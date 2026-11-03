@@ -1,20 +1,19 @@
 # AMC
 
-AMC is the ABI Metadata Compiler/toolchain. This directory now has a standalone
-CMake project so it can move toward an independently released repository.
+AMC is the ABI Metadata Compiler/toolchain. This is the standalone AMC repository.
 
 ## Standalone build
 
 AMC consumes an installed ABIX package. It does not need the ABIX source tree.
 
 ```bash
-cmake -S AMC -B build/AMC \
+cmake -S . -B build \
   -DABIX_DIR=/opt/abix/lib/cmake/ABIX \
   -DCMAKE_PREFIX_PATH="/opt/abix;/path/to/llvm;/path/to/fmt;/path/to/tomlplusplus" \
   -DCMAKE_BUILD_TYPE=Release
-cmake --build build/AMC --parallel
-ctest --test-dir build/AMC --output-on-failure
-cmake --install build/AMC --prefix /opt/amc
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
+cmake --install build --prefix /opt/amc
 ```
 
 Required packages:
@@ -58,6 +57,4 @@ artifact libraries `AMC::format` / `AMC::abi` / `AMC::metadata` / `AMC::tools`
 are exported targets. `amc_add_abi` is installed with the package and resolves
 the ABIX include directories through the imported ABIX targets.
 
-This is the first migration step: the parent ABIX build still contains the
-monorepo integration for the transition period, while this standalone project
-proves that AMC can be built and packaged against an installed ABIX.
+AMC is released independently and consumes an installed ABIX runtime package.

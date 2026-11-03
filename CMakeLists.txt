@@ -1,11 +1,10 @@
 cmake_minimum_required(VERSION 3.20)
 project(AMC VERSION 0.1.0 LANGUAGES C CXX)
 
-# Standalone AMC build. This file is the first step toward publishing AMC as an
-# independent repository: it consumes an installed ABIX package and does not
-# assume that the ABIX source tree is its parent.
+# Standalone AMC build. This repository consumes an installed ABIX package and
+# does not assume that the ABIX source tree is its parent.
 #
-#   cmake -S AMC -B build/AMC \
+#   cmake -S . -B build \
 #     -DABIX_DIR=<prefix>/lib/cmake/ABIX \
 #     -DCMAKE_PREFIX_PATH=<prefix>;/path/to/llvm
 #
@@ -281,6 +280,8 @@ if(AMC_INSTALL)
         FILES ${CMAKE_CURRENT_BINARY_DIR}/AMCConfig.cmake ${CMAKE_CURRENT_BINARY_DIR}/AMCConfigVersion.cmake
               ${AMC_SOURCE_DIR}/CMake/AMC.cmake
         DESTINATION ${AMC_CMAKE_INSTALL_DIR})
+    install(FILES ${AMC_SOURCE_DIR}/LICENSE ${AMC_SOURCE_DIR}/THIRD_PARTY_NOTICES.md
+            DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/licenses/AMC)
 endif()
 
 find_program(AMC_PYTHON_EXECUTABLE NAMES python3 python)
