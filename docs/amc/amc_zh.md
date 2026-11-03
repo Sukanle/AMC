@@ -48,7 +48,7 @@ symbols = ["math::add", "math::Point"]
 output = "build/math_api.abix"
 ```
 
-完整参考见 [`abic_zh.md`](https://github.com/Sukanle/ABIX/blob/main/docs/abix/abic_zh.md)。
+完整参考见 [`abic_zh.md`](../abic/abic_zh.md)。
 
 ## 命令
 
@@ -199,6 +199,6 @@ amc validate missing.abix --error-format json
 | `amc-rust` | Rust 前端/后端 provider（JSON-lines IPC）；不依赖 Clang/LLVM |
 | `amc-zig` | Zig 仅后端 provider（JSON-lines IPC）；消费同一份 IR，不依赖 Clang/LLVM |
 | `amc-dump` | `.abix` 原始 dump（text/JSON） |
-| `amc-mcp` | MCP server；可把多个 artifact 索引成 ABI 知识库（见 [MCP_zh.md](https://github.com/Sukanle/ABIX/blob/main/docs/ai/MCP_zh.md)） |
+| `amc-mcp` | MCP server；可把多个 artifact 索引成 ABI 知识库（见 [MCP_zh.md](../ai/MCP_zh.md)） |
 | `libabix_lldb.so` | 原生 LLDB 命令插件（`abix ...`），直接链接 `libabix-*`（[`tools/lldb_abix.cpp`](https://github.com/Sukanle/AMC/blob/main/tools/lldb_abix.cpp)） |
 | `abix-conformance` | Aue L0/L1 差分运行器（有 Lua 时构建） |

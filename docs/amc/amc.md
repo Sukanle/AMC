@@ -84,7 +84,7 @@ pointer_bits = 64
 endianness = "little"
 ```
 
-See [`abic.md`](https://github.com/Sukanle/ABIX/blob/main/docs/abix/abic.md) for the complete reference.
+See [`abic.md`](../abic/abic.md) for the complete reference.
 
 ## Commands
 
@@ -284,6 +284,6 @@ amc validate missing.abix --error-format json
 | `amc-rust` | Rust frontend/backend provider (JSON-lines IPC); no Clang/LLVM dependency |
 | `amc-zig` | Zig backend-only provider (JSON-lines IPC); consumes the same IR, no Clang/LLVM dependency |
 | `amc-dump` | raw `.abix` dump (text / JSON) |
-| `amc-mcp` | MCP server exposing ABIX tools; indexes multiple artifacts as a knowledge base ([MCP.md](https://github.com/Sukanle/ABIX/blob/main/docs/ai/MCP.md)) |
+| `amc-mcp` | MCP server exposing ABIX tools; indexes multiple artifacts as a knowledge base ([MCP.md](../ai/MCP.md)) |
 | `libabix_lldb.so` | native LLDB command plugin (`abix ...`) linked against `libabix-*` ([`tools/lldb_abix.cpp`](https://github.com/Sukanle/AMC/blob/main/tools/lldb_abix.cpp)) |
 | `abix-conformance` | Aue L0/L1 differential runner (when Lua is present) |
