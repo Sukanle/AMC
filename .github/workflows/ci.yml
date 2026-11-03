@@ -22,6 +22,10 @@ env:
   MICS_REF: main
   LLVM_VERSION: "22"
   ZIG_VERSION: "0.17.0"
+  # Pin dependencies whose distribution packages are not API-compatible across
+  # Ubuntu releases. fmt 9 (Ubuntu 24.04) lacks fmt::println, for example.
+  FMT_VERSION: "11.2.0"
+  TOMLPLUSPLUS_VERSION: "3.4.0"
 
 jobs:
   linux:
@@ -36,8 +40,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            cmake ninja-build pkg-config binutils python3 git \
-            libfmt-dev libtomlplusplus-dev catch2 liblua5.4-dev
+            cmake ninja-build pkg-config binutils python3 git curl \
+            catch2 liblua5.4-dev
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc >/dev/null
           . /etc/os-release
           echo "deb http://apt.llvm.org/${VERSION_CODENAME}/ llvm-toolchain-${VERSION_CODENAME}-${LLVM_VERSION} main" | sudo tee /etc/apt/sources.list.d/llvm.list >/dev/null
@@ -45,6 +49,27 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             clang-${LLVM_VERSION} llvm-${LLVM_VERSION} llvm-${LLVM_VERSION}-dev \
             libclang-${LLVM_VERSION}-dev libclang-cpp${LLVM_VERSION}-dev libclang-common-${LLVM_VERSION}-dev
+
+      - name: Build pinned fmt
+        run: |
+          curl -fsSL -o fmt.tar.gz "https://github.com/fmtlib/fmt/archive/refs/tags/${FMT_VERSION}.tar.gz"
+          tar xzf fmt.tar.gz
+          cmake -S "fmt-${FMT_VERSION}" -B fmt-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DFMT_TEST=OFF -DFMT_DOC=OFF \
+            -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/fmt"
+          cmake --build fmt-build --target install --parallel 2
+
+      - name: Build pinned toml++
+        run: |
+          curl -fsSL -o tomlplusplus.tar.gz "https://github.com/marzer/tomlplusplus/archive/refs/tags/v${TOMLPLUSPLUS_VERSION}.tar.gz"
+          tar xzf tomlplusplus.tar.gz
+          cmake -S "tomlplusplus-${TOMLPLUSPLUS_VERSION}" -B tomlplusplus-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DTOMLPLUSPLUS_BUILD_TESTS=OFF -DTOMLPLUSPLUS_BUILD_EXAMPLES=OFF \
+            -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/tomlplusplus"
+          cmake --build tomlplusplus-build --target install --parallel 2
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -58,9 +83,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: dependencies
-          key: ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ env.MICS_REF }}-${{ hashFiles('CMakeLists.txt') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ env.MICS_REF }}-${{ env.FMT_VERSION }}-${{ env.TOMLPLUSPLUS_VERSION }}-${{ hashFiles('CMakeLists.txt', 'cmake/AMCDependencies.cmake') }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ env.MICS_REF }}-
+            ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ env.MICS_REF }}-${{ env.FMT_VERSION }}-${{ env.TOMLPLUSPLUS_VERSION }}-
 
       - name: Configure and build AMC
         run: |
@@ -69,7 +94,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DAMC_ABIX_REF="$ABIX_REF" \
             -DAMC_MICS_REF="$MICS_REF" \
-            -DCMAKE_PREFIX_PATH="$LLVM_PREFIX"
+            -DCMAKE_PREFIX_PATH="$LLVM_PREFIX;$RUNNER_TEMP/fmt;$RUNNER_TEMP/tomlplusplus"
           cmake --build build --parallel 2
 
       - name: Test
@@ -93,7 +118,28 @@ jobs:
 
       - name: Install dependencies
         run: |
-          brew install cmake ninja llvm@${LLVM_VERSION} fmt tomlplusplus catch2 lua@5.4
+          brew install cmake ninja llvm@${LLVM_VERSION} catch2 lua@5.4
+
+      - name: Build pinned fmt
+        run: |
+          curl -fsSL -o fmt.tar.gz "https://github.com/fmtlib/fmt/archive/refs/tags/${FMT_VERSION}.tar.gz"
+          tar xzf fmt.tar.gz
+          cmake -S "fmt-${FMT_VERSION}" -B fmt-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DFMT_TEST=OFF -DFMT_DOC=OFF \
+            -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/fmt"
+          cmake --build fmt-build --target install --parallel 2
+
+      - name: Build pinned toml++
+        run: |
+          curl -fsSL -o tomlplusplus.tar.gz "https://github.com/marzer/tomlplusplus/archive/refs/tags/v${TOMLPLUSPLUS_VERSION}.tar.gz"
+          tar xzf tomlplusplus.tar.gz
+          cmake -S "tomlplusplus-${TOMLPLUSPLUS_VERSION}" -B tomlplusplus-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DTOMLPLUSPLUS_BUILD_TESTS=OFF -DTOMLPLUSPLUS_BUILD_EXAMPLES=OFF \
+            -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/tomlplusplus"
+          cmake --build tomlplusplus-build --target install --parallel 2
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -107,13 +153,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: dependencies
-          key: ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ env.MICS_REF }}-${{ hashFiles('CMakeLists.txt') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ env.MICS_REF }}-${{ env.FMT_VERSION }}-${{ env.TOMLPLUSPLUS_VERSION }}-${{ hashFiles('CMakeLists.txt', 'cmake/AMCDependencies.cmake') }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ env.MICS_REF }}-
+            ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ env.MICS_REF }}-${{ env.FMT_VERSION }}-${{ env.TOMLPLUSPLUS_VERSION }}-
 
       - name: Configure and build AMC
         run: |
-          PREFIXES="$(brew --prefix llvm@${LLVM_VERSION});$(brew --prefix fmt);$(brew --prefix tomlplusplus);$(brew --prefix catch2);$(brew --prefix lua@5.4)"
+          PREFIXES="$(brew --prefix llvm@${LLVM_VERSION});$RUNNER_TEMP/fmt;$RUNNER_TEMP/tomlplusplus;$(brew --prefix catch2);$(brew --prefix lua@5.4)"
           export PKG_CONFIG_PATH="$(brew --prefix lua@5.4)/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
@@ -155,16 +201,38 @@ jobs:
             mingw-w64-ucrt-x86_64-gcc
             mingw-w64-ucrt-x86_64-clang
             mingw-w64-ucrt-x86_64-llvm
-            mingw-w64-ucrt-x86_64-fmt
-            mingw-w64-ucrt-x86_64-tomlplusplus
             mingw-w64-ucrt-x86_64-catch
             mingw-w64-ucrt-x86_64-lua54
             mingw-w64-ucrt-x86_64-rust
             mingw-w64-ucrt-x86_64-cmake
             mingw-w64-ucrt-x86_64-ninja
             mingw-w64-ucrt-x86_64-pkgconf
-            git
             mingw-w64-ucrt-x86_64-python
+            curl
+            git
+
+      - name: Build pinned fmt
+        run: |
+          PREFIX="$(cygpath -m "$RUNNER_TEMP")/fmt"
+          curl -fsSL -o fmt.tar.gz "https://github.com/fmtlib/fmt/archive/refs/tags/${FMT_VERSION}.tar.gz"
+          tar xzf fmt.tar.gz
+          cmake -S "fmt-${FMT_VERSION}" -B fmt-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DFMT_TEST=OFF -DFMT_DOC=OFF \
+            -DCMAKE_INSTALL_PREFIX="$PREFIX"
+          cmake --build fmt-build --target install --parallel 2
+
+      - name: Build pinned toml++
+        run: |
+          PREFIX="$(cygpath -m "$RUNNER_TEMP")/tomlplusplus"
+          curl -fsSL -o tomlplusplus.tar.gz "https://github.com/marzer/tomlplusplus/archive/refs/tags/v${TOMLPLUSPLUS_VERSION}.tar.gz"
+          tar xzf tomlplusplus.tar.gz
+          cmake -S "tomlplusplus-${TOMLPLUSPLUS_VERSION}" -B tomlplusplus-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DTOMLPLUSPLUS_BUILD_TESTS=OFF -DTOMLPLUSPLUS_BUILD_EXAMPLES=OFF \
+            -DCMAKE_INSTALL_PREFIX="$PREFIX"
+          cmake --build tomlplusplus-build --target install --parallel 2
 
       - name: Setup Zig
         uses: mlugg/setup-zig@v2
@@ -175,18 +243,18 @@ jobs:
         uses: actions/cache@v4
         with:
           path: dependencies
-          key: ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ env.MICS_REF }}-${{ hashFiles('CMakeLists.txt') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ env.MICS_REF }}-${{ env.FMT_VERSION }}-${{ env.TOMLPLUSPLUS_VERSION }}-${{ hashFiles('CMakeLists.txt', 'cmake/AMCDependencies.cmake') }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ env.MICS_REF }}-
+            ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ env.MICS_REF }}-${{ env.FMT_VERSION }}-${{ env.TOMLPLUSPLUS_VERSION }}-
 
       - name: Configure and build AMC
         run: |
-          export CMAKE_PREFIX_PATH="$(cygpath -m "$MINGW_PREFIX")"
+          export CMAKE_PREFIX_PATH="$(cygpath -m "$MINGW_PREFIX");$(cygpath -m "$RUNNER_TEMP")/fmt;$(cygpath -m "$RUNNER_TEMP")/tomlplusplus"
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DAMC_ABIX_REF="$ABIX_REF" \
             -DAMC_MICS_REF="$MICS_REF" \
-            -DCMAKE_PREFIX_PATH="$(cygpath -m "$MINGW_PREFIX")"
+            -DCMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH"
           cmake --build build --parallel 2
 
       - name: Test

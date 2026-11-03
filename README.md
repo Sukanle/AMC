@@ -16,15 +16,18 @@ ctest --test-dir build --output-on-failure
 cmake --install build --prefix /opt/amc
 ```
 
-If `find_package(ABIX 0.3 CONFIG COMPONENTS runtime)` fails, CMake uses
-`FetchContent` to clone ABIX and MICS into the repository-local `dependencies/`
-directory and builds ABIX as a runtime-only subproject:
+If a required dependency is missing or too old, CMake uses `FetchContent` to
+place it in the repository-local `dependencies/` directory. ABIX and MICS are
+cloned; fmt and toml++ are downloaded as pinned release tarballs (fmt 11.2.0 and
+toml++ 3.4.0 by default), which avoids distribution packages with an older API:
 
 ```bash
 cmake -S . -B build \
   -DCMAKE_PREFIX_PATH="/path/to/llvm;/path/to/fmt;/path/to/tomlplusplus" \
   -DAMC_ABIX_REF=devel \
-  -DAMC_MICS_REF=main
+  -DAMC_MICS_REF=main \
+  -DAMC_FMT_VERSION=11.2.0 \
+  -DAMC_TOMLPLUSPLUS_VERSION=3.4.0
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```
@@ -32,8 +35,9 @@ ctest --test-dir build --output-on-failure
 `dependencies/` is a cacheable, untracked dependency checkout; only
 [`dependencies/README.md`](dependencies/README.md) is tracked. In this mode AMC
 still builds and runs its tests, but installs only the tools and headers (not
-the `AMCConfig.cmake` package export), because the package export requires an
-installed ABIX package. Reconfigure with `-DABIX_DIR=...` to install the package.
+the `AMCConfig.cmake` package export), because the package export requires
+installed ABIX and fmt packages. Reconfigure with `-DABIX_DIR=...` and an
+installed fmt to install the package.
 
 Required packages:
 

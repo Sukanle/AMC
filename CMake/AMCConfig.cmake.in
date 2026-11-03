@@ -6,7 +6,7 @@ include(CMakeFindDependencyMacro)
 # AMC consumes the ABIX runtime headers/MICS and builds its own artifact
 # libraries. fmt is required by AMC::format.
 find_dependency(ABIX 0.3 CONFIG COMPONENTS runtime)
-find_dependency(fmt CONFIG REQUIRED)
+find_dependency(fmt @AMC_FMT_VERSION@ CONFIG REQUIRED)
 
 include("${CMAKE_CURRENT_LIST_DIR}/AMCTargets.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/AMC.cmake")

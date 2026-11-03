@@ -34,6 +34,7 @@ set(AMC_ABIX_REF
 set(AMC_MICS_REF
     "main"
     CACHE STRING "MICS git revision used when FetchContent downloads ABIX dependencies")
+set(AMC_DEPENDENCIES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dependencies")
 
 # Prefer an installed ABIX package. If it is missing, fetch ABIX and its
 # dependencies into a repository-local checkout that is intentionally untracked.
@@ -41,7 +42,6 @@ find_package(ABIX 0.3 CONFIG QUIET COMPONENTS runtime)
 set(AMC_ABIX_FETCHED OFF)
 if(NOT ABIX_FOUND)
     set(AMC_ABIX_FETCHED ON)
-    set(AMC_DEPENDENCIES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dependencies")
 
     message(STATUS "ABIX 0.3 package not found; fetching ABIX into ${AMC_DEPENDENCIES_DIR}")
 
@@ -91,8 +91,7 @@ endif()
 
 find_package(LLVM CONFIG REQUIRED)
 find_package(Clang CONFIG REQUIRED)
-find_package(fmt CONFIG REQUIRED)
-find_package(tomlplusplus CONFIG REQUIRED)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AMCDependencies.cmake)
 
 set(AMC_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(AMC_INCLUDE_DIR ${AMC_SOURCE_DIR}/include)
@@ -310,11 +309,12 @@ endif()
 if(AMC_INSTALL)
     set(AMC_CMAKE_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/AMC")
 
-    if(AMC_ABIX_FETCHED)
-        # FetchContent mode: ABIX/MICS are build-tree dependencies and are not
-        # part of AMC's export set, so install the tools and headers only. The
-        # CMake package (and its exported artifact libraries) requires an
-        # installed ABIX package; reconfigure with -DABIX_DIR to generate it.
+    if(AMC_ABIX_FETCHED OR AMC_FMT_FETCHED OR AMC_TOMLPLUSPLUS_FETCHED)
+        # FetchContent mode: build-tree dependencies are not part of AMC's
+        # export set, so install the tools and headers only. The CMake package
+        # (and its exported artifact libraries) requires installed ABIX/fmt
+        # packages; reconfigure with the corresponding *_DIR values to generate
+        # it.
         message(
             STATUS
                 "FetchContent mode: installing AMC tools/headers without the CMake package export")
@@ -363,7 +363,11 @@ if(AMC_INSTALL)
 endif()
 
 find_program(AMC_PYTHON_EXECUTABLE NAMES python3 python)
-if(AMC_BUILD_TESTS AND AMC_INSTALL AND AMC_PYTHON_EXECUTABLE AND NOT AMC_ABIX_FETCHED)
+if(AMC_BUILD_TESTS
+   AND AMC_INSTALL
+   AND AMC_PYTHON_EXECUTABLE
+   AND NOT AMC_ABIX_FETCHED
+   AND NOT AMC_FMT_FETCHED)
     add_test(
         NAME amc-package-test
         COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/cli/amc_package_test.py
