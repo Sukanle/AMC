@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 # Aue L0/L1 differential-conformance prototype.
 #
 # Built only when Lua is available (AMC CMake sets LUA_FOUND). L0 and L1 share

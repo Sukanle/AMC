@@ -58,3 +58,10 @@ are exported targets. `amc_add_abi` is installed with the package and resolves
 the ABIX include directories through the imported ABIX targets.
 
 AMC is released independently and consumes an installed ABIX runtime package.
+
+## License
+
+AMC is licensed under the [Apache License, Version 2.0](LICENSE). See
+[`NOTICE`](NOTICE) for the project notice and
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for bundled dependencies.
+The vendored `ljson` sources remain under the MIT license.
