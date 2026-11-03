@@ -19,6 +19,7 @@ env:
   # Must point at an ABIX revision whose runtime-only package is version 0.3+.
   # Pin this to the ABIX v0.3.0 tag once that release is published.
   ABIX_REF: devel
+  MICS_REF: main
   LLVM_VERSION: "22"
   ZIG_VERSION: "0.17.0"
 
@@ -31,19 +32,11 @@ jobs:
       - name: Checkout AMC
         uses: actions/checkout@v4
 
-      - name: Checkout ABIX runtime dependency
-        uses: actions/checkout@v4
-        with:
-          repository: Sukanle/ABIX
-          ref: ${{ env.ABIX_REF }}
-          path: abix-source
-          submodules: recursive
-
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            cmake ninja-build pkg-config binutils python3 \
+            cmake ninja-build pkg-config binutils python3 git \
             libfmt-dev libtomlplusplus-dev catch2 liblua5.4-dev
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc >/dev/null
           . /etc/os-release
@@ -61,24 +54,22 @@ jobs:
         with:
           version: ${{ env.ZIG_VERSION }}
 
-      - name: Build ABIX runtime package
-        run: |
-          LLVM_PREFIX="/usr/lib/llvm-${LLVM_VERSION}"
-          cmake -S abix-source -B abix-build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DABIX_BUILD_RUNTIME_ONLY=ON \
-            -DBUILD_TESTING=OFF \
-            -DBUILD_BENCHMARKS=OFF \
-            -DCMAKE_PREFIX_PATH="$LLVM_PREFIX"
-          cmake --install abix-build --prefix "$RUNNER_TEMP/abix-runtime"
+      - name: Cache FetchContent dependencies
+        uses: actions/cache@v4
+        with:
+          path: dependencies
+          key: ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ env.MICS_REF }}-${{ hashFiles('CMakeLists.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ env.MICS_REF }}-
 
       - name: Configure and build AMC
         run: |
           LLVM_PREFIX="/usr/lib/llvm-${LLVM_VERSION}"
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DABIX_DIR="$RUNNER_TEMP/abix-runtime/lib/cmake/ABIX" \
-            -DCMAKE_PREFIX_PATH="$LLVM_PREFIX;$RUNNER_TEMP/abix-runtime"
+            -DAMC_ABIX_REF="$ABIX_REF" \
+            -DAMC_MICS_REF="$MICS_REF" \
+            -DCMAKE_PREFIX_PATH="$LLVM_PREFIX"
           cmake --build build --parallel 2
 
       - name: Test
@@ -100,14 +91,6 @@ jobs:
       - name: Checkout AMC
         uses: actions/checkout@v4
 
-      - name: Checkout ABIX runtime dependency
-        uses: actions/checkout@v4
-        with:
-          repository: Sukanle/ABIX
-          ref: ${{ env.ABIX_REF }}
-          path: abix-source
-          submodules: recursive
-
       - name: Install dependencies
         run: |
           brew install cmake ninja llvm@${LLVM_VERSION} fmt tomlplusplus catch2 lua@5.4
@@ -120,16 +103,13 @@ jobs:
         with:
           version: ${{ env.ZIG_VERSION }}
 
-      - name: Build ABIX runtime package
-        run: |
-          PREFIXES="$(brew --prefix llvm@${LLVM_VERSION});$(brew --prefix fmt);$(brew --prefix tomlplusplus);$(brew --prefix catch2);$(brew --prefix lua@5.4)"
-          cmake -S abix-source -B abix-build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DABIX_BUILD_RUNTIME_ONLY=ON \
-            -DBUILD_TESTING=OFF \
-            -DBUILD_BENCHMARKS=OFF \
-            -DCMAKE_PREFIX_PATH="$PREFIXES"
-          cmake --install abix-build --prefix "$RUNNER_TEMP/abix-runtime"
+      - name: Cache FetchContent dependencies
+        uses: actions/cache@v4
+        with:
+          path: dependencies
+          key: ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ env.MICS_REF }}-${{ hashFiles('CMakeLists.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ env.MICS_REF }}-
 
       - name: Configure and build AMC
         run: |
@@ -137,8 +117,9 @@ jobs:
           export PKG_CONFIG_PATH="$(brew --prefix lua@5.4)/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DABIX_DIR="$RUNNER_TEMP/abix-runtime/lib/cmake/ABIX" \
-            -DCMAKE_PREFIX_PATH="$PREFIXES;$RUNNER_TEMP/abix-runtime"
+            -DAMC_ABIX_REF="$ABIX_REF" \
+            -DAMC_MICS_REF="$MICS_REF" \
+            -DCMAKE_PREFIX_PATH="$PREFIXES"
           cmake --build build --parallel 2
 
       - name: Test
@@ -165,14 +146,6 @@ jobs:
       - name: Checkout AMC
         uses: actions/checkout@v4
 
-      - name: Checkout ABIX runtime dependency
-        uses: actions/checkout@v4
-        with:
-          repository: Sukanle/ABIX
-          ref: ${{ env.ABIX_REF }}
-          path: abix-source
-          submodules: recursive
-
       - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
         with:
@@ -190,6 +163,7 @@ jobs:
             mingw-w64-ucrt-x86_64-cmake
             mingw-w64-ucrt-x86_64-ninja
             mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-git
             mingw-w64-ucrt-x86_64-python
 
       - name: Setup Zig
@@ -197,23 +171,22 @@ jobs:
         with:
           version: ${{ env.ZIG_VERSION }}
 
-      - name: Build ABIX runtime package
-        run: |
-          cmake -S abix-source -B abix-build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DABIX_BUILD_RUNTIME_ONLY=ON \
-            -DBUILD_TESTING=OFF \
-            -DBUILD_BENCHMARKS=OFF \
-            -DCMAKE_PREFIX_PATH="$(cygpath -m "$MINGW_PREFIX")"
-          cmake --install abix-build --prefix "$RUNNER_TEMP/abix-runtime"
+      - name: Cache FetchContent dependencies
+        uses: actions/cache@v4
+        with:
+          path: dependencies
+          key: ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ env.MICS_REF }}-${{ hashFiles('CMakeLists.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ env.MICS_REF }}-
 
       - name: Configure and build AMC
         run: |
           export CMAKE_PREFIX_PATH="$(cygpath -m "$MINGW_PREFIX")"
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DABIX_DIR="$(cygpath -m "$RUNNER_TEMP/abix-runtime/lib/cmake/ABIX")" \
-            -DCMAKE_PREFIX_PATH="$(cygpath -m "$MINGW_PREFIX");$(cygpath -m "$RUNNER_TEMP/abix-runtime")"
+            -DAMC_ABIX_REF="$ABIX_REF" \
+            -DAMC_MICS_REF="$MICS_REF" \
+            -DCMAKE_PREFIX_PATH="$(cygpath -m "$MINGW_PREFIX")"
           cmake --build build --parallel 2
 
       - name: Test

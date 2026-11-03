@@ -6,3 +6,6 @@ CMakeUserPresets.json
 *.user
 __pycache__/
 *.pyc
+# FetchContent dependency checkout: keep the README, ignore its contents.
+dependencies/*
+!dependencies/README.md

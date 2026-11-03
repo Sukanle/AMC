@@ -2,18 +2,22 @@
 cmake_minimum_required(VERSION 3.20)
 project(AMC VERSION 0.1.0 LANGUAGES C CXX)
 
-# Standalone AMC build. This repository consumes an installed ABIX package and
+# Standalone AMC build. This repository prefers an installed ABIX package and
 # does not assume that the ABIX source tree is its parent.
 #
 #   cmake -S . -B build \
 #     -DABIX_DIR=<prefix>/lib/cmake/ABIX \
 #     -DCMAKE_PREFIX_PATH=<prefix>;/path/to/llvm
 #
+# When no ABIX 0.3 package is found, the build fetches ABIX (and MICS) from
+# GitHub into ./dependencies and configures ABIX as a runtime-only subproject.
+#
 # The ABIX runtime remains header-only. AMC owns the artifact libraries
 # (format/abi/metadata/tools) and keeps its own exception/RTTI policy.
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
+include(FetchContent)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -24,8 +28,67 @@ option(AMC_BUILD_TESTS "Build AMC unit/e2e tests" ON)
 option(AMC_INSTALL "Generate AMC install rules" ON)
 option(AMC_ENABLE_LLDB_PLUGIN "Build the optional LLDB plugin" ON)
 option(AMC_BUILD_AUE "Build the optional Aue Lua conformance prototype" ON)
+set(AMC_ABIX_REF
+    "devel"
+    CACHE STRING "ABIX git revision used when FetchContent downloads ABIX (tag, branch or commit)")
+set(AMC_MICS_REF
+    "main"
+    CACHE STRING "MICS git revision used when FetchContent downloads ABIX dependencies")
 
-find_package(ABIX 0.3 CONFIG REQUIRED COMPONENTS runtime)
+# Prefer an installed ABIX package. If it is missing, fetch ABIX and its
+# dependencies into a repository-local checkout that is intentionally untracked.
+find_package(ABIX 0.3 CONFIG QUIET COMPONENTS runtime)
+set(AMC_ABIX_FETCHED OFF)
+if(NOT ABIX_FOUND)
+    set(AMC_ABIX_FETCHED ON)
+    set(AMC_DEPENDENCIES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dependencies")
+
+    message(STATUS "ABIX 0.3 package not found; fetching ABIX into ${AMC_DEPENDENCIES_DIR}")
+
+    # ABIX's .gitmodules uses an SSH URL for MICS. Fetch MICS directly over
+    # HTTPS instead so the fallback also works on CI machines without GitHub
+    # SSH credentials. ABIX reuses the MICS::MICS target created here.
+    if(NOT TARGET MICS::MICS)
+        set(MICS_INSTALL OFF)
+        set(MICS_BUILD_TESTS OFF)
+        FetchContent_Declare(
+            MICS
+            GIT_REPOSITORY https://github.com/Sukanle/MICS.git
+            GIT_TAG ${AMC_MICS_REF}
+            GIT_SUBMODULES_RECURSE ON
+            GIT_PROGRESS TRUE
+            SOURCE_DIR ${AMC_DEPENDENCIES_DIR}/MICS)
+        FetchContent_MakeAvailable(MICS)
+    endif()
+
+    # ABIX is consumed as a runtime-only subproject: no tests, benchmarks,
+    # DLL variants or install rules are generated from the fetched checkout.
+    set(ABIX_BUILD_RUNTIME_ONLY ON)
+    set(ABIX_INSTALL OFF)
+    FetchContent_Declare(
+        ABIX
+        GIT_REPOSITORY https://github.com/Sukanle/ABIX.git
+        GIT_TAG ${AMC_ABIX_REF}
+        GIT_SUBMODULES ""
+        GIT_PROGRESS TRUE
+        SOURCE_DIR ${AMC_DEPENDENCIES_DIR}/ABIX)
+    FetchContent_MakeAvailable(ABIX)
+
+    if(NOT TARGET ABIX::runtime)
+        message(FATAL_ERROR "Fetched ABIX does not provide the ABIX::runtime target")
+    endif()
+    set(ABIX_INCLUDE_DIR "${abix_SOURCE_DIR}/include")
+    set(ABIX_INCLUDE_DIRS "${ABIX_INCLUDE_DIR}" "${mics_SOURCE_DIR}/include" "${mics_SOURCE_DIR}/HLMD")
+endif()
+
+# The tests launch compilers directly, so expose the include roots as a native
+# path list (os.pathsep in the Python harness).
+if(WIN32)
+    set(AMC_ABIX_INCLUDE_DIRS_ENV "${ABIX_INCLUDE_DIRS}")
+else()
+    string(JOIN ":" AMC_ABIX_INCLUDE_DIRS_ENV ${ABIX_INCLUDE_DIRS})
+endif()
+
 find_package(LLVM CONFIG REQUIRED)
 find_package(Clang CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
@@ -247,46 +310,60 @@ endif()
 if(AMC_INSTALL)
     set(AMC_CMAKE_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/AMC")
 
-    install(
-        TARGETS amc amc-cpp amc-rust amc-zig amc-dump amc-mcp
-        EXPORT AMCTargets
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-    install(
-        TARGETS libabix-format libabix-abi libabix-metadata libabix-tools
-        EXPORT AMCTargets
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    if(AMC_ABIX_FETCHED)
+        # FetchContent mode: ABIX/MICS are build-tree dependencies and are not
+        # part of AMC's export set, so install the tools and headers only. The
+        # CMake package (and its exported artifact libraries) requires an
+        # installed ABIX package; reconfigure with -DABIX_DIR to generate it.
+        message(
+            STATUS
+                "FetchContent mode: installing AMC tools/headers without the CMake package export")
+        install(
+            TARGETS amc amc-cpp amc-rust amc-zig amc-dump amc-mcp
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    else()
+        install(
+            TARGETS amc amc-cpp amc-rust amc-zig amc-dump amc-mcp
+            EXPORT AMCTargets
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+        install(
+            TARGETS libabix-format libabix-abi libabix-metadata libabix-tools
+            EXPORT AMCTargets
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+        install(
+            EXPORT AMCTargets
+            FILE AMCTargets.cmake
+            NAMESPACE AMC::
+            DESTINATION ${AMC_CMAKE_INSTALL_DIR})
+
+        configure_package_config_file(
+            ${AMC_SOURCE_DIR}/CMake/AMCConfig.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/AMCConfig.cmake
+            INSTALL_DESTINATION ${AMC_CMAKE_INSTALL_DIR}
+            PATH_VARS CMAKE_INSTALL_INCLUDEDIR)
+
+        write_basic_package_version_file(
+            ${CMAKE_CURRENT_BINARY_DIR}/AMCConfigVersion.cmake
+            VERSION ${PROJECT_VERSION}
+            COMPATIBILITY SameMinorVersion)
+
+        install(
+            FILES ${CMAKE_CURRENT_BINARY_DIR}/AMCConfig.cmake ${CMAKE_CURRENT_BINARY_DIR}/AMCConfigVersion.cmake
+                  ${AMC_SOURCE_DIR}/CMake/AMC.cmake
+            DESTINATION ${AMC_CMAKE_INSTALL_DIR})
+    endif()
+
     install(FILES ${AMC_SOURCE_DIR}/providers.toml DESTINATION ${CMAKE_INSTALL_BINDIR} RENAME amc-providers.toml)
     install(DIRECTORY ${AMC_SOURCE_DIR}/include/SKL/AMC DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/SKL)
     install(DIRECTORY ${AMC_SOURCE_DIR}/include/ljson DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-
-    install(
-        EXPORT AMCTargets
-        FILE AMCTargets.cmake
-        NAMESPACE AMC::
-        DESTINATION ${AMC_CMAKE_INSTALL_DIR})
-
-    configure_package_config_file(
-        ${AMC_SOURCE_DIR}/CMake/AMCConfig.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/AMCConfig.cmake
-        INSTALL_DESTINATION ${AMC_CMAKE_INSTALL_DIR}
-        PATH_VARS CMAKE_INSTALL_INCLUDEDIR)
-
-    write_basic_package_version_file(
-        ${CMAKE_CURRENT_BINARY_DIR}/AMCConfigVersion.cmake
-        VERSION ${PROJECT_VERSION}
-        COMPATIBILITY SameMinorVersion)
-
-    install(
-        FILES ${CMAKE_CURRENT_BINARY_DIR}/AMCConfig.cmake ${CMAKE_CURRENT_BINARY_DIR}/AMCConfigVersion.cmake
-              ${AMC_SOURCE_DIR}/CMake/AMC.cmake
-        DESTINATION ${AMC_CMAKE_INSTALL_DIR})
     install(FILES ${AMC_SOURCE_DIR}/LICENSE ${AMC_SOURCE_DIR}/NOTICE ${AMC_SOURCE_DIR}/THIRD_PARTY_NOTICES.md
             DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/licenses/AMC)
 endif()
 
 find_program(AMC_PYTHON_EXECUTABLE NAMES python3 python)
-if(AMC_BUILD_TESTS AND AMC_INSTALL AND AMC_PYTHON_EXECUTABLE)
+if(AMC_BUILD_TESTS AND AMC_INSTALL AND AMC_PYTHON_EXECUTABLE AND NOT AMC_ABIX_FETCHED)
     add_test(
         NAME amc-package-test
         COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/cli/amc_package_test.py
@@ -299,7 +376,7 @@ if(AMC_BUILD_TESTS AND AMC_INSTALL AND AMC_PYTHON_EXECUTABLE)
 endif()
 
 if(AMC_BUILD_TESTS AND AMC_PYTHON_EXECUTABLE)
-    set(_amc_test_env "ABIX_INCLUDE_DIRS=${ABIX_INCLUDE_DIR}" "CXX=${CMAKE_CXX_COMPILER}")
+    set(_amc_test_env "ABIX_INCLUDE_DIRS=${AMC_ABIX_INCLUDE_DIRS_ENV}" "CXX=${CMAKE_CXX_COMPILER}")
 
     add_test(NAME amc-feature-test COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/cli/feature_test.py
                                            ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
@@ -318,8 +395,7 @@ if(AMC_BUILD_TESTS AND AMC_PYTHON_EXECUTABLE)
                                                   ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
     add_test(NAME amc-cmake-integration-test COMMAND ${AMC_PYTHON_EXECUTABLE}
                                                      ${AMC_SOURCE_DIR}/tests/cli/cmake_integration_test.py
-                                                     ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR}
-                                                     --abix-include-dirs=${ABIX_INCLUDE_DIR})
+                                                     ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
 
     set_tests_properties(amc-feature-test amc-rust-test amc-rust-panic-test amc-cancellation-test
                          amc-interop-test amc-expose-interop-test amc-cmake-integration-test

@@ -63,7 +63,8 @@ def main() -> None:
             f"-DAMC_EXECUTABLE={amc}",
         ]
         if args.abix_include_dirs:
-            cmake_cmd.append(f"-DABIX_INCLUDE_DIRS={args.abix_include_dirs}")
+            include_dirs = [p for p in args.abix_include_dirs.split(os.pathsep) if p]
+            cmake_cmd.append("-DABIX_INCLUDE_DIRS=" + ";".join(include_dirs))
         subprocess.run(cmake_cmd, check=True, capture_output=True, text=True)
 
         # Step 2: cmake build

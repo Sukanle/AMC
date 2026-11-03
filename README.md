@@ -4,7 +4,7 @@ AMC is the ABI Metadata Compiler/toolchain. This is the standalone AMC repositor
 
 ## Standalone build
 
-AMC consumes an installed ABIX package. It does not need the ABIX source tree.
+AMC prefers an installed ABIX package. It does not need the ABIX source tree.
 
 ```bash
 cmake -S . -B build \
@@ -15,6 +15,25 @@ cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 cmake --install build --prefix /opt/amc
 ```
+
+If `find_package(ABIX 0.3 CONFIG COMPONENTS runtime)` fails, CMake uses
+`FetchContent` to clone ABIX and MICS into the repository-local `dependencies/`
+directory and builds ABIX as a runtime-only subproject:
+
+```bash
+cmake -S . -B build \
+  -DCMAKE_PREFIX_PATH="/path/to/llvm;/path/to/fmt;/path/to/tomlplusplus" \
+  -DAMC_ABIX_REF=devel \
+  -DAMC_MICS_REF=main
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
+```
+
+`dependencies/` is a cacheable, untracked dependency checkout; only
+[`dependencies/README.md`](dependencies/README.md) is tracked. In this mode AMC
+still builds and runs its tests, but installs only the tools and headers (not
+the `AMCConfig.cmake` package export), because the package export requires an
+installed ABIX package. Reconfigure with `-DABIX_DIR=...` to install the package.
 
 Required packages:
 
@@ -35,7 +54,7 @@ policy.
 The standalone CTest suite covers the C++ core/e2e tests, the installed package
 consumer, feature tests, Rust provider/panic tests, cancellation, interop,
 capability generation and an independent CMake integration test. When Lua 5.4 is
-available, `AMC/Aue` also builds the L0/L1 conformance runner and its tests. The
+available, `Aue` also builds the L0/L1 conformance runner and its tests. The
 old monorepo-only `amc-integration-test` and `amc-cmdly-interop-test` were
 retired with the split.
 
