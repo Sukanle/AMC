@@ -14,6 +14,18 @@ AMC is the ABI Metadata Compiler/toolchain. This is the standalone AMC repositor
 
 ## Tests and analysis
 
+The unified entry point is `python tools/run.py` (build + CTest). Use
+`tools/run_build.py` or `tools/run_test.py` when only one stage is needed:
+
+```bash
+python tools/run.py                         # build + all CTest suites
+python tools/run.py --build-only            # configure and build
+python tools/run.py --elf-pe                # build + ELF/PE metadata test
+python tools/run.py --bootstrap             # build + metadata bootstrap test
+python tools/run.py --interop               # build + interop tests
+python tools/run.py --mcp --host h.abix --plugin p.abix
+```
+
 - `tests/cli/elf_pe_metadata_test.py` verifies the ABIX metadata section in a native binary (CTest: `amc-elf-pe-metadata-test`).
 - `tests/cli/bootstrap_test.py` verifies AMC's own metadata bootstrap through `amc_add_abi` (CTest: `amc-bootstrap-test`).
 - `tests/cli/mcp_compat_test.py` drives `amc-mcp` over JSON-RPC for an ABI compatibility verdict.
