@@ -10,6 +10,7 @@ AMC is the ABI Metadata Compiler/toolchain. This is the standalone AMC repositor
 - [`.abic.toml` configuration](docs/abic/abic.md)
 - [Cross-language projections](docs/lang/README.md)
 - [MCP tool catalogue](docs/ai/MCP.md)
+- [Binary metadata inspection](docs/architecture/elf-inspection.md)
 
 ## Tests and analysis
 

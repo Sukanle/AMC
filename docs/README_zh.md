@@ -36,6 +36,13 @@
 | [MCP_zh.md](ai/MCP_zh.md)   | [MCP.md](ai/MCP.md)   | `amc-mcp` 服务器与 ABI 工具目录            |
 | [troi_zh.md](ai/troi_zh.md) | [troi.md](ai/troi.md) | AMC/MCP Agent 工作流的 TROI token 效率度量 |
 
+## 二进制检查
+
+| 文档 | English | 描述 |
+| --- | --- | --- |
+| [elf-inspection_zh.md](architecture/elf-inspection_zh.md) | [elf-inspection.md](architecture/elf-inspection.md) | 在 ELF / Mach-O 二进制中检查 ABIX 元数据节区 |
+| [pe-inspection_zh.md](architecture/pe-inspection_zh.md) | [pe-inspection.md](architecture/pe-inspection.md) | Windows PE 镜像中的 ABIX 私有头与元数据节区 |
+
 ## 相关 ABIX 文档
 
 - [ABIX 文档索引](https://github.com/Sukanle/ABIX/blob/main/docs/README_zh.md)

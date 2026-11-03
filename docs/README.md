@@ -36,6 +36,13 @@ This directory documents the AMC toolchain: the `amc` CLI, `.abic.toml` configur
 | [MCP.md](ai/MCP.md)   | [MCP_zh.md](ai/MCP_zh.md)   | the `amc-mcp` server and its ABI tool catalogue          |
 | [troi.md](ai/troi.md) | [troi_zh.md](ai/troi_zh.md) | TROI token-efficiency metric for AMC/MCP agent workflows |
 
+## Binary inspection
+
+| Document | 中文 | Description |
+| --- | --- | --- |
+| [elf-inspection.md](architecture/elf-inspection.md) | [elf-inspection_zh.md](architecture/elf-inspection_zh.md) | inspecting ABIX metadata sections in ELF / Mach-O binaries |
+| [pe-inspection.md](architecture/pe-inspection.md) | [pe-inspection_zh.md](architecture/pe-inspection_zh.md) | the ABIX private header and metadata sections in Windows PE images |
+
 ## Related ABIX documents
 
 - [ABIX documentation index](https://github.com/Sukanle/ABIX/blob/main/docs/README.md)
