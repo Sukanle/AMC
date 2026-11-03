@@ -7,6 +7,13 @@ AMC is the ABI Metadata Compiler/toolchain. This is the standalone AMC repositor
 - [AMC toolchain and CLI](docs/amc/amc.md)
 - [AMC 工具链与 CLI](docs/amc/amc_zh.md)
 
+## Tests and analysis
+
+- `tests/cli/elf_pe_metadata_test.py` verifies the ABIX metadata section in a native binary (CTest: `amc-elf-pe-metadata-test`).
+- `tests/cli/bootstrap_test.py` verifies AMC's own metadata bootstrap through `amc_add_abi` (CTest: `amc-bootstrap-test`).
+- `tests/cli/mcp_compat_test.py` drives `amc-mcp` over JSON-RPC for an ABI compatibility verdict.
+- `scripts/abix_token_cost.py` compares the source and `amc context --format llm` token costs.
+
 ## Standalone build
 
 AMC prefers an installed ABIX package. It does not need the ABIX source tree.
@@ -47,7 +54,7 @@ Required packages:
 
 AMC owns the artifact-layer libraries (`format`, `abi`, `metadata`, `tools`) and exports them as `AMC::format`, `AMC::abi`, `AMC::metadata` and `AMC::tools`. They are compiled here rather than borrowed from ABIX, because their public headers and namespace are AMC's `SKL/AMC/Core` API. ABIX runtime remains header-only; AMC is the toolchain that needs LLVM/Clang and keeps its own exception/RTTI policy.
 
-The standalone CTest suite covers the C++ core/e2e tests, the installed package consumer, feature tests, Rust provider/panic tests, cancellation, interop, capability generation and an independent CMake integration test. When Lua 5.4 is available, `Aue` also builds the L0/L1 conformance runner and its tests. The old monorepo-only `amc-integration-test` and `amc-cmdly-interop-test` were retired with the split.
+The standalone CTest suite covers the C++ core/e2e tests, the installed package consumer, feature tests, Rust provider/panic tests, cancellation, interop, capability generation, metadata section verification, the AMC core bootstrap and an independent CMake integration test. When Lua 5.4 is available, `Aue` also builds the L0/L1 conformance runner and its tests. The old monorepo-only `amc-integration-test` and `amc-cmdly-interop-test` were retired with the split.
 
 ## Installed package
 

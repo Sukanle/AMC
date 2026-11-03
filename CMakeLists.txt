@@ -400,8 +400,15 @@ if(AMC_BUILD_TESTS AND AMC_PYTHON_EXECUTABLE)
     add_test(NAME amc-cmake-integration-test COMMAND ${AMC_PYTHON_EXECUTABLE}
                                                      ${AMC_SOURCE_DIR}/tests/cli/cmake_integration_test.py
                                                      ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
+    add_test(NAME amc-elf-pe-metadata-test
+             COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/cli/elf_pe_metadata_test.py
+                     ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
+    add_test(NAME amc-bootstrap-test
+             COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/cli/bootstrap_test.py
+                     ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
 
     set_tests_properties(amc-feature-test amc-rust-test amc-rust-panic-test amc-cancellation-test
                          amc-interop-test amc-expose-interop-test amc-cmake-integration-test
+                         amc-elf-pe-metadata-test amc-bootstrap-test
                          PROPERTIES ENVIRONMENT "${_amc_test_env}" TIMEOUT 180)
 endif()
