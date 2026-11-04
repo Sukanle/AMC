@@ -24,7 +24,7 @@
 
 | 文档                              | English                     | 描述                                                |
 | --------------------------------- | --------------------------- | --------------------------------------------------- |
-| [README_zh.md](lang/README_zh.md) | [README.md](lang/README.md) | ABIX 与 bind 式 FFI 的区别；投影模型                |
+| [README_ZH.md](lang/README_ZH.md) | [README.md](lang/README.md) | ABIX 与 bind 式 FFI 的区别；投影模型                |
 | [cpp_zh.md](lang/cpp_zh.md)       | [cpp.md](lang/cpp.md)       | C++ 前端/后端、生成的布局检查、接口层               |
 | [rust_zh.md](lang/rust_zh.md)     | [rust.md](lang/rust.md)     | Rust provider、`repr(C)` 投影、所有权/`Result` 包装 |
 | [zig_zh.md](lang/zig_zh.md)       | [zig.md](lang/zig.md)       | Zig backend-only 投影、`extern` / `comptime` 检查   |
@@ -45,7 +45,7 @@
 
 ## 相关 ABIX 文档
 
-- [ABIX 文档索引](https://github.com/Sukanle/ABIX/blob/main/docs/README_zh.md)
+- [ABIX 文档索引](https://github.com/Sukanle/ABIX/blob/main/docs/README_ZH.md)
 - [ABIX API 参考](https://github.com/Sukanle/ABIX/blob/main/docs/abix/api_zh.md)
 - [ABIX ABI 规范](https://github.com/Sukanle/ABIX/blob/main/.agents/ABI-SPEC.md)
 - [只依赖 ABIX、不使用 AMC](https://github.com/Sukanle/ABIX/blob/main/docs/abix/without_amc_zh.md)

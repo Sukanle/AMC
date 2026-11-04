@@ -1,7 +1,7 @@
 # AMC Documentation
 
 <p align="center">
-  English · <a href="README_zh.md">中文</a>
+  English · <a href="README_ZH.md">中文</a>
 </p>
 
 This directory documents the AMC toolchain: the `amc` CLI, `.abic.toml` configuration, language providers, MCP integration and agent-efficiency analysis.
@@ -24,7 +24,7 @@ This directory documents the AMC toolchain: the `amc` CLI, `.abic.toml` configur
 
 | Document                    | 中文                              | Description                                                      |
 | --------------------------- | --------------------------------- | ---------------------------------------------------------------- |
-| [README.md](lang/README.md) | [README_zh.md](lang/README_zh.md) | why ABIX differs from bind-style FFI; the projection model       |
+| [README.md](lang/README.md) | [README_ZH.md](lang/README_ZH.md) | why ABIX differs from bind-style FFI; the projection model       |
 | [cpp.md](lang/cpp.md)       | [cpp_zh.md](lang/cpp_zh.md)       | C++ frontend/backend, generated layout checks, Interface layer   |
 | [rust.md](lang/rust.md)     | [rust_zh.md](lang/rust_zh.md)     | Rust provider, `repr(C)` projection, ownership/`Result` wrappers |
 | [zig.md](lang/zig.md)       | [zig_zh.md](lang/zig_zh.md)       | Zig backend-only projection, `extern` / `comptime` checks        |
