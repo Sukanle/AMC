@@ -384,6 +384,7 @@ void test_error_contract_validation(TestResult &r) {
     amc::ErrorContract contract;
     contract.function_index = 0;
     contract.domain = 0x1003000000000001ULL;
+    contract.condition = static_cast<int32_t>(amc::GenericCondition::invalid_argument);
     contract.status_source = amc::StatusSource::return_value;
     contract.success_value = 0;
     contract.value_parameter = 2;
@@ -436,6 +437,7 @@ void test_error_contract_validation(TestResult &r) {
         AMC_CHECK(r, loaded.errors[0].success_value, int64_t(0), "error contract success value round-trip");
         AMC_CHECK(r, loaded.errors[0].value_parameter, uint32_t(2), "error contract value parameter round-trip");
         AMC_CHECK(r, loaded.errors[0].domain, uint64_t(0x1003000000000001ULL), "error contract domain round-trip");
+        AMC_CHECK(r, loaded.errors[0].condition, int32_t(29), "error contract condition round-trip");
     }
     cleanup(path);
 }

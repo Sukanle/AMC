@@ -48,7 +48,8 @@ constexpr uint32_t kSourceEntrySize = 32;     // type_id(16) + file_offset(4) + 
 constexpr uint32_t kOwnedEntrySize = 52;      // type_id(16) + create(16) + destroy(16) + flags(4)
 constexpr uint32_t kContractEntrySize = 32;   // target(4) + target_index(4) + mode(4) + flags(4) + release(16)
 constexpr uint32_t kErrorEntrySize =
-    36;   // function(4) + status_source(4) + status_param(4) + success(8) + value(4) + flags(4) + domain(8)
+    40;   // function(4) + status_source(4) + status_param(4) + success(8) + value(4) + flags(4) + domain(8) +
+          // condition(4)
 constexpr uint32_t kPlatformEntrySize = 8;   // pointer_bits(4) + endianness(4)
 constexpr uint32_t kLoweringEntrySize =
     52;   // type_id(16) + contract_type(16) + kind(4) + status(4) + reason(4) + ptr(4) + len(4)
@@ -1768,6 +1769,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
             put_u32(error_table.bytes, record.value_parameter);
             put_u32(error_table.bytes, record.flags);
             put_u64(error_table.bytes, record.domain);
+            put_u32(error_table.bytes, static_cast<uint32_t>(record.condition));
         }
         sections.push_back(std::move(error_table));
     }
@@ -2317,6 +2319,7 @@ bool read_abix(const std::string &path, AbiModule &module, std::string &error) {
     for (uint32_t i = 0; error_table && i < error_table->count; ++i) {
         ErrorContract record;
         uint32_t status = 0;
+        uint32_t condition = 0;
         uint64_t success = 0;
         if (!read_u32(bytes, error_offset, record.function_index, error)
             || !read_u32(bytes, error_offset, status, error)
@@ -2325,12 +2328,14 @@ bool read_abix(const std::string &path, AbiModule &module, std::string &error) {
             || !read_u32(bytes, error_offset, record.value_parameter, error)
             || !read_u32(bytes, error_offset, record.flags, error)
             || !read_u64(bytes, error_offset, record.domain, error)
+            || !read_u32(bytes, error_offset, condition, error)
             || record.domain == 0 || status > static_cast<uint32_t>(StatusSource::return_field)) {
             error = "invalid error contract record";
             return false;
         }
         record.status_source = static_cast<StatusSource>(status);
         record.success_value = static_cast<int64_t>(success);
+        record.condition = static_cast<int32_t>(condition);
         module.errors.push_back(record);
     }
     if (platform_table) {

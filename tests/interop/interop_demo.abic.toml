@@ -145,6 +145,7 @@ at_accessor = "demo_set_at"
 [[error]]
 function = "demo_div"
 domain = "0x1003000000000001"
+condition = "invalid_argument"
 success = 0
 value = 2
 

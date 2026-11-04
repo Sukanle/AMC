@@ -80,6 +80,7 @@ params = ["borrowed"]
 [[error]]
 function = "bar_process"
 domain = "0x1003000000000001"
+condition = "invalid_argument"
 success = 0
 value = 2
 
@@ -155,12 +156,13 @@ Ownership is a **contract, not a layout fact**: it never participates in `TypeID
 | Field      | Type        | Description                                                                                                                                        |
 | ---------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `function` | string      | Function whose status/result the contract describes                                                                                                |
-| `domain`   | string/int  | **Required.** Non-zero 64-bit error identity domain (for example `"0x1003000000000001"`); a v1 declaration without it is rejected                  |
-| `status`   | string      | `return` (default) or `parameter`; also `return_field` when the return value is an aggregate (emitted automatically for an `abix_result_*` return) |
+| `domain`    | string/int  | **Required.** Non-zero 64-bit error identity domain (for example `"0x1003000000000001"`); a v1 declaration without it is rejected                  |
+| `condition` | string/int  | Generic condition for a failure (EPCD spelling such as `invalid_argument` or `std::errc::io_error`; default `unknown`)                              |
+| `status`    | string      | `return` (default) or `parameter`; also `return_field` when the return value is an aggregate (emitted automatically for an `abix_result_*` return) |
 | `success`  | int         | Status value that means success (default `0`)                                                                                                      |
 | `value`    | int         | Parameter index carrying the result value (omit when the return value is the result)                                                               |
 
-The error contract is v2: `domain` is mandatory and is recorded as the stable error identity, so a consumer can preserve an unknown status numerically instead of folding it into a generic failure. AMC no longer reads the v1 error schema; a declaration without `domain` fails the build with a migration diagnostic. It lets a backend turn a bare C status code into a typed result; a language-native exception/panic must not cross the ABI boundary. See [`ABI-SPEC.md`](https://github.com/Sukanle/ABIX/blob/main/.agents/ABI-SPEC.md) §6.1. With `status = return_field` the status and value are fields of the returned record: when `[[expose]]` emits a thunk that returns `abix_result_*` it records `return_field` with the status and value field indices, so a consumer gets a typed `Result` for the exposed method.
+The error contract is v2: `domain` is mandatory and is recorded as the stable error identity, and `condition` maps the failure onto a frozen EPCD `GenericCondition` so unrelated domains remain comparable. A consumer can preserve an unknown status numerically instead of folding it into a generic failure. AMC no longer reads the v1 error schema; a declaration without `domain` fails the build with a migration diagnostic. It lets a backend turn a bare C status code into a typed result; a language-native exception/panic must not cross the ABI boundary. See [`ABI-SPEC.md`](https://github.com/Sukanle/ABIX/blob/main/.agents/ABI-SPEC.md) §6.1. With `status = return_field` the status and value are fields of the returned record: when `[[expose]]` emits a thunk that returns `abix_result_*` it records `return_field` with the status and value field indices, so a consumer gets a typed `Result` for the exposed method.
 
 ### `[[instantiate]]` — generic instantiation
 

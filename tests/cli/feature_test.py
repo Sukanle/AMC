@@ -231,6 +231,20 @@ def main() -> int:
         else:
             report.fail("[[error]] without a domain (v1) is rejected", legacy_output)
 
+        bad_condition_config = work / "bad_condition.abic.toml"
+        bad_condition_text = legacy_text.replace(
+            'legacy_error.abix', 'bad_condition.abix'
+        ) + 'domain = "0x1003000000000001"\ncondition = "definitely_not_a_condition"\n'
+        bad_condition_config.write_text(bad_condition_text, encoding="utf-8")
+        bad_condition = run(
+            [str(amc), "build", "-c", str(bad_condition_config), "-B", str(work / "bad_condition")]
+        )
+        bad_condition_output = bad_condition.stdout + bad_condition.stderr
+        if bad_condition.returncode != 0 and "GenericCondition" in bad_condition_output:
+            report.ok("[[error]] with an unknown condition is rejected")
+        else:
+            report.fail("[[error]] with an unknown condition is rejected", bad_condition_output)
+
         # --- C. IR generation / inspection -------------------------------
         cxx_artifact = artifacts.get("amc_test")
         if cxx_artifact is not None:

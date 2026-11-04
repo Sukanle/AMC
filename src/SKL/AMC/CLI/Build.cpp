@@ -211,6 +211,31 @@ bool parse_error_domain(const toml::table &table, const std::string &function, u
     return false;
 }
 
+// Parse the optional v2 generic-condition mapping. Names use the frozen EPCD
+// spellings (`invalid_argument`, `std::errc::invalid_argument`, ...); an integer
+// is accepted verbatim so a future/unknown condition keeps its numeric identity.
+bool parse_error_condition(
+    const toml::table &table, const std::string &function, int32_t &condition, std::string &error) {
+    const toml::node *node = table.get("condition");
+    if (node == nullptr) {
+        condition = static_cast<int32_t>(amc::GenericCondition::unknown);
+        return true;
+    }
+    if (const auto value = node->value<int64_t>()) {
+        if (*value >= INT32_MIN && *value <= INT32_MAX) {
+            condition = static_cast<int32_t>(*value);
+            return true;
+        }
+    } else if (const auto text = node->value<std::string>()) {
+        if (const auto parsed = amc::parse_generic_condition(*text)) {
+            condition = static_cast<int32_t>(*parsed);
+            return true;
+        }
+    }
+    error = "[[error]] condition is not a known GenericCondition: " + function;
+    return false;
+}
+
 // Resolve `[[error]]` declarations into per-function error-boundary records.
 bool resolve_errors(const toml::table &config, amc::AbiModule &module, std::string &error) {
     const auto *errors = config["error"].as_array();
@@ -236,6 +261,7 @@ bool resolve_errors(const toml::table &config, amc::AbiModule &module, std::stri
         amc::ErrorContract contract;
         contract.function_index = static_cast<uint32_t>(index);
         if (!parse_error_domain(*table, function_name, contract.domain, error)) return false;
+        if (!parse_error_condition(*table, function_name, contract.condition, error)) return false;
         const std::string status = (*table)["status"].value_or(std::string("return"));
         contract.status_source = status == "parameter" ? amc::StatusSource::parameter : amc::StatusSource::return_value;
         contract.success_value = (*table)["success"].value_or(int64_t{0});

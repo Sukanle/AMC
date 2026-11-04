@@ -243,12 +243,15 @@ void compare_contracts(const AbiModule &contract, const AbiModule &implementatio
             || before.success_value != after.success_value
             || before.value_parameter != after.value_parameter
             || before.domain != after.domain
+            || before.condition != after.condition
             || before.flags != after.flags) {
             add_change(result, ChangeKind::error_boundary_changed, {}, entry.function,
-                fmt::format("status {} -> {}, success {} -> {}, value parameter {} -> {}, domain {:#x} -> {:#x}",
+                fmt::format("status {} -> {}, success {} -> {}, value parameter {} -> {}, domain {:#x} -> {:#x}, "
+                            "condition {} -> {}",
                     status_source_name(before.status_source), status_source_name(after.status_source),
                     before.success_value, after.success_value, before.value_parameter, after.value_parameter,
-                    before.domain, after.domain));
+                    before.domain, after.domain, generic_condition_name(static_cast<GenericCondition>(before.condition)),
+                    generic_condition_name(static_cast<GenericCondition>(after.condition))));
         }
     }
     for (const auto &[key, entry] : implementation_errors)

@@ -21,6 +21,8 @@
 #include <string_view>
 #include <vector>
 
+#include "SKL/AMC/Core/Condition.h"
+
 namespace amc {
 
 struct Hash128 {
@@ -291,6 +293,7 @@ struct ErrorContract {
                                               // index for return_field, or UINT32_MAX when the return
                                               // value itself is the value
     uint64_t domain = 0;                       // v2 error identity domain (required)
+    int32_t condition = static_cast<int32_t>(GenericCondition::unknown);   // EPCD GenericCondition
     uint32_t flags = 0;
 };
 
