@@ -619,6 +619,7 @@ int cmd_build(char **args, int arg_count, const fs::path &provider) {
             const fs::path frontend = provider_executable(provider, language);
             const fs::path base = build_dir.empty() ? fs::absolute(config_path).parent_path() : build_dir;
             const fs::path temporary = base / ".amc" / "frontend.abix";
+            const fs::path semantic_temporary = fs::path(temporary.string() + ".semantic");
             std::error_code ec;
             fs::create_directories(temporary.parent_path(), ec);
             if (ec)
@@ -717,6 +718,10 @@ int cmd_build(char **args, int arg_count, const fs::path &provider) {
                                 return fail(amc::ErrorCategory::io, "cache", error, config_path.string());
                             frontend_ran = false;
                         }
+                    const fs::path cached_semantic = fs::path(cached.directory) / "frontend.abix.semantic";
+                    if (fs::exists(cached_semantic)
+                        && !copy_file(cached_semantic, semantic_temporary, error))
+                        return fail(amc::ErrorCategory::io, "cache", error, config_path.string());
                 }
             }
             if (frontend_ran) {
@@ -955,6 +960,12 @@ int cmd_build(char **args, int arg_count, const fs::path &provider) {
                 // AI-PM: emit the `.abix.meta` sidecar for symbol-server/CI indexing.
                 if (!write_abix_meta(projected, output, error))
                     return fail(amc::ErrorCategory::io, "write_abix_meta", error, output.string() + ".meta");
+                // The semantic sidecar describes template declarations and
+                // instances. It is not part of the ABI artifact, so it is
+                // copied verbatim next to each exported artifact.
+                if (fs::exists(semantic_temporary)
+                    && !copy_file(semantic_temporary, fs::path(output.string() + ".semantic"), error))
+                    return fail(amc::ErrorCategory::io, "semantic", error, output.string() + ".semantic");
             }
             // Populate the cache with the frontend artifact and its full
             // dependency closure, so a later build with unchanged inputs can
@@ -989,15 +1000,19 @@ int cmd_build(char **args, int arg_count, const fs::path &provider) {
                     std::string content(
                         (std::istreambuf_iterator<char>(cached_output)), std::istreambuf_iterator<char>());
                     std::string store_error;
-                    (void)cache.store(cache_inputs,
-                        {
-                            {"frontend.abix", content}
-                    },
-                        dependencies, store_error);
+                    std::vector<std::pair<std::string, std::string>> artifacts{{"frontend.abix", content}};
+                    std::ifstream cached_semantic(semantic_temporary, std::ios::binary);
+                    if (cached_semantic) {
+                        artifacts.push_back({"frontend.abix.semantic",
+                            std::string((std::istreambuf_iterator<char>(cached_semantic)),
+                                std::istreambuf_iterator<char>())});
+                    }
+                    (void)cache.store(cache_inputs, artifacts, dependencies, store_error);
                 }
             }
             fs::remove(temporary, ec);
             fs::remove(temporary.string() + ".d", ec);
+            fs::remove(semantic_temporary, ec);
             return 0;
         } catch (const toml::parse_error &error) {
             return fail(amc::ErrorCategory::config, "build", std::string(error.description()), config_path.string());

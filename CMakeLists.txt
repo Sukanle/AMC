@@ -171,6 +171,7 @@ add_library(
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Error.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Condition.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Semantic/Identity.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Semantic/Serialize.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/ELF.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Json.cpp
     ${AMC_SOURCE_DIR}/src/ljson/json.c

@@ -18,6 +18,7 @@ Aspects:
     E. IR reuse               - one artifact drives every backend
 """
 
+import json
 import os
 import shutil
 import subprocess
@@ -204,7 +205,7 @@ def main() -> int:
 
         # --- B. code parsing -> .abix ------------------------------------
         artifacts: dict[str, Path] = {}
-        for name in ("amc_test", "rust_demo"):
+        for name in ("amc_test", "rust_demo", "templates"):
             out = work / name
             built = run([str(amc), "build", "-c", str(fixtures / f"{name}.abic.toml"), "-B", str(out)])
             found = next(iter(out.rglob("*.abix")), None)
@@ -279,6 +280,42 @@ def main() -> int:
             report.ok("[[error]] domain must match its error set")
         else:
             report.fail("[[error]] domain must match its error set", mismatch_output)
+
+        template_artifact = artifacts.get("templates")
+        if template_artifact is not None:
+            semantic_path = Path(str(template_artifact) + ".semantic")
+            if semantic_path.is_file():
+                try:
+                    semantic = json.loads(semantic_path.read_text(encoding="utf-8"))
+                except json.JSONDecodeError as error:
+                    report.fail("template semantic sidecar is valid JSON", str(error))
+                else:
+                    template_names = {item.get("name") for item in semantic.get("templates", [])}
+                    instances = semantic.get("instances", [])
+                    constrained = any(
+                        parameter.get("constraint")
+                        for declaration in semantic.get("templates", [])
+                        if declaration.get("name") == "multiply"
+                        for parameter in declaration.get("parameters", [])
+                    )
+                    if {"Box", "add", "multiply"} <= template_names:
+                        report.ok("template declarations are recorded (Box/add/multiply)")
+                    else:
+                        report.fail("template declarations are recorded (Box/add/multiply)", str(template_names))
+                    if len(instances) >= 6:
+                        report.ok("template instances are recorded")
+                    else:
+                        report.fail("template instances are recorded", f"count={len(instances)}")
+                    if constrained:
+                        report.ok("Concepts constraint metadata is recorded")
+                    else:
+                        report.fail("Concepts constraint metadata is recorded")
+                    if any(item.get("explicit_specialization") for item in instances):
+                        report.ok("explicit specialization is recorded")
+                    else:
+                        report.fail("explicit specialization is recorded")
+            else:
+                report.fail("template semantic sidecar is written", str(semantic_path))
 
         # --- C. IR generation / inspection -------------------------------
         cxx_artifact = artifacts.get("amc_test")

@@ -130,6 +130,7 @@ struct TemplateParameter {
     std::string name;
     Hash128 default_argument{};   // zero when absent
     Hash128 constraint{};         // normalized constraint key, zero when absent
+    std::string constraint_source;   // source text for diagnostics
 };
 
 struct TemplateDecl {
@@ -149,7 +150,7 @@ enum class InstantiationOrigin : uint32_t {
     config_requested     // [[instantiate]]
 };
 
-enum class TemplateArgumentKind : uint32_t { type, integral, template_, pack };
+enum class TemplateArgumentKind : uint32_t { type, integral, template_, pack, other };
 
 struct TemplateArgument {
     TemplateArgumentKind kind = TemplateArgumentKind::type;

@@ -1,0 +1,12 @@
+[package]
+name = "templates"
+version = "1.0"
+
+[[import]]
+language = "cpp"
+flags = ["-std=c++20"]
+files = ["templates.hpp"]
+symbols = ["Box", "add", "multiply"]
+
+[[export]]
+output = "build/templates.abix"

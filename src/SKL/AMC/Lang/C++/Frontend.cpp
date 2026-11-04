@@ -17,6 +17,9 @@
 #include "SKL/AMC/Lang/Lang.h"
 #include "SKL/AMC/Core/Core.h"
 #include "SKL/AMC/Core/Generated.h"
+#include "SKL/AMC/Semantic/Identity.h"
+#include "SKL/AMC/Semantic/Model.h"
+#include "SKL/AMC/Semantic/Serialize.h"
 
 // The Clang resource directory detected at build time (`clang -print-resource-dir`).
 // It is injected by CMake for the `amc-cpp` target; empty if unavailable.
@@ -29,8 +32,10 @@
 #include <clang/AST/DeclTemplate.h>
 #include <clang/AST/RecordLayout.h>
 #include <clang/AST/RecursiveASTVisitor.h>
+#include <clang/AST/TemplateBase.h>
 #include <clang/AST/Type.h>
 #include <clang/Basic/SourceManager.h>
+#include <clang/Lex/Lexer.h>
 #include <clang/Options/OptionUtils.h>
 #include <clang/Tooling/CompilationDatabase.h>
 #include <clang/Tooling/JSONCompilationDatabase.h>
@@ -255,12 +260,14 @@ bool fixed_width_int(const std::string &spelling, uint32_t &size, bool &is_signe
 class Extractor : public clang::RecursiveASTVisitor<Extractor> {
 public:
     Extractor(clang::ASTContext &c, const std::set<std::string> &wanted, amc::AbiModule &m,
-        const std::vector<amc::lang::AdaptDecl> &a, std::vector<NativeAdapt> &out)
+        const std::vector<amc::lang::AdaptDecl> &a, std::vector<NativeAdapt> &out,
+        amc::semantic::SemanticModule &s)
         : ctx(c)
         , wanted(wanted)
         , module(m)
         , adapts(a)
-        , adaptations(out) {}
+        , adaptations(out)
+        , semantic(s) {}
     bool VisitRecordDecl(clang::RecordDecl *d) {
         if (amc::lang::cancellation_requested()) return false;
         auto *cxx = llvm::dyn_cast<clang::CXXRecordDecl>(d);
@@ -283,6 +290,49 @@ public:
         if (selected(d)) add_alias(d);
         return true;
     }
+    bool VisitClassTemplateDecl(clang::ClassTemplateDecl *d) {
+        if (amc::lang::cancellation_requested()) return false;
+        if (d->isImplicit()) return true;
+        if (!selected(d) && !has_selected_member(d->getTemplatedDecl())) return true;
+        ensure_template_decl(d);
+        for (clang::ClassTemplateSpecializationDecl *specialization : d->specializations()) {
+            if (specialization->isCompleteDefinition())
+                record_template_instance(d, specialization->getTemplateArgs().asArray(),
+                    specialization->getSpecializationKind(), specialization);
+        }
+        return true;
+    }
+    bool VisitFunctionTemplateDecl(clang::FunctionTemplateDecl *d) {
+        if (amc::lang::cancellation_requested()) return false;
+        if (d->isImplicit()) return true;
+        if (!selected(d)) return true;
+        ensure_template_decl(d);
+        for (clang::FunctionDecl *specialization : d->specializations()) {
+            if (const clang::TemplateArgumentList *arguments = specialization->getTemplateSpecializationArgs())
+                record_template_instance(
+                    d, arguments->asArray(), specialization->getTemplateSpecializationKind(), specialization);
+        }
+        return true;
+    }
+    bool VisitClassTemplateSpecializationDecl(clang::ClassTemplateSpecializationDecl *d) {
+        if (amc::lang::cancellation_requested()) return false;
+        if (!d->isCompleteDefinition()) return true;
+        clang::ClassTemplateDecl *declaration = d->getSpecializedTemplate();
+        if (declaration == nullptr) return true;
+        if (!selected(d) && !selected(declaration) && !has_selected_member(declaration->getTemplatedDecl())) return true;
+        record_template_instance(declaration, d->getTemplateArgs().asArray(), d->getSpecializationKind(), d);
+        return true;
+    }
+    bool VisitFunctionDecl(clang::FunctionDecl *d) {
+        if (amc::lang::cancellation_requested()) return false;
+        const clang::FunctionTemplateSpecializationInfo *info = d->getTemplateSpecializationInfo();
+        if (info != nullptr && info->TemplateArguments != nullptr && info->getTemplate() != nullptr
+            && (selected(d) || selected(info->getTemplate()))) {
+            record_template_instance(info->getTemplate(), info->TemplateArguments->asArray(),
+                d->getTemplateSpecializationKind(), d);
+        }
+        return true;
+    }
     bool VisitDecl(clang::Decl *d) {
         if (amc::lang::cancellation_requested()) return false;
         if (auto *fn = llvm::dyn_cast<clang::FunctionDecl>(d))
@@ -296,7 +346,12 @@ private:
     amc::AbiModule &module;
     const std::vector<amc::lang::AdaptDecl> &adapts;
     std::vector<NativeAdapt> &adaptations;
+    amc::semantic::SemanticModule &semantic;
     std::unordered_map<std::string, amc::Hash128> ids;
+    std::unordered_map<std::string, amc::semantic::SemanticTypeId> semantic_type_ids;
+    std::unordered_map<const clang::TemplateDecl *, amc::semantic::TemplateDeclId> semantic_templates;
+    std::set<amc::semantic::SemanticTypeId> semantic_type_records;
+    std::set<amc::semantic::TemplateInstanceId> semantic_instances;
     // Dedup keyed by ABI descriptor, so spellings that share an ABI (e.g.
     // `long` / `long long`) collapse onto one type record with one TypeID.
     std::unordered_map<std::string, amc::Hash128> primitive_ids;
@@ -317,6 +372,271 @@ private:
         origin.line = presumed.getLine();
         origin.column = presumed.getColumn();
         module.sources.push_back(std::move(origin));
+    }
+
+    amc::semantic::SourceLocation semantic_source(clang::SourceLocation location) const {
+        amc::semantic::SourceLocation out;
+        if (location.isInvalid()) return out;
+        const auto presumed = ctx.getSourceManager().getPresumedLoc(location);
+        if (presumed.isInvalid()) return out;
+        out.file = presumed.getFilename() != nullptr ? presumed.getFilename() : "";
+        out.line = presumed.getLine();
+        out.column = presumed.getColumn();
+        return out;
+    }
+
+    std::string source_text(clang::SourceRange range) const {
+        if (range.isInvalid()) return {};
+        return clang::Lexer::getSourceText(
+            clang::CharSourceRange::getTokenRange(range), ctx.getSourceManager(), ctx.getLangOpts())
+            .str();
+    }
+
+    amc::Hash128 source_hash(clang::SourceRange range, uint64_t domain) const {
+        const std::string text = source_text(range);
+        return text.empty() ? amc::Hash128{} : amc::hash_text(text, domain);
+    }
+
+    static amc::semantic::SemanticTypeKind semantic_type_kind(clang::QualType type) {
+        if (type->isLValueReferenceType()) return amc::semantic::SemanticTypeKind::lvalue_reference;
+        if (type->isRValueReferenceType()) return amc::semantic::SemanticTypeKind::rvalue_reference;
+        if (type->isPointerType()) return amc::semantic::SemanticTypeKind::pointer;
+        if (type->isArrayType()) return amc::semantic::SemanticTypeKind::array;
+        if (type->isFunctionType()) return amc::semantic::SemanticTypeKind::function;
+        if (type->isMemberPointerType()) return amc::semantic::SemanticTypeKind::member_pointer;
+        if (type->isRecordType()) return amc::semantic::SemanticTypeKind::record;
+        if (type->isEnumeralType()) return amc::semantic::SemanticTypeKind::enumeration;
+        if (type->isBuiltinType()) return amc::semantic::SemanticTypeKind::builtin;
+        if (type->isDependentType()) return amc::semantic::SemanticTypeKind::dependent;
+        return amc::semantic::SemanticTypeKind::unknown;
+    }
+
+    amc::semantic::SemanticTypeId semantic_type_id(clang::QualType type) {
+        const clang::QualType canonical = type.getCanonicalType();
+        amc::semantic::Qualifiers qualifiers;
+        qualifiers.is_const = type.isConstQualified();
+        qualifiers.is_volatile = type.isVolatileQualified();
+        qualifiers.is_restrict = type.isRestrictQualified();
+        amc::semantic::ValueCategory category = amc::semantic::ValueCategory::value;
+        if (type->isLValueReferenceType())
+            category = amc::semantic::ValueCategory::lvalue;
+        else if (type->isRValueReferenceType())
+            category = amc::semantic::ValueCategory::xvalue;
+        const std::string spelling = canonical.getAsString();
+        const std::string key = spelling + (qualifiers.is_const ? "|c" : "") + (qualifiers.is_volatile ? "|v" : "")
+                              + (qualifiers.is_restrict ? "|r" : "") + "|"
+                              + std::to_string(static_cast<uint32_t>(category));
+        const auto found = semantic_type_ids.find(key);
+        if (found != semantic_type_ids.end()) return found->second;
+
+        amc::semantic::SemanticTypeId element;
+        if (type->isPointerType() || type->isReferenceType())
+            element = semantic_type_id(type->getPointeeType());
+        else if (const auto *array = ctx.getAsArrayType(type))
+            element = semantic_type_id(array->getElementType());
+
+        const amc::semantic::SemanticTypeKind kind = semantic_type_kind(type);
+        const auto id = amc::semantic::semantic_type_identity(kind, spelling, qualifiers, category, {}, element, {},
+            amc::semantic::semantic_rules_version);
+        semantic_type_ids.emplace(key, id);
+        if (semantic_type_records.insert(id).second) {
+            amc::semantic::SemanticType record;
+            record.id = id;
+            record.kind = kind;
+            record.qualified_name = spelling;
+            record.qualifiers = qualifiers;
+            record.element = element;
+            semantic.types.push_back(std::move(record));
+        }
+        return id;
+    }
+
+    static amc::semantic::InstantiationOrigin instantiation_origin(clang::TemplateSpecializationKind kind) {
+        switch (kind) {
+            case clang::TSK_ExplicitSpecialization:
+            case clang::TSK_ExplicitInstantiationDeclaration:
+            case clang::TSK_ExplicitInstantiationDefinition: return amc::semantic::InstantiationOrigin::explicit_source;
+            case clang::TSK_ImplicitInstantiation: return amc::semantic::InstantiationOrigin::implicit_compiler;
+            default: return amc::semantic::InstantiationOrigin::implicit_compiler;
+        }
+    }
+
+    static void append_argument_key(std::string &out, const amc::semantic::TemplateArgument &argument) {
+        out += std::to_string(static_cast<uint32_t>(argument.kind));
+        out += ":";
+        out += std::to_string(argument.type.value.lo);
+        out += ":";
+        out += std::to_string(argument.type.value.hi);
+        out += ":";
+        out += std::to_string(argument.value);
+        out += ":";
+        out += std::to_string(argument.template_decl.value.lo);
+        out += ":";
+        out += std::to_string(argument.template_decl.value.hi);
+        out += ":";
+        out += std::to_string(argument.canonical.lo);
+        out += ":";
+        out += std::to_string(argument.canonical.hi);
+        out += ";";
+    }
+
+    amc::semantic::TemplateArgument convert_argument(const clang::TemplateArgument &argument) {
+        amc::semantic::TemplateArgument out;
+        switch (argument.getKind()) {
+            case clang::TemplateArgument::Type:
+                out.kind = amc::semantic::TemplateArgumentKind::type;
+                out.type = semantic_type_id(argument.getAsType());
+                break;
+            case clang::TemplateArgument::Integral:
+                out.kind = amc::semantic::TemplateArgumentKind::integral;
+                out.value = argument.getAsIntegral().getSExtValue();
+                break;
+            case clang::TemplateArgument::Template:
+                out.kind = amc::semantic::TemplateArgumentKind::template_;
+                if (auto *decl = argument.getAsTemplate().getAsTemplateDecl())
+                    out.template_decl = ensure_template_decl(decl);
+                break;
+            case clang::TemplateArgument::TemplateExpansion:
+                out.kind = amc::semantic::TemplateArgumentKind::pack;
+                if (auto *decl = argument.getAsTemplateOrTemplatePattern().getAsTemplateDecl())
+                    out.template_decl = ensure_template_decl(decl);
+                break;
+            case clang::TemplateArgument::Pack: {
+                out.kind = amc::semantic::TemplateArgumentKind::pack;
+                std::string key;
+                for (const auto &child : argument.pack_elements()) {
+                    const auto converted = convert_argument(child);
+                    append_argument_key(key, converted);
+                }
+                out.canonical = amc::hash_text(key, 0x5041434bULL);
+                break;
+            }
+            default:
+                out.kind = amc::semantic::TemplateArgumentKind::other;
+                break;
+        }
+        return out;
+    }
+
+    amc::semantic::TemplateDeclId ensure_template_decl(clang::TemplateDecl *decl) {
+        const auto found = semantic_templates.find(decl);
+        if (found != semantic_templates.end()) return found->second;
+
+        amc::semantic::TemplateDecl record;
+        record.kind = llvm::isa<clang::ClassTemplateDecl>(decl) ? amc::semantic::TemplateKind::class_
+                                                                : amc::semantic::TemplateKind::function;
+        record.qualified_name = decl->getQualifiedNameAsString();
+        if (const clang::TemplateParameterList *parameters = decl->getTemplateParameters()) {
+            if (const clang::Expr *requires = parameters->getRequiresClause())
+                record.requires_source = source_text(requires->getSourceRange());
+            if (!record.requires_source.empty())
+                record.requires_hash = amc::hash_text(record.requires_source, 0x52455153ULL);
+            for (unsigned i = 0; i < parameters->size(); ++i) {
+                const clang::NamedDecl *parameter = parameters->getParam(i);
+                amc::semantic::TemplateParameter out;
+                out.index = i;
+                out.name = parameter->getNameAsString();
+                if (auto *type = llvm::dyn_cast<clang::TemplateTypeParmDecl>(parameter)) {
+                    out.kind = amc::semantic::TemplateParameterKind::type;
+                    if (type->hasDefaultArgument())
+                        out.default_argument = source_hash(type->getDefaultArgument().getSourceRange(), 0x44454641ULL);
+                    if (type->hasTypeConstraint()) {
+                        if (const clang::TypeConstraint *constraint = type->getTypeConstraint()) {
+                            if (const clang::Expr *expression = constraint->getImmediatelyDeclaredConstraint()) {
+                                out.constraint = source_hash(expression->getSourceRange(), 0x434f4e53ULL);
+                                out.constraint_source = source_text(expression->getSourceRange());
+                            }
+                        }
+                    }
+                } else if (auto *non_type = llvm::dyn_cast<clang::NonTypeTemplateParmDecl>(parameter)) {
+                    out.kind = amc::semantic::TemplateParameterKind::non_type;
+                    if (non_type->hasDefaultArgument())
+                        out.default_argument = source_hash(non_type->getDefaultArgument().getSourceRange(), 0x44454641ULL);
+                } else if (auto *template_parameter = llvm::dyn_cast<clang::TemplateTemplateParmDecl>(parameter)) {
+                    out.kind = amc::semantic::TemplateParameterKind::template_template;
+                    if (template_parameter->hasDefaultArgument())
+                        out.default_argument =
+                            source_hash(template_parameter->getDefaultArgument().getSourceRange(), 0x44454641ULL);
+                } else {
+                    continue;
+                }
+                record.parameters.push_back(std::move(out));
+            }
+        }
+        record.id = amc::semantic::template_decl_identity(record.kind, record.qualified_name, record.parameters,
+            record.requires_hash, amc::semantic::semantic_rules_version);
+        record.source = semantic_source(decl->getLocation());
+        semantic.templates.push_back(record);
+        semantic_templates.emplace(decl, record.id);
+        return record.id;
+    }
+
+    void record_template_instance(clang::TemplateDecl *decl, llvm::ArrayRef<clang::TemplateArgument> arguments,
+        clang::TemplateSpecializationKind kind, clang::NamedDecl *instantiated) {
+        if (decl == nullptr) return;
+        const amc::semantic::TemplateDeclId declaration = ensure_template_decl(decl);
+        std::vector<amc::semantic::TemplateArgument> semantic_arguments;
+        std::vector<amc::semantic::TemplateArgumentKey> keys;
+        semantic_arguments.reserve(arguments.size());
+        keys.reserve(arguments.size());
+        for (const auto &argument : arguments) {
+            auto converted = convert_argument(argument);
+            amc::semantic::TemplateArgumentKey key;
+            key.kind = converted.kind;
+            key.type = converted.type;
+            key.value = converted.value;
+            key.template_decl = converted.template_decl;
+            key.canonical = converted.canonical;
+            keys.push_back(key);
+            semantic_arguments.push_back(std::move(converted));
+        }
+        const bool explicit_specialization = kind == clang::TSK_ExplicitSpecialization;
+        const auto instance = amc::semantic::template_instance_identity(
+            declaration, keys, explicit_specialization, amc::semantic::semantic_rules_version);
+        if (!semantic_instances.insert(instance).second) return;
+
+        amc::semantic::TemplateInstance record;
+        record.id = instance;
+        record.declaration = declaration;
+        record.arguments = std::move(semantic_arguments);
+        record.origin = instantiation_origin(kind);
+        record.is_explicit_specialization = explicit_specialization;
+        record.constraint.evaluated = false;
+        record.constraint.satisfied = false;
+        record.constraint.reason = "recorded from Clang; constraint satisfaction is enforced by the compiler";
+        record.source = semantic_source(instantiated != nullptr ? instantiated->getLocation() : decl->getLocation());
+
+        if (instantiated != nullptr) {
+            if (auto *specialization = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(instantiated)) {
+                record.result = amc::semantic::semantic_type_identity(amc::semantic::SemanticTypeKind::template_instance,
+                    specialization->getQualifiedNameAsString(), {}, amc::semantic::ValueCategory::value, {}, {}, instance,
+                    amc::semantic::semantic_rules_version)
+                                    .value;
+            } else if (auto *function = llvm::dyn_cast<clang::FunctionDecl>(instantiated)) {
+                amc::semantic::SemanticFunctionKind function_kind = amc::semantic::SemanticFunctionKind::free_function;
+                amc::semantic::SemanticTypeId owner;
+                if (auto *method = llvm::dyn_cast<clang::CXXMethodDecl>(function)) {
+                    if (llvm::isa<clang::CXXConstructorDecl>(method))
+                        function_kind = amc::semantic::SemanticFunctionKind::constructor;
+                    else if (llvm::isa<clang::CXXDestructorDecl>(method))
+                        function_kind = amc::semantic::SemanticFunctionKind::destructor;
+                    else if (llvm::isa<clang::CXXConversionDecl>(method))
+                        function_kind = amc::semantic::SemanticFunctionKind::conversion;
+                    else
+                        function_kind = amc::semantic::SemanticFunctionKind::member_function;
+                    owner = semantic_type_id(ctx.getCanonicalTagType(method->getParent()));
+                }
+                std::vector<amc::semantic::SemanticTypeId> parameters;
+                parameters.reserve(function->getNumParams());
+                for (const auto *parameter : function->parameters())
+                    parameters.push_back(semantic_type_id(parameter->getType()));
+                record.result = amc::semantic::semantic_function_identity(function_kind, owner,
+                    function->getNameAsString(), parameters, {}, amc::semantic::ValueCategory::value, instance,
+                    amc::semantic::semantic_rules_version)
+                                    .value;
+            }
+        }
+        semantic.instances.push_back(std::move(record));
     }
     void add_namespaces(const clang::NamedDecl *d) {
         const auto *context = d->getDeclContext();
@@ -820,14 +1140,15 @@ private:
 class Consumer : public clang::ASTConsumer {
 public:
     Consumer(const std::set<std::string> &w, amc::AbiModule &m, const std::vector<amc::lang::AdaptDecl> &a,
-        std::vector<NativeAdapt> &out)
+        std::vector<NativeAdapt> &out, amc::semantic::SemanticModule &s)
         : wanted(w)
         , module(m)
         , adapts(a)
-        , adaptations(out) {}
+        , adaptations(out)
+        , semantic(s) {}
     void HandleTranslationUnit(clang::ASTContext &c) override {
         if (amc::lang::cancellation_requested()) return;
-        Extractor x(c, wanted, module, adapts, adaptations);
+        Extractor x(c, wanted, module, adapts, adaptations, semantic);
         x.TraverseDecl(c.getTranslationUnitDecl());
     }
 
@@ -836,17 +1157,19 @@ private:
     amc::AbiModule &module;
     const std::vector<amc::lang::AdaptDecl> &adapts;
     std::vector<NativeAdapt> &adaptations;
+    amc::semantic::SemanticModule &semantic;
 };
 class Action : public clang::ASTFrontendAction {
 public:
     Action(const std::set<std::string> &w, amc::AbiModule &m, const std::vector<amc::lang::AdaptDecl> &a,
-        std::vector<NativeAdapt> &out)
+        std::vector<NativeAdapt> &out, amc::semantic::SemanticModule &s)
         : wanted(w)
         , module(m)
         , adapts(a)
-        , adaptations(out) {}
+        , adaptations(out)
+        , semantic(s) {}
     std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(clang::CompilerInstance &, clang::StringRef) override {
-        return std::make_unique<Consumer>(wanted, module, adapts, adaptations);
+        return std::make_unique<Consumer>(wanted, module, adapts, adaptations, semantic);
     }
 
 private:
@@ -854,17 +1177,19 @@ private:
     amc::AbiModule &module;
     const std::vector<amc::lang::AdaptDecl> &adapts;
     std::vector<NativeAdapt> &adaptations;
+    amc::semantic::SemanticModule &semantic;
 };
 class Factory : public clang::tooling::FrontendActionFactory {
 public:
     Factory(const std::set<std::string> &w, amc::AbiModule &m, const std::vector<amc::lang::AdaptDecl> &a,
-        std::vector<NativeAdapt> &out)
+        std::vector<NativeAdapt> &out, amc::semantic::SemanticModule &s)
         : wanted(w)
         , module(m)
         , adapts(a)
-        , adaptations(out) {}
+        , adaptations(out)
+        , semantic(s) {}
     std::unique_ptr<clang::FrontendAction> create() override {
-        return std::make_unique<Action>(wanted, module, adapts, adaptations);
+        return std::make_unique<Action>(wanted, module, adapts, adaptations, semantic);
     }
 
 private:
@@ -872,6 +1197,7 @@ private:
     amc::AbiModule &module;
     const std::vector<amc::lang::AdaptDecl> &adapts;
     std::vector<NativeAdapt> &adaptations;
+    amc::semantic::SemanticModule &semantic;
 };
 // P0 automatic capability generation: emit C thunks that expose selected
 // methods of a concrete type, then register them as ABI entities so any
@@ -1425,6 +1751,9 @@ int run_frontend(const char *config_path, const char *output_path) {
     }
     amc::AbiModule module;
     module.package_name = "cpp";
+    amc::semantic::SemanticModule semantic;
+    semantic.package_name = "cpp";
+    semantic.rules_version = amc::semantic::semantic_rules_version;
 
     // Generic instantiation protocol, stage A/B: AMC coordinates the request and
     // the C++ frontend (Clang/Sema) performs the instantiation and constraint
@@ -1454,7 +1783,7 @@ int run_frontend(const char *config_path, const char *output_path) {
     }
 
     std::vector<NativeAdapt> adaptations;
-    Factory factory(wanted, module, c.adaptations, adaptations);
+    Factory factory(wanted, module, c.adaptations, adaptations, semantic);
     clang::tooling::ClangTool tool(*db, tool_files);
     if (!anchor_path.empty()) tool.mapVirtualFile(anchor_path, anchor);
     // Report the include closure so AMC's instantiation cache can invalidate on
@@ -1501,6 +1830,13 @@ int run_frontend(const char *config_path, const char *output_path) {
     if (!amc::write_abix(module, output_path, e)) {
         fmt::print(stderr, "{}\n", e);
         return EXIT_FAILURE;
+    }
+    if (!semantic.templates.empty() || !semantic.instances.empty()) {
+        const std::string semantic_path = std::string(output_path) + ".semantic";
+        if (!amc::semantic::write_semantic_json(semantic, semantic_path, e)) {
+            fmt::print(stderr, "{}\n", e);
+            return EXIT_FAILURE;
+        }
     }
     return EXIT_SUCCESS;
 }
