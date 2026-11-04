@@ -44,6 +44,7 @@
 #include <llvm/ADT/APFloat.h>
 
 #include <fmt/base.h>
+#include <fmt/format.h>
 
 #include <cctype>
 #include <filesystem>
@@ -881,6 +882,12 @@ private:
             x.name = base.getType().getAsString();
             x.type_id = add_type(base.getType());
             x.flags = amc::field_base | access_flags(base.getAccessSpecifier());
+            if (const auto *base_record = base.getType()->getAsCXXRecordDecl()) {
+                const clang::CharUnits offset = base.isVirtual()
+                    ? l.getVBaseClassOffset(base_record)
+                    : l.getBaseClassOffset(base_record);
+                x.offset = static_cast<uint32_t>(offset.getQuantity());
+            }
             module.fields.push_back(std::move(x));
         }
         for (auto *f : d->fields()) {
@@ -1526,21 +1533,27 @@ bool expose_thunks(amc::AbiModule &module, const amc::lang::Config &config, std:
         };
         std::vector<ExposedMethod> exposed_methods;
         for (const auto &method : expose.methods) {
-            const amc::Function *found = nullptr;
+            std::vector<amc::Function> matches;
             for (const auto &function : module.functions) {
                 if (!is_method_of_type(function)) continue;
                 if (function.name == method
                     || (function.name.size() > method.size()
                         && function.name.compare(function.name.size() - method.size(), method.size(), method) == 0
                         && function.name[function.name.size() - method.size() - 1] == ':')) {
-                    found = &function;
-                    break;
+                    matches.push_back(function);
                 }
             }
-            if (found == nullptr) {
+            if (matches.empty()) {
                 error = "[[expose]] references an unknown method: " + expose.type + "::" + method;
                 return false;
             }
+            const auto overload_suffix = [&](const amc::Function &function) {
+                if (matches.size() <= 1) return std::string{};
+                return fmt::format("_{:08x}{:04x}", function.signature.lo,
+                    static_cast<uint32_t>(function.signature.hi & 0xffff));
+            };
+            for (const auto &candidate : matches) {
+            const amc::Function *found = &candidate;
             if (!representable(found->return_type)) {
                 error = "[[expose]] "
                       + expose.type
@@ -1599,11 +1612,12 @@ bool expose_thunks(amc::AbiModule &module, const amc::lang::Config &config, std:
                 args += adapt != nullptr ? adapt_expression(*adapt, name) : name;
                 signature.emplace_back(name, param_type);
             }
-            source +=
-                "extern \"C\" " + return_spelling + " abix_" + symbol_type + "_" + method + "(" + params + ") {\n";
+            const std::string suffix = overload_suffix(*found);
+            source += "extern \"C\" " + return_spelling + " abix_" + symbol_type + "_" + method + suffix + "("
+                    + params + ") {\n";
             source +=
                 std::string("    ") + (returns_void ? "" : "return ") + "self->" + method + "(" + args + ");\n}\n";
-            const std::string symbol = "abix_" + symbol_type + "_" + method;
+            const std::string symbol = "abix_" + symbol_type + "_" + method + suffix;
             // Capture the method facts before registering the thunk: `register_thunk`
             // pushes onto `module.functions`, which may reallocate the vector and
             // invalidate `found`. Reading through `found` afterwards would be a
@@ -1634,6 +1648,7 @@ bool expose_thunks(amc::AbiModule &module, const amc::lang::Config &config, std:
                 contract.success_value = 0;
                 contract.domain = amc::amc_error_domain;
                 module.errors.push_back(contract);
+            }
             }
         }
         source += "\n";

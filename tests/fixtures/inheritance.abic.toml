@@ -1,0 +1,12 @@
+[package]
+name = "inheritance"
+version = "1.0"
+
+[[import]]
+language = "cpp"
+flags = ["-std=c++17"]
+files = ["inheritance.hpp"]
+symbols = ["BaseA", "BaseB", "Derived"]
+
+[[export]]
+output = "build/inheritance.abix"

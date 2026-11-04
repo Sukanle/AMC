@@ -20,6 +20,7 @@ Aspects:
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -205,7 +206,7 @@ def main() -> int:
 
         # --- B. code parsing -> .abix ------------------------------------
         artifacts: dict[str, Path] = {}
-        for name in ("amc_test", "rust_demo", "templates"):
+        for name in ("amc_test", "rust_demo", "templates", "inheritance"):
             out = work / name
             built = run([str(amc), "build", "-c", str(fixtures / f"{name}.abic.toml"), "-B", str(out)])
             found = next(iter(out.rglob("*.abix")), None)
@@ -316,6 +317,59 @@ def main() -> int:
                         report.fail("explicit specialization is recorded")
             else:
                 report.fail("template semantic sidecar is written", str(semantic_path))
+
+        inheritance_artifact = artifacts.get("inheritance")
+        if inheritance_artifact is not None:
+            context = run([str(amc), "context", str(inheritance_artifact), "--format", "json"])
+            if context.returncode == 0:
+                try:
+                    context_data = json.loads(context.stdout)
+                except json.JSONDecodeError as error:
+                    report.fail("inheritance context is valid JSON", str(error))
+                else:
+                    derived = next(
+                        (item for item in context_data.get("types", [])
+                         if item.get("name") == "Derived"),
+                        None,
+                    )
+                    base_offsets = []
+                    if derived is not None:
+                        base_offsets = [
+                            field.get("offset")
+                            for field in context_data.get("fields", [])
+                            if field.get("owner") == derived.get("id") and field.get("name") == "BaseB"
+                        ]
+                    if base_offsets and base_offsets[0] > 0:
+                        report.ok("base-class subobject offsets are recorded")
+                    else:
+                        report.fail("base-class subobject offsets are recorded", str(base_offsets))
+            else:
+                report.fail("inheritance context is readable", context.stderr)
+
+        overload_config = work / "overloads.abic.toml"
+        overload_header = (fixtures / "overloads.hpp").as_posix()
+        overload_config.write_text(
+            '[package]\nname = "overloads"\nversion = "1.0"\n'
+            '[[import]]\nlanguage = "cpp"\nflags = ["-std=c++17"]\n'
+            f'files = ["{overload_header}"]\nsymbols = ["Overloaded"]\n'
+            '[thunks]\noutput = "overload_thunks.cpp"\n'
+            '[[expose]]\ntype = "Overloaded"\nmethods = ["pick"]\nconstructor = []\n'
+            '[[export]]\noutput = "build/overloads.abix"\n',
+            encoding="utf-8",
+        )
+        overload_build = run(
+            [str(amc), "build", "-c", str(overload_config), "-B", str(work / "overloads")]
+        )
+        overload_thunks = work / "overload_thunks.cpp"
+        overload_text = overload_thunks.read_text(encoding="utf-8") if overload_thunks.is_file() else ""
+        overload_symbols = set(re.findall(r"abix_Overloaded_pick_[0-9a-f]+", overload_text))
+        if overload_build.returncode == 0 and len(overload_symbols) >= 2:
+            report.ok("overloaded exposed methods get distinct thunk symbols")
+        else:
+            report.fail(
+                "overloaded exposed methods get distinct thunk symbols",
+                overload_build.stderr + overload_build.stdout + "\n" + overload_text[:800],
+            )
 
         # --- C. IR generation / inspection -------------------------------
         cxx_artifact = artifacts.get("amc_test")

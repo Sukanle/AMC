@@ -335,8 +335,20 @@ std::vector<Symbol> effective_symbols(const AbiModule &module) {
         result.push_back({module.types[i].name, SymbolKind::type, i});
     for (uint32_t i = 0; i < module.fields.size(); ++i)
         result.push_back({module.fields[i].name, SymbolKind::field, i});
-    for (uint32_t i = 0; i < module.functions.size(); ++i)
-        result.push_back({module.functions[i].name, SymbolKind::function, i});
+    std::unordered_map<std::string, uint32_t> function_name_counts;
+    for (const auto &function : module.functions)
+        ++function_name_counts[function.name];
+    for (uint32_t i = 0; i < module.functions.size(); ++i) {
+        const auto &function = module.functions[i];
+        std::string symbol = function.name;
+        // A source name is not an ABI entry identity: overloads share it. Keep
+        // the human-readable prefix and append a short signature key so tools
+        // and generated manifests have a unique symbol per ABI entry.
+        if (function_name_counts[function.name] > 1)
+            symbol += fmt::format("#{:08x}{:04x}", function.signature.lo,
+                static_cast<uint32_t>(function.signature.hi & 0xffff));
+        result.push_back({std::move(symbol), SymbolKind::function, i});
+    }
     return result;
 }
 }   // namespace
