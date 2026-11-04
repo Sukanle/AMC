@@ -164,6 +164,47 @@ Ownership is a **contract, not a layout fact**: it never participates in `TypeID
 
 The error contract is v2: `domain` is mandatory and is recorded as the stable error identity, and `condition` maps the failure onto a frozen EPCD `GenericCondition` so unrelated domains remain comparable. A consumer can preserve an unknown status numerically instead of folding it into a generic failure. AMC no longer reads the v1 error schema; a declaration without `domain` fails the build with a migration diagnostic. It lets a backend turn a bare C status code into a typed result; a language-native exception/panic must not cross the ABI boundary. See [`ABI-SPEC.md`](https://github.com/Sukanle/ABIX/blob/main/.agents/ABI-SPEC.md) §6.1. With `status = return_field` the status and value are fields of the returned record: when `[[expose]]` emits a thunk that returns `abix_result_*` it records `return_field` with the status and value field indices, so a consumer gets a typed `Result` for the exposed method.
 
+### `[[error-set]]` — named error-code table
+
+An error boundary can reference a named, versionless error set with `error_set = "Name"`. The set assigns stable numeric identities and generic conditions to failures without changing the boundary contract.
+
+| Field       | Type       | Description                                                                 |
+| ----------- | ---------- | --------------------------------------------------------------------------- |
+| `name`      | string     | **Required.** Unique set name; its identity is a hash of this name           |
+| `domain`    | string/int | Optional non-zero domain; every referencing `[[error]]` must use the same one |
+| `condition` | string/int | Default generic condition for codes without their own mapping               |
+
+Each `[[error-set.code]]` entry adds one code:
+
+| Field       | Type       | Description                                                                 |
+| ----------- | ---------- | --------------------------------------------------------------------------- |
+| `name`      | string     | **Required.** Unique code name inside the set                               |
+| `value`     | int        | **Required.** Non-zero positive `i32`; `0` is reserved for success          |
+| `condition` | string/int | Optional override of the set's default generic condition                    |
+
+```toml
+[[error]]
+function = "bar_process"
+domain = "0x1003000000000001"
+error_set = "DemoErrors"
+success = 0
+value = 2
+
+[[error-set]]
+name = "DemoErrors"
+domain = "0x1003000000000001"
+
+[[error-set.code]]
+name = "invalid_input"
+value = 1
+condition = "invalid_argument"
+
+[[error-set.code]]
+name = "denied"
+value = 2
+condition = "permission_denied"
+```
+
 ### `[[instantiate]]` — generic instantiation
 
 | Field      | Type     | Description                                                                                                                      |

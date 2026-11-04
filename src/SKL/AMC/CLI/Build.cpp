@@ -183,40 +183,44 @@ bool resolve_contracts(const toml::table &config, amc::AbiModule &module, std::s
     return true;
 }
 
-// Parse the v2 error identity domain. A domain is a non-zero 64-bit value and
-// may be written either as a TOML integer or as a numeric string (the string
-// form is needed for values above INT64_MAX). The old v1 schema had no domain,
-// so its absence is reported as an unsupported contract rather than defaulted.
-bool parse_error_domain(const toml::table &table, const std::string &function, uint64_t &domain, std::string &error) {
-    const toml::node *node = table.get("domain");
-    if (node == nullptr) {
-        error = "[[error]] requires domain (v1 error contracts are no longer supported): " + function;
-        return false;
-    }
-    if (const auto value = node->value<int64_t>()) {
-        if (*value > 0) {
-            domain = static_cast<uint64_t>(*value);
+// Parse a non-zero u64 from either a TOML integer or a numeric string (the
+// string form covers values above INT64_MAX).
+bool parse_u64_node(const toml::node *node, uint64_t &value) {
+    if (node == nullptr) return false;
+    if (const auto integer = node->value<int64_t>()) {
+        if (*integer > 0) {
+            value = static_cast<uint64_t>(*integer);
             return true;
         }
-    } else if (const auto text = node->value<std::string>()) {
+        return false;
+    }
+    if (const auto text = node->value<std::string>()) {
         errno = 0;
         char *end = nullptr;
         const unsigned long long parsed = std::strtoull(text->c_str(), &end, 0);
         if (errno == 0 && end != text->c_str() && *end == '\0' && parsed != 0) {
-            domain = static_cast<uint64_t>(parsed);
+            value = static_cast<uint64_t>(parsed);
             return true;
         }
     }
-    error = "[[error]] domain must be a non-zero u64 (integer or numeric string): " + function;
     return false;
 }
 
-// Parse the optional v2 generic-condition mapping. Names use the frozen EPCD
+// Parse the v2 error identity domain. A domain is a non-zero 64-bit value. The
+// old v1 schema had no domain, so its absence is reported as an unsupported
+// contract rather than defaulted.
+bool parse_error_domain(const toml::table &table, const std::string &function, uint64_t &domain, std::string &error) {
+    if (parse_u64_node(table.get("domain"), domain)) return true;
+    error = table.get("domain") == nullptr
+              ? "[[error]] requires domain (v1 error contracts are no longer supported): " + function
+              : "[[error]] domain must be a non-zero u64 (integer or numeric string): " + function;
+    return false;
+}
+
+// Parse an optional v2 generic-condition mapping. Names use the frozen EPCD
 // spellings (`invalid_argument`, `std::errc::invalid_argument`, ...); an integer
 // is accepted verbatim so a future/unknown condition keeps its numeric identity.
-bool parse_error_condition(
-    const toml::table &table, const std::string &function, int32_t &condition, std::string &error) {
-    const toml::node *node = table.get("condition");
+bool parse_condition_node(const toml::node *node, int32_t &condition) {
     if (node == nullptr) {
         condition = static_cast<int32_t>(amc::GenericCondition::unknown);
         return true;
@@ -226,18 +230,95 @@ bool parse_error_condition(
             condition = static_cast<int32_t>(*value);
             return true;
         }
-    } else if (const auto text = node->value<std::string>()) {
+        return false;
+    }
+    if (const auto text = node->value<std::string>()) {
         if (const auto parsed = amc::parse_generic_condition(*text)) {
             condition = static_cast<int32_t>(*parsed);
             return true;
         }
     }
+    return false;
+}
+
+bool parse_error_condition(
+    const toml::table &table, const std::string &function, int32_t &condition, std::string &error) {
+    if (parse_condition_node(table.get("condition"), condition)) return true;
     error = "[[error]] condition is not a known GenericCondition: " + function;
     return false;
 }
 
+// Resolve `[[error-set]]` declarations into named code tables. The set identity
+// is a hash of its name; codes are appended to the module-wide code table.
+bool resolve_error_sets(const toml::table &config, amc::AbiModule &module, std::string &error) {
+    const auto *sets = config["error-set"].as_array();
+    if (!sets) return true;
+    for (auto &&entry : *sets) {
+        const auto *table = entry.as_table();
+        if (!table) continue;
+        const std::string name = (*table)["name"].value_or("");
+        if (name.empty()) {
+            error = "[[error-set]] requires a name";
+            return false;
+        }
+        for (const auto &existing : module.error_sets)
+            if (existing.name == name) {
+                error = "duplicate [[error-set]]: " + name;
+                return false;
+            }
+        amc::ErrorSet set;
+        set.id = amc::error_set_identity(name);
+        set.name = name;
+        if (const toml::node *domain = table->get("domain")) {
+            if (!parse_u64_node(domain, set.domain)) {
+                error = "[[error-set]] domain must be a non-zero u64: " + name;
+                return false;
+            }
+        }
+        if (!parse_condition_node(table->get("condition"), set.condition)) {
+            error = "[[error-set]] condition is not a known GenericCondition: " + name;
+            return false;
+        }
+        set.code_begin = static_cast<uint32_t>(module.error_codes.size());
+        if (const auto *codes = (*table)["code"].as_array()) {
+            for (auto &&code_entry : *codes) {
+                const auto *code_table = code_entry.as_table();
+                if (!code_table) continue;
+                amc::ErrorCode code;
+                code.set_id = set.id;
+                code.name = (*code_table)["name"].value_or("");
+                if (code.name.empty()) {
+                    error = "[[error-set.code]] requires a name: " + name;
+                    return false;
+                }
+                const auto value = (*code_table)["value"].value<int64_t>();
+                if (!value || *value <= 0 || *value > INT32_MAX) {
+                    error = "[[error-set.code]] value must be a positive i32: " + name + "." + code.name;
+                    return false;
+                }
+                code.value = static_cast<int32_t>(*value);
+                if (!parse_condition_node(code_table->get("condition"), code.condition)) {
+                    error = "[[error-set.code]] condition is not a known GenericCondition: " + name + "." + code.name;
+                    return false;
+                }
+                if (code_table->get("condition") == nullptr) code.condition = set.condition;
+                for (uint32_t i = 0; i < set.code_count; ++i)
+                    if (module.error_codes[set.code_begin + i].value == code.value) {
+                        error = "duplicate [[error-set.code]] value: " + name + "." + std::to_string(code.value);
+                        return false;
+                    }
+                module.error_codes.push_back(std::move(code));
+                ++set.code_count;
+            }
+        }
+        module.error_sets.push_back(std::move(set));
+    }
+    return true;
+}
+
 // Resolve `[[error]]` declarations into per-function error-boundary records.
 bool resolve_errors(const toml::table &config, amc::AbiModule &module, std::string &error) {
+    if (!resolve_error_sets(config, module, error)) return false;
     const auto *errors = config["error"].as_array();
     if (!errors) return true;
     const auto function_index = [&](const std::string &name) -> int {
@@ -262,6 +343,20 @@ bool resolve_errors(const toml::table &config, amc::AbiModule &module, std::stri
         contract.function_index = static_cast<uint32_t>(index);
         if (!parse_error_domain(*table, function_name, contract.domain, error)) return false;
         if (!parse_error_condition(*table, function_name, contract.condition, error)) return false;
+        const std::string error_set_name = (*table)["error_set"].value_or("");
+        if (!error_set_name.empty()) {
+            const auto found = std::find_if(module.error_sets.begin(), module.error_sets.end(),
+                [&](const amc::ErrorSet &set) { return set.name == error_set_name; });
+            if (found == module.error_sets.end()) {
+                error = "[[error]] references an unknown error set: " + error_set_name;
+                return false;
+            }
+            if (found->domain != 0 && found->domain != contract.domain) {
+                error = "[[error]] domain does not match error set " + error_set_name + ": " + function_name;
+                return false;
+            }
+            contract.error_set = found->id;
+        }
         const std::string status = (*table)["status"].value_or(std::string("return"));
         contract.status_source = status == "parameter" ? amc::StatusSource::parameter : amc::StatusSource::return_value;
         contract.success_value = (*table)["success"].value_or(int64_t{0});

@@ -245,6 +245,41 @@ def main() -> int:
         else:
             report.fail("[[error]] with an unknown condition is rejected", bad_condition_output)
 
+        unknown_set_config = work / "unknown_error_set.abic.toml"
+        unknown_set_text = legacy_text.replace(
+            'legacy_error.abix', 'unknown_error_set.abix'
+        ) + 'domain = "0x1003000000000001"\nerror_set = "MissingSet"\n'
+        unknown_set_config.write_text(unknown_set_text, encoding="utf-8")
+        unknown_set = run(
+            [str(amc), "build", "-c", str(unknown_set_config), "-B", str(work / "unknown_error_set")]
+        )
+        unknown_set_output = unknown_set.stdout + unknown_set.stderr
+        if unknown_set.returncode != 0 and "unknown error set" in unknown_set_output:
+            report.ok("[[error]] with an unknown error set is rejected")
+        else:
+            report.fail("[[error]] with an unknown error set is rejected", unknown_set_output)
+
+        mismatch_config = work / "error_set_domain_mismatch.abic.toml"
+        mismatch_text = (
+            '[package]\nname = "mismatch"\nversion = "1.0"\n'
+            '[[import]]\nlanguage = "cpp"\nflags = ["-std=c++17"]\n'
+            f'files = ["{(fixtures / "amc_test_types.hpp").as_posix()}"]\n'
+            'symbols = ["amc_test_compute"]\n'
+            '[[error-set]]\nname = "DemoErrors"\ndomain = "0x1003000000000002"\n'
+            '[[error]]\nfunction = "amc_test_compute"\n'
+            'domain = "0x1003000000000001"\nerror_set = "DemoErrors"\nsuccess = 0\n'
+            '[[export]]\noutput = "build/mismatch.abix"\n'
+        )
+        mismatch_config.write_text(mismatch_text, encoding="utf-8")
+        mismatch = run(
+            [str(amc), "build", "-c", str(mismatch_config), "-B", str(work / "error_set_domain_mismatch")]
+        )
+        mismatch_output = mismatch.stdout + mismatch.stderr
+        if mismatch.returncode != 0 and "does not match error set" in mismatch_output:
+            report.ok("[[error]] domain must match its error set")
+        else:
+            report.fail("[[error]] domain must match its error set", mismatch_output)
+
         # --- C. IR generation / inspection -------------------------------
         cxx_artifact = artifacts.get("amc_test")
         if cxx_artifact is not None:

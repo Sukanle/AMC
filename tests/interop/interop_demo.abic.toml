@@ -142,10 +142,25 @@ at_accessor = "demo_set_at"
 
 # Error boundary: demo_div reports its status in the return value and writes the
 # result through parameter 2.
+[[error-set]]
+name = "DemoErrors"
+domain = "0x1003000000000001"
+
+[[error-set.code]]
+name = "invalid_input"
+value = 1
+condition = "invalid_argument"
+
+[[error-set.code]]
+name = "denied"
+value = 2
+condition = "permission_denied"
+
 [[error]]
 function = "demo_div"
 domain = "0x1003000000000001"
 condition = "invalid_argument"
+error_set = "DemoErrors"
 success = 0
 value = 2
 

@@ -388,8 +388,29 @@ void test_error_contract_validation(TestResult &r) {
     contract.status_source = amc::StatusSource::return_value;
     contract.success_value = 0;
     contract.value_parameter = 2;
+
+    amc::ErrorSet error_set;
+    error_set.id = amc::error_set_identity("DemoErrors");
+    error_set.name = "DemoErrors";
+    error_set.domain = 0x1003000000000001ULL;
+    error_set.condition = static_cast<int32_t>(amc::GenericCondition::unknown);
+    error_set.code_begin = 0;
+    error_set.code_count = 1;
+    amc::ErrorCode error_code;
+    error_code.set_id = error_set.id;
+    error_code.name = "invalid_input";
+    error_code.value = 1;
+    error_code.condition = static_cast<int32_t>(amc::GenericCondition::invalid_argument);
+    m.error_sets = {error_set};
+    m.error_codes = {error_code};
+    contract.error_set = error_set.id;
     m.errors = {contract};
     AMC_TEST(r, amc::validate(m, error), "return_value error contract validates");
+
+    contract.error_set = amc::error_set_identity("Missing");
+    m.errors = {contract};
+    AMC_TEST(r, !amc::validate(m, error), "error contract with an unknown error set is rejected");
+    contract.error_set = error_set.id;
 
     contract.domain = 0;
     m.errors = {contract};
@@ -438,6 +459,16 @@ void test_error_contract_validation(TestResult &r) {
         AMC_CHECK(r, loaded.errors[0].value_parameter, uint32_t(2), "error contract value parameter round-trip");
         AMC_CHECK(r, loaded.errors[0].domain, uint64_t(0x1003000000000001ULL), "error contract domain round-trip");
         AMC_CHECK(r, loaded.errors[0].condition, int32_t(29), "error contract condition round-trip");
+        AMC_TEST(r, loaded.errors[0].error_set == amc::error_set_identity("DemoErrors"),
+            "error set reference round-trip");
+        AMC_CHECK(r, loaded.error_sets.size(), size_t(1), "error set round-trip count");
+        AMC_CHECK(r, loaded.error_codes.size(), size_t(1), "error code round-trip count");
+        if (!loaded.error_sets.empty() && !loaded.error_codes.empty()) {
+            AMC_CHECK(r, loaded.error_sets[0].name, std::string("DemoErrors"), "error set name round-trip");
+            AMC_CHECK(r, loaded.error_sets[0].domain, uint64_t(0x1003000000000001ULL), "error set domain round-trip");
+            AMC_CHECK(r, loaded.error_codes[0].name, std::string("invalid_input"), "error code name round-trip");
+            AMC_CHECK(r, loaded.error_codes[0].value, int32_t(1), "error code value round-trip");
+        }
     }
     cleanup(path);
 }

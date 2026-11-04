@@ -275,6 +275,32 @@ enum class StatusSource : uint32_t {
     return_field = 2
 };
 
+// A named error set: the stable identity, optional domain, and the default
+// generic condition for the codes it contains. `code_begin`/`code_count` point
+// into `AbiModule::error_codes`.
+struct ErrorSet {
+    Hash128 id{};
+    std::string name;
+    uint64_t domain = 0;
+    int32_t condition = static_cast<int32_t>(GenericCondition::unknown);
+    uint32_t flags = 0;
+    uint32_t code_begin = 0;
+    uint32_t code_count = 0;
+};
+
+// One named code inside an error set. The numeric `value` is the identity used
+// by the boundary status; `condition` maps it to a generic condition.
+struct ErrorCode {
+    Hash128 set_id{};
+    std::string name;
+    int32_t value = 0;
+    int32_t condition = static_cast<int32_t>(GenericCondition::unknown);
+    uint32_t flags = 0;
+};
+
+// Stable error-set identity: a content hash over the set name.
+Hash128 error_set_identity(std::string_view name);
+
 // Default error domain for contracts AMC emits automatically (for example the
 // `[[expose]]` thunks that return an `abix_result_*`). Layout matches the EPCD
 // allocation: SKL owner (1), AMC module (0x003), local domain id 1.
@@ -294,6 +320,7 @@ struct ErrorContract {
                                               // value itself is the value
     uint64_t domain = 0;                       // v2 error identity domain (required)
     int32_t condition = static_cast<int32_t>(GenericCondition::unknown);   // EPCD GenericCondition
+    Hash128 error_set{};                       // optional error-set identity (zero = none)
     uint32_t flags = 0;
 };
 
@@ -456,6 +483,8 @@ struct AbiModule {
     std::vector<OwnedType> owned;                      // release-policy registry
     std::vector<OwnershipContract> contracts;          // per-interaction ownership modes
     std::vector<ErrorContract> errors;                 // per-function error boundary
+    std::vector<ErrorSet> error_sets;                  // named error-code tables
+    std::vector<ErrorCode> error_codes;                // codes, grouped by error set
     std::vector<LoweringResult> lowerings;             // ABIX-STD contract match results
     std::vector<PointeeRef> pointees;                  // pointer -> pointee TypeID
     std::vector<ViewAdapter> view_adapters;            // container -> sequence-view accessors

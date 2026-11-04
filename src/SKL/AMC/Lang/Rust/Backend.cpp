@@ -711,7 +711,7 @@ pub mod metadata {
     const PARAMETER_RECORD_SIZE: usize = 32;
     const SYMBOL_RECORD_SIZE: usize = 16;
     const OWNERSHIP_RECORD_SIZE: usize = 24;
-    const ERROR_RECORD_SIZE: usize = 48;
+    const ERROR_RECORD_SIZE: usize = 64;
     const LOWERING_RECORD_SIZE: usize = 32;
     const INTERFACE_RECORD_SIZE: usize = 40;
     const INTERFACE_METHOD_RECORD_SIZE: usize = 72;
@@ -847,6 +847,7 @@ pub mod metadata {
         pub flags: u32,
         pub domain: u64,            // v2 error identity domain
         pub condition: i32,         // EPCD GenericCondition
+        pub error_set: Hash128,     // optional error-set identity (zero = none)
     }
 
     /// One entry in the trailing extension directory.
@@ -1186,6 +1187,7 @@ pub mod metadata {
                 flags: u32_at(d, base + 24),
                 domain: u64_at(d, base + 32),
                 condition: u32_at(d, base + 40) as i32,
+                error_set: hash_at(d, base + 48),
             })
         }
 

@@ -165,6 +165,7 @@ struct MetadataErrorRecord {
     uint64_t domain;             // v2 error identity domain
     int32_t condition;           // EPCD GenericCondition
     uint32_t reserved2;
+    Hash128 error_set;           // optional error-set identity (zero = none)
 };
 
 // Target platform identity, carried as an extension so runtime verification can
@@ -324,7 +325,7 @@ static_assert(sizeof(MetadataParameterRecord) == 32, "MetadataParameterRecord wi
 static_assert(sizeof(MetadataSymbolRecord) == 16, "MetadataSymbolRecord wire layout changed");
 static_assert(sizeof(MetadataHashRecord) == 24, "MetadataHashRecord wire layout changed");
 static_assert(sizeof(MetadataOwnershipRecord) == 24, "MetadataOwnershipRecord wire layout changed");
-static_assert(sizeof(MetadataErrorRecord) == 48, "MetadataErrorRecord wire layout changed");
+static_assert(sizeof(MetadataErrorRecord) == 64, "MetadataErrorRecord wire layout changed");
 static_assert(sizeof(MetadataTargetRecord) == 32, "MetadataTargetRecord wire layout changed");
 static_assert(sizeof(MetadataLoweringRecord) == 32, "MetadataLoweringRecord wire layout changed");
 static_assert(sizeof(MetadataViewAdapterRecord) == 24, "MetadataViewAdapterRecord wire layout changed");
@@ -355,6 +356,7 @@ struct MetadataErrorContract {
     uint32_t value_parameter = UINT32_MAX;
     uint64_t domain = 0;
     int32_t condition = static_cast<int32_t>(GenericCondition::unknown);
+    Hash128 error_set{};
 };
 
 // A decoded ABIX-STD lowering result (types referenced by table index).

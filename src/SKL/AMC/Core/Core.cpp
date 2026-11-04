@@ -48,8 +48,12 @@ constexpr uint32_t kSourceEntrySize = 32;     // type_id(16) + file_offset(4) + 
 constexpr uint32_t kOwnedEntrySize = 52;      // type_id(16) + create(16) + destroy(16) + flags(4)
 constexpr uint32_t kContractEntrySize = 32;   // target(4) + target_index(4) + mode(4) + flags(4) + release(16)
 constexpr uint32_t kErrorEntrySize =
-    40;   // function(4) + status_source(4) + status_param(4) + success(8) + value(4) + flags(4) + domain(8) +
-          // condition(4)
+    56;   // function(4) + status_source(4) + status_param(4) + success(8) + value(4) + flags(4) + domain(8) +
+          // condition(4) + error_set(16)
+constexpr uint32_t kErrorSetEntrySize =
+    48;   // id(16) + name_off(4) + name_len(4) + domain(8) + condition(4) + flags(4) + code_begin(4) + code_count(4)
+constexpr uint32_t kErrorCodeEntrySize =
+    36;   // set_id(16) + name_off(4) + name_len(4) + value(4) + condition(4) + flags(4)
 constexpr uint32_t kPlatformEntrySize = 8;   // pointer_bits(4) + endianness(4)
 constexpr uint32_t kLoweringEntrySize =
     52;   // type_id(16) + contract_type(16) + kind(4) + status(4) + reason(4) + ptr(4) + len(4)
@@ -95,7 +99,9 @@ enum Section : uint32_t {
     interface_methods,
     implementations,
     method_bindings,
-    layout_encoding
+    layout_encoding,
+    error_sets,
+    error_codes
 };
 
 constexpr uint32_t section_required = 1u << 0;
@@ -274,6 +280,8 @@ Hash128 signature_hash(const Function &function) {
         input += std::to_string(parameter.type_id.lo) + std::to_string(parameter.type_id.hi);
     return hash_text(input, 0x5349474e41545552ULL);
 }
+
+Hash128 error_set_identity(std::string_view name) { return hash_text(name, 0x45525253ULL); }   // "ERRS"
 
 Hash128 method_signature_hash(const InterfaceMethod &method) {
     Function function;
@@ -722,6 +730,45 @@ bool validate(const AbiModule &module, std::string &error) {
             return false;
         }
     }
+    std::unordered_map<std::string, const ErrorSet *> error_set_by_id;
+    std::vector<bool> error_code_covered(module.error_codes.size(), false);
+    for (const auto &set : module.error_sets) {
+        if (set.name.empty() || !(set.id == error_set_identity(set.name))) {
+            error = "invalid error set identity";
+            return false;
+        }
+        if (!error_set_by_id.emplace(hash_key(set.id), &set).second) {
+            error = "duplicate error set";
+            return false;
+        }
+        if (set.code_begin > module.error_codes.size()
+            || set.code_count > module.error_codes.size() - set.code_begin) {
+            error = "error set code range is out of range";
+            return false;
+        }
+        std::unordered_map<int32_t, bool> values;
+        std::unordered_map<std::string, bool> names;
+        for (uint32_t i = 0; i < set.code_count; ++i) {
+            const auto &code = module.error_codes[set.code_begin + i];
+            if (code.name.empty() || code.value == 0 || !(code.set_id == set.id)) {
+                error = "invalid error code record";
+                return false;
+            }
+            if (!values.emplace(code.value, true).second) {
+                error = "duplicate error code value";
+                return false;
+            }
+            if (!names.emplace(code.name, true).second) {
+                error = "duplicate error code name";
+                return false;
+            }
+            error_code_covered[set.code_begin + i] = true;
+        }
+    }
+    if (std::any_of(error_code_covered.begin(), error_code_covered.end(), [](bool covered) { return !covered; })) {
+        error = "error code does not belong to an error set";
+        return false;
+    }
     for (const auto &contract : module.errors) {
         if (contract.function_index >= module.functions.size()) {
             error = "error contract references an unknown function";
@@ -730,6 +777,17 @@ bool validate(const AbiModule &module, std::string &error) {
         if (contract.domain == 0) {
             error = "error contract has no domain";
             return false;
+        }
+        if (!(contract.error_set == Hash128{})) {
+            const auto found = error_set_by_id.find(hash_key(contract.error_set));
+            if (found == error_set_by_id.end()) {
+                error = "error contract references an unknown error set";
+                return false;
+            }
+            if (found->second->domain != 0 && found->second->domain != contract.domain) {
+                error = "error contract domain does not match its error set";
+                return false;
+            }
         }
         const auto &function = module.functions[contract.function_index];
         if (contract.status_source == StatusSource::return_field) {
@@ -1567,6 +1625,10 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
             all_parameters.push_back(parameter);
         }
     }
+    for (const auto &set : module.error_sets)
+        intern(set.name);
+    for (const auto &code : module.error_codes)
+        intern(code.name);
     std::vector<Symbol> artifact_symbols = effective_symbols(module);
     for (const auto &symbol : artifact_symbols)
         intern(symbol.name);
@@ -1770,8 +1832,40 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
             put_u32(error_table.bytes, record.flags);
             put_u64(error_table.bytes, record.domain);
             put_u32(error_table.bytes, static_cast<uint32_t>(record.condition));
+            put_hash(error_table.bytes, record.error_set);
         }
         sections.push_back(std::move(error_table));
+    }
+
+    // Optional error-set tables: named code tables referenced by an error
+    // boundary. Like the error table, they are contract metadata and never feed
+    // ABI identity.
+    if (!module.error_sets.empty()) {
+        SectionData set_table{error_sets, static_cast<uint32_t>(module.error_sets.size()), kErrorSetEntrySize, 0, {}};
+        for (const auto &record : module.error_sets) {
+            put_hash(set_table.bytes, record.id);
+            put_u32(set_table.bytes, string_offsets.at(record.name));
+            put_u32(set_table.bytes, static_cast<uint32_t>(record.name.size()));
+            put_u64(set_table.bytes, record.domain);
+            put_u32(set_table.bytes, static_cast<uint32_t>(record.condition));
+            put_u32(set_table.bytes, record.flags);
+            put_u32(set_table.bytes, record.code_begin);
+            put_u32(set_table.bytes, record.code_count);
+        }
+        sections.push_back(std::move(set_table));
+    }
+    if (!module.error_codes.empty()) {
+        SectionData code_table{
+            error_codes, static_cast<uint32_t>(module.error_codes.size()), kErrorCodeEntrySize, 0, {}};
+        for (const auto &record : module.error_codes) {
+            put_hash(code_table.bytes, record.set_id);
+            put_u32(code_table.bytes, string_offsets.at(record.name));
+            put_u32(code_table.bytes, static_cast<uint32_t>(record.name.size()));
+            put_u32(code_table.bytes, static_cast<uint32_t>(record.value));
+            put_u32(code_table.bytes, static_cast<uint32_t>(record.condition));
+            put_u32(code_table.bytes, record.flags);
+        }
+        sections.push_back(std::move(code_table));
     }
 
     // Optional target platform facts (pointer width / endianness). Excluded
@@ -2038,6 +2132,8 @@ bool read_abix(const std::string &path, AbiModule &module, std::string &error) {
     const auto *owned_table = optional(owned, kOwnedEntrySize);
     const auto *contract_table = optional(contracts, kContractEntrySize);
     const auto *error_table = optional(errors, kErrorEntrySize);
+    const auto *error_set_table = optional(error_sets, kErrorSetEntrySize);
+    const auto *error_code_table = optional(error_codes, kErrorCodeEntrySize);
     const auto *platform_table = optional(platform, kPlatformEntrySize);
     const auto *lowering_table = optional(lowering, kLoweringEntrySize);
     const auto *pointee_table = optional(pointees, kPointeeEntrySize);
@@ -2329,6 +2425,7 @@ bool read_abix(const std::string &path, AbiModule &module, std::string &error) {
             || !read_u32(bytes, error_offset, record.flags, error)
             || !read_u64(bytes, error_offset, record.domain, error)
             || !read_u32(bytes, error_offset, condition, error)
+            || !read_hash(bytes, error_offset, record.error_set, error)
             || record.domain == 0 || status > static_cast<uint32_t>(StatusSource::return_field)) {
             error = "invalid error contract record";
             return false;
@@ -2337,6 +2434,43 @@ bool read_abix(const std::string &path, AbiModule &module, std::string &error) {
         record.success_value = static_cast<int64_t>(success);
         record.condition = static_cast<int32_t>(condition);
         module.errors.push_back(record);
+    }
+    size_t error_set_offset = error_set_table ? error_set_table->offset : 0;
+    for (uint32_t i = 0; error_set_table && i < error_set_table->count; ++i) {
+        ErrorSet record;
+        uint32_t name_offset = 0, name_length = 0, condition = 0;
+        if (!read_hash(bytes, error_set_offset, record.id, error)
+            || !read_u32(bytes, error_set_offset, name_offset, error)
+            || !read_u32(bytes, error_set_offset, name_length, error)
+            || !read_u64(bytes, error_set_offset, record.domain, error)
+            || !read_u32(bytes, error_set_offset, condition, error)
+            || !read_u32(bytes, error_set_offset, record.flags, error)
+            || !read_u32(bytes, error_set_offset, record.code_begin, error)
+            || !read_u32(bytes, error_set_offset, record.code_count, error)
+            || !read_string(name_offset, name_length, record.name)) {
+            error = "invalid error set record";
+            return false;
+        }
+        record.condition = static_cast<int32_t>(condition);
+        module.error_sets.push_back(record);
+    }
+    size_t error_code_offset = error_code_table ? error_code_table->offset : 0;
+    for (uint32_t i = 0; error_code_table && i < error_code_table->count; ++i) {
+        ErrorCode record;
+        uint32_t name_offset = 0, name_length = 0, value = 0, condition = 0;
+        if (!read_hash(bytes, error_code_offset, record.set_id, error)
+            || !read_u32(bytes, error_code_offset, name_offset, error)
+            || !read_u32(bytes, error_code_offset, name_length, error)
+            || !read_u32(bytes, error_code_offset, value, error)
+            || !read_u32(bytes, error_code_offset, condition, error)
+            || !read_u32(bytes, error_code_offset, record.flags, error)
+            || !read_string(name_offset, name_length, record.name)) {
+            error = "invalid error code record";
+            return false;
+        }
+        record.value = static_cast<int32_t>(value);
+        record.condition = static_cast<int32_t>(condition);
+        module.error_codes.push_back(record);
     }
     if (platform_table) {
         size_t platform_offset = platform_table->offset;

@@ -245,6 +245,7 @@ bool build_metadata_region(
         record.flags = contract.flags;
         record.domain = contract.domain;
         record.condition = contract.condition;
+        record.error_set = contract.error_set;
         append_record(error_records, &record, sizeof(record));
     }
     struct PendingExtension {
@@ -942,6 +943,7 @@ bool read_error_contracts(
         contract.value_parameter = record.value_parameter;
         contract.domain = record.domain;
         contract.condition = record.condition;
+        contract.error_set = record.error_set;
         out.push_back(contract);
     }
     return true;
