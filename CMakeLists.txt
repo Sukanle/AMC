@@ -39,7 +39,7 @@ option(AMC_INSTALL "Generate AMC install rules" ON)
 option(AMC_ENABLE_LLDB_PLUGIN "Build the optional LLDB plugin" ON)
 option(AMC_BUILD_AUE "Build the optional Aue Lua conformance prototype" ON)
 set(AMC_ABIX_REF
-    "devel"
+    "v0.3.0"
     CACHE STRING "ABIX git revision used when FetchContent downloads ABIX (tag, branch or commit)")
 set(AMC_DEPENDENCIES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dependencies")
 

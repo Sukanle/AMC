@@ -52,7 +52,7 @@ cmake --install build --prefix /opt/amc
 ```bash
 cmake -S . -B build \
   -DCMAKE_PREFIX_PATH="/path/to/llvm;/path/to/fmt;/path/to/tomlplusplus" \
-  -DAMC_ABIX_REF=devel
+  -DAMC_ABIX_REF=v0.3.0
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```

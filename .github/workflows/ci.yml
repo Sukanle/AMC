@@ -16,9 +16,8 @@ concurrency:
 
 env:
   CTEST_OUTPUT_ON_FAILURE: "1"
-  # Must point at an ABIX revision whose runtime-only package is version 0.3+.
-  # Pin this to the ABIX v0.3.0 tag once that release is published.
-  ABIX_REF: devel
+  # Released ABIX v0.3.0 branch/tag; its runtime-only package is version 0.3.
+  ABIX_REF: v0.3.0
   # Minimum supported LLVM/Clang release. CI builds against the minimum while
   # CMake accepts any newer LLVM/Clang installed by the user.
   LLVM_VERSION: "22"

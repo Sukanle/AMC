@@ -16,6 +16,6 @@ Notes:
 - This is **not** a source directory for AMC. Do not edit files here.
 - These checkouts are **not tracked** by Git; only this README is tracked.
 - There is no separate requirements list or maintenance workflow for this directory. Delete it at any time and CMake will re-create it on the next configure.
-- To use a specific ABIX revision, pass `-DAMC_ABIX_REF=<ref>` when configuring. The MICS revision comes from ABIX's submodule pointer.
+- To use a specific ABIX revision (the default is the released `v0.3.0` branch/tag), pass `-DAMC_ABIX_REF=<ref>` when configuring. The MICS revision comes from ABIX's submodule pointer.
 - Prefer installing ABIX and passing `-DABIX_DIR=<prefix>/lib/cmake/ABIX` when you want a reproducible build that does not download dependencies. The AMC CMake package export is only generated in this installed-package mode.
 - On CI, cache this directory with `actions/cache` keyed by the requested ABIX revision.
