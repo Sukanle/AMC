@@ -269,9 +269,14 @@ def main() -> int:
                 if abix_includes:
                     include_flags = [f"-I{path}" for path in abix_includes.split(os.pathsep) if path]
                 else:
-                    include_flags = [f"-I{source_root / 'include'}", f"-I{source_root}",
-                                     f"-I{source_root / 'MICS' / 'include'}",
-                                     f"-I{source_root / 'MICS' / 'HLMD'}"]
+                    include_flags = [
+                        f"-I{source_root / 'include'}", f"-I{source_root}",
+                        f"-I{source_root / 'dependencies' / 'ABIX' / 'include'}",
+                        f"-I{source_root / 'dependencies' / 'ABIX' / 'MICS' / 'include'}",
+                        f"-I{source_root / 'dependencies' / 'ABIX' / 'MICS' / 'HLMD'}",
+                        f"-I{source_root / 'MICS' / 'include'}",
+                        f"-I{source_root / 'MICS' / 'HLMD'}",
+                    ]
                 compile_result = run([cxx, "-std=c++17", f"-I{header.parent}", *include_flags,
                                       str(src), "-o", str(work / "binding_check")])
                 if compile_result.returncode == 0:

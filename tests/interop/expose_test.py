@@ -100,6 +100,9 @@ def include_roots(source_root: str) -> tuple[str, ...]:
         return tuple(path for path in configured.split(os.pathsep) if path)
     return (
         os.path.join(source_root, "include"),
+        os.path.join(source_root, "dependencies", "ABIX", "include"),
+        os.path.join(source_root, "dependencies", "ABIX", "MICS", "include"),
+        os.path.join(source_root, "dependencies", "ABIX", "MICS", "HLMD"),
         os.path.join(source_root, "MICS", "include"),
         os.path.join(source_root, "MICS", "HLMD"),
     )

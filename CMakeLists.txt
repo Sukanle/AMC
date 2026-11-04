@@ -114,7 +114,9 @@ endif()
 # The tests launch compilers directly, so expose the include roots as a native
 # path list (os.pathsep in the Python harness).
 if(WIN32)
-    set(AMC_ABIX_INCLUDE_DIRS_ENV "${ABIX_INCLUDE_DIRS}")
+    # CTest's ENVIRONMENT property is itself a semicolon-separated list, so the
+    # Windows path separators must be escaped to keep the value intact.
+    string(REPLACE ";" "\\;" AMC_ABIX_INCLUDE_DIRS_ENV "${ABIX_INCLUDE_DIRS}")
 else()
     string(JOIN ":" AMC_ABIX_INCLUDE_DIRS_ENV ${ABIX_INCLUDE_DIRS})
 endif()
