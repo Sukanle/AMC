@@ -170,6 +170,7 @@ add_library(
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Core.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Error.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Condition.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Semantic/Identity.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/ELF.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Json.cpp
     ${AMC_SOURCE_DIR}/src/ljson/json.c
@@ -354,6 +355,12 @@ endif()
 
 if(AMC_BUILD_TESTS)
     enable_testing()
+    add_executable(amc-semantic-test ${AMC_SOURCE_DIR}/tests/unit/semantic_model_test.cpp)
+    target_include_directories(amc-semantic-test PRIVATE ${AMC_INCLUDE_DIR})
+    target_link_libraries(amc-semantic-test PRIVATE amc-core fmt::fmt)
+    set_target_properties(amc-semantic-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+    add_test(NAME amc-semantic-test COMMAND amc-semantic-test)
+
     find_package(Catch2 3 QUIET)
     if(Catch2_FOUND)
         include(Catch)
