@@ -13,7 +13,7 @@
 #
 # Configure:
 #   cmake -S tests/consumers -B <build> -G Ninja \
-#     -DAMC_MODULE_DIR=<amc-root>/CMake \
+#     -DAMC_MODULE_DIR=<amc-root>/cmake \
 #     -DAMC_SOURCE_ROOT=<amc-root> \
 #     -DAMC_EXECUTABLE=<dir>/amc \
 #     -DABIX_INCLUDE_DIRS="<abix>;<mics>;<hlmd>"
@@ -26,7 +26,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(NOT AMC_SOURCE_ROOT)
-  message(FATAL_ERROR "AMC_SOURCE_ROOT must point at the AMC source tree")
+    message(FATAL_ERROR "AMC_SOURCE_ROOT must point at the AMC source tree")
 endif()
 
 include("${AMC_MODULE_DIR}/AMC.cmake")

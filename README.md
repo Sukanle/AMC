@@ -1,11 +1,13 @@
 # AMC
 
+<p align="center">
+  <a href="README_ZH.md">中文</a> · English
+</p>
+
 AMC is the ABI Metadata Compiler/toolchain. This is the standalone AMC repository.
 
 ## Documentation
-
 - [Documentation index](docs/README.md)
-- [中文文档索引](docs/README_zh.md)
 - [AMC toolchain and CLI](docs/amc/amc.md)
 - [`.abic.toml` configuration](docs/abic/abic.md)
 - [Cross-language projections](docs/lang/README.md)
@@ -45,27 +47,26 @@ ctest --test-dir build --output-on-failure
 cmake --install build --prefix /opt/amc
 ```
 
-If a required dependency is missing or too old, CMake uses `FetchContent` to place it in the repository-local `dependencies/` directory. ABIX and MICS are cloned; fmt and toml++ are downloaded as pinned release tarballs (fmt 11.2.0 and toml++ 3.4.0 by default), which avoids distribution packages with an older API:
+Only ABIX is fetched automatically. When `find_package(ABIX 0.3 CONFIG COMPONENTS runtime)` fails, CMake clones ABIX with its submodules into the repository-local `dependencies/` directory and configures it as a runtime-only subproject:
 
 ```bash
 cmake -S . -B build \
   -DCMAKE_PREFIX_PATH="/path/to/llvm;/path/to/fmt;/path/to/tomlplusplus" \
-  -DAMC_ABIX_REF=devel \
-  -DAMC_MICS_REF=main \
-  -DAMC_FMT_VERSION=11.2.0 \
-  -DAMC_TOMLPLUSPLUS_VERSION=3.4.0
+  -DAMC_ABIX_REF=devel
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```
 
-`dependencies/` is a cacheable, untracked dependency checkout; only [`dependencies/README.md`](dependencies/README.md) is tracked. In this mode AMC still builds and runs its tests, but installs only the tools and headers (not the `AMCConfig.cmake` package export), because the package export requires installed ABIX and fmt packages. Reconfigure with `-DABIX_DIR=...` and an installed fmt to install the package.
+All other dependencies — LLVM/Clang, fmt and toml++ — are expected to be installed by the user; AMC uses the versions already available on the system and never downloads replacements. Minimum supported versions are enforced, so newer releases (including newer major versions) are accepted as-is. Set `CMAKE_PREFIX_PATH` (or the corresponding `<package>_DIR` value) when they are not in a default location.
+
+`dependencies/` is a cacheable, untracked ABIX checkout; only [`dependencies/README.md`](dependencies/README.md) is tracked. In this mode AMC still builds and runs its tests, but installs only the tools and headers (not the `AMCConfig.cmake` package export), because the package export requires an installed ABIX package. Reconfigure with `-DABIX_DIR=...` to install the package.
 
 Required packages:
 
-- `ABIX 0.3` runtime and MICS
+- `ABIX 0.3` runtime and MICS (fetched automatically when not installed)
 - LLVM and Clang (`clang-cpp`)
-- fmt
-- toml++
+- fmt 11.2 or newer
+- toml++ 3.4 or newer
 - Catch2 v3 for the C++ tests (optional)
 - Lua 5.4 for the optional Aue conformance prototype
 

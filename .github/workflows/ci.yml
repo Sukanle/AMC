@@ -19,11 +19,14 @@ env:
   # Must point at an ABIX revision whose runtime-only package is version 0.3+.
   # Pin this to the ABIX v0.3.0 tag once that release is published.
   ABIX_REF: devel
-  MICS_REF: main
+  # Minimum supported LLVM/Clang release. CI builds against the minimum while
+  # CMake accepts any newer LLVM/Clang installed by the user.
   LLVM_VERSION: "22"
   ZIG_VERSION: "0.17.0"
-  # Pin dependencies whose distribution packages are not API-compatible across
-  # Ubuntu releases. fmt 9 (Ubuntu 24.04) lacks fmt::println, for example.
+  # Minimum supported versions of dependencies whose distribution packages are
+  # not API-compatible across Ubuntu releases (fmt 9 on Ubuntu 24.04 lacks
+  # fmt::println, for example). CI builds these exact versions so the lower
+  # bound stays verified; newer installed releases are accepted by CMake.
   FMT_VERSION: "11.2.0"
   TOMLPLUSPLUS_VERSION: "3.4.0"
 
@@ -83,9 +86,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: dependencies
-          key: ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ env.MICS_REF }}-${{ env.FMT_VERSION }}-${{ env.TOMLPLUSPLUS_VERSION }}-${{ hashFiles('CMakeLists.txt', 'cmake/AMCDependencies.cmake') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ hashFiles('CMakeLists.txt', 'cmake/Dependencies.cmake') }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ env.MICS_REF }}-${{ env.FMT_VERSION }}-${{ env.TOMLPLUSPLUS_VERSION }}-
+            ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-
 
       - name: Configure and build AMC
         run: |
@@ -93,7 +96,6 @@ jobs:
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DAMC_ABIX_REF="$ABIX_REF" \
-            -DAMC_MICS_REF="$MICS_REF" \
             -DCMAKE_PREFIX_PATH="$LLVM_PREFIX;$RUNNER_TEMP/fmt;$RUNNER_TEMP/tomlplusplus"
           cmake --build build --parallel 2
 
@@ -153,9 +155,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: dependencies
-          key: ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ env.MICS_REF }}-${{ env.FMT_VERSION }}-${{ env.TOMLPLUSPLUS_VERSION }}-${{ hashFiles('CMakeLists.txt', 'cmake/AMCDependencies.cmake') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ hashFiles('CMakeLists.txt', 'cmake/Dependencies.cmake') }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ env.MICS_REF }}-${{ env.FMT_VERSION }}-${{ env.TOMLPLUSPLUS_VERSION }}-
+            ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-
 
       - name: Configure and build AMC
         run: |
@@ -164,7 +166,6 @@ jobs:
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DAMC_ABIX_REF="$ABIX_REF" \
-            -DAMC_MICS_REF="$MICS_REF" \
             -DCMAKE_PREFIX_PATH="$PREFIXES"
           cmake --build build --parallel 2
 
@@ -243,9 +244,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: dependencies
-          key: ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ env.MICS_REF }}-${{ env.FMT_VERSION }}-${{ env.TOMLPLUSPLUS_VERSION }}-${{ hashFiles('CMakeLists.txt', 'cmake/AMCDependencies.cmake') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ hashFiles('CMakeLists.txt', 'cmake/Dependencies.cmake') }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ env.MICS_REF }}-${{ env.FMT_VERSION }}-${{ env.TOMLPLUSPLUS_VERSION }}-
+            ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-
 
       - name: Configure and build AMC
         run: |
@@ -253,7 +254,6 @@ jobs:
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DAMC_ABIX_REF="$ABIX_REF" \
-            -DAMC_MICS_REF="$MICS_REF" \
             -DCMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH"
           cmake --build build --parallel 2
 

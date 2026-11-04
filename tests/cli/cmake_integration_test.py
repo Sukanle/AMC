@@ -46,11 +46,15 @@ def main() -> None:
         # Step 1: cmake configure
         print("  [INFO] Configuring CMake fixture...")
         fixture = os.path.join(amc_root, "tests", "cli", "cmake_fixture")
-        module_dir = os.path.join(amc_root, "CMake")
+        module_dir = os.path.join(amc_root, "cmake")
+        if not os.path.isfile(os.path.join(module_dir, "AMC.cmake")):
+            module_dir = os.path.join(amc_root, "CMake")
         fixture_dir = os.path.join(amc_root, "tests", "fixtures")
         if not os.path.isdir(fixture):
             fixture = os.path.join(amc_root, "AMC", "tests", "cli", "cmake_fixture")
-            module_dir = os.path.join(amc_root, "AMC", "CMake")
+            module_dir = os.path.join(amc_root, "AMC", "cmake")
+            if not os.path.isfile(os.path.join(module_dir, "AMC.cmake")):
+                module_dir = os.path.join(amc_root, "AMC", "CMake")
             fixture_dir = os.path.join(amc_root, "AMC", "tests", "fixtures")
         amc = os.path.join(amc_bin, "amc.exe" if sys.platform == "win32" else "amc")
         cmake_cmd = [
