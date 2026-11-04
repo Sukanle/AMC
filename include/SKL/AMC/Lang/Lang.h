@@ -50,11 +50,15 @@ struct ContractDecl {
 
 // Error boundary for one function: the status value that means success and,
 // optionally, which parameter carries the result value.
+//
+// v2 requires the error `domain`; a declaration without one is a v1 contract
+// and is rejected (AMC does not read the old error schema).
 struct ErrorDecl {
     std::string function;
     std::string status;   // "return" (default) | "parameter"
     int64_t success = 0;
     int64_t value = -1;   // local parameter index, or -1 when the return value is the value
+    uint64_t domain = 0;  // v2 error identity domain (required)
 };
 
 // A request to instantiate a language generic into a concrete type. The

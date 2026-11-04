@@ -48,7 +48,7 @@ constexpr uint32_t kSourceEntrySize = 32;     // type_id(16) + file_offset(4) + 
 constexpr uint32_t kOwnedEntrySize = 52;      // type_id(16) + create(16) + destroy(16) + flags(4)
 constexpr uint32_t kContractEntrySize = 32;   // target(4) + target_index(4) + mode(4) + flags(4) + release(16)
 constexpr uint32_t kErrorEntrySize =
-    28;   // function(4) + status_source(4) + status_param(4) + success(8) + value(4) + flags(4)
+    36;   // function(4) + status_source(4) + status_param(4) + success(8) + value(4) + flags(4) + domain(8)
 constexpr uint32_t kPlatformEntrySize = 8;   // pointer_bits(4) + endianness(4)
 constexpr uint32_t kLoweringEntrySize =
     52;   // type_id(16) + contract_type(16) + kind(4) + status(4) + reason(4) + ptr(4) + len(4)
@@ -724,6 +724,10 @@ bool validate(const AbiModule &module, std::string &error) {
     for (const auto &contract : module.errors) {
         if (contract.function_index >= module.functions.size()) {
             error = "error contract references an unknown function";
+            return false;
+        }
+        if (contract.domain == 0) {
+            error = "error contract has no domain";
             return false;
         }
         const auto &function = module.functions[contract.function_index];
@@ -1763,6 +1767,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
             put_u64(error_table.bytes, static_cast<uint64_t>(record.success_value));
             put_u32(error_table.bytes, record.value_parameter);
             put_u32(error_table.bytes, record.flags);
+            put_u64(error_table.bytes, record.domain);
         }
         sections.push_back(std::move(error_table));
     }
@@ -2319,7 +2324,8 @@ bool read_abix(const std::string &path, AbiModule &module, std::string &error) {
             || !read_u64(bytes, error_offset, success, error)
             || !read_u32(bytes, error_offset, record.value_parameter, error)
             || !read_u32(bytes, error_offset, record.flags, error)
-            || status > static_cast<uint32_t>(StatusSource::return_field)) {
+            || !read_u64(bytes, error_offset, record.domain, error)
+            || record.domain == 0 || status > static_cast<uint32_t>(StatusSource::return_field)) {
             error = "invalid error contract record";
             return false;
         }

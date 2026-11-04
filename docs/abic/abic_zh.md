@@ -79,6 +79,7 @@ params = ["borrowed"]
 # 错误边界：状态在返回值，结果通过参数 2
 [[error]]
 function = "bar_process"
+domain = "0x1003000000000001"
 success = 0
 value = 2
 
@@ -150,14 +151,15 @@ output = "build/mylib.abix"
 
 ### `[[error]]` — 错误边界
 
-| 字段       | 类型   | 说明                                                                                                    |
-| ---------- | ------ | ------------------------------------------------------------------------------------------------------- |
-| `function` | string | 契约所描述的函数                                                                                        |
-| `status`   | string | `return`（默认）或 `parameter`；当返回值是聚合时还有 `return_field`（`abix_result_*` 返回值会自动生成） |
-| `success`  | int    | 表示成功的状态值（默认 `0`）                                                                            |
-| `value`    | int    | 承载结果值的参数下标（返回值为结果时可省略）                                                            |
+| 字段       | 类型       | 说明                                                                                                    |
+| ---------- | ---------- | ------------------------------------------------------------------------------------------------------- |
+| `function` | string     | 契约所描述的函数                                                                                        |
+| `domain`   | string/int | **必填。** 非零 64 位错误身份域（例如 `"0x1003000000000001"`）；缺少该字段的 v1 声明会被拒绝             |
+| `status`   | string     | `return`（默认）或 `parameter`；当返回值是聚合时还有 `return_field`（`abix_result_*` 返回值会自动生成） |
+| `success`  | int        | 表示成功的状态值（默认 `0`）                                                                            |
+| `value`    | int        | 承载结果值的参数下标（返回值为结果时可省略）                                                            |
 
-它让后端把裸 C 状态码变成类型化结果；语言原生的异常/panic **不得**穿越 ABI 边界。`status = return_field` 时状态与结果值是返回记录的两个字段：`[[expose]]` 生成返回 `abix_result_*` 的 thunk 时会记录 `return_field` 及其状态/值字段下标，消费者因此得到类型化的 `Result`。见 [`ABI-SPEC.md`](https://github.com/Sukanle/ABIX/blob/main/.agents/ABI-SPEC.md) §6.1。
+错误契约使用 v2：`domain` 必填，并作为稳定错误身份记录，消费者可以按数字保留未知状态，而不是折叠成通用失败。AMC 不再读取 v1 错误 schema；缺少 `domain` 的声明会在构建时失败并给出迁移诊断。它让后端把裸 C 状态码变成类型化结果；语言原生的异常/panic **不得**穿越 ABI 边界。`status = return_field` 时状态与结果值是返回记录的两个字段：`[[expose]]` 生成返回 `abix_result_*` 的 thunk 时会记录 `return_field` 及其状态/值字段下标，消费者因此得到类型化的 `Result`。见 [`ABI-SPEC.md`](https://github.com/Sukanle/ABIX/blob/main/.agents/ABI-SPEC.md) §6.1。
 
 ### `[[instantiate]]` — 泛型实例化
 

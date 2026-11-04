@@ -801,6 +801,7 @@ int main() {
 
         amc::ErrorContract error_boundary;
         error_boundary.function_index = 0;
+        error_boundary.domain = 0x1003000000000001ULL;
         error_boundary.status_source = amc::StatusSource::return_value;
         error_boundary.success_value = 0;
         owned_before.errors.push_back(error_boundary);

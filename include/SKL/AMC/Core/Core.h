@@ -273,6 +273,11 @@ enum class StatusSource : uint32_t {
     return_field = 2
 };
 
+// Default error domain for contracts AMC emits automatically (for example the
+// `[[expose]]` thunks that return an `abix_result_*`). Layout matches the EPCD
+// allocation: SKL owner (1), AMC module (0x003), local domain id 1.
+inline constexpr uint64_t amc_error_domain = 0x1003000000000001ULL;
+
 // Error boundary contract: how a function reports success/failure and where the
 // result value is carried. It lets a consumer turn a C status code into a typed
 // result instead of inspecting a bare integer. A contract, not a layout fact.
@@ -285,6 +290,7 @@ struct ErrorContract {
     uint32_t value_parameter = UINT32_MAX;    // local parameter index carrying the value, the value field
                                               // index for return_field, or UINT32_MAX when the return
                                               // value itself is the value
+    uint64_t domain = 0;                       // v2 error identity domain (required)
     uint32_t flags = 0;
 };
 

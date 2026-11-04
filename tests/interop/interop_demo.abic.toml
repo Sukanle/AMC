@@ -144,6 +144,7 @@ at_accessor = "demo_set_at"
 # result through parameter 2.
 [[error]]
 function = "demo_div"
+domain = "0x1003000000000001"
 success = 0
 value = 2
 
@@ -151,6 +152,7 @@ value = 2
 # projection must preserve the numeric code instead of mapping it to an enum.
 [[error]]
 function = "demo_div_unknown"
+domain = "0x1003000000000001"
 success = 0
 value = 2
 

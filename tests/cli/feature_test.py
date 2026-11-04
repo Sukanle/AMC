@@ -214,6 +214,23 @@ def main() -> int:
             else:
                 report.fail(f"{name}: amc build produced a .abix", built.stderr + built.stdout)
 
+        # The v2 error contract requires a domain; a v1 declaration (no domain)
+        # must be rejected instead of being read with an implicit contract.
+        legacy_config = work / "legacy_error.abic.toml"
+        legacy_text = (fixtures / "amc_test.abic.toml").read_text(encoding="utf-8")
+        legacy_text = legacy_text.replace(
+            'files = ["amc_test_types.hpp"]',
+            f'files = ["{(fixtures / "amc_test_types.hpp").as_posix()}"]',
+        )
+        legacy_text += '\n[[error]]\nfunction = "amc_test_compute"\nsuccess = 0\n'
+        legacy_config.write_text(legacy_text, encoding="utf-8")
+        legacy = run([str(amc), "build", "-c", str(legacy_config), "-B", str(work / "legacy_error")])
+        legacy_output = legacy.stdout + legacy.stderr
+        if legacy.returncode != 0 and "domain" in legacy_output:
+            report.ok("[[error]] without a domain (v1) is rejected")
+        else:
+            report.fail("[[error]] without a domain (v1) is rejected", legacy_output)
+
         # --- C. IR generation / inspection -------------------------------
         cxx_artifact = artifacts.get("amc_test")
         if cxx_artifact is not None:

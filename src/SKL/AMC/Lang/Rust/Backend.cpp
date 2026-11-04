@@ -547,7 +547,7 @@ void emit_errors(Output &o, const Projector &p) {
             o.print("    }} else {{\n        Err({}(result.{}))\n    }}\n}}\n", error_type, status_access);
             continue;
         }
-        if (record.status_source != amc::StatusSource::return_value) continue;   // v1: return-value status only
+        if (record.status_source != amc::StatusSource::return_value) continue;   // return-value status only
         if (record.value_parameter == UINT32_MAX) continue;
         if (record.value_parameter >= function.parameters.size()) continue;
         const int value_index = p.index_of(function.parameters[record.value_parameter].type_id);
@@ -711,7 +711,7 @@ pub mod metadata {
     const PARAMETER_RECORD_SIZE: usize = 32;
     const SYMBOL_RECORD_SIZE: usize = 16;
     const OWNERSHIP_RECORD_SIZE: usize = 24;
-    const ERROR_RECORD_SIZE: usize = 32;
+    const ERROR_RECORD_SIZE: usize = 40;
     const LOWERING_RECORD_SIZE: usize = 32;
     const INTERFACE_RECORD_SIZE: usize = 40;
     const INTERFACE_METHOD_RECORD_SIZE: usize = 72;
@@ -845,6 +845,7 @@ pub mod metadata {
         pub value_parameter: u32,   // local parameter index, or u32::MAX
         pub success_value: i64,
         pub flags: u32,
+        pub domain: u64,            // v2 error identity domain
     }
 
     /// One entry in the trailing extension directory.
@@ -1182,6 +1183,7 @@ pub mod metadata {
                 value_parameter: u32_at(d, base + 12),
                 success_value: u64_at(d, base + 16) as i64,
                 flags: u32_at(d, base + 24),
+                domain: u64_at(d, base + 32),
             })
         }
 

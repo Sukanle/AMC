@@ -16,6 +16,8 @@
 #include "SKL/AMC/CLI/CLI.h"
 
 #include <algorithm>
+#include <cerrno>
+#include <cstdlib>
 #include <fstream>
 #include <iterator>
 #include <string>
@@ -181,6 +183,34 @@ bool resolve_contracts(const toml::table &config, amc::AbiModule &module, std::s
     return true;
 }
 
+// Parse the v2 error identity domain. A domain is a non-zero 64-bit value and
+// may be written either as a TOML integer or as a numeric string (the string
+// form is needed for values above INT64_MAX). The old v1 schema had no domain,
+// so its absence is reported as an unsupported contract rather than defaulted.
+bool parse_error_domain(const toml::table &table, const std::string &function, uint64_t &domain, std::string &error) {
+    const toml::node *node = table.get("domain");
+    if (node == nullptr) {
+        error = "[[error]] requires domain (v1 error contracts are no longer supported): " + function;
+        return false;
+    }
+    if (const auto value = node->value<int64_t>()) {
+        if (*value > 0) {
+            domain = static_cast<uint64_t>(*value);
+            return true;
+        }
+    } else if (const auto text = node->value<std::string>()) {
+        errno = 0;
+        char *end = nullptr;
+        const unsigned long long parsed = std::strtoull(text->c_str(), &end, 0);
+        if (errno == 0 && end != text->c_str() && *end == '\0' && parsed != 0) {
+            domain = static_cast<uint64_t>(parsed);
+            return true;
+        }
+    }
+    error = "[[error]] domain must be a non-zero u64 (integer or numeric string): " + function;
+    return false;
+}
+
 // Resolve `[[error]]` declarations into per-function error-boundary records.
 bool resolve_errors(const toml::table &config, amc::AbiModule &module, std::string &error) {
     const auto *errors = config["error"].as_array();
@@ -205,6 +235,7 @@ bool resolve_errors(const toml::table &config, amc::AbiModule &module, std::stri
         }
         amc::ErrorContract contract;
         contract.function_index = static_cast<uint32_t>(index);
+        if (!parse_error_domain(*table, function_name, contract.domain, error)) return false;
         const std::string status = (*table)["status"].value_or(std::string("return"));
         contract.status_source = status == "parameter" ? amc::StatusSource::parameter : amc::StatusSource::return_value;
         contract.success_value = (*table)["success"].value_or(int64_t{0});

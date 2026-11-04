@@ -243,6 +243,7 @@ bool build_metadata_region(
         record.value_parameter = contract.value_parameter;
         record.success_value = contract.success_value;
         record.flags = contract.flags;
+        record.domain = contract.domain;
         append_record(error_records, &record, sizeof(record));
     }
     struct PendingExtension {
@@ -386,7 +387,7 @@ bool build_metadata_region(
         pending.push_back(
             {metadata_extension_ownership, 1, static_cast<uint32_t>(module.contracts.size()), &ownership_records});
     if (!error_records.empty())
-        pending.push_back({metadata_extension_error, 1, static_cast<uint32_t>(module.errors.size()), &error_records});
+        pending.push_back({metadata_extension_error, 2, static_cast<uint32_t>(module.errors.size()), &error_records});
     if (!target_records.empty()) pending.push_back({metadata_extension_target, 1, 1, &target_records});
     if (!lowering_records.empty())
         pending.push_back({metadata_extension_lowering, 1,
@@ -913,7 +914,7 @@ bool read_error_contracts(
             data, size, header, metadata_extension_error, present, version, count, records, byte_size, error))
         return false;
     if (!present) return true;
-    if (version != 1) {
+    if (version != 2) {
         error = "unsupported error contract version";
         return false;
     }
@@ -924,7 +925,7 @@ bool read_error_contracts(
     for (uint32_t i = 0; i < count; ++i) {
         MetadataErrorRecord record{};
         memcpy(&record, records + static_cast<size_t>(i) * sizeof(record), sizeof(record));
-        if (record.status_source > static_cast<uint32_t>(StatusSource::return_field)) {
+        if (record.status_source > static_cast<uint32_t>(StatusSource::return_field) || record.domain == 0) {
             error = "invalid error contract record";
             return false;
         }
@@ -938,6 +939,7 @@ bool read_error_contracts(
         contract.status_parameter = record.status_parameter;
         contract.success_value = record.success_value;
         contract.value_parameter = record.value_parameter;
+        contract.domain = record.domain;
         out.push_back(contract);
     }
     return true;

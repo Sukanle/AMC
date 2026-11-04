@@ -383,11 +383,18 @@ void test_error_contract_validation(TestResult &r) {
     std::string error;
     amc::ErrorContract contract;
     contract.function_index = 0;
+    contract.domain = 0x1003000000000001ULL;
     contract.status_source = amc::StatusSource::return_value;
     contract.success_value = 0;
     contract.value_parameter = 2;
     m.errors = {contract};
     AMC_TEST(r, amc::validate(m, error), "return_value error contract validates");
+
+    contract.domain = 0;
+    m.errors = {contract};
+    AMC_TEST(r, !amc::validate(m, error), "error contract without a domain is rejected");
+    AMC_TEST(r, error.find("domain") != std::string::npos, "missing-domain error is descriptive");
+    contract.domain = 0x1003000000000001ULL;
 
     contract.function_index = 2;
     m.errors = {contract};
@@ -402,6 +409,7 @@ void test_error_contract_validation(TestResult &r) {
 
     amc::ErrorContract field_contract;
     field_contract.function_index = 1;
+    field_contract.domain = 0x1003000000000002ULL;
     field_contract.status_source = amc::StatusSource::return_field;
     field_contract.status_parameter = 0;
     field_contract.value_parameter = 1;
@@ -427,6 +435,7 @@ void test_error_contract_validation(TestResult &r) {
         AMC_CHECK(r, loaded.errors[0].function_index, uint32_t(0), "error contract function index round-trip");
         AMC_CHECK(r, loaded.errors[0].success_value, int64_t(0), "error contract success value round-trip");
         AMC_CHECK(r, loaded.errors[0].value_parameter, uint32_t(2), "error contract value parameter round-trip");
+        AMC_CHECK(r, loaded.errors[0].domain, uint64_t(0x1003000000000001ULL), "error contract domain round-trip");
     }
     cleanup(path);
 }

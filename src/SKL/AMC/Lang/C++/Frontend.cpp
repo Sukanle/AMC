@@ -1306,6 +1306,7 @@ bool expose_thunks(amc::AbiModule &module, const amc::lang::Config &config, std:
                 contract.status_parameter = return_contract.pointer_field;
                 contract.value_parameter = return_contract.length_field;
                 contract.success_value = 0;
+                contract.domain = amc::amc_error_domain;
                 module.errors.push_back(contract);
             }
         }
