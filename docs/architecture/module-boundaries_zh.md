@@ -91,19 +91,15 @@ IR 还承载 Type/Interface/Method Identity、所有权、生命周期、错误�
 
 ## 兼容转发头
 
-A1 通过显式标记的转发头保持旧 include 可用。每个转发头必须带 `AMC_COMPAT_FORWARD` 标记，写明目标头文件，并在 `tools/check_module_boundaries.py` 报告没有 include 用户后删除。
+A1 在 provider 迁移期间使用过显式标记的转发头。现在所有 provider 都直接包含目标头文件，**已无兼容转发头**。
 
-| 转发头 | 目标 | 当前用户 |
-| --- | --- | --- |
-| `include/SKL/AMC/Lang/C++.h` | `SKL/AMC/Frontend/Cpp/Cpp.h` + `SKL/AMC/Backend/Cpp/Cpp.h` | `src/SKL/AMC/Lang/C++/C++.cpp` |
-| `include/SKL/AMC/Lang/Rust.h` | `SKL/AMC/Frontend/Rust/Rust.h` + `SKL/AMC/Backend/Rust/Rust.h` | 无（外部确认后删除） |
-| `include/SKL/AMC/Lang/Zig.h` | `SKL/AMC/Backend/Zig/Zig.h` | 无（外部确认后删除） |
+未来如再引入转发头，必须带 `AMC_COMPAT_FORWARD` 标记、写明目标头文件，并在 `tools/check_module_boundaries.py` 报告没有 include 用户后删除。
 
 使用：
 
 ```bash
 python3 tools/check_module_boundaries.py            # report-only
-python3 tools/check_module_boundaries.py --strict   # 禁止边失败
+python3 tools/check_module_boundaries.py --strict   # 未登记禁止边失败
 python3 tools/check_module_boundaries.py --contracts-only
 ```
 
@@ -147,7 +143,7 @@ CTest 同时运行 `--contracts-only` 和 `--strict`：
 - `Lang/Rust/Frontend.cpp` → `Frontend/Rust/Frontend.cpp`
 - `Lang/Rust/Backend.cpp` → `Backend/Rust/Backend.cpp`
 - `Lang/Zig/Backend.cpp` → `Backend/Zig/Backend.cpp`
-- `Lang/{C++,Rust,Zig}.h` 已改为带标记的兼容转发头；Rust/Zig 当前没有 in-tree 用户，外部确认后可删除
+- 所有 provider 已直接包含目标头文件，兼容转发头已删除
 - 扫描当前未列出任何未登记禁止边；只剩 3 条 CLI -> IR 的 A4 例外
 - `amc-boundary-contracts` 与 `amc-boundary-edges` 已加入 CTest
 

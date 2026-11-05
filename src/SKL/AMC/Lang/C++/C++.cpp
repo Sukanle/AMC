@@ -13,7 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "SKL/AMC/Lang/C++.h"
+#include "SKL/AMC/Backend/Cpp/Cpp.h"
+#include "SKL/AMC/Frontend/Cpp/Cpp.h"
+#include "SKL/AMC/Lang/Lang.h"
 
 #include <fmt/format.h>
 

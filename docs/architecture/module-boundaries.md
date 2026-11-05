@@ -100,21 +100,17 @@ independent from the runtime ABI version.
 
 ## Compatibility Forwarders
 
-A1 keeps old include paths working through explicitly marked forwarders. Every
-forwarder must carry the `AMC_COMPAT_FORWARD` marker, name its target and be
-removed once `tools/check_module_boundaries.py` reports no include sites.
+A1 used explicitly marked forwarders while providers migrated. All providers now
+include their target headers directly, so **no compatibility forwarders remain**.
 
-| Forwarder | Target | Current users |
-| --- | --- | --- |
-| `include/SKL/AMC/Lang/C++.h` | `SKL/AMC/Frontend/Cpp/Cpp.h` + `SKL/AMC/Backend/Cpp/Cpp.h` | `src/SKL/AMC/Lang/C++/C++.cpp` |
-| `include/SKL/AMC/Lang/Rust.h` | `SKL/AMC/Frontend/Rust/Rust.h` + `SKL/AMC/Backend/Rust/Rust.h` | none (remove after external check) |
-| `include/SKL/AMC/Lang/Zig.h` | `SKL/AMC/Backend/Zig/Zig.h` | none (remove after external check) |
+Any future forwarder must carry the `AMC_COMPAT_FORWARD` marker, name its target
+and be removed once `tools/check_module_boundaries.py` reports no include sites.
 
 Run:
 
 ```bash
 python3 tools/check_module_boundaries.py            # report-only
-python3 tools/check_module_boundaries.py --strict   # fail on forbidden edges
+python3 tools/check_module_boundaries.py --strict   # fail on unlisted edges
 python3 tools/check_module_boundaries.py --contracts-only
 ```
 
@@ -160,9 +156,9 @@ and `amc-boundary-edges`.
 - `Lang/Rust/Frontend.cpp` → `Frontend/Rust/Frontend.cpp`
 - `Lang/Rust/Backend.cpp` → `Backend/Rust/Backend.cpp`
 - `Lang/Zig/Backend.cpp` → `Backend/Zig/Backend.cpp`
-- `Lang/{C++,Rust,Zig}.h` are marked compatibility forwarders; Rust/Zig have no
-  in-tree users and are ready for removal after the external check
-- The scanner reports zero unlisted forbidden edges; three CLI -> IR edges
+- all providers include their target headers directly; compatibility forwarders
+  have been removed
+- the scanner reports zero unlisted forbidden edges; three CLI -> IR edges
   remain as allowlisted A4 exceptions
 - `amc-boundary-contracts` and `amc-boundary-edges` run in CTest
 
