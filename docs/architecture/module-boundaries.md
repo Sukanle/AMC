@@ -250,6 +250,17 @@ and `amc-boundary-edges`.
 | `Core/Query.cpp`, `Core/Context.cpp` | `Query/` |
 | `Tool/Dump/*` | `Interfaces/CLI` or `Query/` |
 
+## A2/A3 Progress
+
+- `IR/Artifact` loads `.abix` + optional `.semantic` / `.lowering` into one
+  `ir::Module`; backends use that boundary instead of repeating sidecar paths
+- `Pass/Verify` owns ABI validation, `Pass/Compatibility` wraps contract drift,
+  and `Pass/Pipeline` composes ABI verification + lowering
+- `Compilation/Build` runs the standard pass pipeline, and `amc verify` uses the
+  compatibility pass
+- remaining A3 work is moving the rest of `Core/Verify` policy and future type
+  mapping checks fully behind `Pass` APIs
+
 ## A1 Progress
 
 - `Lang/C++/Frontend.cpp` → `Frontend/Cpp/Frontend.cpp`

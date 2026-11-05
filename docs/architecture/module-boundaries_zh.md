@@ -212,6 +212,15 @@ CTest 同时运行 `--contracts-only` 和 `--strict`：
 | `Core/Query.cpp`、`Core/Context.cpp` | `Query/` |
 | `Tool/Dump/*` | `Interfaces/CLI` 或 `Query/` |
 
+## A2/A3 进度
+
+- `IR/Artifact` 把 `.abix` + 可选 `.semantic` / `.lowering` 加载为一个
+  `ir::Module`；backend 统一使用该边界，不再重复 sidecar 路径
+- `Pass/Verify` 负责 ABI 校验，`Pass/Compatibility` 包装契约漂移，
+  `Pass/Pipeline` 组合 ABI 校验与 lowering
+- `Compilation/Build` 运行标准 Pass pipeline，`amc verify` 使用 compatibility pass
+- A3 剩余工作是把 `Core/Verify` 的其余策略和未来的类型映射检查完全收敛到 Pass API
+
 ## A1 进度
 
 - `Lang/C++/Frontend.cpp` → `Frontend/Cpp/Frontend.cpp`

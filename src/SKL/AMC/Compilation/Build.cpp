@@ -18,8 +18,10 @@
 #include "SKL/AMC/Compilation/Meta.h"
 #include "SKL/AMC/Compilation/Provider.h"
 #include "SKL/AMC/Diagnostics/Diagnostics.h"
+#include "SKL/AMC/IR/Artifact.h"
 #include "SKL/AMC/IR/LoweringJson.h"
 #include "SKL/AMC/Pass/Lowering.h"
+#include "SKL/AMC/Pass/Pipeline.h"
 #include "SKL/AMC/Semantic/Serialize.h"
 #include "SKL/AMC/Semantic/Sync.h"
 #include "SKL/AMC/Util/Error.h"
@@ -857,9 +859,11 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
                     return fail(amc::ErrorCategory::provider, "frontend", error, config_path.string());
             }
 
-            amc::AbiModule full;
-            if (!amc::read_abix(temporary.string(), full, error))
-                return fail(read_error_category(error), "read_abix", error, temporary.string());
+            amc::ir::Module artifact;
+            if (!amc::ir::load_artifact(temporary.string(), artifact, error))
+                return fail(read_error_category(error), "read_artifact", error, temporary.string());
+            amc::AbiModule full = std::move(artifact.abi);
+            amc::semantic::SemanticModule semantic = std::move(artifact.semantic);
             full.package_name = config["package"]["name"].value_or("cpp");
             full.package_version = config["package"]["version"].value_or("");
             if (!resolve_ownership(config, full, error))
@@ -876,13 +880,6 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
             // links, run the lowering pass and emit `<artifact>.lowering` per
             // export. The lowering result is a contract, not a rewrite: the
             // artifact itself is unchanged.
-            amc::semantic::SemanticModule semantic;
-            if (fs::exists(semantic_temporary)) {
-                std::string semantic_error;
-                if (!amc::semantic::read_semantic_json(semantic_temporary.string(), semantic, semantic_error))
-                    return fail(
-                        amc::ErrorCategory::validation, "semantic", semantic_error, semantic_temporary.string());
-            }
             amc::semantic::synchronize_from_abi(full, semantic);
             attach_semantic_ownership(full, semantic);
             // A provider that does not write a semantic sidecar (the Rust
@@ -897,9 +894,13 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
             amc::ir::Module lowering_module;
             lowering_module.abi = full;
             lowering_module.semantic = std::move(semantic);
-            amc::ir::LoweringResult lowering;
             amc::diagnostics::DiagnosticList lowering_diagnostics;
-            amc::pass::lower(lowering_module, lowering, lowering_diagnostics, {});
+            if (!amc::pass::run_default_pipeline(lowering_module, lowering_diagnostics)) {
+                std::string message = "pass pipeline failed";
+                if (!lowering_diagnostics.empty()) message = lowering_diagnostics.front().message;
+                return fail(amc::ErrorCategory::validation, "pass", message, config_path.string());
+            }
+            amc::ir::LoweringResult lowering = std::move(lowering_module.lowering);
 
             // ABIX-STD lowering: match each contracted instantiation against its
             // contract. Instantiation succeeded already (the frontend did it);

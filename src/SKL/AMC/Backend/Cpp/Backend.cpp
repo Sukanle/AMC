@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "SKL/AMC/Backend/Cpp/Cpp.h"
+#include "SKL/AMC/IR/Artifact.h"
 #include "SKL/AMC/IR/LoweringJson.h"
 #include "SKL/AMC/Lang/Lang.h"
 #include "SKL/AMC/Core/Core.h"
@@ -133,18 +134,15 @@ static bool interface_has_handle_methods(const amc::AbiModule &m, const amc::Int
 
 int backend(const char *input, const char *output) {
     if (amc::lang::cancellation_requested()) return amc::lang::kCapabilityCancelled;
-    amc::AbiModule m;
+    amc::ir::Module artifact;
     std::string e;
-    if (!amc::read_abix(input, m, e)) {
+    if (!amc::ir::load_artifact(input, artifact, e)) {
         fmt::print(stderr, "{}\n", e);
         return 1;
     }
-    amc::ir::LoweringResult lowering;
+    amc::AbiModule m = std::move(artifact.abi);
+    amc::ir::LoweringResult lowering = std::move(artifact.lowering);
     std::string lowering_error;
-    if (!amc::ir::load_lowering_sidecar(input, lowering, lowering_error)) {
-        fmt::print(stderr, "{}\n", lowering_error);
-        return 1;
-    }
     if (!amc::ir::apply_lowering_contracts(lowering, m, lowering_error)) {
         fmt::print(stderr, "{}\n", lowering_error);
         return 1;

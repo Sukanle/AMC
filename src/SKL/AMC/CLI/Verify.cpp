@@ -25,6 +25,7 @@
 #include "SKL/AMC/Core/Query.h"
 #include "SKL/AMC/Core/Symbol.h"
 #include "SKL/AMC/Core/Verify.h"
+#include "SKL/AMC/Pass/Compatibility.h"
 #include "SKL/AMC/Util/Error.h"
 #include "SKL/AMC/Compilation/Config.h"
 #include "SKL/AMC/Compilation/Provider.h"
@@ -82,7 +83,10 @@ int cmd_verify(char **args, int arg_count, const fs::path &provider) {
             if (!amc::load_module_source(positionals[1], implementation, error))
                 return fail(read_error_category(error), "read_abix", error, positionals[1]);
             amc::VerifyResult result;
-            if (!amc::verify_modules(contract, implementation, result, error))
+            amc::pass::Context context;
+            context.strict = false;
+            amc::diagnostics::DiagnosticList compatibility_diagnostics;
+            if (!amc::pass::compare_modules(contract, implementation, result, context, compatibility_diagnostics))
                 return fail(amc::ErrorCategory::internal, "verify", error);
             result.contract_path = positionals[0];
             result.implementation_path = positionals[1];
@@ -151,7 +155,10 @@ int cmd_verify(char **args, int arg_count, const fs::path &provider) {
                 if (!amc::read_abix(reference.string(), contract, error))
                     return fail(read_error_category(error), "read_abix", error, reference.string());
                 amc::VerifyResult result;
-                if (!amc::verify_modules(contract, projected, result, error))
+                amc::pass::Context context;
+                context.strict = false;
+                amc::diagnostics::DiagnosticList compatibility_diagnostics;
+                if (!amc::pass::compare_modules(contract, projected, result, context, compatibility_diagnostics))
                     return fail(amc::ErrorCategory::internal, "verify", error);
                 result.contract_path = reference.string();
                 result.implementation_path = config_path.string() + " (regenerated)";

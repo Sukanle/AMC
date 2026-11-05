@@ -32,6 +32,11 @@ struct LoweringOptions {
 bool lower(const ir::Module &module, ir::LoweringResult &result, diagnostics::DiagnosticList &diagnostics,
     const LoweringOptions &options = {});
 
+// Pipeline entry: write the lowering result back into the IR module. Lowering
+// errors stay warnings by default so an artifact can still carry partial
+// contracts; strict callers use `lower(..., LoweringOptions{true})`.
+bool lower_pass(ir::Module &module, diagnostics::DiagnosticList &diagnostics);
+
 }   // namespace amc::pass
 
 #endif   // AMC_PASS_LOWERING_H

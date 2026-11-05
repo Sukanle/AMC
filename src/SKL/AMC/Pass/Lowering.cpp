@@ -317,4 +317,8 @@ bool lower(const ir::Module &module, ir::LoweringResult &result, diagnostics::Di
     return !diagnostics::has_errors(diagnostics);
 }
 
+bool lower_pass(ir::Module &module, diagnostics::DiagnosticList &diagnostics) {
+    return lower(module, module.lowering, diagnostics, {});
+}
+
 }   // namespace amc::pass

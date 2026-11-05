@@ -267,6 +267,7 @@ add_library(
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Semantic/Serialize.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Semantic/Sync.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/LoweringJson.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/Artifact.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/ELF.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Json.cpp
     ${AMC_SOURCE_DIR}/src/ljson/json.c
@@ -332,7 +333,12 @@ set_target_properties(
 
 # M4: semantic -> ABI lowering pass. It links the semantic model to the ABI
 # view without rewriting either; backends consume the resulting contract.
-add_library(amc-pass STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Lowering.cpp)
+add_library(
+    amc-pass STATIC
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Lowering.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Verify.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Compatibility.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Pipeline.cpp)
 target_include_directories(amc-pass PUBLIC ${AMC_INCLUDE_DIR})
 target_link_libraries(amc-pass PUBLIC libabix-format)
 
@@ -495,6 +501,12 @@ if(AMC_BUILD_TESTS)
     target_link_libraries(amc-lowering-test PRIVATE amc-core amc-pass fmt::fmt)
     set_target_properties(amc-lowering-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
     add_test(NAME amc-lowering-test COMMAND amc-lowering-test)
+
+    add_executable(amc-pass-test ${AMC_SOURCE_DIR}/tests/unit/pass_test.cpp)
+    target_include_directories(amc-pass-test PRIVATE ${AMC_INCLUDE_DIR})
+    target_link_libraries(amc-pass-test PRIVATE amc-core amc-pass fmt::fmt)
+    set_target_properties(amc-pass-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+    add_test(NAME amc-pass-test COMMAND amc-pass-test)
 
     find_package(Catch2 3 QUIET)
     if(Catch2_FOUND)

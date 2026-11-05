@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "SKL/AMC/Backend/Rust/Rust.h"
+#include "SKL/AMC/IR/Artifact.h"
 #include "SKL/AMC/IR/LoweringJson.h"
 #include "SKL/AMC/Lang/Lang.h"
 
@@ -1184,18 +1185,15 @@ std::string generate_projection(const amc::AbiModule &module, const amc::ir::Low
 
 int backend(const char *input, const char *output) {
     if (amc::lang::cancellation_requested()) return amc::lang::kCapabilityCancelled;
-    amc::AbiModule module;
+    amc::ir::Module artifact;
     std::string error;
-    if (!amc::read_abix(input, module, error)) {
+    if (!amc::ir::load_artifact(input, artifact, error)) {
         fmt::print(stderr, "{}\n", error);
         return 1;
     }
-    amc::ir::LoweringResult lowering;
+    amc::AbiModule module = std::move(artifact.abi);
+    amc::ir::LoweringResult lowering = std::move(artifact.lowering);
     std::string lowering_error;
-    if (!amc::ir::load_lowering_sidecar(input, lowering, lowering_error)) {
-        fmt::print(stderr, "{}\n", lowering_error);
-        return 1;
-    }
     if (!amc::ir::apply_lowering_contracts(lowering, module, lowering_error)) {
         fmt::print(stderr, "{}\n", lowering_error);
         return 1;
