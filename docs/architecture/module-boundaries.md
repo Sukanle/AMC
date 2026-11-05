@@ -307,6 +307,25 @@ and `amc-boundary-edges`.
 - remaining Core leftovers are the ABI model itself (`Core.h`/`Core.cpp`),
   `Adapter`, and `Lua`; they are outside the A5 infrastructure slice
 
+## A6 Progress
+
+- A6.0/A6.4: `Aue/README.md` records the Lua VM / ABIX Contract / Native
+  Execution layering, the L0/L1/L2 downgrade rule, and the
+  conformance/benchmark entry points
+- A6.1: L1 pre-builds its name -> entry index once at registration; cold
+  dispatch is a single table lookup instead of a linear contract scan
+- A6.2: the Lua generator emits record/field descriptors; record metatables
+  provide direct `__index`/`__newindex` access with explicit ABI width/kind
+  mapping and reject unsupported writes
+- A6.3: type metatables install a default `__gc` hook;
+  `register_type_destroy` overrides it with a native destructor. The demo
+  `Counter` maintains a live count, and conformance drops a temporary object
+  and runs `collectgarbage` to prove the destructor runs before release
+- `Core/Lua.*` moved to `Backend/Lua/Lua.*`; the generator now lives in the
+  Backend module and adds no new boundary edge
+- A6.4 remaining: an independent Aue package/release entry point; the current
+  build remains an optional AMC integration
+
 ## A1 Progress
 
 - `Lang/C++/Frontend.cpp` → `Frontend/Cpp/Frontend.cpp`

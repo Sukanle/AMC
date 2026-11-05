@@ -261,6 +261,20 @@ CTest 同时运行 `--contracts-only` 和 `--strict`：
 - Core 剩余项是 ABI 模型本身（`Core.h`/`Core.cpp`）、`Adapter` 与 `Lua`，
   不属于 A5 基础设施切片
 
+## A6 进度
+
+- A6.0/A6.4：`Aue/README.md` 记录 Lua VM / ABIX Contract / Native Execution
+  三层、L0/L1/L2 降级规则，以及 conformance/benchmark 入口
+- A6.1：L1 在注册时一次性预构建 name -> entry 索引；冷派发从线性扫描变为
+  单次 table lookup
+- A6.2：Lua generator 输出 record/field descriptor；record metatable 提供
+  直接 `__index`/`__newindex` 访问，显式映射 ABI 宽度/类型，并拒绝不支持的写入
+- A6.3：type metatable 安装默认 `__gc` hook；`register_type_destroy` 用原生
+  destructor 覆盖。demo `Counter` 维护 live count，conformance 释放临时对象并
+  执行 `collectgarbage`，验证 destructor 在 userdata 释放前运行
+- `Core/Lua.*` 迁移到 `Backend/Lua/Lua.*`，generator 归入 Backend，未新增边界边
+- A6.4 剩余：独立 Aue package/release 入口；当前构建仍是 AMC 的可选集成
+
 ## A1 进度
 
 - `Lang/C++/Frontend.cpp` → `Frontend/Cpp/Frontend.cpp`

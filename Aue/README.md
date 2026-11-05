@@ -43,9 +43,18 @@ The generated metatable name is `<module>.<type>` (for example
 
 ## Native lifetime
 
-Field metatables install a `__gc` hook. The demo `Counter` is a POD userdata,
-so the hook is currently a no-op; the hook is the integration point for native
-objects that own resources and is covered by the conformance fixture.
+`register_contract_types` installs a default no-op `__gc` hook. A type that owns
+native resources overrides it with `register_type_destroy()`:
+
+```cpp
+aue::register_type_destroy(state, "counter.Counter", counter_destroy);
+```
+
+The hook receives the userdata's native pointer and runs before Lua releases
+the block. The demo `Counter` registers a destructor that maintains the live
+count exposed as `counter.live_count()`; the conformance script creates a
+temporary object, drops it, runs `collectgarbage`, and asserts the count
+returns to its starting value.
 
 ## Running
 

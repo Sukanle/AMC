@@ -75,6 +75,10 @@ struct Type {
     size_t field_count;
 };
 
+// Optional native destructor used by the `__gc` hook. A type without one keeps
+// the default no-op hook; a resource-owning type registers its own.
+using Destroy = void (*)(void *object);
+
 // The ABIX contract the boundary layer dispatches through. `abi_hash` is the
 // `.abix` artifact hash both ends must agree on. `types` is optional; when
 // present, `register_contract_types` installs field-access metatables.
@@ -125,6 +129,10 @@ Level register_layer(lua_State *state, const Contract &contract, Level requested
 // Installs field-access metatables for every record type in `contract`. The
 // metatable name is `<module>.<type>`; unknown fields resolve to nil.
 void register_contract_types(lua_State *state, const Contract &contract);
+
+// Overrides the `__gc` hook for one type with a native destructor. The name is
+// the full metatable name (`<module>.<type>`), matching register_contract_types.
+void register_type_destroy(lua_State *state, const char *type_name, Destroy destroy);
 
 // --- the demo native module (`counter`) ----------------------------------
 void register_counter_types(lua_State *state);

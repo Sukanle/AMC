@@ -17,6 +17,7 @@ struct Counter {
 Counter *counter_new(int initial);
 int counter_add(Counter *counter, int delta);
 int counter_get(const Counter *counter);
+int counter_live_count(void);
 
 #ifdef __cplusplus
 }

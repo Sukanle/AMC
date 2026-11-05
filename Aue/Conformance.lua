@@ -9,6 +9,15 @@ print("value", counter.get(c))
 print("field", c.value)
 c.value = 42
 print("field_after", c.value, counter.get(c))
+
+local live_before = counter.live_count()
+local temp = counter.new(7)
+print("live_new", counter.live_count() - live_before)
+temp = nil
+collectgarbage("collect")
+collectgarbage("collect")
+print("live_gc", counter.live_count() - live_before)
+
 print("module", counter._module)
 print("hash", counter._abi_hash)
 

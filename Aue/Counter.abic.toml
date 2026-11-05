@@ -6,7 +6,7 @@ version = "1.0"
 language = "cpp"
 flags = ["-std=c++17"]
 files = ["Counter.api.hpp"]
-symbols = ["counter_new", "counter_add", "counter_get"]
+symbols = ["counter_new", "counter_add", "counter_get", "counter_live_count"]
 
 [[export]]
 output = "build/counter.abix"

@@ -263,6 +263,14 @@ int type_newindex(lua_State *state) {
 
 int type_gc(lua_State *) { return 0; }
 
+int destroy_gc(lua_State *state) {
+    auto *destroy = static_cast<Destroy *>(lua_touserdata(state, lua_upvalueindex(1)));
+    if (destroy != nullptr && *destroy != nullptr) {
+        if (void *object = lua_touserdata(state, 1)) (*destroy)(object);
+    }
+    return 0;
+}
+
 }   // namespace
 
 void register_contract_types(lua_State *state, const Contract &contract) {
@@ -294,6 +302,20 @@ void register_contract_types(lua_State *state, const Contract &contract) {
 
         lua_pop(state, 2);
     }
+}
+
+void register_type_destroy(lua_State *state, const char *type_name, Destroy destroy) {
+    if (type_name == nullptr || destroy == nullptr) return;
+    luaL_getmetatable(state, type_name);
+    if (!lua_istable(state, -1)) {
+        lua_pop(state, 1);
+        return;
+    }
+    auto *box = static_cast<Destroy *>(lua_newuserdatauv(state, sizeof(Destroy), 0));
+    *box = destroy;
+    lua_pushcclosure(state, destroy_gc, 1);
+    lua_setfield(state, -2, "__gc");
+    lua_pop(state, 1);
 }
 
 void register_direct(lua_State *state, const Contract &contract) {
