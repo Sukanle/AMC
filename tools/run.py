@@ -190,7 +190,7 @@ Examples:
     bench_group.add_argument(
         "--bench-pin",
         default=None,
-        help="CPU pinning: auto, off, all, or a list like 0-7",
+        help="CPU pinning: auto, off, all, p, e, or a list like 0-7",
     )
     bench_group.add_argument(
         "--bench-filter",

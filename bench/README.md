@@ -37,6 +37,7 @@ python tools/run_bench.py --bin build/bin --out bench/results --repetitions 5
 python tools/run_bench.py --list
 python tools/run_bench.py FullPipeline --exe amc-pass-perf-bench
 python tools/run_bench.py --pin off
+python tools/run_bench.py --pin e          # E-cores (Linux)
 ```
 
 Or through the unified pipeline:

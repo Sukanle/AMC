@@ -92,6 +92,26 @@ def performance_cpu_pool() -> list[int]:
     return pool if len(pool) < len(freqs) else []
 
 
+def online_cpus() -> list[int]:
+    """Logical CPUs the kernel lists as online (Linux only)."""
+    try:
+        text = Path("/sys/devices/system/cpu/online").read_text(encoding="ascii").strip()
+    except OSError:
+        return []
+    try:
+        return parse_cpu_list(text)
+    except ValueError:
+        return []
+
+
+def e_core_pool() -> list[int]:
+    """Linux E-core candidates: online CPUs outside the highest-freq pool."""
+    p_cores = set(performance_cpu_pool())
+    if not p_cores:
+        return []
+    return [cpu for cpu in online_cpus() if cpu not in p_cores]
+
+
 def parse_cpu_list(spec: str) -> list[int]:
     """`0-3,8,10-11` -> [0, 1, 2, 3, 8, 10, 11]."""
     cpus: list[int] = []
@@ -129,6 +149,12 @@ def resolve_pin(pin: str) -> tuple[list[int], str]:
         cpus = performance_cpu_pool()
         if not cpus:
             return [], "no P-core pool detected"
+    elif pin == "e":
+        if IS_WINDOWS:
+            return [], "CPU pinning is currently supported on Unix only"
+        cpus = e_core_pool()
+        if not cpus:
+            return [], "no E-core pool detected"
     else:
         cpus = parse_cpu_list(pin)
     if not HAS_AFFINITY:
@@ -137,7 +163,7 @@ def resolve_pin(pin: str) -> tuple[list[int], str]:
 
 
 def pin_spec(value: str) -> str:
-    if value in ("auto", "off", "all", "p"):
+    if value in ("auto", "off", "all", "p", "e"):
         return value
     try:
         cpus = parse_cpu_list(value)
@@ -145,7 +171,7 @@ def pin_spec(value: str) -> str:
         cpus = []
     if not cpus:
         raise argparse.ArgumentTypeError(
-            f"expected `auto`, `off`, `all`, `p` or a CPU list like `0-7`, got {value!r}"
+            f"expected `auto`, `off`, `all`, `p`, `e` or a CPU list like `0-7`, got {value!r}"
         )
     return value
 
@@ -282,7 +308,8 @@ def main() -> int:
         "--pin",
         type=pin_spec,
         default="auto",
-        help="restrict children to a CPU set: `auto`/`p`, `off`/`all`, or a list like `0-7`",
+        help="restrict children to a CPU set: `auto`/`p` (P-cores), `e` (E-cores), "
+        "`off`/`all`, or a list like `0-7`",
     )
     parser.add_argument("--list", action="store_true", help="list discovered benchmarks and exit")
     args = parser.parse_args()
