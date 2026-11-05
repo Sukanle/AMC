@@ -1,6 +1,6 @@
 # AMC 模块边界（A0）
 
-状态：**A0 已冻结；A1/A4/A5 已落地，A2/A3/A6 进行中**。本文定义 Frontend、IR、Pass、Backend、Compilation 和 Interfaces 之间的契约；剩余工作是边界收敛和物理模块拆分，而不是重新设计架构。
+状态：**A0 已冻结；A1/A4/A5 已落地；A2/A3/A6 核心完成**。本文定义 Frontend、IR、Pass、Backend、Compilation 和 Interfaces 之间的契约；剩余工作是边界收敛和长期清理，而不是重新设计架构。
 
 ## 目标
 
@@ -10,12 +10,9 @@
 
 ## AMC 编译边界
 
-AMC 是**编译前**的语义分析与代码生成工具链。它负责解析源语言语义、构建 IR、
-执行 ABI 降低，并生成 ABI 契约和源代码产物。
+AMC 是**编译前**的语义分析与代码生成工具链。它负责解析源语言语义、构建 IR、执行 ABI 降低，并生成 ABI 契约和源代码产物。
 
-AMC **不负责**语言实际编译、机器码生成、优化和链接；这些工作由用户自己的工具链
-完成。AMC 可以生成辅助 TU、调用编译器前端、请求模板实例化信息，但不能演变成
-独立的编译器驱动、构建系统或优化器。
+AMC **不负责**语言实际编译、机器码生成、优化和链接；这些工作由用户自己的工具链完成。AMC 可以生成辅助 TU、调用编译器前端、请求模板实例化信息，但不能演变成独立的编译器驱动、构建系统或优化器。
 
 由此得到：
 
@@ -35,6 +32,28 @@ AMC **不负责**语言实际编译、机器码生成、优化和链接；这些
 | Interfaces | 对外暴露编译能力 | CLI、MCP、LSP、SDK |
 
 支撑模块：`Artifact`、`Diagnostics`、`Platform`、`Serialization`、`Query`、`Support`。
+
+## 私有实现与 CodeIn
+
+安装的公共接口是 `include/SKL/AMC/<module>/`。语言相关实现放在平行的私有目录，避免公共头文件泄漏 Clang、后端内部结构或生成代码辅助：
+
+| 路径 | 职责 |
+| --- | --- |
+| `include/SKL/AMC/Private/Backend/Cpp/` | C++ emitter 声明（`Emitters.h`、`CppNames.h`） |
+| `include/SKL/AMC/Private/Frontend/Cpp/` | `Native`、`Extractor`、`ThunkEmitter` 声明 |
+| `src/SKL/AMC/Private/Backend/Cpp/` | C++ emitter 实现 |
+| `src/SKL/AMC/Private/Frontend/Cpp/` | Clang extractor 与 thunk 实现 |
+| `include/SKL/AMC/Backend/CodeIn.h` | 共享 CodeIn 运行时加载器 |
+| `include/SKL/AMC/Backend/Codegen.h` | 共享标识符/字面量辅助 |
+| `CodeIn/` | 运行时加载的静态模板（`Cpp/Prologue.hpp`、`Rust/MetaData.rs`） |
+
+规则：
+
+- 私有头文件可以包含 Clang/LLVM 和实现依赖；公共头文件不得包含。
+- 私有头文件只有在 `-DAMC_INSTALL_PRIVATE_HEADERS=ON` 时才安装。
+- CodeIn 保存稳定骨架；动态循环和条件仍留在 C++。
+- `amc-llvm` 是 LLVM/Clang include、定义和动态/静态链接选择的唯一接口目标。
+- 性能基线与回归门槛见[基准测试](../bench/README_ZH.md)。
 
 ## 依赖规则
 
@@ -126,71 +145,47 @@ python3 tools/check_module_boundaries.py --strict   # 未登记禁止边失败
 python3 tools/check_module_boundaries.py --contracts-only
 ```
 
-临时例外记录在 `tools/module_boundary_allowlist.txt`，每行格式为
-`file|from|to|until|reason`。`until` 指定移除该边的阶段；过期条目会在报告中提示，避免 allowlist 腐化。`--strict` 接受已登记例外，只对未登记的禁止边失败。
+临时例外记录在 `tools/module_boundary_allowlist.txt`，每行格式为 `file|from|to|until|reason`。`until` 指定移除该边的阶段；过期条目会在报告中提示，避免 allowlist 腐化。`--strict` 接受已登记例外，只对未登记的禁止边失败。
 
 当前例外：无。allowlist 文件刻意保持为空。
 
-CTest 同时运行 `--contracts-only` 和 `--strict`：
-`amc-boundary-contracts`、`amc-boundary-edges`。
+CTest 同时运行 `--contracts-only` 和 `--strict`：`amc-boundary-contracts`、`amc-boundary-edges`。
 
 ## M4 进度
 
-- `IR/Lowering.h` 定义 `AbiTypeId` / `AbiFunctionId`、lowered type/function/
-  ownership/template 记录和 `LoweringResult` 契约
+- `IR/Lowering.h` 定义 `AbiTypeId` / `AbiFunctionId`、lowered type/function/ ownership/template 记录和 `LoweringResult` 契约
 - `Pass/Lowering` 把语义类型、函数、继承、字段、所有权和已实例化模板链接到 ABI 实体
-- `ir::Module` 携带 lowering 结果；`amc-lowering-test` 覆盖映射、直接
-  `abi_type` / `abi_signature` 链接、缺失/歧义实体、strict 模式和 lowering JSON 往返
-- C++ frontend 把每个 ABI type/function 同步进语义模型并写入直接链接；
-  `Semantic/Sync` 可供其他 frontend 复用
+- `ir::Module` 携带 lowering 结果；`amc-lowering-test` 覆盖映射、直接 `abi_type` / `abi_signature` 链接、缺失/歧义实体、strict 模式和 lowering JSON 往返
+- C++ frontend 把每个 ABI type/function 同步进语义模型并写入直接链接；`Semantic/Sync` 可供其他 frontend 复用
 - `Semantic/Serialize` 支持读写 sidecar，包含 records、functions、ownership 和 ABI 链接
-- `Compilation/Build` 读取 sidecar、补齐缺失链接、运行 `pass::lower`，在符号投影后写出
-  `<artifact>.lowering`
-- Backend 加载可选的 lowering sidecar，消费 lowered type/function 索引和所有权契约，
-  不再按名称重新推导
+- `Compilation/Build` 读取 sidecar、补齐缺失链接、运行 `pass::lower`，在符号投影后写出 `<artifact>.lowering`
+- Backend 加载可选的 lowering sidecar，消费 lowered type/function 索引和所有权契约，不再按名称重新推导
 
 ## M5 进度
 
-- `[[expose]]` 记录显式的 `semantic::ExposedType` / `ExposedMethod` 契约
-  （handle 类型、create/destroy thunk、方法 thunk 签名），semantic sidecar 可读写
-- `Pass/Lowering` 把 exposed 契约 lowering 成 `LoweredExposedType`，随
-  `<artifact>.lowering` 传给每个 backend
+- `[[expose]]` 记录显式的 `semantic::ExposedType` / `ExposedMethod` 契约（handle 类型、create/destroy thunk、方法 thunk 签名），semantic sidecar 可读写
+- `Pass/Lowering` 把 exposed 契约 lowering 成 `LoweredExposedType`，随 `<artifact>.lowering` 传给每个 backend
 - Rust 从 lowering 契约投影带类型方法的 `Owned<T>` wrapper
 - C++ 投影 move-only RAII `<Type>Handle`，包含工厂、类型化方法和 thunk 的 C linkage 声明
-- Zig 投影 `<Type>Handle`（create/deinit/类型化方法），并对 `type_opaque` 记录输出
-  opaque blob，不再泄露私有字段
-- Rust / C++ / Zig 把声明的错误边界投影为类型化结果
-  （`Result<T, E>` / `AmcResult(T, E)`），而不是裸状态码
-- Rust / Zig 还会生成类型化接口能力契约（identity、version、slot、签名）；
-  C++ 已有 `k<Name>Interface` / `<Name>Traits`
-- Rust / Zig 生成 typed interface proxy，在 bind 阶段校验 interface id、version、
-  slot 和 signature；C++ 使用 ABIX proxy runtime
-- 生成的 proxy 携带 `InterfaceLease`/`lease`，在 drop/deinit 时释放调用方持有的
-  模块 lease
-- interop 测试用同一原生库在 C++/Rust/Zig 中绑定同一 handle-shaped interface，
-  并拒绝 stale version/signature 契约
-- registry consumer 覆盖 module lease / begin_unload / wait_for_idle 生命周期；
-  `tests/interop/m7/` 是独立 same-library/same-contract L3 fixture，并覆盖 target /
-  stale lowering / 跨 artifact interface 版本 / 编译期 layout 拒绝
+- Zig 投影 `<Type>Handle`（create/deinit/类型化方法），并对 `type_opaque` 记录输出 opaque blob，不再泄露私有字段
+- Rust / C++ / Zig 把声明的错误边界投影为类型化结果（`Result<T, E>` / `AmcResult(T, E)`），而不是裸状态码
+- Rust / Zig 还会生成类型化接口能力契约（identity、version、slot、签名）； C++ 已有 `k<Name>Interface` / `<Name>Traits`
+- Rust / Zig 生成 typed interface proxy，在 bind 阶段校验 interface id、version、 slot 和 signature；C++ 使用 ABIX proxy runtime
+- 生成的 proxy 携带 `InterfaceLease`/`lease`，在 drop/deinit 时释放调用方持有的模块 lease
+- interop 测试用同一原生库在 C++/Rust/Zig 中绑定同一 handle-shaped interface，并拒绝 stale version/signature 契约
+- registry consumer 覆盖 module lease / begin_unload / wait_for_idle 生命周期；`tests/interop/m7/` 是独立 same-library/same-contract L3 fixture，并覆盖 target / stale lowering / 跨 artifact interface 版本 / 编译期 layout 拒绝
 - `Verify` 会比较 interface contract，跨 artifact 的版本/slot/签名变化会报告为契约漂移
-- 若 lowering sidecar 引用了 artifact 中不存在的 TypeID 或签名，生成阶段直接失败，
-  不再投影过期数据
-- `tests/interop/expose_test.py` 用同一 exposed 契约和类型化 Result wrapper 运行
-  Rust、C++、Zig 消费者；thunk 名称全部通过签名解析，不解析符号拼写
+- 若 lowering sidecar 引用了 artifact 中不存在的 TypeID 或签名，生成阶段直接失败，不再投影过期数据
+- `tests/interop/expose_test.py` 用同一 exposed 契约和类型化 Result wrapper 运行 Rust、C++、Zig 消费者；thunk 名称全部通过签名解析，不解析符号拼写
 - 能力发现范围与 stale sidecar 失败策略记录在 `docs/amc/capability-discovery.md`
 
 ## M6 进度
 
-- EPCD 0.1 成为必需的 Core 依赖；构建支持已安装包或仓库内 checkout，并在可用时
-  链接 `EPCD::Interface` 完成注册
-- `SKL/AMC/Error.h` 定义稳定的 `AMCErr` 静态域、`from_std_errc`、
-  `error_message` 和幂等 `register_errors`
-- `amc::Error` 携带 `skl::epcd::ErrorCode`；`abix.error/1` 增加可选
-  `domain` / `value`，旧字段保持稳定
-- `[[error]]` v2 强制 domain、支持 `GenericCondition` 和 `return_field`；
-  `[[error-set]]` / `[[error-set.code]]` 完成校验、序列化与稳定错误码表
-- Rust / C++ / Zig 从命名错误集生成稳定数值、名称和通用条件；typed Result 在存在
-  error-set 时使用命名类型，未知码按数字保留
+- EPCD 0.1 成为必需的 Core 依赖；构建支持已安装包或仓库内 checkout，并在可用时链接 `EPCD::Interface` 完成注册
+- `SKL/AMC/Error.h` 定义稳定的 `AMCErr` 静态域、`from_std_errc`、`error_message` 和幂等 `register_errors`
+- `amc::Error` 携带 `skl::epcd::ErrorCode`；`abix.error/1` 增加可选 `domain` / `value`，旧字段保持稳定
+- `[[error]]` v2 强制 domain、支持 `GenericCondition` 和 `return_field`；`[[error-set]]` / `[[error-set.code]]` 完成校验、序列化与稳定错误码表
+- Rust / C++ / Zig 从命名错误集生成稳定数值、名称和通用条件；typed Result 在存在 error-set 时使用命名类型，未知码按数字保留
 - interop 测试覆盖三语言的命名错误集投影与 typed Result 行为
 
 ## 当前 → 目标映射
@@ -218,72 +213,36 @@ CTest 同时运行 `--contracts-only` 和 `--strict`：
 
 ## A2/A3 进度
 
-- `IR/Artifact` 把 `.abix` + 可选 `.semantic` / `.lowering` 加载为一个
-  `ir::Module`；backend 统一使用该边界，不再重复 sidecar 路径
-- `Pass/Artifact` 校验 IR schema 与 sidecar 元数据；`Pass/Semantic` 校验语义引用；
-  `Pass/Verify` 负责 ABI 与只读 lowering 引用校验；`Pass/Compatibility` 包装契约漂移；
-  `Pass/TypeMapping` 负责映射报告；`Pass/Pipeline` 组合 artifact/semantic/ABI 校验 +
-  lowering + lowering 校验，并支持选择 Pass/strict 选项
-- `Compilation/Build` 运行标准 Pass pipeline；`amc verify`、`amc diff`、
-  `amc compatibility` 使用 Pass 入口
-- A3.5 策略门面：`IR/Compatibility` 与 `IR/TypeMapping` 命名比较/映射策略；
-  `Pass/*` 增加诊断与 strict 行为，`Query/Compatibility` 复用同一策略，且不引入
-  Query -> Pass 边
-- `Diagnostics` 负责聚合（`Summary`）、文本渲染和 `amc.diagnostics/1` JSON schema；
-  `Diagnostics/Verify` 把 `VerifyResult` 漂移转换为统一诊断模型，
-  `amc verify --format diagnostics-json` 输出该 schema
-- A2/A3.5 收口：剩余工作是 A5 物理拆分而不是策略设计；
-  `amc-pass-perf-bench`（Google Benchmark 5k/20k 参数）为拆分记录 Pass 基线
+- `IR/Artifact` 把 `.abix` + 可选 `.semantic` / `.lowering` 加载为一个 `ir::Module`；backend 统一使用该边界，不再重复 sidecar 路径
+- `Pass/Artifact` 校验 IR schema 与 sidecar 元数据；`Pass/Semantic` 校验语义引用；`Pass/Verify` 负责 ABI 与只读 lowering 引用校验；`Pass/Compatibility` 包装契约漂移；`Pass/TypeMapping` 负责映射报告；`Pass/Pipeline` 组合 artifact/semantic/ABI 校验 + lowering + lowering 校验，并支持选择 Pass/strict 选项
+- `Compilation/Build` 运行标准 Pass pipeline；`amc verify`、`amc diff`、`amc compatibility` 使用 Pass 入口
+- A3.5 策略门面：`IR/Compatibility` 与 `IR/TypeMapping` 命名比较/映射策略；`Pass/*` 增加诊断与 strict 行为，`Query/Compatibility` 复用同一策略，且不引入 Query -> Pass 边
+- `Diagnostics` 负责聚合（`Summary`）、文本渲染和 `amc.diagnostics/1` JSON schema；`Diagnostics/Verify` 把 `VerifyResult` 漂移转换为统一诊断模型，`amc verify --format diagnostics-json` 输出该 schema
+- A2/A3.5 收口：A5 物理拆分与当前 Pass 基线已经就位；`amc-pass-perf-bench` 及其他性能套件记录在[基准测试](../bench/README_ZH.md)，包括 4x 输入扩展门槛
 
 ## A5 进度
 
-- A5.1 Diagnostics：`Core/Error.*` → `Diagnostics/Error.*`；AMC 错误呈现与诊断
-  schema 同属 Diagnostics，错误身份仍由 EPCD 提供
-- A5.2 Cache：`Core/Cache.*` → `Compilation/Cache.*`；实现从 `libabix-tools`
-  移入 `amc-compilation`，`amc-core-test` 为缓存用例链接 `amc-compilation`
-- A5.3 Artifact：`Core/Metadata.*`、`Core/Materialize.*` →
-  `Artifact/Metadata.*`、`Artifact/Materialize.*`；`libabix-metadata` 作为
-  artifact 库保留 region/materialization 实现
-- A5.4 Platform：`Core/ELF.*`、`Core/Symbol.*` → `Platform/ELF.*`、
-  `Platform/Symbol.*`；新增 `amc-platform` 静态库（`AMC::platform`），负责
-  ELF/Mach-O/PE section 访问与 build-id/symbol-store 辅助
-- 边界工具现在识别 `Artifact`、`Platform`、`Query`、`Interfaces`、`Support`
-  头文件；Backend/Compilation/Query 可消费 Artifact，Query/Artifact 可消费
-  Platform，未添加兼容转发头
-- A5.5 Query：`Core/Query.*`、`Core/Context.*` → `Query/Query.*`、
-  `Query/Context.*`；CLI 编译命令中未使用的 Query/Context include 已清理
-- A5.6 Support：`Core/Json.*` → `Support/Json.*`；JSON wrapper 仍位于
-  `libabix-format`，边界扫描器现在识别 `Support/` 源路径和头文件
-- A5.7 Verify：`Core/Verify.*` → `IR/Verify.*`；`VerifyResult`/`ChangeKind`
-  留在 IR 策略层，`Pass/Compatibility` 继续负责诊断
-- A5.8 Condition：`Core/Condition.*` → `IR/Condition.*`，冻结的错误边界枚举
-  与 ABI 模型放在一起
-- Core 剩余项是 ABI 模型本身（`Core.h`/`Core.cpp`）、`Adapter` 与 `Lua`，
-  不属于 A5 基础设施切片
+- A5.1 Diagnostics：`Core/Error.*` → `Diagnostics/Error.*`；AMC 错误呈现与诊断 schema 同属 Diagnostics，错误身份仍由 EPCD 提供
+- A5.2 Cache：`Core/Cache.*` → `Compilation/Cache.*`；实现从 `libabix-tools` 移入 `amc-compilation`，`amc-core-test` 为缓存用例链接 `amc-compilation`
+- A5.3 Artifact：`Core/Metadata.*`、`Core/Materialize.*` → `Artifact/Metadata.*`、`Artifact/Materialize.*`；`libabix-metadata` 作为 artifact 库保留 region/materialization 实现
+- A5.4 Platform：`Core/ELF.*`、`Core/Symbol.*` → `Platform/ELF.*`、`Platform/Symbol.*`；新增 `amc-platform` 静态库（`AMC::platform`），负责 ELF/Mach-O/PE section 访问与 build-id/symbol-store 辅助
+- 边界工具现在识别 `Artifact`、`Platform`、`Query`、`Interfaces`、`Support` 头文件；Backend/Compilation/Query 可消费 Artifact，Query/Artifact 可消费 Platform，未添加兼容转发头
+- A5.5 Query：`Core/Query.*`、`Core/Context.*` → `Query/Query.*`、`Query/Context.*`；CLI 编译命令中未使用的 Query/Context include 已清理
+- A5.6 Support：`Core/Json.*` → `Support/Json.*`；JSON wrapper 仍位于 `libabix-format`，边界扫描器现在识别 `Support/` 源路径和头文件
+- A5.7 Verify：`Core/Verify.*` → `IR/Verify.*`；`VerifyResult`/`ChangeKind` 留在 IR 策略层，`Pass/Compatibility` 继续负责诊断
+- A5.8 Condition：`Core/Condition.*` → `IR/Condition.*`，冻结的错误边界枚举与 ABI 模型放在一起
+- Core 剩余项是 ABI 模型本身（`Core.h`/`Core.cpp`）、`Adapter` 与 `Lua`，不属于 A5 基础设施切片
 
 ## A6 进度
 
-- A6.0/A6.4：`Aue/README.md` 记录 Lua VM / ABIX Contract / Native Execution
-  三层、L0/L1/L2 降级规则，以及 conformance/benchmark 入口
-- A6.1：L1 在注册时一次性预构建 name -> entry 索引；冷派发从线性扫描变为
-  单次 table lookup
-- A6.2：Lua generator 输出 record/field descriptor；record metatable 提供
-  直接 `__index`/`__newindex` 访问，显式映射 ABI 宽度/类型，并拒绝不支持的写入
-- A6.3：type metatable 安装默认 `__gc` hook；`register_type_destroy` 用原生
-  destructor 覆盖。demo `Counter` 维护 live count，conformance 释放临时对象并
-  执行 `collectgarbage`，验证 destructor 在 userdata 释放前运行
+- A6.0/A6.4：`Aue/README.md` 记录 Lua VM / ABIX Contract / Native Execution 三层、L0/L1/L2 降级规则，以及 conformance/benchmark 入口
+- A6.1：L1 在注册时一次性预构建 name -> entry 索引；冷派发从线性扫描变为单次 table lookup
+- A6.2：Lua generator 输出 record/field descriptor；record metatable 提供直接 `__index`/`__newindex` 访问，显式映射 ABI 宽度/类型，并拒绝不支持的写入
+- A6.3：type metatable 安装默认 `__gc` hook；`register_type_destroy` 用原生 destructor 覆盖。demo `Counter` 维护 live count，conformance 释放临时对象并执行 `collectgarbage`，验证 destructor 在 userdata 释放前运行
 - `Core/Lua.*` 迁移到 `Backend/Lua/Lua.*`，generator 归入 Backend，未新增边界边
-- A6.4：`Aue/standalone/CMakeLists.txt` 提供不依赖 AMC driver 的
-  conformance/benchmark 入口，安装 `bin/abix-conformance`、`bin/abix-bench`
-  与 `share/aue/*`，并通过 `cpack` 生成版本化
-  `Aue-<version>-<system>.tar.gz`；已用安装后的 ABIX runtime 验证
-- A6.5：`-DAUE_ENABLE_L2=ON` 构建 opt-in 的 L2 native-dispatch prototype。
-  它使用 C 侧开放寻址 contract index，不做 memoization；这是研究原型，不是
-  Lua VM patch。默认构建仍只提供 L0/L1
-- A6.6：field descriptor 现在区分 scalar、pointer、record、array、opaque。
-  record/array 字段返回非拥有 view，通过 Lua uservalue 1 保持 parent 存活；
-  array 元素访问使用 `type_index` 或 `element_kind`/`element_size`，不支持的
-  写入会明确拒绝
+- A6.4：`Aue/standalone/CMakeLists.txt` 提供不依赖 AMC driver 的 conformance/benchmark 入口，安装 `bin/abix-conformance`、`bin/abix-bench` 与 `share/aue/*`，并通过 `cpack` 生成版本化 `Aue-<version>-<system>.tar.gz`；已用安装后的 ABIX runtime 验证
+- A6.5：`-DAUE_ENABLE_L2=ON` 构建 opt-in 的 L2 native-dispatch prototype。它使用 C 侧开放寻址 contract index，不做 memoization；这是研究原型，不是 Lua VM patch。默认构建仍只提供 L0/L1
+- A6.6：field descriptor 现在区分 scalar、pointer、record、array、opaque。 record/array 字段返回非拥有 view，通过 Lua uservalue 1 保持 parent 存活； array 元素访问使用 `type_index` 或 `element_kind`/`element_size`，不支持的写入会明确拒绝
 
 ## A1 进度
 
@@ -314,7 +273,7 @@ CTest 同时运行 `--contracts-only` 和 `--strict`：
 - [x] `amc-boundary-test` 覆盖契约类型和 Pass 顺序。
 - [x] 已有 report-only 依赖扫描和 A0 契约头 gate。
 - [x] `--strict` 边 gate 通过，并保留有记录的 A4 例外。
-- [ ] A1 将现有 include 迁移到契约头文件后面。
+- [x] A1 已将现有 include 迁移到契约头文件后面。
 
 ## A1 入口条件
 

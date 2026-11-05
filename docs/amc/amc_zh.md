@@ -60,6 +60,16 @@ amc build -c package.abic.toml [-B <build_dir>]
 
 按配置运行前端、投影导出符号，写出 `.abix` 及 `.abix.meta` 索引 sidecar。
 
+### 实例化缓存
+
+`amc build` / `amc verify` 可以复用之前生成的前端 artifact：
+
+```bash
+amc build -c package.abic.toml -B build --cache build/.amc-cache
+```
+
+也可以通过 `.abic.toml` 的 `[cache] dir = "..."` 指定。缓存 key 覆盖源码 digest、声明依赖、target 事实和 lowering 规则。快速路径 miss 返回 `not_found`；诊断模式会扫描 manifest 给出精确原因。多个 `amc` 进程使用进程唯一临时目录暂存 entry，再通过 rename 原子提交，因此构建系统可以安全地用多个实例共享一个缓存。
+
 ### inspect / validate
 
 ```bash
@@ -205,18 +215,15 @@ amc validate missing.abix --error-format json
 
 命令带 `--format json` 时错误也切到 JSON。
 
-可选的 `domain` / `value` 字段携带 AMC 错误类别的稳定 EPCD 身份；旧消费者可以忽略，
-`code` / `category` / `stage` / `message` 保持稳定。
+可选的 `domain` / `value` 字段携带 AMC 错误类别的稳定 EPCD 身份；旧消费者可以忽略，`code` / `category` / `stage` / `message` 保持稳定。
 
 ## L3 适配
 
-显式所有权、回调、命名错误和 handle-shaped interface 示例见
-[l3-adaptation.md](l3-adaptation.md)。
+显式所有权、回调、命名错误和 handle-shaped interface 示例见 [l3-adaptation.md](l3-adaptation.md)。
 
 ## 能力发现
 
-AMC 能从源码证明哪些能力、从已编译模块能发现哪些信息，以及过期 lowering
-sidecar 如何被拒绝，见 [capability-discovery.md](capability-discovery.md)。
+AMC 能从源码证明哪些能力、从已编译模块能发现哪些信息，以及过期 lowering sidecar 如何被拒绝，见 [capability-discovery.md](capability-discovery.md)。
 
 ## 其他工具
 

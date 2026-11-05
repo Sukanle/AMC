@@ -96,6 +96,16 @@ Runs the configured frontend, projects the requested symbols and writes the `.ab
 amc build -c package.abic.toml [-B <build_dir>]
 ```
 
+### Instantiation cache
+
+`amc build` and `amc verify` can reuse a previously generated frontend artifact:
+
+```bash
+amc build -c package.abic.toml -B build --cache build/.amc-cache
+```
+
+The cache can also be selected with `[cache] dir = "..."` in `.abic.toml`. Entries are keyed by the source digest, declared dependencies, target facts and lowering rules. A miss on the fast path returns `not_found`; diagnosis mode scans manifests to report the precise reason. Concurrent `amc` processes stage entries in process-unique temporary directories and commit with rename, so a build system can safely run several instances against one cache.
+
 ### `amc inspect` / `amc validate`
 
 ```bash
@@ -290,20 +300,15 @@ amc validate missing.abix --error-format json
 
 `--format json` on a command also switches errors to JSON.
 
-The optional `domain` / `value` fields carry the stable EPCD identity of the
-AMC error category. Older consumers can ignore them; `code` / `category` /
-`stage` / `message` remain stable.
+The optional `domain` / `value` fields carry the stable EPCD identity of the AMC error category. Older consumers can ignore them; `code` / `category` / `stage` / `message` remain stable.
 
 ## L3 adaptation
 
-See [l3-adaptation.md](l3-adaptation.md) for explicit ownership, callbacks,
-named errors and handle-shaped interface examples.
+See [l3-adaptation.md](l3-adaptation.md) for explicit ownership, callbacks, named errors and handle-shaped interface examples.
 
 ## Capability discovery
 
-See [capability-discovery.md](capability-discovery.md) for what AMC can prove
-from source, what it can discover from a compiled module, and how stale
-lowering sidecars are rejected.
+See [capability-discovery.md](capability-discovery.md) for what AMC can prove from source, what it can discover from a compiled module, and how stale lowering sidecars are rejected.
 
 ## Other tools
 

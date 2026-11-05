@@ -4,7 +4,7 @@
   <a href="README_ZH.md">中文</a> · English
 </p>
 
-AMC is the ABI Metadata Compiler/toolchain. This is the standalone AMC repository.
+AMC is an interface compiler and code-generation toolchain. This is the standalone AMC repository.
 
 ## Documentation
 - [Documentation index](docs/README.md)
@@ -13,11 +13,11 @@ AMC is the ABI Metadata Compiler/toolchain. This is the standalone AMC repositor
 - [Cross-language projections](docs/lang/README.md)
 - [MCP tool catalogue](docs/ai/MCP.md)
 - [Binary metadata inspection](docs/architecture/elf-inspection.md)
+- [Benchmarks and performance analysis](docs/bench/README.md)
 
 ## Tests and analysis
 
-The unified entry point is `python tools/run.py` (build + CTest). Use
-`tools/run_build.py` or `tools/run_test.py` when only one stage is needed:
+The unified entry point is `python tools/run.py` (build + CTest). Use `tools/run_build.py` or `tools/run_test.py` when only one stage is needed:
 
 ```bash
 python tools/run.py                         # build + all CTest suites

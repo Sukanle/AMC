@@ -12,6 +12,7 @@
 - [生成的投影](#生成的投影)
 - [接口层](#接口层)
 - [示例](#示例)
+- [实现布局](#实现布局)
 - [限制与说明](#限制与说明)
 
 </details>
@@ -82,6 +83,22 @@ amc generate build/demo/interop_demo.abix -l cpp -o build/demo/gen
 ```
 
 生成的 header 可以被 C++ 消费方直接 include；如果 provider 布局发生漂移，`amc_abi_check.hpp` 会让构建失败。
+
+## 实现布局
+
+provider 按职责拆分，避免 Clang 前端和 emitter 后端重新变成单文件：
+
+| 路径 | 职责 |
+| --- | --- |
+| `include/SKL/AMC/Frontend/Cpp/Cpp.h` | 公共前端入口（`run_frontend`） |
+| `include/SKL/AMC/Backend/Cpp/Cpp.h` | 公共后端入口（`run_backend`） |
+| `include/SKL/AMC/Private/Frontend/Cpp/` | `Native`、`Extractor`、`ThunkEmitter` 声明 |
+| `src/SKL/AMC/Private/Frontend/Cpp/` | Clang visitor 与 thunk 实现 |
+| `include/SKL/AMC/Private/Backend/Cpp/` | emitter 声明 |
+| `src/SKL/AMC/Private/Backend/Cpp/` | projection/interface/handle/error/check emitter |
+| `CodeIn/Cpp/Prologue.hpp` | 运行时加载的生成 prologue |
+
+`Extractor` 是不持有资源的 Clang visitor；`ThunkEmitter` 是不持有资源的操作类。 C++ backend 入口只负责加载 artifact、应用 lowering 并调用 emitter。私有头文件只有在 `-DAMC_INSTALL_PRIVATE_HEADERS=ON` 时才会安装。
 
 ## 限制与说明
 
