@@ -232,6 +232,12 @@ set_target_properties(
                POSITION_INDEPENDENT_CODE ON
                OUTPUT_NAME abix-tools)
 
+# A4 Compilation module: configuration parsing and, later, the shared build
+# pipeline. It is a build-tree library consumed by the CLI.
+add_library(amc-compilation STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Config.cpp)
+target_include_directories(amc-compilation PUBLIC ${AMC_INCLUDE_DIR})
+target_link_libraries(amc-compilation PUBLIC libabix-format tomlplusplus::tomlplusplus)
+
 add_library(AMC::format ALIAS libabix-format)
 add_library(AMC::abi ALIAS libabix-abi)
 add_library(AMC::metadata ALIAS libabix-metadata)
@@ -293,7 +299,7 @@ add_executable(
     ${AMC_SOURCE_DIR}/src/SKL/AMC/CLI/Providers.cpp)
 target_include_directories(amc PRIVATE ${AMC_INCLUDE_DIR})
 target_compile_definitions(amc PRIVATE AMC_DEFAULT_PROVIDERS_FILE="${AMC_SOURCE_DIR}/providers.toml")
-target_link_libraries(amc PRIVATE amc-core tomlplusplus::tomlplusplus)
+target_link_libraries(amc PRIVATE amc-core amc-compilation tomlplusplus::tomlplusplus)
 
 add_executable(
     amc-dump ${AMC_SOURCE_DIR}/src/SKL/AMC/Tool/Dump/Dump.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Tool/Dump/Json.cpp

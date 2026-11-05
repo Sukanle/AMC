@@ -98,6 +98,15 @@ It also carries type/interface/method identity, ownership, lifetime, error
 contracts, versions, capabilities and metadata. The schema version is
 independent from the runtime ABI version.
 
+## A4 Progress
+
+- `ExportSpec`, `parse_exports` and `apply_target_and_layout` moved to
+  `Compilation/Config` (`amc-compilation`)
+- build/verify/generate now call `amc::compilation::*` instead of the CLI
+  umbrella header for configuration parsing
+- the remaining CLI → IR edges are the build pipeline and the CLI dispatcher,
+  still tracked as A4 allowlist entries
+
 ## Compatibility Forwarders
 
 A1 used explicitly marked forwarders while providers migrated. All providers now

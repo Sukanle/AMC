@@ -89,6 +89,13 @@ IR 必须区分：
 
 IR 还承载 Type/Interface/Method Identity、所有权、生命周期、错误契约、版本、能力和元数据。IR schema version 与运行时 ABI version 独立。
 
+## A4 进度
+
+- `ExportSpec`、`parse_exports`、`apply_target_and_layout` 已迁入
+  `Compilation/Config`（`amc-compilation`）
+- build/verify/generate 已改为调用 `amc::compilation::*`，不再通过 CLI 伞头解析配置
+- 剩余 CLI → IR 边主要是 build pipeline 和 CLI dispatcher，仍作为 A4 allowlist 跟踪
+
 ## 兼容转发头
 
 A1 在 provider 迁移期间使用过显式标记的转发头。现在所有 provider 都直接包含目标头文件，**已无兼容转发头**。

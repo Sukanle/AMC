@@ -154,28 +154,6 @@ bool write_abix_meta(const amc::AbiModule &module, const fs::path &artifact, std
     return true;
 }
 
-bool parse_exports(const toml::table &table, std::vector<ExportSpec> &exports, std::string &error) {
-    const auto *entries = table["export"].as_array();
-    if (!entries || entries->empty()) {
-        error = "configuration needs at least one [[export]]";
-        return false;
-    }
-    for (const auto &entry : *entries) {
-        const auto *spec = entry.as_table();
-        const auto output = spec ? (*spec)["output"].value<std::string>() : std::nullopt;
-        if (!output || output->empty()) {
-            error = "[[export]] requires output";
-            return false;
-        }
-        ExportSpec result{*output, {}};
-        if (const auto *symbols = (*spec)["symbols"].as_array())
-            for (const auto &symbol : *symbols)
-                result.symbols.push_back(symbol.value_or(""));
-        exports.push_back(std::move(result));
-    }
-    return true;
-}
-
 fs::path provider_executable(const fs::path &base_provider, const std::string &language) {
     if (language.empty() || language == "cpp") return base_provider;
     ProviderManifest manifest;

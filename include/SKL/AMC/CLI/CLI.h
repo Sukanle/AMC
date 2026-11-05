@@ -53,11 +53,6 @@ std::string elf_meta_document(const std::string &key, const amc::MetadataHeader 
 std::string abi_diagnostics(const amc::AbiModule &reference, const amc::VerifyResult &result);
 bool write_abix_meta(const amc::AbiModule &module, const fs::path &artifact, std::string &error);
 
-struct ExportSpec {
-    fs::path output;
-    std::vector<std::string> symbols;
-};
-
 // One entry of `AMC/providers.toml`. `roles` contains `frontend` and/or
 // `backend`; `protocol` is `jsonl-v1` for provider processes and `direct` for
 // built-in backends such as the Aue/Lua contract writer.
@@ -83,10 +78,6 @@ bool load_provider_manifest(const fs::path &executable_dir, ProviderManifest &ma
 const ProviderManifestEntry *find_provider_manifest(const ProviderManifest &manifest, const std::string &language);
 std::string describe_provider(const ProviderManifestEntry &provider);
 
-bool parse_exports(const toml::table &table, std::vector<ExportSpec> &exports, std::string &error);
-// Apply the `[target]` table to the module and recompute every LayoutHash with
-// the Canonical Layout Encoding v1. Call once the target facts are final.
-void apply_target_and_layout(const toml::table &config, amc::AbiModule &module);
 bool dispatch_provider(const fs::path &provider, const char *capability, const fs::path &input, const fs::path &output,
     std::string &error);
 // Resolve the `amc-<language>` provider executable that sits next to `amc`.

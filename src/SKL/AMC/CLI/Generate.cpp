@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "SKL/AMC/CLI/CLI.h"
+#include "SKL/AMC/Compilation/Config.h"
 
 #include <exception>
 #include <string>
@@ -120,7 +121,7 @@ int cmd_frontend(char **args, int arg_count, const fs::path &provider) {
             amc::AbiModule module;
             if (!amc::read_abix(output_path.string(), module, error))
                 return fail(read_error_category(error), "read_abix", error, output_path.string());
-            apply_target_and_layout(config, module);
+            amc::compilation::apply_target_and_layout(config, module);
             if (!amc::write_abix(module, output_path.string(), error))
                 return fail(amc::ErrorCategory::io, "write_abix", error, output_path.string());
         } catch (const toml::parse_error &e) {

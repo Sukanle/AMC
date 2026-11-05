@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "SKL/AMC/CLI/CLI.h"
+#include "SKL/AMC/Compilation/Config.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -26,19 +27,6 @@
 #include "SKL/AMC/Core/Cache.h"
 
 namespace amc::cli {
-
-void apply_target_and_layout(const toml::table &config, amc::AbiModule &module) {
-    if (const auto *target = config["target"].as_table()) {
-        if (auto value = (*target)["arch"].value<int64_t>()) module.arch = static_cast<uint32_t>(*value);
-        if (auto value = (*target)["os"].value<int64_t>()) module.os = static_cast<uint32_t>(*value);
-        if (auto value = (*target)["abi"].value<int64_t>()) module.target_abi = static_cast<uint32_t>(*value);
-        if (auto value = (*target)["pointer_bits"].value<int64_t>())
-            module.pointer_bits = static_cast<uint32_t>(*value);
-        const std::string endianness = (*target)["endianness"].value_or(std::string{});
-        if (!endianness.empty()) module.endianness = endianness == "little" ? 1u : (endianness == "big" ? 2u : 0u);
-    }
-    amc::recompute_layout_hashes(module);
-}
 
 namespace {
 
@@ -609,9 +597,9 @@ int cmd_build(char **args, int arg_count, const fs::path &provider) {
             if (!imports || imports->size() != 1)
                 return fail(
                     amc::ErrorCategory::config, "build", "MVP requires exactly one [[import]]", config_path.string());
-            std::vector<ExportSpec> exports;
+            std::vector<amc::compilation::ExportSpec> exports;
             std::string error;
-            if (!parse_exports(config, exports, error))
+            if (!amc::compilation::parse_exports(config, exports, error))
                 return fail(amc::ErrorCategory::config, "build", error, config_path.string());
             const auto *import_table = (*imports)[0].as_table();
             const std::string language =
@@ -742,7 +730,7 @@ int cmd_build(char **args, int arg_count, const fs::path &provider) {
                 return fail(amc::ErrorCategory::config, "build", error, config_path.string());
             if (!resolve_interfaces(config, full, error))
                 return fail(amc::ErrorCategory::config, "build", error, config_path.string());
-            apply_target_and_layout(config, full);
+            amc::compilation::apply_target_and_layout(config, full);
             // ABIX-STD lowering: match each contracted instantiation against its
             // contract. Instantiation succeeded already (the frontend did it);
             // this decides whether the concrete type is the boundary entity

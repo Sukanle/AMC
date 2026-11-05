@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "SKL/AMC/CLI/CLI.h"
+#include "SKL/AMC/Compilation/Config.h"
 
 #include <string>
 #include <vector>
@@ -84,9 +85,9 @@ int cmd_verify(char **args, int arg_count, const fs::path &provider) {
             if (!imports || imports->size() != 1)
                 return fail(
                     amc::ErrorCategory::config, "verify", "MVP requires exactly one [[import]]", config_path.string());
-            std::vector<ExportSpec> exports;
+            std::vector<amc::compilation::ExportSpec> exports;
             std::string error;
-            if (!parse_exports(config, exports, error))
+            if (!amc::compilation::parse_exports(config, exports, error))
                 return fail(amc::ErrorCategory::config, "verify", error, config_path.string());
             const auto *import_table = (*imports)[0].as_table();
             const std::string language =
@@ -108,7 +109,7 @@ int cmd_verify(char **args, int arg_count, const fs::path &provider) {
                 return fail(read_error_category(error), "read_abix", error, temporary.string());
             full.package_name = config["package"]["name"].value_or("cpp");
             full.package_version = config["package"]["version"].value_or("");
-            apply_target_and_layout(config, full);
+            amc::compilation::apply_target_and_layout(config, full);
 
             std::vector<amc::VerifyResult> results;
             std::string diagnostics_buffer;
