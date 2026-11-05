@@ -1,0 +1,135 @@
+# AMC 模块边界（A0）
+
+状态：**A0 边界冻结**。本文只定义 Frontend、IR、Pass、Backend、Compilation 和 Interfaces 之间的契约，不搬迁现有代码；A1 再开始物理拆分。
+
+## 目标
+
+- 以 ABIX IR 为中心，而不是围绕某一种源语言组织功能。
+- 明确并逐步机械化检查模块依赖方向。
+- 迁移过程中保持现有 interop/conformance 测试通过。
+
+## 模块
+
+| 模块 | 职责 | 拥有 |
+| --- | --- | --- |
+| Frontend | 理解源语言并输出 IR | 语言解析、AST 提取、源码语义 |
+| IR | 表达与语言无关的接口语义 | 类型、身份、ABI 映射、所有权、生命周期、错误、版本、能力 |
+| Pass | 验证和转换 IR | 规范化、验证、兼容性、lowering |
+| Backend | 从已验证 IR 生成目标文件 | C++/Rust/Zig/Protobuf/gRPC 生成器 |
+| Compilation | 编排一次接口编译 | Context、Session、Pipeline、Cache、构建选项 |
+| Interfaces | 对外暴露编译能力 | CLI、MCP、LSP、SDK |
+
+支撑模块：`Artifact`、`Diagnostics`、`Platform`、`Serialization`、`Query`、`Support`。
+
+## 依赖规则
+
+允许：
+
+```text
+Frontend ──► IR
+Pass     ──► IR + Diagnostics
+Backend  ──► IR + Diagnostics
+Compilation ──► Frontend + Pass + Backend + IR
+Interfaces  ──► Compilation
+```
+
+禁止：
+
+- IR 不得包含源语言解析器、Clang AST 或 Backend。
+- Frontend 不得包含 Backend，也不得直接调用 Backend。
+- Backend 不得包含 Clang AST，也不得解析源码。
+- CLI/MCP/LSP/SDK 不得自行实现 configure/frontend/pass/backend 流程。
+- Pass 不得依赖特定 Backend。
+- 任何模块不得绕过 Diagnostics 直接吞掉可恢复错误。
+
+## 数据流与所有权
+
+```text
+Request
+  │
+  ▼
+Frontend ──► IR（由 Compilation 拥有）
+  │
+  ▼
+Pass Pipeline（修改工作副本）
+  │
+  ▼
+Backend（借用已验证 IR，生成 artifacts）
+  │
+  ▼
+Result + Diagnostics
+```
+
+- Compilation Session 拥有 IR 和所有工作副本。
+- Pass 可以修改 IR，但返回 `true` 时必须保持 IR 有效。
+- Backend 接收 `const IR*`，不得修改。
+- Diagnostics 是跨模块唯一的可恢复错误通道。
+- C++ 异常不得跨越模块边界。
+
+## A0 契约头文件
+
+| 头文件 | 契约 |
+| --- | --- |
+| `include/SKL/AMC/IR/Module.h` | `amc::ir::Module`、schema version |
+| `include/SKL/AMC/Diagnostics/Diagnostics.h` | `Diagnostic`、`Severity`、`DiagnosticList` |
+| `include/SKL/AMC/Frontend/Frontend.h` | `Request`、`Result`、`Frontend` |
+| `include/SKL/AMC/Pass/Pass.h` | `Context`、`Pass`、`Pipeline` |
+| `include/SKL/AMC/Backend/Backend.h` | `Artifact`、`Request`、`Result`、`Backend` |
+| `include/SKL/AMC/Compilation/Compilation.h` | `Request`、`Result`、`Compiler` |
+
+A0 的 `ir::Module` 暂时聚合现有 ABI 模块和 Semantic Model，等 A2 再合并数据布局。
+
+## IR 职责
+
+IR 必须区分：
+
+- 逻辑类型（例如扩展浮点）；
+- 物理表示（IEEE binary64、x87 extended、PPC double-double）；
+- ABI 映射（size、alignment、register class、calling convention）。
+
+IR 还承载 Type/Interface/Method Identity、所有权、生命周期、错误契约、版本、能力和元数据。IR schema version 与运行时 ABI version 独立。
+
+## 当前 → 目标映射
+
+| 当前 | 目标 |
+| --- | --- |
+| `Core/Core.h`（`AbiModule`） | `IR/` ABI view |
+| `Semantic/*` | `IR/` semantic view |
+| `Lang/C++/Frontend.cpp` | `Frontend/Cpp/` |
+| `Lang/C++/Backend.cpp` | `Backend/Cpp/` |
+| `Lang/Rust/*` | `Frontend/Rust/` + `Backend/Rust/` |
+| `Lang/Zig/*` | `Backend/Zig/` |
+| `CLI/*` | `Interfaces/CLI/` + `Compilation/` |
+| `Tool/MCP/*` | `Interfaces/MCP/` |
+| `Core/Verify.cpp` | `Pass/Compatibility` |
+| `Core/Cache.cpp` | `Compilation/Cache` |
+| `Core/ELF.cpp` | `Platform/ELF` |
+| `Core/Metadata.cpp` | `Artifact/` / `Serialization/` |
+| `Core/Query.cpp`、`Core/Context.cpp` | `Query/` |
+| `Tool/Dump/*` | `Interfaces/CLI` 或 `Query/` |
+
+## 迁移规则
+
+1. 同一步不同时搬目录和改行为。
+2. 先冻结契约头文件，再迁移第一个实现。
+3. 迁移期间保留兼容转发头文件。
+4. 每一步都必须保持 `ctest` 和 interop 测试通过。
+5. 模块只能新增允许方向上的依赖。
+6. 新代码必须使用 A0 契约头文件，不能跨模块直接依赖实现。
+
+## A0 验收
+
+- [x] 六个模块职责和支撑模块已文档化。
+- [x] 依赖方向和禁止边已文档化。
+- [x] 数据流、所有权和诊断规则已文档化。
+- [x] 边界头文件存在并可编译。
+- [x] `amc-boundary-test` 覆盖契约类型和 Pass 顺序。
+- [ ] A1 增加依赖检查脚本/CI gate。
+- [ ] A1 将现有 include 迁移到契约头文件后面。
+
+## A1 入口条件
+
+- 契约头文件被接受为模块公共表面。
+- Frontend/Backend 拆分有文件级迁移映射。
+- 依赖检查能以 report-only 模式扫描当前代码树。
+- 任何 A0 契约头文件都不包含 Clang AST、Backend 或 Interface 层。

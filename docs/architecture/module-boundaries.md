@@ -1,0 +1,144 @@
+# AMC Module Boundaries (A0)
+
+Status: **A0 boundary freeze**. This document defines the contracts between the
+AMC frontend, IR, pass pipeline, backend, compilation pipeline and external
+interfaces. It does not move existing code yet; A1 starts the physical split.
+
+## Goals
+
+- Make ABIX IR the center of the toolchain instead of any one source language.
+- Make the dependency direction explicit and mechanically checkable.
+- Keep every existing interop and conformance test green during the migration.
+
+## Modules
+
+| Module | Responsibility | Owns |
+| --- | --- | --- |
+| Frontend | Understand a source language and emit IR | language parsing, AST extraction, source semantics |
+| IR | Express language-independent interface semantics | types, identities, ABI mapping, ownership, lifetime, errors, versions, capabilities |
+| Pass | Validate and transform IR | normalization, validation, compatibility, lowering |
+| Backend | Emit target files from validated IR | C++/Rust/Zig/Protobuf/gRPC generators |
+| Compilation | Orchestrate one interface compilation | context, session, pipeline, cache, build options |
+| Interfaces | Expose compilation to users and agents | CLI, MCP, LSP, SDK |
+
+Support modules: `Artifact`, `Diagnostics`, `Platform`, `Serialization`,
+`Query`, and `Support`.
+
+## Dependency Rules
+
+Allowed:
+
+```text
+Frontend ──► IR
+Pass     ──► IR + Diagnostics
+Backend  ──► IR + Diagnostics
+Compilation ──► Frontend + Pass + Backend + IR
+Interfaces  ──► Compilation
+```
+
+Forbidden:
+
+- IR must not include a source-language parser, Clang AST, or a backend.
+- A frontend must not include a backend or call a backend directly.
+- A backend must not include Clang AST or parse source languages.
+- CLI/MCP/LSP/SDK must not implement configure/frontend/pass/backend logic.
+- A pass must not depend on a specific backend.
+- No module may bypass diagnostics for a recoverable failure.
+
+## Data Flow and Ownership
+
+```text
+Request
+  │
+  ▼
+Frontend ──► IR (owned by Compilation)
+  │
+  ▼
+Pass pipeline (mutates the working IR)
+  │
+  ▼
+Backend (borrows a validated IR, emits artifacts)
+  │
+  ▼
+Result + Diagnostics
+```
+
+- The compilation session owns the IR and the working copies.
+- A pass may mutate the IR but must leave it valid when it returns `true`.
+- A backend receives `const IR*` and must not mutate it.
+- Diagnostics are accumulated in one list and are the only recoverable error
+  channel across module boundaries.
+- No C++ exception may cross a module boundary.
+
+## Contract Headers
+
+A0 freezes these headers:
+
+| Header | Contract |
+| --- | --- |
+| `include/SKL/AMC/IR/Module.h` | `amc::ir::Module`, schema version |
+| `include/SKL/AMC/Diagnostics/Diagnostics.h` | `Diagnostic`, `Severity`, `DiagnosticList` |
+| `include/SKL/AMC/Frontend/Frontend.h` | `Request`, `Result`, `Frontend` |
+| `include/SKL/AMC/Pass/Pass.h` | `Context`, `Pass`, `Pipeline` |
+| `include/SKL/AMC/Backend/Backend.h` | `Artifact`, `Request`, `Result`, `Backend` |
+| `include/SKL/AMC/Compilation/Compilation.h` | `Request`, `Result`, `Compiler` |
+
+The A0 `ir::Module` aggregates the existing ABI module and semantic model so
+the boundary can be frozen before A2 merges their data layout.
+
+## IR Responsibilities
+
+The IR must distinguish:
+
+- logical type (for example extended floating point);
+- physical representation (IEEE binary64, x87 extended, PPC double-double);
+- ABI mapping (size, alignment, register class, calling convention).
+
+It also carries type/interface/method identity, ownership, lifetime, error
+contracts, versions, capabilities and metadata. The schema version is
+independent from the runtime ABI version.
+
+## Current → Target Mapping
+
+| Current | Target |
+| --- | --- |
+| `Core/Core.h` (`AbiModule`) | `IR/` ABI view |
+| `Semantic/*` | `IR/` semantic view |
+| `Lang/C++/Frontend.cpp` | `Frontend/Cpp/` |
+| `Lang/C++/Backend.cpp` | `Backend/Cpp/` |
+| `Lang/Rust/*` | `Frontend/Rust/` + `Backend/Rust/` |
+| `Lang/Zig/*` | `Backend/Zig/` |
+| `CLI/*` | `Interfaces/CLI/` + `Compilation/` |
+| `Tool/MCP/*` | `Interfaces/MCP/` |
+| `Core/Verify.cpp` | `Pass/Compatibility` |
+| `Core/Cache.cpp` | `Compilation/Cache` |
+| `Core/ELF.cpp`, `Core/ELF.h` | `Platform/ELF` |
+| `Core/Metadata.cpp` | `Artifact/` / `Serialization/` |
+| `Core/Query.cpp`, `Core/Context.cpp` | `Query/` |
+| `Tool/Dump/*` | `Interfaces/CLI` or `Query/` |
+
+## Migration Rules
+
+1. Do not move a directory and change its behavior in the same step.
+2. Freeze a contract header before moving its first implementation.
+3. Keep compatibility forwarding headers while callers migrate.
+4. Every migration step must keep `ctest` and interop tests green.
+5. A module may only gain a dependency that the rules above allow.
+6. New code must use the A0 contract headers instead of reaching across modules.
+
+## A0 Acceptance
+
+- [x] Six module responsibilities and support modules documented.
+- [x] Dependency direction and forbidden edges documented.
+- [x] Data flow, ownership and diagnostic rules documented.
+- [x] Boundary headers exist and compile.
+- [x] `amc-boundary-test` covers the contract types and pass ordering.
+- [ ] A dependency check script/CI gate is added in A1.
+- [ ] Current includes are migrated behind the contract headers in A1.
+
+## A1 Entry Criteria
+
+- The contract headers are accepted as the public module surface.
+- The Frontend/Backend split has a file-level migration map.
+- A dependency check can run in report-only mode against the current tree.
+- No A0 contract header includes Clang AST, a backend, or an interface layer.

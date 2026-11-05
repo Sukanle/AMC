@@ -36,6 +36,12 @@
 | [MCP_zh.md](ai/MCP_zh.md)   | [MCP.md](ai/MCP.md)   | `amc-mcp` 服务器与 ABI 工具目录            |
 | [troi_zh.md](ai/troi_zh.md) | [troi.md](ai/troi.md) | AMC/MCP Agent 工作流的 TROI token 效率度量 |
 
+## 架构
+
+| 文档 | English | 描述 |
+| --- | --- | --- |
+| [module-boundaries_zh.md](architecture/module-boundaries_zh.md) | [module-boundaries.md](architecture/module-boundaries.md) | A0 模块职责、依赖规则与 API 契约 |
+
 ## 二进制检查
 
 | 文档 | English | 描述 |

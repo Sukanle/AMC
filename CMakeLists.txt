@@ -362,6 +362,12 @@ if(AMC_BUILD_TESTS)
     set_target_properties(amc-semantic-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
     add_test(NAME amc-semantic-test COMMAND amc-semantic-test)
 
+    add_executable(amc-boundary-test ${AMC_SOURCE_DIR}/tests/unit/module_boundaries_test.cpp)
+    target_include_directories(amc-boundary-test PRIVATE ${AMC_INCLUDE_DIR})
+    target_link_libraries(amc-boundary-test PRIVATE amc-core fmt::fmt)
+    set_target_properties(amc-boundary-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+    add_test(NAME amc-boundary-test COMMAND amc-boundary-test)
+
     find_package(Catch2 3 QUIET)
     if(Catch2_FOUND)
         include(Catch)

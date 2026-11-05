@@ -36,6 +36,12 @@ This directory documents the AMC toolchain: the `amc` CLI, `.abic.toml` configur
 | [MCP.md](ai/MCP.md)   | [MCP_zh.md](ai/MCP_zh.md)   | the `amc-mcp` server and its ABI tool catalogue          |
 | [troi.md](ai/troi.md) | [troi_zh.md](ai/troi_zh.md) | TROI token-efficiency metric for AMC/MCP agent workflows |
 
+## Architecture
+
+| Document | 中文 | Description |
+| --- | --- | --- |
+| [module-boundaries.md](architecture/module-boundaries.md) | [module-boundaries_zh.md](architecture/module-boundaries_zh.md) | A0 module responsibilities, dependency rules and API contracts |
+
 ## Binary inspection
 
 | Document | 中文 | Description |
