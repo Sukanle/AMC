@@ -179,6 +179,17 @@ BENCHMARK_DEFINE_F(CacheReadFixture, LookupMiss)(benchmark::State &state) {
 }
 BENCHMARK_REGISTER_F(CacheReadFixture, LookupMiss)->Arg(200)->Arg(1'000);
 
+BENCHMARK_DEFINE_F(CacheReadFixture, LookupMissDiagnose)(benchmark::State &state) {
+    for (auto _ : state) {
+        for (size_t i = 0; i < count; ++i) {
+            auto result = cache->lookup(make_inputs(i, "source-v2"), amc::LookupOptions{true});
+            benchmark::DoNotOptimize(result);
+        }
+    }
+    state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(count));
+}
+BENCHMARK_REGISTER_F(CacheReadFixture, LookupMissDiagnose)->Arg(200);
+
 BENCHMARK_DEFINE_F(CacheReadFixture, DependencyChanged)(benchmark::State &state) {
     for (auto _ : state) {
         auto result = cache->lookup(dependency_inputs);

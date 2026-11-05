@@ -359,31 +359,29 @@ bool verify_modules(
 
     const auto compare_function_set = [&](const std::vector<const Function *> &contracts,
                                           const std::vector<const Function *> &matches, const std::string &owner_name) {
+        // Functions belonging to one owner are compared by name. Index the
+        // contract side once so a free-function-heavy module does not degrade
+        // to O(n²) inside this set comparison.
+        std::map<std::string, const Function *> contract_by_name;
+        std::map<std::string, const Function *> implementation_by_name;
+        for (const auto *contract_function : contracts)
+            contract_by_name.emplace(contract_function->name, contract_function);
+        for (const auto *implementation_function : matches)
+            implementation_by_name.emplace(implementation_function->name, implementation_function);
+
         for (const auto *contract_function : contracts) {
-            const Function *match = nullptr;
-            for (const auto *candidate : matches)
-                if (candidate->name == contract_function->name) {
-                    match = candidate;
-                    break;
-                }
-            if (!match) {
+            const auto match = implementation_by_name.find(contract_function->name);
+            if (match == implementation_by_name.end()) {
                 add_change(
                     result, ChangeKind::function_removed, owner_name, contract_function->name, "function removed");
                 continue;
             }
-            compare_function(*contract_function, *match, result);
+            compare_function(*contract_function, *match->second, result);
         }
-        for (const auto *implementation_function : matches) {
-            bool found = false;
-            for (const auto *candidate : contracts)
-                if (candidate->name == implementation_function->name) {
-                    found = true;
-                    break;
-                }
-            if (!found)
+        for (const auto *implementation_function : matches)
+            if (contract_by_name.find(implementation_function->name) == contract_by_name.end())
                 add_change(
                     result, ChangeKind::function_added, owner_name, implementation_function->name, "function added");
-        }
     };
 
     // Compare every owner that appears in either module.

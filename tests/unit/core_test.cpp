@@ -1825,8 +1825,8 @@ int main() {
             {"module.abix", "ARTIFACT-A"}
         };
 
-        check(cache.lookup(base).status == amc::CacheStatus::miss
-                  && cache.lookup(base).reason == std::string(amc::cache_reason_not_found),
+        const auto empty = cache.lookup(base, amc::LookupOptions{true});
+        check(empty.status == amc::CacheStatus::miss && empty.reason == std::string(amc::cache_reason_not_found),
             "empty cache misses with not_found");
         check(cache.store(base, artifacts, error), "store an instantiation product");
         const auto hit = cache.lookup(base);
@@ -1844,8 +1844,13 @@ int main() {
             "an alias-only change is not a new instantiation request");
 
         // Each input change yields a miss with a precise reason.
+        const auto fast_miss = cache.lookup(source_changed);
+        check(
+            fast_miss.status == amc::CacheStatus::miss && fast_miss.reason == std::string(amc::cache_reason_not_found),
+            "fast lookup skips the diagnostic scan");
         auto reason_for = [&](const amc::InstantiationBuildInputs &inputs) {
-            return cache.lookup(inputs).status == amc::CacheStatus::miss ? cache.lookup(inputs).reason : std::string();
+            const auto result = cache.lookup(inputs, amc::LookupOptions{true});
+            return result.status == amc::CacheStatus::miss ? result.reason : std::string();
         };
         check(reason_for(source_changed) == std::string(amc::cache_reason_source_digest_changed),
             "dependency change invalidates with source_digest_changed");

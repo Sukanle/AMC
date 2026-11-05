@@ -540,7 +540,7 @@ bool InstantiationCache::store(const InstantiationBuildInputs &inputs,
     return true;
 }
 
-CacheLookup InstantiationCache::lookup(const InstantiationBuildInputs &inputs) const {
+CacheLookup InstantiationCache::lookup(const InstantiationBuildInputs &inputs, const LookupOptions options) const {
     CacheLookup result;
     result.build_key = instantiation_build_key(inputs);
     result.directory = entry_directory(result.build_key);
@@ -586,6 +586,12 @@ CacheLookup InstantiationCache::lookup(const InstantiationBuildInputs &inputs) c
             return result;
         }
     }
+    // Fast path: only the "entry not found" case needs the diagnostic scan.
+    // Invalid manifests, corrupted entries, schema drift and dependency changes
+    // already carry a precise status/reason.
+    if (!options.diagnose || result.status != CacheStatus::miss || result.reason != cache_reason_not_found)
+        return result;
+
     // Diagnose a miss against any same-template entry so incremental builds can
     // report why they rebuilt.
     const Hash128 desired_template = instantiation_template_signature(inputs.request);

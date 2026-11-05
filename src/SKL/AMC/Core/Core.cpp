@@ -29,6 +29,12 @@
 namespace amc {
 namespace {
 
+struct Hash128Hash {
+    size_t operator()(Hash128 value) const noexcept {
+        return static_cast<size_t>(value.lo ^ (value.hi * 0x9e3779b97f4a7c15ULL));
+    }
+};
+
 constexpr uint16_t kFormatVersion = 4;
 constexpr uint16_t kHashAlgorithm = 0;
 constexpr uint32_t kHeaderSize = 20;
@@ -500,9 +506,8 @@ const Type *find_type_by_id(const AbiModule &module, Hash128 id) {
         std::find_if(module.types.begin(), module.types.end(), [&](const Type &type) { return type.id == id; });
     return it == module.types.end() ? nullptr : &*it;
 }
-bool scalar_kind(const AbiModule &module, Hash128 id, bool &floating) {
-    const auto *type = find_type_by_id(module, id);
-    if (!type || type->kind != TypeKind::primitive) return false;
+bool scalar_kind(const Type *type, bool &floating) {
+    if (type == nullptr || type->kind != TypeKind::primitive) return false;
     const auto abi_kind = static_cast<PrimitiveAbiKind>(type->primitive_abi & 0xffu);
     floating = abi_kind == PrimitiveAbiKind::floating;
     return true;
@@ -514,63 +519,89 @@ bool build_compatibility(const AbiModule &source, const AbiModule &target, AbiMo
     result = target;
     result.compatibility.clear();
     result.maps.clear();
+
+    // build_compatibility pairs every source type with a target type and, for
+    // map-compatible records, compares fields by name. Build the lookup tables
+    // once instead of scanning both modules for every pair.
+    std::unordered_map<std::string, const Type *> target_by_name;
+    std::unordered_map<Hash128, const Type *, Hash128Hash> target_by_id;
+    std::unordered_map<Hash128, const Type *, Hash128Hash> source_by_id;
+    target_by_name.reserve(target.types.size());
+    target_by_id.reserve(target.types.size());
+    source_by_id.reserve(source.types.size());
+    for (const auto &type : target.types) {
+        target_by_name.emplace(type.name, &type);
+        target_by_id.emplace(type.id, &type);
+    }
+    for (const auto &type : source.types)
+        source_by_id.emplace(type.id, &type);
+
+    const auto lookup = [](const auto &table, Hash128 id) -> const Type * {
+        const auto found = table.find(id);
+        return found == table.end() ? nullptr : found->second;
+    };
+
     for (const auto &from : source.types) {
         // Nominal types are paired by name; primitives fall back to their
         // (ABI-normalised) TypeID so that differently-spelled but ABI-equal
         // scalar types still line up across modules/languages.
-        const auto *to = find_type_by_name(target, from.name);
-        if (!to) to = find_type_by_id(target, from.id);
-        if (!to) continue;
+        const Type *to = nullptr;
+        if (const auto found = target_by_name.find(from.name); found != target_by_name.end()) to = found->second;
+        if (to == nullptr) to = lookup(target_by_id, from.id);
+        if (to == nullptr) continue;
+
         CompatibilityRecord compatibility{from.id, to->id, CompatibilityKind::incompatible, UINT32_MAX, 0};
         if (from.id == to->id && effective_layout_hash(source, from) == effective_layout_hash(target, *to)) {
             compatibility.kind = CompatibilityKind::identical;
         } else if (effective_layout_hash(source, from) == effective_layout_hash(target, *to)) {
             compatibility.kind = CompatibilityKind::layout_compatible;
         } else if (from.kind == TypeKind::record && to->kind == TypeKind::record) {
+            std::unordered_map<std::string, uint32_t> source_fields;
+            std::unordered_map<std::string, uint32_t> target_fields;
+            source_fields.reserve(from.field_count);
+            target_fields.reserve(to->field_count);
+            for (uint32_t i = 0; i < from.field_count; ++i)
+                source_fields.emplace(source.fields[from.field_begin + i].name, i);
+            for (uint32_t i = 0; i < to->field_count; ++i)
+                target_fields.emplace(target.fields[to->field_begin + i].name, i);
+
             MapRecord map{from.id, to->id, from.name, to->name, 0, 0, 0, {}};
             for (uint32_t target_index = 0; target_index < to->field_count; ++target_index) {
                 const auto &target_field = target.fields[to->field_begin + target_index];
-                uint32_t source_index = UINT32_MAX;
-                for (uint32_t i = 0; i < from.field_count; ++i) {
-                    if (source.fields[from.field_begin + i].name == target_field.name) {
-                        source_index = i;
-                        break;
-                    }
-                }
-                if (source_index == UINT32_MAX) {
+                const auto source_field = source_fields.find(target_field.name);
+                if (source_field == source_fields.end()) {
+                    const Type *target_type = lookup(target_by_id, target_field.type_id);
                     map.operations.push_back({MapOpcode::add_default, UINT32_MAX, target_index, 0, target_field.offset,
-                        find_type_by_id(target, target_field.type_id)->size, {}});
+                        target_type == nullptr ? 0 : target_type->size, {}});
                     continue;
                 }
-                const auto &source_field = source.fields[from.field_begin + source_index];
-                if (source_field.type_id == target_field.type_id)
-                    map.operations.push_back(
-                        {MapOpcode::copy_field, source_index, target_index, source_field.offset, target_field.offset,
-                            std::min(find_type_by_id(source, source_field.type_id)->size,
-                                find_type_by_id(target, target_field.type_id)->size),
-                            {}});
-                else {
+                const auto &source_field_value = source.fields[from.field_begin + source_field->second];
+                if (source_field_value.type_id == target_field.type_id) {
+                    const Type *source_type = lookup(source_by_id, source_field_value.type_id);
+                    const Type *target_type = lookup(target_by_id, target_field.type_id);
+                    const uint32_t source_size = source_type == nullptr ? 0 : source_type->size;
+                    const uint32_t target_size = target_type == nullptr ? 0 : target_type->size;
+                    map.operations.push_back({MapOpcode::copy_field, source_field->second, target_index,
+                        source_field_value.offset, target_field.offset, std::min(source_size, target_size), {}});
+                } else {
+                    const Type *source_type = lookup(source_by_id, source_field_value.type_id);
+                    const Type *target_type = lookup(target_by_id, target_field.type_id);
                     bool source_float = false, target_float = false;
-                    if (!scalar_kind(source, source_field.type_id, source_float)
-                        || !scalar_kind(target, target_field.type_id, target_float)
+                    if (!scalar_kind(source_type, source_float)
+                        || !scalar_kind(target_type, target_float)
                         || source_float != target_float) {
                         map.operations.clear();
                         break;
                     }
-                    map.operations.push_back({source_float ? MapOpcode::convert_float : MapOpcode::convert_int,
-                        source_index, target_index, source_field.offset, target_field.offset, 0, target_field.type_id});
+                    map.operations.push_back(
+                        {source_float ? MapOpcode::convert_float : MapOpcode::convert_int, source_field->second,
+                            target_index, source_field_value.offset, target_field.offset, 0, target_field.type_id});
                 }
             }
             if (!map.operations.empty()) {
                 for (uint32_t source_index = 0; source_index < from.field_count; ++source_index) {
                     const auto &source_field = source.fields[from.field_begin + source_index];
-                    bool found = false;
-                    for (uint32_t i = 0; i < to->field_count; ++i)
-                        if (target.fields[to->field_begin + i].name == source_field.name) {
-                            found = true;
-                            break;
-                        }
-                    if (!found)
+                    if (target_fields.find(source_field.name) == target_fields.end())
                         map.operations.push_back(
                             {MapOpcode::skip_field, source_index, UINT32_MAX, source_field.offset, 0, 0, {}});
                 }

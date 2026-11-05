@@ -107,7 +107,11 @@ std::vector<size_t> query_type_indices(const AbiModule &module, std::string_view
 }
 
 std::vector<size_t> query_function_indices(const AbiModule &module, std::string_view needle) {
-    const auto index = index_types(module);
+    // The owner-qualified fallback needs a TypeID index. Build it lazily: most
+    // artifacts contain free functions only, and building the full map for
+    // every query dominates the exact-name path on large modules.
+    std::map<TypeKey, const Type *> index;
+    bool index_ready = false;
     std::vector<size_t> exact;
     for (size_t i = 0; i < module.functions.size(); ++i) {
         const auto &function = module.functions[i];
@@ -118,6 +122,10 @@ std::vector<size_t> query_function_indices(const AbiModule &module, std::string_
         // "Owner::name", where Owner is the declaring type registered in this
         // module (AMC stores the bare member name plus owner_type).
         if (!(function.owner_type == Hash128{})) {
+            if (!index_ready) {
+                index = index_types(module);
+                index_ready = true;
+            }
             const auto owner = index.find({function.owner_type.lo, function.owner_type.hi});
             if (owner != index.end() && owner->second->name + "::" + function.name == needle) {
                 exact.push_back(i);

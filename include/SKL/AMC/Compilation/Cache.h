@@ -135,6 +135,12 @@ constexpr const char *cache_reason_corrupted_artifact = "corrupted_artifact";
 constexpr const char *cache_reason_invalid_manifest = "invalid_manifest";
 constexpr const char *cache_reason_dependency_changed = "dependency_changed";
 
+struct LookupOptions {
+    // Precise miss reasons require scanning same-template entries. Keep the
+    // default lookup on the fast path; CLI/diagnostic callers can opt in.
+    bool diagnose = false;
+};
+
 struct CacheLookup {
     CacheStatus status = CacheStatus::miss;
     std::string reason;   // e.g. "source_digest_changed"
@@ -172,7 +178,7 @@ public:
     // every recorded dependency. On a miss the `reason` explains which input
     // differs from any same-template entry, so incremental builds can report
     // why they rebuilt.
-    CacheLookup lookup(const InstantiationBuildInputs &inputs) const;
+    CacheLookup lookup(const InstantiationBuildInputs &inputs, LookupOptions options = {}) const;
 
     // Verify a committed entry (manifest schema/versions + artifact digests).
     bool verify(const Hash128 &build_key, std::string &error) const;
