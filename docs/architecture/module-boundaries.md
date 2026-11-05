@@ -135,6 +135,17 @@ Current exceptions: none. The allowlist file is intentionally empty.
 CTest runs both `--contracts-only` and `--strict` as `amc-boundary-contracts`
 and `amc-boundary-edges`.
 
+## M4 Progress
+
+- `IR/Lowering.h` defines `AbiTypeId` / `AbiFunctionId`, lowered type/function/
+  ownership/template records and the `LoweringResult` contract
+- `Pass/Lowering` links semantic types, functions, inheritance, fields,
+  ownership and materialized templates to their ABI counterparts
+- `ir::Module` carries the lowering result; `amc-lowering-test` covers mapping,
+  missing/ambiguous entities and strict mode
+- Backend consumption of the lowered contract and the semantic sidecar reader
+  are the next M4 slice
+
 ## Current → Target Mapping
 
 | Current | Target |

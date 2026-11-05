@@ -119,6 +119,14 @@ python3 tools/check_module_boundaries.py --contracts-only
 CTest 同时运行 `--contracts-only` 和 `--strict`：
 `amc-boundary-contracts`、`amc-boundary-edges`。
 
+## M4 进度
+
+- `IR/Lowering.h` 定义 `AbiTypeId` / `AbiFunctionId`、lowered type/function/
+  ownership/template 记录和 `LoweringResult` 契约
+- `Pass/Lowering` 把语义类型、函数、继承、字段、所有权和已实例化模板链接到 ABI 实体
+- `ir::Module` 携带 lowering 结果；`amc-lowering-test` 覆盖映射、缺失/歧义实体和 strict 模式
+- Backend 消费 lowering 后的 Contract、semantic sidecar reader 是下一段 M4
+
 ## 当前 → 目标映射
 
 | 当前 | 目标 |

@@ -272,6 +272,12 @@ target_include_directories(amc-compilation PUBLIC ${AMC_INCLUDE_DIR})
 target_link_libraries(amc-compilation PUBLIC libabix-format amc-util tomlplusplus::tomlplusplus)
 target_compile_definitions(amc-compilation PRIVATE AMC_DEFAULT_PROVIDERS_FILE="${AMC_SOURCE_DIR}/providers.toml")
 
+# M4: semantic -> ABI lowering pass. It links the semantic model to the ABI
+# view without rewriting either; backends consume the resulting contract.
+add_library(amc-pass STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Lowering.cpp)
+target_include_directories(amc-pass PUBLIC ${AMC_INCLUDE_DIR})
+target_link_libraries(amc-pass PUBLIC libabix-format)
+
 add_library(AMC::format ALIAS libabix-format)
 add_library(AMC::abi ALIAS libabix-abi)
 add_library(AMC::metadata ALIAS libabix-metadata)
@@ -415,6 +421,12 @@ if(AMC_BUILD_TESTS)
     target_link_libraries(amc-boundary-test PRIVATE amc-core fmt::fmt)
     set_target_properties(amc-boundary-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
     add_test(NAME amc-boundary-test COMMAND amc-boundary-test)
+
+    add_executable(amc-lowering-test ${AMC_SOURCE_DIR}/tests/unit/lowering_test.cpp)
+    target_include_directories(amc-lowering-test PRIVATE ${AMC_INCLUDE_DIR})
+    target_link_libraries(amc-lowering-test PRIVATE amc-core amc-pass fmt::fmt)
+    set_target_properties(amc-lowering-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+    add_test(NAME amc-lowering-test COMMAND amc-lowering-test)
 
     find_package(Catch2 3 QUIET)
     if(Catch2_FOUND)

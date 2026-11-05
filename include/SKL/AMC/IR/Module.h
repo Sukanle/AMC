@@ -17,6 +17,7 @@
 #define AMC_IR_MODULE_H
 
 #include "SKL/AMC/Core/Core.h"
+#include "SKL/AMC/IR/Lowering.h"
 #include "SKL/AMC/Semantic/Model.h"
 
 #include <stdint.h>
@@ -27,11 +28,12 @@ namespace amc::ir {
 // pipeline and a backend. Until A2 merges the two views, it aggregates the
 // existing ABI module and the semantic model so the boundary can be frozen
 // without moving code.
-inline constexpr uint32_t module_schema_version = 1;
+inline constexpr uint32_t module_schema_version = 2;
 
 struct Module {
     AbiModule abi;
     semantic::SemanticModule semantic;
+    LoweringResult lowering;
     uint32_t schema_version = module_schema_version;
 };
 
