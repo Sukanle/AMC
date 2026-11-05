@@ -1,12 +1,27 @@
 # AMC 模块边界（A0）
 
-状态：**A0 边界冻结**。本文只定义 Frontend、IR、Pass、Backend、Compilation 和 Interfaces 之间的契约，不搬迁现有代码；A1 再开始物理拆分。
+状态：**A0 已冻结；A1/A4 已落地，A2/A3/A5 进行中**。本文定义 Frontend、IR、Pass、Backend、Compilation 和 Interfaces 之间的契约；剩余工作是边界收敛和物理模块拆分，而不是重新设计架构。
 
 ## 目标
 
 - 以 ABIX IR 为中心，而不是围绕某一种源语言组织功能。
 - 明确并逐步机械化检查模块依赖方向。
 - 迁移过程中保持现有 interop/conformance 测试通过。
+
+## AMC 编译边界
+
+AMC 是**编译前**的语义分析与代码生成工具链。它负责解析源语言语义、构建 IR、
+执行 ABI 降低，并生成 ABI 契约和源代码产物。
+
+AMC **不负责**语言实际编译、机器码生成、优化和链接；这些工作由用户自己的工具链
+完成。AMC 可以生成辅助 TU、调用编译器前端、请求模板实例化信息，但不能演变成
+独立的编译器驱动、构建系统或优化器。
+
+由此得到：
+
+- `.abix` / `.semantic` / `.lowering` 是契约和生成输入，不是目标文件或机器码；
+- Compilation 模块只编排 frontend/pass/backend，不替代用户的编译器或链接器；
+- 生成绑定止于源码级产物和 ABI 声明。
 
 ## 模块
 

@@ -1,14 +1,35 @@
 # AMC Module Boundaries (A0)
 
-Status: **A0 boundary freeze**. This document defines the contracts between the
-AMC frontend, IR, pass pipeline, backend, compilation pipeline and external
-interfaces. It does not move existing code yet; A1 starts the physical split.
+Status: **A0 frozen; A1/A4 landed, A2/A3/A5 in progress**. This document defines
+the contracts between the AMC frontend, IR, pass pipeline, backend, compilation
+pipeline and external interfaces. The remaining work is boundary consolidation
+and physical module extraction, not a new architecture.
 
 ## Goals
 
 - Make ABIX IR the center of the toolchain instead of any one source language.
 - Make the dependency direction explicit and mechanically checkable.
 - Keep every existing interop and conformance test green during the migration.
+
+## AMC Compiler Boundary
+
+AMC is a **pre-compilation** semantic analysis and code generation toolchain.
+It parses and analyzes source-language semantics, constructs an IR, performs ABI
+lowering, and generates ABI contracts and source artifacts.
+
+AMC does **not** implement language compilation, machine-code generation,
+optimization, or linking. Those stay with the user's toolchain. AMC may generate
+helper translation units, call a compiler frontend, or request template
+instantiation facts, but it must not become a compiler driver, build system or
+optimizer.
+
+Consequences:
+
+- `.abix` / `.semantic` / `.lowering` are contracts and generation inputs, not
+  object files or machine code.
+- The Compilation module orchestrates frontend/pass/backend work; it does not
+  replace the user's compiler or linker.
+- Generated bindings stop at source-level artifacts and ABI declarations.
 
 ## Modules
 
