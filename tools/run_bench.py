@@ -20,20 +20,27 @@ Usage:
 
 Aue's `abix-bench` is intentionally not in this list: it is a standalone Lua
 micro-benchmark with its own text output, not a Google Benchmark program.
+
+Pinning is cross-platform where the OS supports it: Linux uses cpufreq +
+sched_setaffinity, Windows uses EfficiencyClass + SetProcessAffinityMask, and
+macOS currently runs unpinned.
 """
 
 from __future__ import annotations
 
 import argparse
+import ctypes
 import functools
 import json
 import os
+import struct
 import subprocess
 import sys
 from pathlib import Path
 
 IS_WINDOWS = sys.platform == "win32"
-HAS_AFFINITY = hasattr(os, "sched_setaffinity")
+# Unix exposes sched_setaffinity; Windows uses SetProcessAffinityMask via ctypes.
+HAS_AFFINITY = hasattr(os, "sched_setaffinity") or IS_WINDOWS
 
 DEFAULT_BENCHES = [
     "amc-pass-perf-bench",
@@ -104,8 +111,70 @@ def online_cpus() -> list[int]:
         return []
 
 
+def _windows_core_classes() -> dict[int, list[int]]:
+    """Windows logical CPUs grouped by `EfficiencyClass`.
+
+    P-cores report the higher class, E-cores the lower one. Parsed from
+    `GetLogicalProcessorInformationEx(RelationProcessorCore)`.
+    """
+    if not IS_WINDOWS:
+        return {}
+    relation_processor_core = 0
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.GetLogicalProcessorInformationEx.argtypes = [
+        ctypes.c_int,
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+    kernel32.GetLogicalProcessorInformationEx.restype = ctypes.c_int
+    size = ctypes.c_uint32(0)
+    kernel32.GetLogicalProcessorInformationEx(relation_processor_core, None, ctypes.byref(size))
+    if size.value == 0:
+        return {}
+    buffer = ctypes.create_string_buffer(size.value)
+    if not kernel32.GetLogicalProcessorInformationEx(relation_processor_core, buffer, ctypes.byref(size)):
+        return {}
+    raw = bytes(buffer[: size.value])
+    classes: dict[int, list[int]] = {}
+    offset = 0
+    while offset + 8 <= len(raw):
+        relationship, record_size = struct.unpack_from("<II", raw, offset)
+        if record_size < 8:
+            break
+        body = raw[offset + 8 : offset + record_size]
+        if relationship == relation_processor_core and len(body) >= 24:
+            _flags, efficiency = struct.unpack_from("<BB", body, 0)
+            group_count = struct.unpack_from("<H", body, 22)[0]
+            for group_index in range(group_count):
+                base = 24 + group_index * 16
+                if base + 10 > len(body):
+                    break
+                mask, group = struct.unpack_from("<QH", body, base)
+                for bit in range(64):
+                    if mask & (1 << bit):
+                        classes.setdefault(efficiency, []).append(group * 64 + bit)
+        offset += record_size
+    return classes
+
+
+def p_core_pool() -> list[int]:
+    """Logical CPUs in the highest performance class / frequency pool."""
+    if IS_WINDOWS:
+        classes = _windows_core_classes()
+        if len(classes) < 2:
+            return []
+        return sorted(classes[max(classes)])
+    return performance_cpu_pool()
+
+
 def e_core_pool() -> list[int]:
-    """Linux E-core candidates: online CPUs outside the highest-freq pool."""
+    """Logical CPUs below the P-core class (Windows) or outside the P-core pool."""
+    if IS_WINDOWS:
+        classes = _windows_core_classes()
+        if len(classes) < 2:
+            return []
+        top = max(classes)
+        return sorted(cpu for efficiency, cpus in classes.items() if efficiency != top for cpu in cpus)
     p_cores = set(performance_cpu_pool())
     if not p_cores:
         return []
@@ -144,14 +213,10 @@ def resolve_pin(pin: str) -> tuple[list[int], str]:
     if pin in ("off", "all"):
         return [], ""
     if pin in ("auto", "p"):
-        if IS_WINDOWS:
-            return [], "CPU pinning is currently supported on Unix only"
-        cpus = performance_cpu_pool()
+        cpus = p_core_pool()
         if not cpus:
             return [], "no P-core pool detected"
     elif pin == "e":
-        if IS_WINDOWS:
-            return [], "CPU pinning is currently supported on Unix only"
         cpus = e_core_pool()
         if not cpus:
             return [], "no E-core pool detected"
@@ -160,6 +225,29 @@ def resolve_pin(pin: str) -> tuple[list[int], str]:
     if not HAS_AFFINITY:
         return [], "CPU affinity is not supported on this platform"
     return cpus, ""
+
+
+def apply_windows_affinity(pid: int, cpus: list[int]) -> bool:
+    """Restrict a running child to `cpus` through SetProcessAffinityMask."""
+    if not IS_WINDOWS:
+        return False
+    mask = 0
+    for cpu in cpus:
+        mask |= 1 << cpu
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.restype = ctypes.c_void_p
+    kernel32.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
+    kernel32.SetProcessAffinityMask.restype = ctypes.c_int
+    kernel32.SetProcessAffinityMask.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
+    kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+    # PROCESS_SET_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION
+    handle = kernel32.OpenProcess(0x0200 | 0x1000, False, pid)
+    if not handle:
+        return False
+    try:
+        return bool(kernel32.SetProcessAffinityMask(handle, ctypes.c_size_t(mask)))
+    finally:
+        kernel32.CloseHandle(handle)
 
 
 def pin_spec(value: str) -> str:
@@ -230,18 +318,25 @@ def run_benchmark(
         if allowed_cpus and not IS_WINDOWS
         else None
     )
-    process = subprocess.run(
+    popen_kwargs = {}
+    if preexec is not None:
+        popen_kwargs["preexec_fn"] = preexec
+    process = subprocess.Popen(
         cmd,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
         encoding="utf-8",
         errors="replace",
         cwd=exe.parent,
-        preexec_fn=preexec,
+        **popen_kwargs,
     )
+    if allowed_cpus and IS_WINDOWS and not apply_windows_affinity(process.pid, allowed_cpus):
+        print(f"  [warn] could not set affinity for {exe.name}", file=sys.stderr)
+    _, stderr = process.communicate()
     if process.returncode != 0:
         print(f"  [FAIL] {exe.name}: exit {process.returncode}", file=sys.stderr)
-        excerpt = strip_child_noise(process.stderr[-800:])
+        excerpt = strip_child_noise(stderr[-800:])
         if excerpt:
             print(excerpt, file=sys.stderr)
         return False

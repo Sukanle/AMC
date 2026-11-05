@@ -37,7 +37,7 @@ python tools/run_bench.py --bin build/bin --out bench/results --repetitions 5
 python tools/run_bench.py --list
 python tools/run_bench.py FullPipeline --exe amc-pass-perf-bench
 python tools/run_bench.py --pin off
-python tools/run_bench.py --pin e          # E-cores (Linux)
+python tools/run_bench.py --pin e          # E-cores (Linux/Windows)
 ```
 
 Or through the unified pipeline:
@@ -50,6 +50,10 @@ python tools/run.py                         # build + test + benchmark
 `tools/run_bench.py` forwards benchmark-name regexes to Google Benchmark,
 normalises `ns`/`us`/`ms`/`s` to nanoseconds, and writes one JSON file per
 executable under `--out`.
+
+Pinning is cross-platform where the OS supports it: Linux uses
+`sched_setaffinity` plus cpufreq to distinguish P/E cores; Windows uses
+`SetProcessAffinityMask` plus `EfficiencyClass`; macOS currently runs unpinned.
 
 Short CTest smoke:
 
