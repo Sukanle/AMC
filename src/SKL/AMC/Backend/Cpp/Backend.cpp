@@ -121,6 +121,12 @@ static bool interface_has_handle_methods(const amc::AbiModule &m, const amc::Int
     for (uint32_t i = 0; i < record.method_count; ++i) {
         const auto &method = m.interface_methods[record.method_begin + i];
         if (method.parameters.empty() || !type_is_pointer(m, method.parameters[0].type_id)) return false;
+        // The generated proxy forwards the runtime's `void *` object handle to
+        // the typed function pointer. A typed handle (e.g. `const DemoVec2 *`)
+        // would not implicitly convert; such contracts remain metadata-only
+        // until an explicit void-pointer adapter is exposed.
+        const std::string first = cpp_type_of(m, method.parameters[0].type_id);
+        if (first != "void*" && first != "const void*") return false;
     }
     return true;
 }

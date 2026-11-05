@@ -14,6 +14,7 @@ symbols = [
     "DemoVec2",
     "demo_add",
     "demo_scale",
+    "demo_scale_handle",
     "demo_vec2_create",
     "demo_vec2_destroy",
     "demo_div",
@@ -184,6 +185,18 @@ methods = ["demo_add", "demo_scale"]
 interface = "IVectorMath"
 type = "DemoVec2"
 methods = ["demo_add", "demo_scale"]
+
+# A handle-shaped interface: its first method parameter is the object handle, so
+# the generated Rust/Zig proxies can bind it with the same contract.
+[[interface]]
+name = "IVectorScale"
+version = 1
+methods = ["demo_scale_handle"]
+
+[[implements]]
+interface = "IVectorScale"
+type = "DemoVec2"
+methods = ["demo_scale_handle"]
 
 # Target platform facts, carried into the region for runtime verification.
 [target]

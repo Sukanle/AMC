@@ -163,6 +163,10 @@ CTest 同时运行 `--contracts-only` 和 `--strict`：
   （`Result<T, E>` / `AmcResult(T, E)`），而不是裸状态码
 - Rust / Zig 还会生成类型化接口能力契约（identity、version、slot、签名）；
   C++ 已有 `k<Name>Interface` / `<Name>Traits`
+- Rust / Zig 生成 typed interface proxy，在 bind 阶段校验 interface id、version、
+  slot 和 signature；C++ 使用 ABIX proxy runtime
+- interop 测试用同一原生库在 C++/Rust/Zig 中绑定同一 handle-shaped interface，
+  并拒绝 stale version/signature 契约
 - 若 lowering sidecar 引用了 artifact 中不存在的 TypeID 或签名，生成阶段直接失败，
   不再投影过期数据
 - `tests/interop/expose_test.py` 用同一 exposed 契约和类型化 Result wrapper 运行

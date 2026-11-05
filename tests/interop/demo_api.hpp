@@ -37,6 +37,8 @@ struct DemoVec2 {
 // Pure value functions.
 DEMO_API int32_t demo_add(int32_t a, int32_t b);
 DEMO_API double demo_scale(const struct DemoVec2 *v, double factor);
+// Handle-shaped wrapper for the named interface: the object handle is opaque.
+DEMO_API double demo_scale_handle(const void *v, double factor);
 
 // Library-owned handle: allocated by the library, released by the same library.
 // This is the cross-DLL ownership contract in miniature -- the consumer never

@@ -23,11 +23,23 @@
 #include "demo_api.hpp"
 #include "amc_generated.hpp"
 
+extern "C" double scale_adapter(const void *object, double factor) { return demo_scale_handle(object, factor); }
+
 int main() {
     assert(demo_add(2, 3) == 5);
 
     DemoVec2 value{4, 2.5};
     assert(demo_scale(&value, 2.0) == 13.0);
+
+    // Bind the same handle-shaped interface from the shared artifact.
+    ::skl::abix::poly::InterfaceMethod scale_methods[] = {
+        {amc_generated::IVectorScaleTraits::signatures[0], ::skl::abix::poly::interface_entry(&scale_adapter), 0, 0}
+    };
+    amc_generated::IVectorScale scale;
+    assert(scale.bind_methods(amc_generated::IVectorScaleTraits::id, amc_generated::IVectorScaleTraits::version,
+               scale_methods, 1, &value)
+           == ::skl::abix::poly::InterfaceStatus::ok);
+    assert(scale.demo_scale_handle(2.0) == 13.0);
 
     DemoVec2 *owned = demo_vec2_create(7, 1.5);
     assert(owned != nullptr);

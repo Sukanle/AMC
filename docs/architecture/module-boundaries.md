@@ -192,6 +192,11 @@ and `amc-boundary-edges`.
 - Rust and Zig also emit typed interface capability contracts (identity,
   version, slots, signatures); C++ already emits `k<Name>Interface` /
   `<Name>Traits`
+- Rust and Zig emit typed interface proxies that validate interface id,
+  version, slot and signature at bind time; C++ uses the ABIX proxy runtime
+- the interop suite binds the same handle-shaped interface through C++, Rust
+  and Zig against the same native library and rejects stale version/signature
+  contracts
 - generation rejects a lowering sidecar that references a TypeID or signature
   absent from the artifact, instead of projecting stale data
 - `tests/interop/expose_test.py` drives the same exposed contract and typed

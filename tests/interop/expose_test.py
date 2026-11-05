@@ -452,10 +452,36 @@ def main() -> int:
             open(proxy_src, "w", encoding="utf-8").write(
                 '#include "shapes.hpp"\n'
                 '#include "shapes_iface.hpp"\n'
+                '#include <cstdint>\n'
+                'struct FakeShape { std::int32_t area; };\n'
+                'extern "C" std::int32_t fake_area(const void *object) {\n'
+                '    return static_cast<const FakeShape *>(object)->area;\n'
+                '}\n'
                 'int main() {\n'
                 '    static_assert(amc_generated::ShapeTraits::slots.shape_area == 0);\n'
                 '    static_assert(amc_generated::ShapeTraits::signatures.size() == 1);\n'
-                '    return amc_generated::ShapeTraits::version == 1 ? 0 : 1;\n'
+                '    FakeShape object{42};\n'
+                '    ::skl::abix::poly::InterfaceMethod methods[] = {\n'
+                '        {amc_generated::ShapeTraits::signatures[0],\n'
+                '         ::skl::abix::poly::interface_entry(&fake_area), 0, 0}};\n'
+                '    amc_generated::Shape proxy;\n'
+                '    if (proxy.bind_methods(amc_generated::ShapeTraits::id,\n'
+                '            amc_generated::ShapeTraits::version, methods, 1, &object)\n'
+                '        != ::skl::abix::poly::InterfaceStatus::ok)\n'
+                '        return 1;\n'
+                '    if (proxy.shape_area() != 42) return 2;\n'
+                '    amc_generated::Shape wrong;\n'
+                '    if (wrong.bind_methods(amc_generated::ShapeTraits::id,\n'
+                '            amc_generated::ShapeTraits::version + 1, methods, 1, &object)\n'
+                '        != ::skl::abix::poly::InterfaceStatus::version_mismatch)\n'
+                '        return 3;\n'
+                '    methods[0].signature = {};\n'
+                '    amc_generated::Shape stale;\n'
+                '    if (stale.bind_methods(amc_generated::ShapeTraits::id,\n'
+                '            amc_generated::ShapeTraits::version, methods, 1, &object)\n'
+                '        != ::skl::abix::poly::InterfaceStatus::signature_mismatch)\n'
+                '        return 4;\n'
+                '    return 0;\n'
                 '}\n')
             proxy_bin = os.path.join(work, exe_name("shapes_proxy"))
             r = run([cxx, "-std=c++17", *include_flags(source_root), "-I" + work,
@@ -463,6 +489,98 @@ def main() -> int:
             if check(r.returncode == 0, "the generated interface proxy header compiles", r.stderr[-400:]):
                 r = run([proxy_bin], env=env)
                 check(r.returncode == 0, "the generated interface proxy header runs")
+
+        # The same interface contract projects to Rust and Zig proxies with the
+        # same bind-time id/version/signature checks.
+        shapes_abix = os.path.join(work, "shapes_out", "shapes.abix")
+        rust_proxy_gen = os.path.join(work, "shapes_gen_rust")
+        os.makedirs(rust_proxy_gen, exist_ok=True)
+        r = run([amc, "generate", shapes_abix, "-l", "rust", "-o", rust_proxy_gen])
+        if check(r.returncode == 0, "amc generate -l rust for the interface proxy", (r.stdout + r.stderr)[-400:]):
+            rust_proxy_src = os.path.join(work, "rust_interface_proxy.rs")
+            open(rust_proxy_src, "w", encoding="utf-8").write(
+                '#[path = "shapes_gen_rust/amc_generated.rs"]\n'
+                'mod abi;\n'
+                'use abi::*;\n'
+                'use core::ffi::c_void;\n'
+                'unsafe extern "C" fn fake_area(object: *mut c_void) -> core::ffi::c_int {\n'
+                '    unsafe { *(object as *mut i32) }\n'
+                '}\n'
+                'fn main() {\n'
+                '    let mut value: i32 = 42;\n'
+                '    let method = InterfaceMethodEntry {\n'
+                '        signature_lo: ShapeProxy::SHAPE_AREA_SIGNATURE.0,\n'
+                '        signature_hi: ShapeProxy::SHAPE_AREA_SIGNATURE.1,\n'
+                '        entry: fake_area as usize,\n'
+                '        slot: ShapeProxy::SHAPE_AREA_SLOT,\n'
+                '        flags: 0,\n'
+                '    };\n'
+                '    let proxy = unsafe { ShapeProxy::bind(\n'
+                '        (ShapeProxy::ID_LO, ShapeProxy::ID_HI), ShapeProxy::VERSION,\n'
+                '        &mut value as *mut i32 as *mut c_void, &[method], core::ptr::null_mut()) };\n'
+                '    let proxy = match proxy { Ok(p) => p, Err(_) => std::process::exit(1) };\n'
+                '    if proxy.shape_area() != 42 { std::process::exit(2); }\n'
+                '    let wrong = unsafe { ShapeProxy::bind(\n'
+                '        (ShapeProxy::ID_LO, ShapeProxy::ID_HI), ShapeProxy::VERSION + 1,\n'
+                '        &mut value as *mut i32 as *mut c_void, &[method], core::ptr::null_mut()) };\n'
+                '    if wrong.err() != Some(BindError::VersionMismatch) { std::process::exit(3); }\n'
+                '    let bad = InterfaceMethodEntry { signature_lo: 0, ..method };\n'
+                '    let stale = unsafe { ShapeProxy::bind(\n'
+                '        (ShapeProxy::ID_LO, ShapeProxy::ID_HI), ShapeProxy::VERSION,\n'
+                '        &mut value as *mut i32 as *mut c_void, &[bad], core::ptr::null_mut()) };\n'
+                '    if stale.err() != Some(BindError::SignatureMismatch) { std::process::exit(4); }\n'
+                '    println!("rust interface proxy: OK");\n'
+                '}\n')
+            rust_proxy_bin = os.path.join(work, exe_name("rust_interface_proxy"))
+            r = run([rustc, "--edition", "2021", rust_proxy_src, "-o", rust_proxy_bin])
+            if check(r.returncode == 0, "the Rust interface proxy consumer compiles", r.stderr[-400:]):
+                r = run([rust_proxy_bin], env=env)
+                check(r.returncode == 0 and "rust interface proxy: OK" in r.stdout,
+                      "the Rust interface proxy binds, calls and rejects stale contracts",
+                      (r.stdout + r.stderr)[-400:])
+
+        zig_proxy_gen = os.path.join(work, "shapes_gen_zig")
+        os.makedirs(zig_proxy_gen, exist_ok=True)
+        r = run([amc, "generate", shapes_abix, "-l", "zig", "-o", zig_proxy_gen])
+        if check(r.returncode == 0, "amc generate -l zig for the interface proxy", (r.stdout + r.stderr)[-400:]):
+            zig_proxy_src = os.path.join(work, "zig_interface_proxy.zig")
+            open(zig_proxy_src, "w", encoding="utf-8").write(
+                'const std = @import("std");\n'
+                'const abi = @import("shapes_gen_zig/amc_generated.zig");\n'
+                'fn fake_area(object: ?*anyopaque) callconv(.c) c_int {\n'
+                '    const value: *i32 = @ptrCast(@alignCast(object.?));\n'
+                '    return value.*;\n'
+                '}\n'
+                'pub fn main() !void {\n'
+                '    var value: i32 = 42;\n'
+                '    const methods = [_]abi.InterfaceMethodEntry{.{\n'
+                '        .signature_lo = abi.ShapeProxy.shape_area_signature_lo,\n'
+                '        .signature_hi = abi.ShapeProxy.shape_area_signature_hi,\n'
+                '        .entry = @intFromPtr(&fake_area),\n'
+                '        .slot = abi.ShapeProxy.shape_area_slot,\n'
+                '        .flags = 0,\n'
+                '    }};\n'
+                '    const proxy = try abi.ShapeProxy.bind(abi.ShapeProxy.ID_LO, abi.ShapeProxy.ID_HI,\n'
+                '        abi.ShapeProxy.VERSION, &value, methods[0..], null);\n'
+                '    if (proxy.shape_area() != 42) return error.BadValue;\n'
+                '    const wrong = abi.ShapeProxy.bind(abi.ShapeProxy.ID_LO, abi.ShapeProxy.ID_HI,\n'
+                '        abi.ShapeProxy.VERSION + 1, &value, methods[0..], null);\n'
+                '    if (wrong != error.VersionMismatch) return error.ExpectedVersionMismatch;\n'
+                '    var stale = methods;\n'
+                '    stale[0].signature_lo = 0;\n'
+                '    const invalid = abi.ShapeProxy.bind(abi.ShapeProxy.ID_LO, abi.ShapeProxy.ID_HI,\n'
+                '        abi.ShapeProxy.VERSION, &value, stale[0..], null);\n'
+                '    if (invalid != error.SignatureMismatch) return error.ExpectedSignatureMismatch;\n'
+                '    std.debug.print("zig interface proxy: OK\\n", .{});\n'
+                '}\n')
+            zig_proxy_bin = os.path.join(work, exe_name("zig_interface_proxy"))
+            r = run([zig, "build-exe", "zig_interface_proxy.zig", "-lc",
+                     "-femit-bin=" + zig_proxy_bin], cwd=work)
+            if check(r.returncode == 0, "the Zig interface proxy consumer compiles", r.stderr[-400:]):
+                r = run([zig_proxy_bin], env=env)
+                check(r.returncode == 0 and "zig interface proxy: OK" in (r.stdout + r.stderr),
+                      "the Zig interface proxy binds, calls and rejects stale contracts",
+                      (r.stdout + r.stderr)[-400:])
 
     # Real-project comparison: expose a type from cmdly. Auto-expose covers its
     # representable surface; a std::string method is refused pending a contract.

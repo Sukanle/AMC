@@ -40,6 +40,10 @@ DEMO_API double demo_scale(const struct DemoVec2 *v, double factor) {
     return (static_cast<double>(v->x) + v->y) * factor;
 }
 
+DEMO_API double demo_scale_handle(const void *v, double factor) {
+    return demo_scale(static_cast<const DemoVec2 *>(v), factor);
+}
+
 DEMO_API struct DemoVec2 *demo_vec2_create(int32_t x, double y) {
     auto *v = new (std::nothrow) DemoVec2{x, y};
     if (v) ++g_live;

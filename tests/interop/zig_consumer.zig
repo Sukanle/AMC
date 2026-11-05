@@ -9,13 +9,34 @@
 const std = @import("std");
 const abi = @import("gen/amc_generated.zig");
 
-pub fn main() void {
+fn scale_adapter(object: ?*anyopaque, factor: f64) callconv(.c) f64 {
+    return abi.demo_scale_handle(object, factor);
+}
+
+pub fn main() !void {
     const sum = abi.demo_add(2, 3);
     if (sum != 5) @panic("demo_add");
 
     var v = abi.DemoVec2{ .x = 4, .y = 2.5 };
     const scaled = abi.demo_scale(&v, 2.0);
     if (scaled != 13.0) @panic("demo_scale");
+
+    const scale_methods = [_]abi.InterfaceMethodEntry{.{
+        .signature_lo = abi.IVectorScaleProxy.demo_scale_handle_signature_lo,
+        .signature_hi = abi.IVectorScaleProxy.demo_scale_handle_signature_hi,
+        .entry = @intFromPtr(&scale_adapter),
+        .slot = abi.IVectorScaleProxy.demo_scale_handle_slot,
+        .flags = 0,
+    }};
+    const scale_proxy = try abi.IVectorScaleProxy.bind(
+        abi.IVectorScaleProxy.ID_LO,
+        abi.IVectorScaleProxy.ID_HI,
+        abi.IVectorScaleProxy.VERSION,
+        &v,
+        scale_methods[0..],
+        null,
+    );
+    if (scale_proxy.demo_scale_handle(2.0) != 13.0) @panic("interface call");
 
     var out: c_int = 0;
     const rc = abi.demo_div(10, 2, &out);

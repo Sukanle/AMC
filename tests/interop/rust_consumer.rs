@@ -52,6 +52,29 @@ fn main() {
         let unknown = demo_div_unknown_result(10, 2).expect_err("unknown status");
         assert_eq!(unknown.0, 99, "unknown error code is preserved");
 
+        // Bind the same handle-shaped interface contract from the shared
+        // artifact and call it through the native library.
+        let mut scaled_value = DemoVec2 { x: 4, y: 2.5 };
+        unsafe extern "C" fn scale_adapter(object: *mut core::ffi::c_void, factor: f64) -> f64 {
+            unsafe { demo_scale_handle(object as *const core::ffi::c_void, factor) }
+        }
+        let scale_method = InterfaceMethodEntry {
+            signature_lo: IVectorScaleProxy::DEMO_SCALE_HANDLE_SIGNATURE.0,
+            signature_hi: IVectorScaleProxy::DEMO_SCALE_HANDLE_SIGNATURE.1,
+            entry: scale_adapter as usize,
+            slot: IVectorScaleProxy::DEMO_SCALE_HANDLE_SLOT,
+            flags: 0,
+        };
+        let scale_proxy = IVectorScaleProxy::bind(
+            (IVectorScaleProxy::ID_LO, IVectorScaleProxy::ID_HI),
+            IVectorScaleProxy::VERSION,
+            &mut scaled_value as *mut DemoVec2 as *mut core::ffi::c_void,
+            &[scale_method],
+            core::ptr::null_mut(),
+        )
+        .expect("interface bind");
+        assert_eq!(scale_proxy.demo_scale_handle(2.0), 13.0, "interface call");
+
         // Runtime metadata: parse the ABIX Metadata Region embedded in this
         // projection and check the facts it records against the Rust type.
         let region = abi::metadata::Region::open(&abi::AMC_METADATA_REGION).expect("metadata region");
@@ -103,7 +126,7 @@ fn main() {
         assert!(region.interface_count() >= 1, "interface in region");
         let iface = region.interface_at(0).expect("interface record");
         assert_eq!(iface.method_count, 2, "interface method count");
-        assert_eq!(region.interface_method_count(), iface.method_count, "interface methods in region");
+        assert!(region.interface_method_count() >= iface.method_count, "interface methods in region");
         let first_method = region.interface_method_at(0).expect("interface method");
         assert!(first_method.signature.lo != 0 || first_method.signature.hi != 0, "method signature present");
         assert!(first_method.parameter_count >= 1, "method parameters recorded");

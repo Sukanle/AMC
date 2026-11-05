@@ -624,6 +624,127 @@ void emit_capability_contracts(Output &o, const Projector &p) {
     o.print("    ];\n}}\n");
 }
 
+void emit_interface_proxies(Output &o, const Projector &p) {
+    if (p.m.interfaces.empty()) return;
+    o.print("\n// Interface proxies: bind-time version/slot/signature validation.\n");
+    o.print("#[repr(C)]\n#[derive(Clone, Copy)]\n");
+    o.print(
+        "pub struct InterfaceMethodEntry {{\n    pub signature_lo: u64,\n    pub signature_hi: u64,\n"
+        "    pub entry: usize,\n    pub slot: u32,\n    pub flags: u32,\n}}\n");
+    o.print("#[derive(Clone, Copy, PartialEq, Eq, Debug)]\n");
+    o.print(
+        "pub enum BindError {{\n    InterfaceNotFound,\n    VersionMismatch,\n    MethodMissing,\n"
+        "    SignatureMismatch,\n}}\n");
+    for (const auto &record : p.m.interfaces) {
+        std::vector<const amc::InterfaceMethod *> by_slot;
+        for (uint32_t i = 0; i < record.method_count; ++i) {
+            const auto &method = p.m.interface_methods[record.method_begin + i];
+            if (method.slot >= by_slot.size()) by_slot.resize(method.slot + 1, nullptr);
+            by_slot[method.slot] = &method;
+        }
+        const std::string type = pascal_ident(record.name) + "Proxy";
+        o.print("\npub struct {} {{\n    object: *mut core::ffi::c_void,\n", type);
+        for (const auto *method : by_slot) {
+            if (method == nullptr) continue;
+            std::string params = "*mut core::ffi::c_void";
+            for (size_t i = method->parameters.empty() ? 0 : 1; i < method->parameters.size(); ++i)
+                params += ", " + p.field_type(method->parameters[i].type_id);
+            const int return_index = p.index_of(method->return_type);
+            const bool returns_void = return_index >= 0
+                                   && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::primitive
+                                   && (p.m.types[static_cast<size_t>(return_index)].primitive_abi & 0xffu)
+                                          == static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
+            o.print("    {}: unsafe extern \"C\" fn({}){},\n", rust_field_ident(method->name), params,
+                returns_void ? "" : " -> " + p.field_type(method->return_type));
+        }
+        o.print("    /// Opaque keepalive: the caller must keep the module/lease alive\n");
+        o.print("    /// for as long as this proxy is used.\n");
+        o.print("    keepalive: *mut core::ffi::c_void,\n}}\n");
+
+        o.print("impl {} {{\n", type);
+        o.print("    pub const ID_LO: u64 = 0x{:x};\n    pub const ID_HI: u64 = 0x{:x};\n", record.id.lo, record.id.hi);
+        o.print("    pub const VERSION: u32 = {};\n", record.version);
+        o.print("    const SLOT_CAPACITY: usize = {};\n", by_slot.size());
+        for (const auto *method : by_slot) {
+            if (method == nullptr) continue;
+            o.print("    pub const {}_SLOT: u32 = {};\n", rust_const_ident(method->name), method->slot);
+            o.print("    pub const {}_SIGNATURE: (u64, u64) = (0x{:x}, 0x{:x});\n", rust_const_ident(method->name),
+                method->signature.lo, method->signature.hi);
+        }
+        o.print(
+            "    pub unsafe fn bind(interface_id: (u64, u64), version: u32, object: *mut core::ffi::c_void,\n"
+            "        methods: &[InterfaceMethodEntry], keepalive: *mut core::ffi::c_void) -> Result<Self, BindError> "
+            "{{\n");
+        o.print(
+            "        if interface_id != (Self::ID_LO, Self::ID_HI) {{ return Err(BindError::InterfaceNotFound); }}\n");
+        o.print("        if version != Self::VERSION {{ return Err(BindError::VersionMismatch); }}\n");
+        o.print("        let mut entries = [0usize; Self::SLOT_CAPACITY];\n");
+        o.print("        let mut signatures = [(0u64, 0u64); Self::SLOT_CAPACITY];\n");
+        o.print(
+            "        for method in methods {{\n            if method.entry == 0 || method.slot as usize >= "
+            "Self::SLOT_CAPACITY {{ continue; }}\n");
+        o.print("            entries[method.slot as usize] = method.entry;\n");
+        o.print(
+            "            signatures[method.slot as usize] = (method.signature_lo, method.signature_hi);\n        }}\n");
+        for (const auto *method : by_slot) {
+            if (method == nullptr) continue;
+            const std::string name = rust_const_ident(method->name);
+            o.print(
+                "        if entries[Self::{}_SLOT as usize] == 0 {{ return Err(BindError::MethodMissing); }}\n", name);
+            o.print(
+                "        if signatures[Self::{}_SLOT as usize] != Self::{}_SIGNATURE {{ return "
+                "Err(BindError::SignatureMismatch); }}\n",
+                name, name);
+        }
+        o.print("        Ok(Self {{\n            object,\n            keepalive,\n");
+        for (const auto *method : by_slot) {
+            if (method == nullptr) continue;
+            std::string params = "*mut core::ffi::c_void";
+            for (size_t i = method->parameters.empty() ? 0 : 1; i < method->parameters.size(); ++i)
+                params += ", " + p.field_type(method->parameters[i].type_id);
+            const int return_index = p.index_of(method->return_type);
+            const bool returns_void = return_index >= 0
+                                   && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::primitive
+                                   && (p.m.types[static_cast<size_t>(return_index)].primitive_abi & 0xffu)
+                                          == static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
+            o.print(
+                "            {}: core::mem::transmute::<usize, unsafe extern \"C\" fn({}){}>(entries[Self::{}_SLOT as "
+                "usize]),\n",
+                rust_field_ident(method->name), params, returns_void ? "" : " -> " + p.field_type(method->return_type),
+                rust_const_ident(method->name));
+        }
+        o.print("        }})\n    }}\n");
+        o.print("    pub fn keepalive(&self) -> *mut core::ffi::c_void {{ self.keepalive }}\n");
+        for (const auto *method : by_slot) {
+            if (method == nullptr) continue;
+            std::string params, args;
+            for (size_t i = method->parameters.empty() ? 0 : 1; i < method->parameters.size(); ++i) {
+                if (!params.empty()) {
+                    params += ", ";
+                    args += ", ";
+                }
+                const std::string name = "arg" + std::to_string(i - (method->parameters.empty() ? 0 : 1));
+                params += name + ": " + p.field_type(method->parameters[i].type_id);
+                args += name;
+            }
+            const int return_index = p.index_of(method->return_type);
+            const bool returns_void = return_index >= 0
+                                   && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::primitive
+                                   && (p.m.types[static_cast<size_t>(return_index)].primitive_abi & 0xffu)
+                                          == static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
+            if (returns_void)
+                o.print("    pub fn {}(&self{}) {{ unsafe {{ (self.{})(self.object{}) }} }}\n",
+                    rust_field_ident(method->name), params.empty() ? "" : ", " + params, rust_field_ident(method->name),
+                    args.empty() ? "" : ", " + args);
+            else
+                o.print("    pub fn {}(&self{}) -> {} {{ unsafe {{ (self.{})(self.object{}) }} }}\n",
+                    rust_field_ident(method->name), params.empty() ? "" : ", " + params,
+                    p.field_type(method->return_type), rust_field_ident(method->name), args.empty() ? "" : ", " + args);
+        }
+        o.print("}}\n");
+    }
+}
+
 const amc::ErrorSet *find_error_set(const amc::AbiModule &module, amc::Hash128 id) {
     if (id.lo == 0 && id.hi == 0) return nullptr;
     for (const auto &set : module.error_sets)
@@ -1033,6 +1154,7 @@ std::string generate_projection(const amc::AbiModule &module, const amc::ir::Low
     emit_functions(o, projector);
     emit_owned(o, projector);
     emit_capability_contracts(o, projector);
+    emit_interface_proxies(o, projector);
     emit_error_sets(o, projector);
     emit_errors(o, projector);
     emit_lowerings(o, projector);

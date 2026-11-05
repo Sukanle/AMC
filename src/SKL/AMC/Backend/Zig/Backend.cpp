@@ -483,6 +483,127 @@ void emit_capability_contracts(Output &o, const Projector &p) {
     o.print("}};\n");
 }
 
+void emit_interface_proxies(Output &o, const Projector &p) {
+    if (p.m.interfaces.empty()) return;
+    o.print("\n// Interface proxies: bind-time version/slot/signature validation.\n");
+    o.print(
+        "pub const InterfaceMethodEntry = extern struct {{\n    signature_lo: u64,\n    signature_hi: u64,\n"
+        "    entry: usize,\n    slot: u32,\n    flags: u32,\n}};\n");
+    o.print(
+        "pub const InterfaceBindError = error{{\n    InterfaceNotFound,\n    VersionMismatch,\n    MethodMissing,\n"
+        "    SignatureMismatch,\n}};\n");
+    for (const auto &record : p.m.interfaces) {
+        std::vector<const amc::InterfaceMethod *> by_slot;
+        for (uint32_t i = 0; i < record.method_count; ++i) {
+            const auto &method = p.m.interface_methods[record.method_begin + i];
+            if (method.slot >= by_slot.size()) by_slot.resize(method.slot + 1, nullptr);
+            by_slot[method.slot] = &method;
+        }
+        const std::string type = zig_ident(record.name) + "Proxy";
+        o.print("\npub const {} = struct {{\n    object: *anyopaque,\n", type);
+        for (const auto *method : by_slot) {
+            if (method == nullptr) continue;
+            std::string params = "?*anyopaque";
+            for (size_t i = method->parameters.empty() ? 0 : 1; i < method->parameters.size(); ++i)
+                params += ", " + p.field_type(method->parameters[i].type_id);
+            const int return_index = p.index_of(method->return_type);
+            const bool returns_void = return_index >= 0
+                                   && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::primitive
+                                   && (p.m.types[static_cast<size_t>(return_index)].primitive_abi & 0xffu)
+                                          == static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
+            o.print("    {}: *const fn ({}) callconv(.c) {},\n", zig_ident("fn_" + method->name), params,
+                returns_void ? "void" : p.field_type(method->return_type));
+        }
+        o.print("    /// Opaque keepalive: the caller must keep the module/lease alive\n");
+        o.print("    /// for as long as this proxy is used.\n");
+        o.print("    keepalive: ?*anyopaque,\n");
+        o.print("    pub const ID_LO: u64 = 0x{:x};\n    pub const ID_HI: u64 = 0x{:x};\n", record.id.lo, record.id.hi);
+        o.print("    pub const VERSION: u32 = {};\n", record.version);
+        o.print("    const SLOT_CAPACITY: usize = {};\n", by_slot.size());
+        for (const auto *method : by_slot) {
+            if (method == nullptr) continue;
+            const std::string name = zig_ident(method->name);
+            o.print("    pub const {}_slot: u32 = {};\n", zig_ident(name), method->slot);
+            o.print("    pub const {}_signature_lo: u64 = 0x{:x};\n", zig_ident(name), method->signature.lo);
+            o.print("    pub const {}_signature_hi: u64 = 0x{:x};\n", zig_ident(name), method->signature.hi);
+        }
+        o.print(
+            "    pub fn bind(interface_id_lo: u64, interface_id_hi: u64, version: u32, object: *anyopaque,\n"
+            "        methods: []const InterfaceMethodEntry, keepalive: ?*anyopaque) InterfaceBindError!{} {{\n",
+            type);
+        o.print("        if (interface_id_lo != ID_LO or interface_id_hi != ID_HI) return error.InterfaceNotFound;\n");
+        o.print("        if (version != VERSION) return error.VersionMismatch;\n");
+        o.print("        var entries: [SLOT_CAPACITY]usize = undefined;\n");
+        o.print("        var signatures_lo: [SLOT_CAPACITY]u64 = undefined;\n");
+        o.print("        var signatures_hi: [SLOT_CAPACITY]u64 = undefined;\n");
+        o.print("        @memset(entries[0..], 0);\n");
+        o.print("        @memset(signatures_lo[0..], 0);\n");
+        o.print("        @memset(signatures_hi[0..], 0);\n");
+        o.print("        for (methods) |method| {{\n");
+        o.print("            if (method.entry == 0 or method.slot >= SLOT_CAPACITY) continue;\n");
+        o.print("            entries[method.slot] = method.entry;\n");
+        o.print("            signatures_lo[method.slot] = method.signature_lo;\n");
+        o.print("            signatures_hi[method.slot] = method.signature_hi;\n        }}\n");
+        for (const auto *method : by_slot) {
+            if (method == nullptr) continue;
+            const std::string name = zig_ident(method->name);
+            const std::string slot = zig_ident(name + "_slot");
+            const std::string sig_lo = zig_ident(name + "_signature_lo");
+            const std::string sig_hi = zig_ident(name + "_signature_hi");
+            o.print("        if (entries[{}] == 0) return error.MethodMissing;\n", slot);
+            o.print("        if (signatures_lo[{}] != {} or signatures_hi[{}] != {}) return error.SignatureMismatch;\n",
+                slot, sig_lo, slot, sig_hi);
+        }
+        o.print("        return .{{\n            .object = object,\n            .keepalive = keepalive,\n");
+        for (const auto *method : by_slot) {
+            if (method == nullptr) continue;
+            const std::string field = zig_ident("fn_" + method->name);
+            std::string params = "?*anyopaque";
+            for (size_t i = method->parameters.empty() ? 0 : 1; i < method->parameters.size(); ++i)
+                params += ", " + p.field_type(method->parameters[i].type_id);
+            const int return_index = p.index_of(method->return_type);
+            const bool returns_void = return_index >= 0
+                                   && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::primitive
+                                   && (p.m.types[static_cast<size_t>(return_index)].primitive_abi & 0xffu)
+                                          == static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
+            o.print(
+                "            .{} = @as(*const fn ({}) callconv(.c) {}, @ptrCast(@alignCast(@as(*anyopaque, "
+                "@ptrFromInt(entries[{}]))))),\n",
+                field, params, returns_void ? "void" : p.field_type(method->return_type),
+                zig_ident(zig_ident(method->name) + "_slot"));
+        }
+        o.print("        }};\n    }}\n");
+        for (const auto *method : by_slot) {
+            if (method == nullptr) continue;
+            const std::string name = zig_ident(method->name);
+            std::string params, args;
+            for (size_t i = method->parameters.empty() ? 0 : 1; i < method->parameters.size(); ++i) {
+                if (!params.empty()) {
+                    params += ", ";
+                    args += ", ";
+                }
+                const std::string arg = "arg" + std::to_string(i - (method->parameters.empty() ? 0 : 1));
+                params += arg + ": " + p.field_type(method->parameters[i].type_id);
+                args += arg;
+            }
+            const int return_index = p.index_of(method->return_type);
+            const bool returns_void = return_index >= 0
+                                   && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::primitive
+                                   && (p.m.types[static_cast<size_t>(return_index)].primitive_abi & 0xffu)
+                                          == static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
+            if (returns_void)
+                o.print("    pub fn {}(self: *const {}{}) void {{ self.{} (self.object{}); }}\n", name, type,
+                    params.empty() ? "" : ", " + params, zig_ident("fn_" + method->name),
+                    args.empty() ? "" : ", " + args);
+            else
+                o.print("    pub fn {}(self: *const {}{}) {} {{ return self.{} (self.object{}); }}\n", name, type,
+                    params.empty() ? "" : ", " + params, p.field_type(method->return_type),
+                    zig_ident("fn_" + method->name), args.empty() ? "" : ", " + args);
+        }
+        o.print("}};\n");
+    }
+}
+
 void emit_error_sets(Output &o, const Projector &p) {
     if (p.m.error_sets.empty()) return;
     o.print("\n// Named error sets: stable numeric values, names and conditions.\n");
@@ -722,6 +843,7 @@ std::string generate_projection(const amc::AbiModule &module, const amc::ir::Low
     emit_functions(o, projector);
     emit_exposed_handles(o, projector);
     emit_capability_contracts(o, projector);
+    emit_interface_proxies(o, projector);
     emit_error_sets(o, projector);
     emit_error_wrappers(o, projector);
     emit_layout_checks(o, projector);
