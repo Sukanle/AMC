@@ -39,6 +39,13 @@ python tools/run_bench.py FullPipeline --exe amc-pass-perf-bench
 python tools/run_bench.py --pin off
 ```
 
+Or through the unified pipeline:
+
+```bash
+python tools/run.py --bench-only --build-dir build/Release
+python tools/run.py                         # build + test + benchmark
+```
+
 `tools/run_bench.py` forwards benchmark-name regexes to Google Benchmark,
 normalises `ns`/`us`/`ms`/`s` to nanoseconds, and writes one JSON file per
 executable under `--out`.
