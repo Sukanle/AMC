@@ -323,8 +323,10 @@ and `amc-boundary-edges`.
   and runs `collectgarbage` to prove the destructor runs before release
 - `Core/Lua.*` moved to `Backend/Lua/Lua.*`; the generator now lives in the
   Backend module and adds no new boundary edge
-- A6.4 remaining: an independent Aue package/release entry point; the current
-  build remains an optional AMC integration
+- A6.4: `Aue/standalone/CMakeLists.txt` provides a driver-independent
+  conformance/benchmark entry point; it uses the checked-in fallback contract
+  and requires installed ABIX/fmt/Lua. Package/versioned release validation
+  remains
 
 ## A1 Progress
 

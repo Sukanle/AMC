@@ -273,7 +273,9 @@ CTest 同时运行 `--contracts-only` 和 `--strict`：
   destructor 覆盖。demo `Counter` 维护 live count，conformance 释放临时对象并
   执行 `collectgarbage`，验证 destructor 在 userdata 释放前运行
 - `Core/Lua.*` 迁移到 `Backend/Lua/Lua.*`，generator 归入 Backend，未新增边界边
-- A6.4 剩余：独立 Aue package/release 入口；当前构建仍是 AMC 的可选集成
+- A6.4：`Aue/standalone/CMakeLists.txt` 提供不依赖 AMC driver 的
+  conformance/benchmark 入口，使用 checked-in fallback contract，并要求已安装
+  ABIX/fmt/Lua；版本化 package/release 验证仍待完成
 
 ## A1 进度
 

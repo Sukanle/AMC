@@ -67,6 +67,17 @@ cmake --build <build-dir> --target abix-conformance abix-bench
 <b>bin/abix-bench
 ```
 
-The conformance runner executes the same Lua script under L0 and L1 and fails
-if the output differs. The benchmark is a smoke test that reports per-call
-overhead; its numbers are not asserted.
+Standalone, without the AMC driver or generated contract (requires installed
+ABIX runtime, fmt and Lua 5.4):
+
+```bash
+cmake -S Aue/standalone -B build/aue -DABIX_DIR=<abix-package>
+cmake --build build/aue --parallel
+ctest --test-dir build/aue --output-on-failure
+```
+
+The standalone path uses the checked-in fallback contract in
+`Aue/src/Counter.cpp`; the AMC build generates the contract from
+`Counter.abic.toml` instead. The conformance runner executes the same Lua script
+under L0 and L1 and fails if the output differs. The benchmark is a smoke test
+that reports per-call overhead; its numbers are not asserted.
