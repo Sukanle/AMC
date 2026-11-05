@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "SKL/AMC/Backend/CodeIn.h"
 #include "SKL/AMC/Backend/Cpp/Cpp.h"
 #include "SKL/AMC/IR/Artifact.h"
 #include "SKL/AMC/IR/LoweringJson.h"
@@ -172,39 +173,13 @@ int backend(const char *input, const char *output) {
         o.print("#include <SKL/ABIX/Interface/Contract.h>\n");
     }
     if (any_interface_proxy) o.print("#include <SKL/ABIX/Interface/Proxy.h>\n");
-    o.print(
-        "namespace amc_generated {{\n"
-        "using TypeId = ::skl::abix::model::TypeId;\n"
-        "using LayoutInfo = ::skl::abix::metadata::LayoutInfo;\n"
-        "using FieldInfo = ::skl::abix::metadata::FieldDescriptor;\n"
-        "using ParameterInfo = ::skl::abix::metadata::ParameterDescriptor;\n"
-        "using FunctionInfo = ::skl::abix::metadata::FunctionDescriptor;\n"
-        "using SymbolInfo = ::skl::abix::metadata::SymbolDescriptor;\n"
-        "using ModuleInfo = ::skl::abix::metadata::ModuleDescriptor;\n"
-        "enum class MapOpcode : uint8_t {{ \n"
-        "    copy_field,\n"
-        "    convert_int,\n"
-        "    convert_float,\n"
-        "    add_default,\n"
-        "    skip_field,\n"
-        "}};\n"
-        "struct MapOperation {{\n"
-        "    MapOpcode opcode;\n"
-        "    uint32_t source_field;\n"
-        "    uint32_t target_field;\n"
-        "    uint32_t source_offset;\n"
-        "    uint32_t target_offset;\n"
-        "    uint32_t byte_count;\n"
-        "    TypeId auxiliary;\n"
-        "}};\n"
-        "template <typename Source, typename Target> struct MapPrivate;\n"
-        "template <typename T> struct TypeTraits;\n"
-        "template <typename T, typename E> struct Result {{\n"
-        "    bool ok = false;\n"
-        "    T value{{}};\n"
-        "    E error{{}};\n"
-        "    explicit operator bool() const noexcept {{ return ok; }}\n"
-        "}};\n");
+    std::string codein_error;
+    std::string prologue;
+    if (!amc::backend::read_codein_text("Cpp/Prologue.hpp", prologue, codein_error)) {
+        fmt::print(stderr, "{}\n", codein_error);
+        return 1;
+    }
+    o.print("{}", prologue);
 
     for (const auto &type : m.types) {
         if (amc::lang::cancellation_requested()) return amc::lang::kCapabilityCancelled;

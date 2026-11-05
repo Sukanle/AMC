@@ -406,9 +406,11 @@ add_library(amc-util STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Util/Names.cpp ${AMC_S
 target_include_directories(amc-util PUBLIC ${AMC_INCLUDE_DIR})
 target_link_libraries(amc-util PUBLIC libabix-format fmt::fmt)
 
-add_library(amc-lang STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Lang.cpp)
+add_library(amc-lang STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Lang.cpp
+                             ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/CodeIn.cpp)
 target_include_directories(amc-lang PUBLIC ${AMC_INCLUDE_DIR})
-target_link_libraries(amc-lang PUBLIC amc-util fmt::fmt tomlplusplus::tomlplusplus)
+target_include_directories(amc-lang PRIVATE ${AMC_GENERATED_INCLUDE_DIR})
+target_link_libraries(amc-lang PUBLIC amc-util amc-llvm fmt::fmt tomlplusplus::tomlplusplus)
 
 add_library(amc-core INTERFACE)
 target_link_libraries(

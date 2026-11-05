@@ -18,7 +18,7 @@
 #include "SKL/AMC/IR/LoweringJson.h"
 #include "SKL/AMC/Lang/Lang.h"
 
-#include "SKL/AMC/Config.h"
+#include "SKL/AMC/Backend/CodeIn.h"
 #include "SKL/AMC/Core/Generated.h"
 #include "SKL/AMC/Artifact/Metadata.h"
 
@@ -35,23 +35,8 @@
 #include <fmt/format.h>
 #include <fmt/os.h>
 
-#include <llvm/ADT/SmallString.h>
-#include <llvm/ADT/SmallVector.h>
 #include <llvm/Support/FileSystem.h>
-#include <llvm/Support/MemoryBuffer.h>
-#include <llvm/Support/Path.h>
 #include <llvm/Support/raw_ostream.h>
-
-#if defined(_WIN32)
-#  ifndef NOMINMAX
-#    define NOMINMAX
-#  endif
-#  include <windows.h>
-#elif defined(__APPLE__)
-#  include <mach-o/dyld.h>
-#else
-#  include <unistd.h>
-#endif
 
 namespace amc::lang::rust {
 namespace {
@@ -1073,68 +1058,6 @@ std::string primitive_rust_type(uint32_t primitive_abi) {
     }
 }
 
-llvm::SmallString<256> executable_directory() {
-#if defined(_WIN32)
-    llvm::SmallVector<char, 4'096> buffer(4'096, 0);
-    const DWORD length = GetModuleFileNameA(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
-    if (length > 0 && length < buffer.size()) {
-        llvm::SmallString<256> path(llvm::StringRef(buffer.data(), length));
-        llvm::sys::path::remove_filename(path);
-        return path;
-    }
-#elif defined(__APPLE__)
-    uint32_t size = 0;
-    _NSGetExecutablePath(nullptr, &size);
-    llvm::SmallVector<char, 4'096> buffer(size, 0);
-    if (_NSGetExecutablePath(buffer.data(), &size) == 0) {
-        llvm::SmallString<256> path(llvm::StringRef(buffer.data()));
-        llvm::SmallString<256> canonical;
-        if (!llvm::sys::fs::real_path(path, canonical)) {
-            llvm::sys::path::remove_filename(canonical);
-            return canonical;
-        }
-        llvm::sys::path::remove_filename(path);
-        return path;
-    }
-#else
-    llvm::SmallVector<char, 4'096> buffer(4'096, 0);
-    const ssize_t length = readlink("/proc/self/exe", buffer.data(), buffer.size() - 1);
-    if (length > 0) {
-        llvm::SmallString<256> path(llvm::StringRef(buffer.data(), static_cast<size_t>(length)));
-        llvm::sys::path::remove_filename(path);
-        return path;
-    }
-#endif
-    return {};
-}
-
-// Read a static template from CodeIn. The configured build-tree path is tried
-// first; installed providers fall back to the install-relative data directory
-// and to a CodeIn directory next to the executable.
-std::string read_codein_text(llvm::StringRef relative) {
-    llvm::SmallVector<llvm::SmallString<256>, 4> candidates;
-    const auto add_candidate = [&](llvm::StringRef base) {
-        if (base.empty()) return;
-        llvm::SmallString<256> path(base);
-        llvm::sys::path::append(path, relative);
-        candidates.push_back(std::move(path));
-    };
-    add_candidate(AMC_CODEIN_DIR);
-    if (const llvm::SmallString<256> executable = executable_directory(); !executable.empty()) {
-        llvm::SmallString<256> install(executable);
-        llvm::sys::path::append(install, "..", AMC_CODEIN_INSTALL_SUBDIR, relative);
-        candidates.push_back(std::move(install));
-        llvm::SmallString<256> beside(executable);
-        llvm::sys::path::append(beside, "CodeIn", relative);
-        candidates.push_back(std::move(beside));
-    }
-    for (const auto &candidate : candidates) {
-        if (auto buffer = llvm::MemoryBuffer::getFile(candidate)) return (*buffer)->getBuffer().str();
-    }
-    throw std::runtime_error(
-        "cannot read CodeIn asset: " + relative.str() + " (searched " + candidates.front().str().str() + ")");
-}
-
 std::string generate_projection(const amc::AbiModule &module, const amc::ir::LoweringResult *lowering) {
     Projector projector(module, lowering);
     fmt::memory_buffer buffer;
@@ -1179,7 +1102,7 @@ std::string generate_projection(const amc::AbiModule &module, const amc::ir::Low
     // was described with (type ids, layout hashes, sizes, calling conventions)
     // without any C++ toolchain and without parsing `.abix` offline.
 
-    o.print("{}", read_codein_text("Rust/MetaData.rs"));
+    o.print("{}", amc::backend::read_codein_text("Rust/MetaData.rs"));
     return fmt::to_string(buffer);
 }
 
