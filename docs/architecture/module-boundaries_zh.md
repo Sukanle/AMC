@@ -233,7 +233,7 @@ CTest 同时运行 `--contracts-only` 和 `--strict`：
   `Diagnostics/Verify` 把 `VerifyResult` 漂移转换为统一诊断模型，
   `amc verify --format diagnostics-json` 输出该 schema
 - A2/A3.5 收口：剩余工作是 A5 物理拆分而不是策略设计；
-  `amc-pass-perf-test`（默认 5k，`AMC_PASS_PERF_LARGE=1` 时 20k）为拆分记录 Pass 基线
+  `amc-pass-perf-bench`（Google Benchmark 5k/20k 参数）为拆分记录 Pass 基线
 
 ## A5 进度
 

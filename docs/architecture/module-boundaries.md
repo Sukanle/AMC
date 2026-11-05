@@ -274,8 +274,8 @@ and `amc-boundary-edges`.
   `VerifyResult` drift into the shared model, and `amc verify --format
   diagnostics-json` emits it
 - A2/A3.5 close-out: the remaining work is the A5 physical split, not policy
-  design; `amc-pass-perf-test` (5k default, 20k with
-  `AMC_PASS_PERF_LARGE=1`) records the pass baseline for that move
+  design; `amc-pass-perf-bench` (Google Benchmark 5k/20k args) records the pass
+  baseline for that move
 
 ## A5 Progress
 

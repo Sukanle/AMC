@@ -20,6 +20,19 @@ set(AMC_TOMLPLUSPLUS_MIN_VERSION
 find_package(fmt ${AMC_FMT_MIN_VERSION} CONFIG REQUIRED)
 find_package(tomlplusplus ${AMC_TOMLPLUSPLUS_MIN_VERSION} CONFIG REQUIRED)
 
+# Google Benchmark is optional: AMC always builds correctness tests, while the
+# performance targets are only created when the package is available.
+set(AMC_BENCHMARK_FOUND FALSE)
+if(AMC_BUILD_BENCHMARKS)
+    find_package(benchmark CONFIG QUIET)
+    if(benchmark_FOUND AND TARGET benchmark::benchmark_main)
+        set(AMC_BENCHMARK_FOUND TRUE)
+        message(STATUS "Google Benchmark ${benchmark_VERSION} found")
+    else()
+        message(STATUS "Google Benchmark not found — performance benchmarks will not be built")
+    endif()
+endif()
+
 if(NOT TARGET fmt::fmt)
     message(FATAL_ERROR "fmt ${AMC_FMT_MIN_VERSION} or newer is required but no fmt::fmt target was created")
 endif()

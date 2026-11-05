@@ -28,6 +28,8 @@ env:
   # bound stays verified; newer installed releases are accepted by CMake.
   FMT_VERSION: "11.2.0"
   TOMLPLUSPLUS_VERSION: "3.4.0"
+  BENCHMARK_VERSION: "1.10.0"
+  WINDOWS_BENCHMARK_VERSION: "1.10.0-1"
 
 jobs:
   linux:
@@ -73,6 +75,16 @@ jobs:
             -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/tomlplusplus"
           cmake --build tomlplusplus-build --target install --parallel 2
 
+      - name: Build pinned Google Benchmark
+        run: |
+          curl -fsSL -o benchmark.tar.gz "https://github.com/google/benchmark/archive/refs/tags/v${BENCHMARK_VERSION}.tar.gz"
+          tar xzf benchmark.tar.gz
+          cmake -S "benchmark-${BENCHMARK_VERSION}" -B benchmark-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBENCHMARK_ENABLE_TESTING=OFF -DBENCHMARK_ENABLE_GTEST_TESTS=OFF \
+            -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/benchmark"
+          cmake --build benchmark-build --target install --parallel 2
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -95,11 +107,14 @@ jobs:
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DAMC_ABIX_REF="$ABIX_REF" \
-            -DCMAKE_PREFIX_PATH="$LLVM_PREFIX;$RUNNER_TEMP/fmt;$RUNNER_TEMP/tomlplusplus"
+            -DCMAKE_PREFIX_PATH="$LLVM_PREFIX;$RUNNER_TEMP/fmt;$RUNNER_TEMP/tomlplusplus;$RUNNER_TEMP/benchmark" \
+            -DAMC_BUILD_BENCHMARKS=ON
           cmake --build build --parallel 2
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure --timeout 180
+        run: |
+          ctest --test-dir build -N -L perf | grep -q amc-artifact-perf-bench
+          ctest --test-dir build --output-on-failure --timeout 180
 
       - name: Install and smoke
         run: |
@@ -142,6 +157,16 @@ jobs:
             -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/tomlplusplus"
           cmake --build tomlplusplus-build --target install --parallel 2
 
+      - name: Build pinned Google Benchmark
+        run: |
+          curl -fsSL -o benchmark.tar.gz "https://github.com/google/benchmark/archive/refs/tags/v${BENCHMARK_VERSION}.tar.gz"
+          tar xzf benchmark.tar.gz
+          cmake -S "benchmark-${BENCHMARK_VERSION}" -B benchmark-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBENCHMARK_ENABLE_TESTING=OFF -DBENCHMARK_ENABLE_GTEST_TESTS=OFF \
+            -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/benchmark"
+          cmake --build benchmark-build --target install --parallel 2
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -160,17 +185,19 @@ jobs:
 
       - name: Configure and build AMC
         run: |
-          PREFIXES="$(brew --prefix llvm@${LLVM_VERSION});$RUNNER_TEMP/fmt;$RUNNER_TEMP/tomlplusplus;$(brew --prefix catch2);$(brew --prefix lua@5.4)"
+          PREFIXES="$(brew --prefix llvm@${LLVM_VERSION});$RUNNER_TEMP/fmt;$RUNNER_TEMP/tomlplusplus;$RUNNER_TEMP/benchmark;$(brew --prefix catch2);$(brew --prefix lua@5.4)"
           export PKG_CONFIG_PATH="$(brew --prefix lua@5.4)/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DAMC_ABIX_REF="$ABIX_REF" \
+            -DAMC_BUILD_BENCHMARKS=ON \
             -DCMAKE_PREFIX_PATH="$PREFIXES"
           cmake --build build --parallel 2
 
       - name: Test
         run: |
           export PKG_CONFIG_PATH="$(brew --prefix lua@5.4)/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+          ctest --test-dir build -N -L perf | grep -q amc-artifact-perf-bench
           ctest --test-dir build --output-on-failure --timeout 180
 
       - name: Install and smoke
@@ -202,6 +229,7 @@ jobs:
             mingw-w64-ucrt-x86_64-clang
             mingw-w64-ucrt-x86_64-llvm
             mingw-w64-ucrt-x86_64-catch
+            mingw-w64-ucrt-x86_64-benchmark=${{ env.WINDOWS_BENCHMARK_VERSION }}
             mingw-w64-ucrt-x86_64-lua54
             mingw-w64-ucrt-x86_64-rust
             mingw-w64-ucrt-x86_64-cmake
@@ -253,11 +281,14 @@ jobs:
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DAMC_ABIX_REF="$ABIX_REF" \
+            -DAMC_BUILD_BENCHMARKS=ON \
             -DCMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH"
           cmake --build build --parallel 2
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure --timeout 180
+        run: |
+          ctest --test-dir build -N -L perf | grep -q amc-artifact-perf-bench
+          ctest --test-dir build --output-on-failure --timeout 180
 
       - name: Install and smoke
         run: |
