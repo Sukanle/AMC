@@ -16,6 +16,8 @@
 #ifndef AMC_ERROR_H
 #define AMC_ERROR_H
 
+#include "SKL/AMC/Error.h"
+
 #include <stdint.h>
 #include <string>
 #include <string_view>
@@ -42,11 +44,30 @@ enum class ErrorCategory : uint32_t {
 
 const char *error_category_name(ErrorCategory category);
 
+// Maps the coarse diagnostic category onto the stable AMC domain. `category`
+// stays available for human-readable output and old consumers.
+[[nodiscard]] constexpr AMCErr amc_error_from_category(ErrorCategory category) noexcept {
+    switch (category) {
+        case ErrorCategory::usage:         return AMCErr::usage;
+        case ErrorCategory::config:        return AMCErr::config;
+        case ErrorCategory::io:            return AMCErr::io;
+        case ErrorCategory::provider:      return AMCErr::provider;
+        case ErrorCategory::format:        return AMCErr::format;
+        case ErrorCategory::validation:    return AMCErr::validation;
+        case ErrorCategory::compatibility: return AMCErr::compatibility;
+        case ErrorCategory::internal:      return AMCErr::internal;
+    }
+    return AMCErr::internal;
+}
+
 // Stable, machine-readable error code derived from the category, e.g.
 // "AMC-IO" / "AMC-FORMAT".  Kept deliberately coarse; `stage` narrows it.
 std::string error_code(ErrorCategory category);
 
 struct Error {
+    // Stable EPCD identity. `category` below is the coarse compatibility and
+    // presentation classification, not a second identity.
+    skl::epcd::ErrorCode code{};
     ErrorCategory category = ErrorCategory::internal;
     std::string stage;
     std::string message;

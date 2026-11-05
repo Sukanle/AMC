@@ -185,11 +185,15 @@ amc validate missing.abix --error-format json
 
 ```json
 {"schema":"abix.error/1","error":{"code":"AMC-IO","category":"io",
+ "domain":"0x1003000000000001","value":3,
  "stage":"read_abix","message":"cannot open input: missing.abix",
  "file":"missing.abix","detail":null}}
 ```
 
 命令带 `--format json` 时错误也切到 JSON。
+
+可选的 `domain` / `value` 字段携带 AMC 错误类别的稳定 EPCD 身份；旧消费者可以忽略，
+`code` / `category` / `stage` / `message` 保持稳定。
 
 ## 其他工具
 

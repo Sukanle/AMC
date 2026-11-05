@@ -142,6 +142,55 @@ else()
     string(JOIN ":" AMC_ABIX_INCLUDE_DIRS_ENV ${ABIX_INCLUDE_DIRS})
 endif()
 
+# EPCD owns the stable application-layer error identity. AMC requires Core
+# (ErrorCode / static domains / conditions); Interface is used for registration
+# when the installed or fetched EPCD provides it.
+set(AMC_EPCD_REF
+    "v0.1.0-baseline"
+    CACHE STRING "EPCD git revision used when FetchContent downloads EPCD")
+find_package(EPCD 0.1 CONFIG QUIET COMPONENTS Core)
+if(NOT EPCD_FOUND)
+    find_package(Git QUIET)
+    if(NOT GIT_EXECUTABLE)
+        message(FATAL_ERROR "git is required to fetch EPCD")
+    endif()
+    if(EXISTS "${AMC_DEPENDENCIES_DIR}/EPCD/CMakeLists.txt")
+        message(
+            STATUS
+                "EPCD 0.1 package not found; using existing checkout at ${AMC_DEPENDENCIES_DIR}/EPCD (delete it to refetch)"
+        )
+        set(epcd_SOURCE_DIR "${AMC_DEPENDENCIES_DIR}/EPCD")
+        set(epcd_BINARY_DIR "${CMAKE_BINARY_DIR}/epcd")
+        add_subdirectory("${epcd_SOURCE_DIR}" "${epcd_BINARY_DIR}")
+    else()
+        message(STATUS "EPCD 0.1 package not found; fetching EPCD into ${AMC_DEPENDENCIES_DIR}")
+        set(EPCD_BUILD_TESTS
+            OFF
+            CACHE BOOL "Do not build EPCD tests from the AMC checkout" FORCE)
+        set(EPCD_INSTALL
+            OFF
+            CACHE BOOL "Do not install fetched EPCD" FORCE)
+        FetchContent_Declare(
+            epcd
+            GIT_REPOSITORY https://github.com/Sukanle/EPCD.git
+            GIT_TAG ${AMC_EPCD_REF}
+            GIT_SHALLOW TRUE
+            GIT_PROGRESS TRUE
+            SOURCE_DIR ${AMC_DEPENDENCIES_DIR}/EPCD)
+        FetchContent_MakeAvailable(epcd)
+    endif()
+endif()
+if(NOT TARGET EPCD::Core)
+    message(FATAL_ERROR "EPCD::Core is unavailable; install EPCD or check the EPCD checkout")
+endif()
+set(AMC_EPCD_TARGETS EPCD::Core)
+if(TARGET EPCD::Interface)
+    list(APPEND AMC_EPCD_TARGETS EPCD::Interface)
+    set(AMC_HAS_EPCD_INTERFACE ON)
+else()
+    set(AMC_HAS_EPCD_INTERFACE OFF)
+endif()
+
 find_package(LLVM CONFIG REQUIRED)
 llvm_map_components_to_libnames(AMC_LLVM_SUPPORT_LIBS support)
 # LLVM's cxxflags include -D_GNU_SOURCE, but GCC/Clang on Linux already define
@@ -212,6 +261,7 @@ add_library(
     libabix-format STATIC
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Core.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Error.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Error.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Condition.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Semantic/Identity.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Semantic/Serialize.cpp
@@ -226,7 +276,7 @@ add_library(
 target_include_directories(
     libabix-format PUBLIC $<BUILD_INTERFACE:${AMC_INCLUDE_DIR}> $<BUILD_INTERFACE:${AMC_SOURCE_DIR}/include/ljson>
                           $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-target_link_libraries(libabix-format PUBLIC ABIX::runtime fmt::fmt MICS::MICS)
+target_link_libraries(libabix-format PUBLIC ABIX::runtime fmt::fmt MICS::MICS ${AMC_EPCD_TARGETS})
 target_compile_features(libabix-format PUBLIC cxx_std_17)
 set_target_properties(
     libabix-format
@@ -235,6 +285,9 @@ set_target_properties(
                C_STANDARD_REQUIRED ON
                POSITION_INDEPENDENT_CODE ON
                OUTPUT_NAME abix-format)
+if(AMC_HAS_EPCD_INTERFACE)
+    target_compile_definitions(libabix-format PRIVATE AMC_HAS_EPCD_INTERFACE=1)
+endif()
 target_compile_definitions(
     libabix-format
     PRIVATE JSON_PARSE_SKIP_COMMENT=1

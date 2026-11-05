@@ -44,6 +44,8 @@ fn main() {
         assert_eq!(demo_div_result(10, 2), Ok(5), "div ok");
         let err = demo_div_result(10, 0).expect_err("div by zero");
         assert_eq!(err.0, 1, "div error status");
+        assert_eq!(err.name(), "invalid_input", "named error code");
+        assert_eq!(err.condition_name(), "invalid_argument", "generic condition");
 
         // Unknown error codes must survive the Rust projection. The library
         // returns 99, which is outside the contract's known status values.

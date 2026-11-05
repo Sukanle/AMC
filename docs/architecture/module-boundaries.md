@@ -172,6 +172,24 @@ and `amc-boundary-edges`.
   Result wrappers through Rust, C++ and Zig runtime consumers; all thunk names
   are resolved from signatures, never parsed
 
+## M6 Progress
+
+- EPCD 0.1 is a required Core dependency; the build accepts an installed
+  package or fetches/uses a repository-local checkout, and links
+  `EPCD::Interface` for registration when available
+- `SKL/AMC/Error.h` defines the stable `AMCErr` static domain, `from_std_errc`,
+  `error_message`, and idempotent `register_errors`
+- `amc::Error` carries `skl::epcd::ErrorCode`; `abix.error/1` adds optional
+  `domain` / `value` while keeping the existing fields stable
+- `[[error]]` v2 requires a domain, maps `GenericCondition`, and supports
+  `return_field`; `[[error-set]]` / `[[error-set.code]]` validate, serialize and
+  round-trip stable error-code tables
+- Rust, C++ and Zig project named error sets with stable numeric values, names
+  and generic conditions; typed Result wrappers use the named set when present
+  and preserve unknown codes numerically
+- the interop suite checks the named error-set projection and typed Result
+  behavior across Rust, C++ and Zig
+
 ## Current → Target Mapping
 
 | Current | Target |

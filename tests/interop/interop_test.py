@@ -160,8 +160,11 @@ def main() -> int:
 
         if os.path.isfile(generated):
             generated_text = open(generated, encoding="utf-8").read()
-            check("demo_div_result" in generated_text and "pub struct DemoDivError(pub" in generated_text,
-                  "Rust projection emits the error-boundary Result and an FFI-safe error newtype")
+            check("demo_div_result" in generated_text and "pub struct DemoErrors(pub i32)" in generated_text,
+                  "Rust projection emits the named error-set Result wrapper")
+            check("pub const INVALID_INPUT: Self = Self(1)" in generated_text
+                  and "pub const fn condition_name(self)" in generated_text,
+                  "Rust projection exposes named error values and generic conditions")
             check("demo_div_unknown_result" in generated_text
                   and "pub struct DemoDivUnknownError(pub" in generated_text,
                   "Rust projection keeps an FFI-safe newtype for an unknown-status error boundary")
@@ -186,6 +189,10 @@ def main() -> int:
                   "amc generate -l cpp emitted the signature array and zero-based slot table")
             check("IVectorMath_demo_scale_fn" in header and "(*)(const struct DemoVec2*, double)" in header,
                   "amc generate -l cpp emitted the interface method typedefs")
+            check("struct DemoErrors" in header and "static constexpr int invalid_input = 1;" in header,
+                  "amc generate -l cpp emitted the named error set")
+            check("Result<int, DemoErrors> demo_div_result" in header,
+                  "amc generate -l cpp typed the error-set Result")
         else:
             check(False, "amc generate -l cpp produced the interface projection",
                   (result.stderr.strip() if result else "skipped (no artifact)")[:2000])
@@ -249,6 +256,12 @@ def main() -> int:
             check(result is not None and result.returncode == 0 and os.path.isfile(zig_projection),
                   "amc generate -l zig produced amc_generated.zig",
                   (result.stderr.strip() if result else "skipped (no artifact)")[:2000])
+            if os.path.isfile(zig_projection):
+                zig_text = open(zig_projection, encoding="utf-8").read()
+                check("pub const DemoErrors" in zig_text and "pub const invalid_input: c_int = 1;" in zig_text,
+                      "amc generate -l zig emitted the named error set")
+                check("pub fn condition_name(value: c_int)" in zig_text,
+                      "amc generate -l zig maps error codes to generic conditions")
 
             zig_src = os.path.join(work, "zig_consumer.zig")
             shutil.copyfile(os.path.join(SCRIPT_DIR, "zig_consumer.zig"), zig_src)

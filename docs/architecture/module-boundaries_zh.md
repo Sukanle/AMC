@@ -149,6 +149,20 @@ CTest 同时运行 `--contracts-only` 和 `--strict`：
 - `tests/interop/expose_test.py` 用同一 exposed 契约和类型化 Result wrapper 运行
   Rust、C++、Zig 消费者；thunk 名称全部通过签名解析，不解析符号拼写
 
+## M6 进度
+
+- EPCD 0.1 成为必需的 Core 依赖；构建支持已安装包或仓库内 checkout，并在可用时
+  链接 `EPCD::Interface` 完成注册
+- `SKL/AMC/Error.h` 定义稳定的 `AMCErr` 静态域、`from_std_errc`、
+  `error_message` 和幂等 `register_errors`
+- `amc::Error` 携带 `skl::epcd::ErrorCode`；`abix.error/1` 增加可选
+  `domain` / `value`，旧字段保持稳定
+- `[[error]]` v2 强制 domain、支持 `GenericCondition` 和 `return_field`；
+  `[[error-set]]` / `[[error-set.code]]` 完成校验、序列化与稳定错误码表
+- Rust / C++ / Zig 从命名错误集生成稳定数值、名称和通用条件；typed Result 在存在
+  error-set 时使用命名类型，未知码按数字保留
+- interop 测试覆盖三语言的命名错误集投影与 typed Result 行为
+
 ## 当前 → 目标映射
 
 | 当前 | 目标 |

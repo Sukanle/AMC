@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <cctype>
 #include <stdint.h>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -446,6 +447,40 @@ void emit_exposed_handles(Output &o, const Projector &p) {
     }
 }
 
+void emit_error_sets(Output &o, const Projector &p) {
+    if (p.m.error_sets.empty()) return;
+    o.print("\n// Named error sets: stable numeric values, names and conditions.\n");
+    for (const auto &set : p.m.error_sets) {
+        const std::string name = zig_ident(set.name);
+        o.print("pub const {} = struct {{\n", name);
+        o.print("    pub const domain: u64 = 0x{:x};\n", static_cast<unsigned long long>(set.domain));
+        for (uint32_t i = 0; i < set.code_count; ++i) {
+            const auto &code = p.m.error_codes[set.code_begin + i];
+            o.print("    pub const {}: c_int = {};\n", zig_ident(code.name), code.value);
+        }
+        o.print("    pub fn name(value: c_int) []const u8 {{\n        return switch (value) {{\n");
+        for (uint32_t i = 0; i < set.code_count; ++i) {
+            const auto &code = p.m.error_codes[set.code_begin + i];
+            o.print("            {} => \"{}\",\n", code.value, code.name);
+        }
+        o.print("            else => \"unknown\",\n        }};\n    }}\n");
+        o.print("    pub fn condition(value: c_int) i32 {{\n        return switch (value) {{\n");
+        for (uint32_t i = 0; i < set.code_count; ++i) {
+            const auto &code = p.m.error_codes[set.code_begin + i];
+            o.print("            {} => {},\n", code.value, code.condition);
+        }
+        o.print("            else => -1,\n        }};\n    }}\n");
+        o.print("    pub fn condition_name(value: c_int) []const u8 {{\n        return switch (condition(value)) {{\n");
+        std::set<int32_t> conditions;
+        for (uint32_t i = 0; i < set.code_count; ++i)
+            conditions.insert(p.m.error_codes[set.code_begin + i].condition);
+        for (const int32_t condition : conditions)
+            o.print("            {} => \"{}\",\n", condition,
+                amc::generic_condition_name(static_cast<amc::GenericCondition>(condition)));
+        o.print("            else => \"unknown\",\n        }};\n    }}\n}};\n");
+    }
+}
+
 void emit_error_wrappers(Output &o, const Projector &p) {
     if (p.m.errors.empty()) return;
     o.print("\n// Typed error boundary: a declared C status becomes a Result union.\n");
@@ -650,6 +685,7 @@ std::string generate_projection(const amc::AbiModule &module, const amc::ir::Low
     }
     emit_functions(o, projector);
     emit_exposed_handles(o, projector);
+    emit_error_sets(o, projector);
     emit_error_wrappers(o, projector);
     emit_layout_checks(o, projector);
     std::string error;

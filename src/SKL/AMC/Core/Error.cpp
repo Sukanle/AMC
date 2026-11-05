@@ -45,6 +45,7 @@ std::string error_code(ErrorCategory category) {
 
 Error make_error(ErrorCategory category, std::string stage, std::string message, std::string file, std::string detail) {
     Error error;
+    error.code = make_error_code(amc_error_from_category(category));
     error.category = category;
     error.stage = std::move(stage);
     error.message = std::move(message);
@@ -98,6 +99,13 @@ std::string error_to_json(const Error &error) {
     output += ",\"category\":\"";
     output += error_category_name(error.category);
     output += '"';
+    if (error.code.failed()) {
+        output += ",\"domain\":\"0x";
+        output += fmt::format("{:016x}", error.code.domain);
+        output += "\"";
+        output += ",\"value\":";
+        output += std::to_string(error.code.value);
+    }
     json_optional(output, "stage", error.stage);
     json_optional(output, "message", error.message);
     json_optional(output, "file", error.file);

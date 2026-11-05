@@ -270,11 +270,16 @@ amc validate missing.abix --error-format json
 
 ```json
 {"schema":"abix.error/1","error":{"code":"AMC-IO","category":"io",
+ "domain":"0x1003000000000001","value":3,
  "stage":"read_abix","message":"cannot open input: missing.abix",
  "file":"missing.abix","detail":null}}
 ```
 
 `--format json` on a command also switches errors to JSON.
+
+The optional `domain` / `value` fields carry the stable EPCD identity of the
+AMC error category. Older consumers can ignore them; `code` / `category` /
+`stage` / `message` remain stable.
 
 ## Other tools
 

@@ -123,6 +123,22 @@ int main() {
         check(contains(json, "\"category\":\"io\""), "error json category");
         check(contains(json, "\"stage\":\"read_abix\""), "error json stage");
         check(contains(json, "\"file\":\"x\""), "error json file");
+        check(contains(json, "\"domain\":\"0x1003000000000001\""), "error json EPCD domain");
+        check(contains(json, "\"value\":3"), "error json EPCD value");
+        check(error.code.domain == skl::epcd::make_skl_domain(0x003, 0x0001), "error carries the AMC EPCD domain");
+        check(error.code.value == static_cast<skl::epcd::ErrorValue>(amc::AMCErr::io),
+            "error carries the AMC EPCD value");
+        check(amc::error_message(error.code) == "I/O operation failed.", "AMC error message");
+        const auto std_error = amc::from_std_errc(std::errc::permission_denied);
+        check(std_error.domain == skl::epcd::domain::std_compat, "std::errc uses the EPCD std-compat domain");
+        check(std_error.value == static_cast<skl::epcd::ErrorValue>(std::errc::permission_denied),
+            "std::errc keeps its numeric identity");
+        check(amc::error_message(std_error).find("Permission denied") != std::string::npos,
+            "std::errc message is described");
+        check(amc::register_errors() == amc::errors_registered(), "AMC error registration is idempotent");
+        check(std::string(amc::AMCErr_domain.name) == "AMC", "AMC static domain name");
+        check(amc::AMCErr_domain.descriptor.domain == skl::epcd::make_skl_domain(0x003, 0x0001),
+            "AMC static domain identity");
         check(contains(amc::error_to_text(error), "amc: io/read_abix: cannot open input: x"), "error text rendering");
         amc::ErrorFormat format = amc::ErrorFormat::text;
         check(amc::parse_error_format("json", format) && format == amc::ErrorFormat::json, "parse_error_format json");

@@ -22,6 +22,8 @@
 
 #include <fmt/os.h>
 
+#include <set>
+
 #if defined(__APPLE__)
 // Used by the macOS helpers below to derive the Homebrew LLVM prefix from the
 // Clang resource directory; the lightweight provider header no longer drags
@@ -671,6 +673,45 @@ int backend(const char *input, const char *output) {
         o.print("private:\n    {} ptr_ = nullptr;\n}};\n", self_type);
     }
 
+    // Named error sets: stable numeric codes, names and generic conditions.
+    // Unknown values are preserved by carrying the raw status in `value`.
+    for (const auto &set : m.error_sets) {
+        const std::string name = cpp_name(set.name);
+        o.print(
+            "\n// Named error set `{}` (domain 0x{:016x}).\n", set.name, static_cast<unsigned long long>(set.domain));
+        o.print("struct {} {{\n", name);
+        o.print("    int value = 0;\n");
+        o.print("    constexpr {}() = default;\n", name);
+        o.print("    constexpr explicit {}(int raw) : value(raw) {{}}\n", name);
+        for (uint32_t i = 0; i < set.code_count; ++i) {
+            const auto &code = m.error_codes[set.code_begin + i];
+            o.print("    static constexpr int {} = {};\n", cpp_name(code.name), code.value);
+        }
+        o.print("    static constexpr const char *name(int raw) noexcept {{\n        switch (raw) {{\n");
+        for (uint32_t i = 0; i < set.code_count; ++i) {
+            const auto &code = m.error_codes[set.code_begin + i];
+            o.print("            case {}: return \"{}\";\n", code.value, code.name);
+        }
+        o.print("            default: return \"unknown\";\n        }}\n    }}\n");
+        o.print("    static constexpr int condition(int raw) noexcept {{\n        switch (raw) {{\n");
+        for (uint32_t i = 0; i < set.code_count; ++i) {
+            const auto &code = m.error_codes[set.code_begin + i];
+            o.print("            case {}: return {};\n", code.value, code.condition);
+        }
+        o.print("            default: return -1;\n        }}\n    }}\n");
+        o.print(
+            "    static constexpr const char *condition_name(int raw) noexcept {{\n        switch (condition(raw)) "
+            "{{\n");
+        std::set<int32_t> conditions;
+        for (uint32_t i = 0; i < set.code_count; ++i)
+            conditions.insert(m.error_codes[set.code_begin + i].condition);
+        for (const int32_t condition : conditions)
+            o.print("            case {}: return \"{}\";\n", condition,
+                amc::generic_condition_name(static_cast<amc::GenericCondition>(condition)));
+        o.print("            default: return \"unknown\";\n        }}\n    }}\n");
+        o.print("}};\n");
+    }
+
     // Error-boundary wrappers: turn the declared C status into a typed
     // `Result<T, E>` instead of exposing a bare status code.
     for (const auto &record : m.errors) {
@@ -690,6 +731,12 @@ int backend(const char *input, const char *output) {
             return parameter.name.empty() ? fmt::format("arg{}", index) : cpp_name(parameter.name);
         };
 
+        const auto find_error_set = [&](amc::Hash128 id) -> const amc::ErrorSet * {
+            if (id.lo == 0 && id.hi == 0) return nullptr;
+            for (const auto &set : m.error_sets)
+                if (set.id == id) return &set;
+            return nullptr;
+        };
         std::string value_type, status_type;
         std::string status_access, value_access;
         std::string params, call_args;
@@ -737,8 +784,10 @@ int backend(const char *input, const char *output) {
             continue;
         }
 
+        const amc::ErrorSet *error_set = find_error_set(record.error_set);
+        const std::string error_type = error_set != nullptr ? cpp_name(error_set->name) : status_type;
         o.print("\n// Typed error boundary for `{}`.\n", function.name);
-        o.print("inline Result<{}, {}> {}_result({}) {{\n", value_type, status_type, function.name, params);
+        o.print("inline Result<{}, {}> {}_result({}) {{\n", value_type, error_type, function.name, params);
         if (record.status_source == amc::StatusSource::return_value) o.print("    {} value{{}};\n", value_type);
         if (record.status_source == amc::StatusSource::return_field)
             o.print("    auto raw = {}({});\n", function.name, call_args);
@@ -751,9 +800,9 @@ int backend(const char *input, const char *output) {
             o.print("    if (status == static_cast<{}>({})) return {{true, value, {{}}}};\n", status_type,
                 record.success_value);
         if (record.status_source == amc::StatusSource::return_field)
-            o.print("    return {{false, {{}}, raw.{}}};\n", status_access);
+            o.print("    return {{false, {{}}, {}(raw.{})}};\n", error_type, status_access);
         else
-            o.print("    return {{false, {{}}, status}};\n");
+            o.print("    return {{false, {{}}, {}(status)}};\n", error_type);
         o.print("}}\n");
     }
 

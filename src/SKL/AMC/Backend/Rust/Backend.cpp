@@ -28,6 +28,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <set>
 #include <vector>
 
 #include <fmt/format.h>
@@ -110,6 +111,13 @@ std::string rust_field_ident(const std::string &name) {
     if (ident == "self" || ident == "Self" || ident == "super" || ident == "crate") return ident + "_";
     if (is_rust_keyword(ident)) return "r#" + ident;
     return ident;
+}
+
+std::string rust_const_ident(std::string name) {
+    name = rust_ident(name);
+    for (char &c : name)
+        c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    return name;
 }
 
 // Convert an ABI name to a PascalCase Rust type identifier (for generated
@@ -576,6 +584,58 @@ void emit_owned(Output &o, const Projector &p) {
     }
 }
 
+const amc::ErrorSet *find_error_set(const amc::AbiModule &module, amc::Hash128 id) {
+    if (id.lo == 0 && id.hi == 0) return nullptr;
+    for (const auto &set : module.error_sets)
+        if (set.id == id) return &set;
+    return nullptr;
+}
+
+const amc::ErrorCode *find_error_code(const amc::AbiModule &module, const amc::ErrorSet &set, int32_t value) {
+    for (uint32_t i = 0; i < set.code_count; ++i) {
+        const auto &code = module.error_codes[set.code_begin + i];
+        if (code.value == value) return &code;
+    }
+    return nullptr;
+}
+
+// Named error sets become a stable Rust value type. Unknown codes are preserved
+// as their raw numeric value; only known codes get a name and condition.
+void emit_error_sets(Output &o, const Projector &p) {
+    if (p.m.error_sets.empty()) return;
+    o.print("\n// Named error sets: stable values, conditions and names.\n");
+    for (const auto &set : p.m.error_sets) {
+        const std::string type = pascal_ident(set.name);
+        o.print("#[derive(Clone, Copy, PartialEq, Eq, Debug)]\n");
+        o.print("pub struct {}(pub i32);\n", type);
+        o.print("impl {} {{\n", type);
+        for (uint32_t i = 0; i < set.code_count; ++i) {
+            const auto &code = p.m.error_codes[set.code_begin + i];
+            o.print("    pub const {}: Self = Self({});\n", rust_const_ident(code.name), code.value);
+        }
+        o.print("    pub const fn name(self) -> &'static str {{\n        match self.0 {{\n");
+        for (uint32_t i = 0; i < set.code_count; ++i) {
+            const auto &code = p.m.error_codes[set.code_begin + i];
+            o.print("            {} => \"{}\",\n", code.value, code.name);
+        }
+        o.print("            _ => \"unknown\",\n        }}\n    }}\n");
+        o.print("    pub const fn condition(self) -> i32 {{\n        match self.0 {{\n");
+        for (uint32_t i = 0; i < set.code_count; ++i) {
+            const auto &code = p.m.error_codes[set.code_begin + i];
+            o.print("            {} => {},\n", code.value, code.condition);
+        }
+        o.print("            _ => -1,\n        }}\n    }}\n");
+        o.print("    pub const fn condition_name(self) -> &'static str {{\n        match self.condition() {{\n");
+        std::set<int32_t> conditions;
+        for (uint32_t i = 0; i < set.code_count; ++i)
+            conditions.insert(p.m.error_codes[set.code_begin + i].condition);
+        for (const int32_t condition : conditions)
+            o.print("            {} => \"{}\",\n", condition,
+                amc::generic_condition_name(static_cast<amc::GenericCondition>(condition)));
+        o.print("            _ => \"unknown\",\n        }}\n    }}\n}}\n");
+    }
+}
+
 // Error-boundary wrappers: turn a C status code into a typed `Result`, so the
 // language-native error mechanism (C++ exception / Rust panic) never has to
 // cross the boundary. Only the declared contract is used -- nothing is inferred.
@@ -586,7 +646,8 @@ void emit_errors(Output &o, const Projector &p) {
         if (record.function_index >= p.m.functions.size()) continue;
         const amc::Function &function = p.m.functions[record.function_index];
         const std::string function_rust = rust_ident(function.name);
-        const std::string error_type = pascal_ident(function.name) + "Error";
+        const amc::ErrorSet *set = find_error_set(p.m, record.error_set);
+        const std::string error_type = set != nullptr ? pascal_ident(set->name) : pascal_ident(function.name) + "Error";
         if (record.status_source == amc::StatusSource::return_field) {
             // A Result return: the status and value are fields of the returned
             // record, so no out-parameter is involved.
@@ -614,12 +675,18 @@ void emit_errors(Output &o, const Projector &p) {
                 params += fmt::format("{}: {}", parameter_name, p.field_type(parameter.type_id));
                 call_args += parameter_name;
             }
-            o.print("#[derive(Clone, Copy, PartialEq, Eq, Debug)]\n");
-            o.print("pub struct {}(pub {});\n", error_type, status_rust);
-            o.print("impl {} {{\n    pub const SUCCESS: {} = {};\n}}\n", error_type, status_rust, record.success_value);
+            if (set == nullptr) {
+                o.print("#[derive(Clone, Copy, PartialEq, Eq, Debug)]\n");
+                o.print("pub struct {}(pub {});\n", error_type, status_rust);
+                o.print(
+                    "impl {} {{\n    pub const SUCCESS: {} = {};\n}}\n", error_type, status_rust, record.success_value);
+            }
             o.print("pub fn {}({}) -> Result<{}, {}> {{\n", function_rust + "_result", params, value_rust, error_type);
             o.print("    let result = unsafe {{ {}({}) }};\n", function_rust, call_args);
-            o.print("    if result.{} == {}::SUCCESS {{\n", status_access, error_type);
+            if (set != nullptr)
+                o.print("    if result.{} == {} {{\n", status_access, record.success_value);
+            else
+                o.print("    if result.{} == {}::SUCCESS {{\n", status_access, error_type);
             o.print("        Ok(result.{})\n", value_access);
             o.print("    }} else {{\n        Err({}(result.{}))\n    }}\n}}\n", error_type, status_access);
             continue;
@@ -650,13 +717,20 @@ void emit_errors(Output &o, const Projector &p) {
             call_args += parameter_name;
         }
 
-        o.print("#[derive(Clone, Copy, PartialEq, Eq, Debug)]\n");
-        o.print("pub struct {}(pub {});\n", error_type, status_rust);
-        o.print("impl {} {{\n    pub const SUCCESS: {} = {};\n}}\n", error_type, status_rust, record.success_value);
+        if (set == nullptr) {
+            o.print("#[derive(Clone, Copy, PartialEq, Eq, Debug)]\n");
+            o.print("pub struct {}(pub {});\n", error_type, status_rust);
+            o.print("impl {} {{\n    pub const SUCCESS: {} = {};\n}}\n", error_type, status_rust, record.success_value);
+        }
         o.print("pub fn {}({}) -> Result<{}, {}> {{\n", function_rust + "_result", params, value_rust, error_type);
         o.print("    let mut value: {} = core::default::Default::default();\n", value_rust);
         o.print("    let status = unsafe {{ {}({}) }};\n", function_rust, call_args);
-        o.print("    if status == {}::SUCCESS {{ Ok(value) }} else {{ Err({}(status)) }}\n", error_type, error_type);
+        if (set != nullptr)
+            o.print(
+                "    if status == {} {{ Ok(value) }} else {{ Err({}(status)) }}\n", record.success_value, error_type);
+        else
+            o.print(
+                "    if status == {}::SUCCESS {{ Ok(value) }} else {{ Err({}(status)) }}\n", error_type, error_type);
         o.print("}}\n");
     }
 }
@@ -917,6 +991,7 @@ std::string generate_projection(const amc::AbiModule &module, const amc::ir::Low
     }
     emit_functions(o, projector);
     emit_owned(o, projector);
+    emit_error_sets(o, projector);
     emit_errors(o, projector);
     emit_lowerings(o, projector);
     emit_view_adapters(o, projector);
