@@ -64,7 +64,7 @@ ctest --test-dir build --output-on-failure
 **必需的依赖包：**
 
 - ABIX 0.3 运行时及 MICS（若未安装则自动获取）
-- LLVM 与 Clang（`clang-cpp`）
+- LLVM 与 Clang（`clang-cpp`）；providers 优先链接共享 `libLLVM`，可用 `-DAMC_LLVM_DYNAMIC=OFF` 回退静态组件
 - fmt 11.2 及更高版本
 - toml++ 3.4 及更高版本
 - C++ 测试所需的 Catch2 v3（可选）

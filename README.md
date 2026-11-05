@@ -64,7 +64,7 @@ All other dependencies — LLVM/Clang, fmt and toml++ — are expected to be ins
 Required packages:
 
 - `ABIX 0.3` runtime and MICS (fetched automatically when not installed)
-- LLVM and Clang (`clang-cpp`)
+- LLVM and Clang (`clang-cpp`); providers link shared `libLLVM` when available (pass `-DAMC_LLVM_DYNAMIC=OFF` for the static fallback)
 - fmt 11.2 or newer
 - toml++ 3.4 or newer
 - Catch2 v3 for the C++ tests (optional)

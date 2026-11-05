@@ -108,6 +108,14 @@ store them past the underlying storage lifetime.
 
 ## Build and test expectations
 
+- Providers link the **LLVM shared library** when the installed LLVM exposes it
+  (`AMC_LLVM_DYNAMIC=ON`, the default). This keeps one copy of LLVM Support in
+  `libLLVM` instead of embedding it in every provider. When no dylib target is
+  available (notably MSVC), configure falls back to static component libraries.
+  Use `-DAMC_LLVM_DYNAMIC=OFF` to force the static fallback.
+- The LLVM major version is a runtime dependency of a dynamically linked
+  provider; do not assume cross-major ABI compatibility.
+
 - Keep `ctest` green; the boundary gates are `amc-boundary-contracts` and
   `amc-boundary-edges --strict`.
 - Do not add a forbidden module edge without a staged

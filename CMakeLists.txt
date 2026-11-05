@@ -132,6 +132,21 @@ endif()
 find_package(LLVM CONFIG REQUIRED)
 llvm_map_components_to_libnames(AMC_LLVM_SUPPORT_LIBS support)
 
+# Prefer the LLVM shared library so providers do not each embed a copy of
+# LLVMSupport. Fall back to component static libraries when the installed LLVM
+# has no dylib target (notably MSVC builds, where LLVM_BUILD_LLVM_DYLIB is
+# unsupported).
+option(AMC_LLVM_DYNAMIC "Link AMC providers against the shared LLVM library when available" ON)
+set(AMC_LLVM_LINK_LIBRARIES ${AMC_LLVM_SUPPORT_LIBS})
+if(AMC_LLVM_DYNAMIC
+   AND TARGET LLVM
+   AND LLVM_LINK_LLVM_DYLIB)
+    set(AMC_LLVM_LINK_LIBRARIES LLVM)
+    message(STATUS "LLVM providers: dynamic LLVM (${LLVM_PACKAGE_VERSION})")
+else()
+    message(STATUS "LLVM providers: static component libraries (${LLVM_PACKAGE_VERSION})")
+endif()
+
 # Use Clang through clang-cpp instead of find_package(Clang). Some packagers
 # (notably MSYS2) export Clang target files that reference static archives they
 # do not ship, so configuring fails even though clang-cpp is installed. Clang
@@ -280,18 +295,18 @@ add_executable(
              ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Rust/Backend.cpp)
 target_include_directories(amc-rust PRIVATE ${AMC_INCLUDE_DIR} ${AMC_GENERATED_INCLUDE_DIR} ${LLVM_INCLUDE_DIRS})
 target_compile_options(amc-rust PRIVATE ${LLVM_DEFINITIONS})
-target_link_libraries(amc-rust PRIVATE amc-core amc-lang fmt::fmt ${AMC_LLVM_SUPPORT_LIBS})
+target_link_libraries(amc-rust PRIVATE amc-core amc-lang fmt::fmt ${AMC_LLVM_LINK_LIBRARIES})
 
 add_executable(amc-zig ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Zig/Zig.cpp
                        ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Zig/Backend.cpp)
 target_include_directories(amc-zig PRIVATE ${AMC_INCLUDE_DIR} ${LLVM_INCLUDE_DIRS})
 target_compile_options(amc-zig PRIVATE ${LLVM_DEFINITIONS})
-target_link_libraries(amc-zig PRIVATE amc-core amc-lang fmt::fmt ${AMC_LLVM_SUPPORT_LIBS})
+target_link_libraries(amc-zig PRIVATE amc-core amc-lang fmt::fmt ${AMC_LLVM_LINK_LIBRARIES})
 
 add_executable(amc-cancel-test-provider ${AMC_SOURCE_DIR}/tests/providers/cancellation/cancellation_provider.cpp)
 target_include_directories(amc-cancel-test-provider PRIVATE ${AMC_INCLUDE_DIR} ${LLVM_INCLUDE_DIRS})
 target_compile_options(amc-cancel-test-provider PRIVATE ${LLVM_DEFINITIONS})
-target_link_libraries(amc-cancel-test-provider PRIVATE amc-lang fmt::fmt ${AMC_LLVM_SUPPORT_LIBS})
+target_link_libraries(amc-cancel-test-provider PRIVATE amc-lang fmt::fmt ${AMC_LLVM_LINK_LIBRARIES})
 set_target_properties(amc-cancel-test-provider PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 add_executable(
@@ -327,6 +342,11 @@ target_link_libraries(amc-mcp PRIVATE amc-core)
 
 set_target_properties(amc amc-cpp amc-rust amc-zig amc-dump amc-mcp PROPERTIES RUNTIME_OUTPUT_DIRECTORY
                                                                                ${CMAKE_BINARY_DIR}/bin)
+if(AMC_LLVM_DYNAMIC AND AMC_LLVM_LINK_LIBRARIES STREQUAL "LLVM")
+    # Keep the LLVM shared-library directory in the installed RPATH so a
+    # provider outside the default loader path still finds libLLVM.
+    set_target_properties(amc-cpp amc-rust amc-zig PROPERTIES INSTALL_RPATH_USE_LINK_PATH ON)
+endif()
 configure_file(${AMC_SOURCE_DIR}/providers.toml ${CMAKE_BINARY_DIR}/bin/amc-providers.toml COPYONLY)
 
 if(AMC_ENABLE_LLDB_PLUGIN)
