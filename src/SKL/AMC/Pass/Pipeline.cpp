@@ -16,12 +16,14 @@
 #include "SKL/AMC/Pass/Pipeline.h"
 
 #include "SKL/AMC/Pass/Lowering.h"
+#include "SKL/AMC/Pass/Semantic.h"
 #include "SKL/AMC/Pass/Verify.h"
 
 namespace amc::pass {
 
 Pipeline make_default_pipeline() {
     Pipeline pipeline;
+    pipeline.passes.push_back({"semantic-verify", verify_semantic});
     pipeline.passes.push_back({"abi-verify", verify_abi});
     pipeline.passes.push_back({"lowering",
         [](ir::Module &module, Context &, diagnostics::DiagnosticList &out) { return lower_pass(module, out); }});

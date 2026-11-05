@@ -40,15 +40,4 @@ bool compare_modules(const AbiModule &contract, const AbiModule &implementation,
     return true;
 }
 
-bool build_compatibility_report(const AbiModule &source, const AbiModule &target, AbiModule &report, Context &context,
-    diagnostics::DiagnosticList &diagnostics) {
-    (void)context;
-    std::string error;
-    if (!amc::build_compatibility(source, target, report, error)) {
-        diagnostics::add_error(diagnostics, "compatibility_failed", "pass", error);
-        return false;
-    }
-    return true;
-}
-
 }   // namespace amc::pass

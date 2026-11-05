@@ -29,11 +29,6 @@ namespace amc::pass {
 bool compare_modules(const AbiModule &contract, const AbiModule &implementation, VerifyResult &result, Context &context,
     diagnostics::DiagnosticList &diagnostics);
 
-// A3: type-mapping compatibility report. The policy remains in Core/Adapter;
-// the pass owns the error/diagnostic boundary used by CLI and Compilation.
-bool build_compatibility_report(const AbiModule &source, const AbiModule &target, AbiModule &report, Context &context,
-    diagnostics::DiagnosticList &diagnostics);
-
 }   // namespace amc::pass
 
 #endif   // AMC_PASS_COMPATIBILITY_H

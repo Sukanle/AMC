@@ -15,6 +15,7 @@
  */
 #include "SKL/AMC/CLI/Support.h"
 #include "SKL/AMC/Core/Adapter.h"
+#include "SKL/AMC/Pass/TypeMapping.h"
 #include "SKL/AMC/Core/Cache.h"
 #include "SKL/AMC/Core/Context.h"
 #include "SKL/AMC/Core/Core.h"
@@ -83,8 +84,13 @@ int cmd_adapter(char **args, int arg_count) {
             return fail(read_error_category(error), "read_abix", error, source_path.string());
         if (!amc::load_module_source(target_path.string(), target, error))
             return fail(read_error_category(error), "read_abix", error, target_path.string());
-        if (!amc::build_compatibility(source, target, report, error))
-            return fail(amc::ErrorCategory::compatibility, "build_compatibility", error);
+        amc::pass::Context context;
+        context.strict = false;
+        amc::diagnostics::DiagnosticList diagnostics;
+        if (!amc::pass::build_compatibility_report(source, target, report, context, diagnostics)) {
+            const std::string message = diagnostics.empty() ? error : diagnostics.front().message;
+            return fail(amc::ErrorCategory::compatibility, "build_compatibility", message);
+        }
         const std::string text = amc::generate_adapter(source, target, report, options, error);
         if (!error.empty()) return fail(amc::ErrorCategory::compatibility, "adapter", error, source_path.string());
         if (output.empty()) {

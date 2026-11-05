@@ -25,7 +25,7 @@
 #include "SKL/AMC/Core/Query.h"
 #include "SKL/AMC/Core/Symbol.h"
 #include "SKL/AMC/Core/Verify.h"
-#include "SKL/AMC/Pass/Compatibility.h"
+#include "SKL/AMC/Pass/TypeMapping.h"
 #include "SKL/AMC/Util/Error.h"
 
 #include <filesystem>

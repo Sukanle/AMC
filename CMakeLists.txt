@@ -337,7 +337,9 @@ add_library(
     amc-pass STATIC
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Lowering.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Verify.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Semantic.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Compatibility.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/TypeMapping.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Pipeline.cpp)
 target_include_directories(amc-pass PUBLIC ${AMC_INCLUDE_DIR})
 target_link_libraries(amc-pass PUBLIC libabix-format)

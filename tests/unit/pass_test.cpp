@@ -16,6 +16,8 @@
 #include "SKL/AMC/Core/Core.h"
 #include "SKL/AMC/IR/Artifact.h"
 #include "SKL/AMC/Pass/Compatibility.h"
+#include "SKL/AMC/Pass/Semantic.h"
+#include "SKL/AMC/Pass/TypeMapping.h"
 #include "SKL/AMC/Pass/Pipeline.h"
 #include "SKL/AMC/Pass/Verify.h"
 
@@ -89,6 +91,29 @@ void test_compatibility_pass() {
     check(amc::diagnostics::has_errors(strict), "strict drift becomes an error");
 }
 
+void test_verify_semantic_pass() {
+    amc::ir::Module module;
+    amc::semantic::SemanticType type;
+    type.id = amc::semantic::SemanticTypeId{id("demo::Widget")};
+    type.kind = amc::semantic::SemanticTypeKind::record;
+    type.qualified_name = "demo::Widget";
+    module.semantic.types.push_back(type);
+
+    amc::pass::Context context;
+    amc::diagnostics::DiagnosticList diagnostics;
+    check(amc::pass::verify_semantic(module, context, diagnostics), "verify_semantic accepts complete records");
+
+    amc::semantic::SemanticRecord record;
+    record.type = type.id;
+    amc::semantic::SemanticBase base;
+    base.type = amc::semantic::SemanticTypeId{id("demo::Missing")};
+    record.bases.push_back(base);
+    module.semantic.records.push_back(record);
+    amc::diagnostics::DiagnosticList invalid;
+    check(!amc::pass::verify_semantic(module, context, invalid), "verify_semantic rejects missing references");
+    check(amc::diagnostics::has_errors(invalid), "missing semantic reference emits an error");
+}
+
 void test_verify_lowering_pass() {
     amc::ir::Module module;
     module.abi = module_with_layout(8, 8);
@@ -149,6 +174,7 @@ void test_default_pipeline() {
 int main() {
     test_verify_abi_pass();
     test_compatibility_pass();
+    test_verify_semantic_pass();
     test_verify_lowering_pass();
     test_compatibility_mapping_pass();
     test_artifact_loader();
