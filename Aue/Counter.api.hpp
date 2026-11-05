@@ -4,11 +4,15 @@
 // The public ABI of the demo native module, described to AMC so that the
 // generated Lua/Aue contract is derived from real metadata rather than a
 // hand-written table.
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-struct Counter;
+struct Counter {
+    int32_t value;
+};
 
 Counter *counter_new(int initial);
 int counter_add(Counter *counter, int delta);

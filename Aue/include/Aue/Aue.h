@@ -45,13 +45,46 @@ struct Entry {
     Function function;   // native implementation
 };
 
+// ABI scalar kinds that Aue can read/write directly through a descriptor. The
+// set is deliberately small: unsupported fields stay inaccessible rather than
+// silently guessing a layout.
+enum class FieldKind : uint32_t {
+    integer_signed,
+    integer_unsigned,
+    floating,
+    boolean,
+    pointer,
+    unknown,
+};
+
+// One field of a record type, expressed as an offset into the native object.
+// `size` is the ABI width; `kind` decides how the Lua value is encoded.
+struct Field {
+    const char *name;
+    uint32_t offset;
+    uint32_t size;
+    FieldKind kind;
+};
+
+// A record type whose fields can be projected directly into Lua.
+struct Type {
+    const char *name;
+    uint32_t size;
+    uint32_t align;
+    const Field *fields;
+    size_t field_count;
+};
+
 // The ABIX contract the boundary layer dispatches through. `abi_hash` is the
-// `.abix` artifact hash both ends must agree on.
+// `.abix` artifact hash both ends must agree on. `types` is optional; when
+// present, `register_contract_types` installs field-access metatables.
 struct Contract {
     const char *module;
     const char *abi_hash;
     const Entry *entries;
     size_t entry_count;
+    const Type *types = nullptr;
+    size_t type_count = 0;
 };
 
 // Aue boundary levels. L2 (VM inline dispatch) is not implemented yet; the
@@ -88,6 +121,10 @@ void register_meta(lua_State *state, const Contract &contract);
 // Registers the module at `requested`, clamped to `compiled_level`. Returns the
 // level actually used, so callers can report the (possibly degraded) choice.
 Level register_layer(lua_State *state, const Contract &contract, Level requested);
+
+// Installs field-access metatables for every record type in `contract`. The
+// metatable name is `<module>.<type>`; unknown fields resolve to nil.
+void register_contract_types(lua_State *state, const Contract &contract);
 
 // --- the demo native module (`counter`) ----------------------------------
 void register_counter_types(lua_State *state);

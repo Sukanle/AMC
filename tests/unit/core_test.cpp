@@ -20,7 +20,7 @@
 #include "SKL/AMC/Platform/ELF.h"
 #include "SKL/AMC/Diagnostics/Error.h"
 #include "SKL/AMC/Support/Json.h"
-#include "SKL/AMC/Core/Lua.h"
+#include "SKL/AMC/Backend/Lua/Lua.h"
 #include "SKL/AMC/Artifact/Materialize.h"
 #include "SKL/AMC/Artifact/Metadata.h"
 #include "SKL/AMC/Query/Query.h"
@@ -568,6 +568,29 @@ int main() {
     {
         amc::AbiModule m;
         m.package_name = "counter";
+        amc::Type int_type;
+        int_type.name = "int";
+        int_type.kind = amc::TypeKind::primitive;
+        int_type.id = amc::hash_text("int", 0x54595045ULL);
+        int_type.size = 4;
+        int_type.align = 4;
+        int_type.primitive_abi = amc::primitive_abi(4, amc::PrimitiveAbiKind::sint, amc::FloatFormat::none, true);
+        m.types.push_back(int_type);
+        amc::Type counter_type;
+        counter_type.name = "Counter";
+        counter_type.kind = amc::TypeKind::record;
+        counter_type.id = amc::hash_text("Counter", 0x54595045ULL);
+        counter_type.size = 4;
+        counter_type.align = 4;
+        counter_type.field_begin = 0;
+        counter_type.field_count = 1;
+        m.types.push_back(counter_type);
+        amc::Field value;
+        value.owner_type = counter_type.id;
+        value.name = "value";
+        value.type_id = int_type.id;
+        value.offset = 0;
+        m.fields.push_back(value);
         m.functions.push_back(amc::Function{});
         m.functions.back().name = "counter_add";
         m.functions.back().signature = amc::hash_text("counter_add", 1);
@@ -581,6 +604,10 @@ int main() {
         check(contains(contract, "aue::Contract"), "lua contract type");
         check(contains(contract, "\"add\", 2, counter_add"), "lua entry name/arity/symbol");
         check(contains(contract, "\"counter\""), "lua module name");
+        check(contains(contract, "aue::Field lua_type_0_fields"), "lua contract emits field descriptors");
+        check(contains(contract, "\"value\", 0, 4, aue::FieldKind::integer_signed"), "lua field offset/kind");
+        check(contains(contract, "aue::Type lua_types"), "lua contract emits record descriptors");
+        check(contains(contract, "\"Counter\", 4, 4, lua_type_0_fields, 1"), "lua record descriptor");
         check(amc::lua_function_symbol("Foo::bar") == "Foo_bar", "lua symbol sanitizes scope");
         check(amc::lua_function_symbol("weird-name") == "weird_name", "lua symbol sanitizes chars");
         check(amc::lua_entry_name("counter", "counter_add") == "add", "lua entry strips package prefix");

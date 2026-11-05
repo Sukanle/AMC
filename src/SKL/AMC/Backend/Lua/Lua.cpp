@@ -13,10 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "SKL/AMC/Core/Lua.h"
+#include "SKL/AMC/Backend/Lua/Lua.h"
 #include "SKL/AMC/Core/Generated.h"
 
 #include <cctype>
+#include <vector>
 
 #include <fmt/format.h>
 
@@ -39,6 +40,59 @@ std::string cpp_string(const std::string &value) {
             result += c;
     }
     return result + '"';
+}
+
+const Type *find_abi_type(const AbiModule &module, Hash128 id) {
+    for (const auto &type : module.types)
+        if (type.id == id) return &type;
+    return nullptr;
+}
+
+enum class EmittedFieldKind : uint32_t {
+    integer_signed,
+    integer_unsigned,
+    floating,
+    boolean,
+    pointer,
+    unknown,
+};
+
+EmittedFieldKind field_kind(const Type &type) {
+    if (type.kind == TypeKind::pointer) return EmittedFieldKind::pointer;
+    if (type.kind == TypeKind::enumeration)
+        return (type.primitive_abi & primitive_signed_bit) != 0 ? EmittedFieldKind::integer_signed
+                                                                : EmittedFieldKind::integer_unsigned;
+    if (type.kind != TypeKind::primitive) return EmittedFieldKind::unknown;
+
+    switch (static_cast<PrimitiveAbiKind>(type.primitive_abi & 0xffu)) {
+        case PrimitiveAbiKind::bool_:          return EmittedFieldKind::boolean;
+        case PrimitiveAbiKind::floating:       return EmittedFieldKind::floating;
+        case PrimitiveAbiKind::sint:
+        case PrimitiveAbiKind::schar:
+        case PrimitiveAbiKind::char_signed:
+        case PrimitiveAbiKind::wchar_signed:   return EmittedFieldKind::integer_signed;
+        case PrimitiveAbiKind::uint:
+        case PrimitiveAbiKind::uchar:
+        case PrimitiveAbiKind::char_unsigned:
+        case PrimitiveAbiKind::char8:
+        case PrimitiveAbiKind::char16:
+        case PrimitiveAbiKind::char32:
+        case PrimitiveAbiKind::wchar_unsigned: return EmittedFieldKind::integer_unsigned;
+        default:                               break;
+    }
+    return EmittedFieldKind::unknown;
+}
+
+const char *field_kind_literal(EmittedFieldKind kind) {
+    switch (kind) {
+        case EmittedFieldKind::integer_signed:   return "aue::FieldKind::integer_signed";
+        case EmittedFieldKind::integer_unsigned: return "aue::FieldKind::integer_unsigned";
+        case EmittedFieldKind::floating:         return "aue::FieldKind::floating";
+        case EmittedFieldKind::boolean:          return "aue::FieldKind::boolean";
+        case EmittedFieldKind::pointer:          return "aue::FieldKind::pointer";
+        case EmittedFieldKind::unknown:          return "aue::FieldKind::unknown";
+    }
+    return "aue::FieldKind::unknown";
 }
 
 }   // namespace
@@ -116,6 +170,55 @@ std::string generate_lua_contract(const AbiModule &module, std::string &error) {
     if (module.functions.empty()) out += "    {nullptr, 0, nullptr},\n";
     out += "};\n\n";
 
+    // Aue-2: expose record fields as descriptors so the runtime can read and
+    // write native memory directly. Only records with fields are emitted; the
+    // metatable is installed by register_contract_types().
+    std::vector<size_t> record_types;
+    for (size_t i = 0; i < module.types.size(); ++i) {
+        const Type &type = module.types[i];
+        if (type.kind == TypeKind::record && type.field_count > 0) record_types.push_back(i);
+    }
+
+    for (size_t emitted = 0; emitted < record_types.size(); ++emitted) {
+        const Type &type = module.types[record_types[emitted]];
+        out += "inline const aue::Field lua_type_";
+        out += fmt::to_string(emitted);
+        out += "_fields[] = {\n";
+        for (uint32_t i = 0; i < type.field_count; ++i) {
+            const Field &field = module.fields[type.field_begin + i];
+            const Type *field_type = find_abi_type(module, field.type_id);
+            out += "    {";
+            out += cpp_string(field.name);
+            out += ", ";
+            out += fmt::to_string(field.offset);
+            out += ", ";
+            out += fmt::to_string(field_type == nullptr ? 0 : field_type->size);
+            out += ", ";
+            out += field_kind_literal(field_type == nullptr ? EmittedFieldKind::unknown : field_kind(*field_type));
+            out += "},\n";
+        }
+        out += "};\n\n";
+    }
+
+    if (!record_types.empty()) {
+        out += "inline const aue::Type lua_types[] = {\n";
+        for (size_t emitted = 0; emitted < record_types.size(); ++emitted) {
+            const Type &type = module.types[record_types[emitted]];
+            out += "    {";
+            out += cpp_string(type.name);
+            out += ", ";
+            out += fmt::to_string(type.size);
+            out += ", ";
+            out += fmt::to_string(type.align);
+            out += ", lua_type_";
+            out += fmt::to_string(emitted);
+            out += "_fields, ";
+            out += fmt::to_string(type.field_count);
+            out += "},\n";
+        }
+        out += "};\n\n";
+    }
+
     out += "inline const aue::Contract lua_contract = {\n";
     out += "    ";
     out += cpp_string(package);
@@ -127,6 +230,15 @@ std::string generate_lua_contract(const AbiModule &module, std::string &error) {
     out += "    ";
     out += fmt::to_string(module.functions.size());
     out += ",\n";
+    if (record_types.empty()) {
+        out += "    nullptr,\n";
+        out += "    0,\n";
+    } else {
+        out += "    lua_types,\n";
+        out += "    ";
+        out += fmt::to_string(record_types.size());
+        out += ",\n";
+    }
     out += "};\n";
     out += "\n";
     out += "}  // namespace amc_generated\n";

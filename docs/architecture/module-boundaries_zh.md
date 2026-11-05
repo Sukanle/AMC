@@ -1,6 +1,6 @@
 # AMC 模块边界（A0）
 
-状态：**A0 已冻结；A1/A4 已落地，A2/A3/A5 进行中**。本文定义 Frontend、IR、Pass、Backend、Compilation 和 Interfaces 之间的契约；剩余工作是边界收敛和物理模块拆分，而不是重新设计架构。
+状态：**A0 已冻结；A1/A4/A5 已落地，A2/A3/A6 进行中**。本文定义 Frontend、IR、Pass、Backend、Compilation 和 Interfaces 之间的契约；剩余工作是边界收敛和物理模块拆分，而不是重新设计架构。
 
 ## 目标
 
@@ -212,6 +212,7 @@ CTest 同时运行 `--contracts-only` 和 `--strict`：
 | `Core/ELF.*`、`Core/Symbol.*` | `Platform/` | 已迁移（A5.4） |
 | `Core/Query.*`、`Core/Context.*` | `Query/` | 已迁移（A5.5） |
 | `Core/Json.*` | `Support/Json` | 已迁移（A5.6） |
+| `Core/Lua.*` | `Backend/Lua/Lua` | 已迁移（A6） |
 | `Core/Condition.*` | `IR/Condition` | 已迁移（A5.8） |
 | `Tool/Dump/*` | `Interfaces/CLI` 或 `Query/` | 未迁移 |
 

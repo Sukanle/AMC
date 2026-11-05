@@ -140,6 +140,8 @@ amc generate file.abix -l lua  -o aue_contract.hpp
 amc generate file.abix -l lua  -o conformance.lua
 ```
 
+Lua projection 生成 Aue 消费的 `aue::Contract`（见 `Aue/README.md`）：函数 entry 与 record field descriptor。L1 在注册时一次性预构建 name → entry 索引，record metatable 通过预构建的 offset 索引访问字段；不支持的字段类型保持不可访问，而不是猜测编码。
+
 C++ provider 在写出 `amc_generated.hpp`（projection）的同时，会在同目录生成 `amc_abi_check.hpp`：把 layout 漂移转化为编译器/clangd 的普通诊断，无需 clangd 插件：
 
 ```cpp

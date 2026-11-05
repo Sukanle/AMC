@@ -180,6 +180,8 @@ amc generate file.abix -l lua  -o aue_contract.hpp # Aue contract (header)
 amc generate file.abix -l lua  -o conformance.lua  # generated Lua test case
 ```
 
+The Lua projection emits an `aue::Contract` consumed by Aue (`Aue/README.md`): function entries plus record field descriptors. L1 pre-builds the name → entry index once at registration, and record metatables resolve fields through a pre-built offset index; unsupported field kinds stay inaccessible instead of being guessed.
+
 The C++ provider writes `amc_generated.hpp` (the projection) and, next to it, `amc_abi_check.hpp` — a compile-time ABI check that turns layout drift into an ordinary compiler/clangd diagnostic while editing, with no clangd plugin:
 
 ```cpp

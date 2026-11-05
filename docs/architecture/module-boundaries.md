@@ -1,6 +1,6 @@
 # AMC Module Boundaries (A0)
 
-Status: **A0 frozen; A1/A4 landed, A2/A3/A5 in progress**. This document defines
+Status: **A0 frozen; A1/A4/A5 landed, A2/A3/A6 in progress**. This document defines
 the contracts between the AMC frontend, IR, pass pipeline, backend, compilation
 pipeline and external interfaces. The remaining work is boundary consolidation
 and physical module extraction, not a new architecture.
@@ -250,6 +250,7 @@ and `amc-boundary-edges`.
 | `Core/ELF.*`, `Core/Symbol.*` | `Platform/` | moved (A5.4) |
 | `Core/Query.*`, `Core/Context.*` | `Query/` | moved (A5.5) |
 | `Core/Json.*` | `Support/Json` | moved (A5.6) |
+| `Core/Lua.*` | `Backend/Lua/Lua` | moved (A6) |
 | `Core/Condition.*` | `IR/Condition` | moved (A5.8) |
 | `Tool/Dump/*` | `Interfaces/CLI` or `Query/` | remaining |
 

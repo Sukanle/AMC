@@ -7,6 +7,12 @@ counter.add(b, -50)
 print("a", counter.get(a))
 print("b", counter.get(b))
 print("a_again", counter.get(a))
+print("field_unknown", a.missing)
+
+local ok_field = pcall(function()
+    a.value = "bad"
+end)
+print("field_guard", ok_field)
 
 local ok = pcall(function()
     return counter.get(nil)

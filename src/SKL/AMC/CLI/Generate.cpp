@@ -17,7 +17,7 @@
 #include "SKL/AMC/Core/Adapter.h"
 #include "SKL/AMC/Core/Core.h"
 #include "SKL/AMC/Diagnostics/Error.h"
-#include "SKL/AMC/Core/Lua.h"
+#include "SKL/AMC/Backend/Lua/Lua.h"
 #include "SKL/AMC/Artifact/Metadata.h"
 #include "SKL/AMC/Util/Error.h"
 #include "SKL/AMC/Compilation/Config.h"

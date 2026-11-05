@@ -6,6 +6,9 @@ local c = counter.new(10)
 counter.add(c, 5)
 counter.add(c, -2)
 print("value", counter.get(c))
+print("field", c.value)
+c.value = 42
+print("field_after", c.value, counter.get(c))
 print("module", counter._module)
 print("hash", counter._abi_hash)
 

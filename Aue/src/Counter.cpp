@@ -29,22 +29,24 @@
 #endif
 
 namespace {
+// Keep the native layout in sync with `Counter.api.hpp`; the generated contract
+// carries the field offsets, while this struct is the actual storage.
 struct Counter {
-    int value;
+    int32_t value;
 };
 }   // namespace
 
 // External linkage so a generated contract can reference these symbols by name.
 extern "C" int counter_new(lua_State *state) {
     auto *counter = static_cast<Counter *>(lua_newuserdatauv(state, sizeof(Counter), 0));
-    counter->value = static_cast<int>(luaL_checkinteger(state, 1));
+    counter->value = static_cast<int32_t>(luaL_checkinteger(state, 1));
     luaL_setmetatable(state, "counter.Counter");
     return 1;
 }
 
 extern "C" int counter_add(lua_State *state) {
     auto *counter = static_cast<Counter *>(luaL_checkudata(state, 1, "counter.Counter"));
-    counter->value += static_cast<int>(luaL_checkinteger(state, 2));
+    counter->value += static_cast<int32_t>(luaL_checkinteger(state, 2));
     return 0;
 }
 
@@ -62,23 +64,30 @@ const aue::Entry kCounterEntries[] = {
     {"get", 1, counter_get},
 };
 
+const aue::Field kCounterFields[] = {
+    {"value", 0, sizeof(int32_t), aue::FieldKind::integer_signed},
+};
+
+const aue::Type kCounterTypes[] = {
+    {"Counter", sizeof(Counter), alignof(Counter), kCounterFields, 1},
+};
+
 const aue::Contract kCounterContract = {
-    // Kept in sync with `Aue/counter.abic.toml`; the generated conformance
+    // Kept in sync with `Aue/Counter.abic.toml`; the generated conformance
     // script asserts the runtime contract and the metadata agree on this hash.
     "counter",
-    "0x1cfd421d673a1d40eff2cac77295f156",
+    "0Xa0e7f9e1971ea9d0776c11f6f4dc7ef8",
     kCounterEntries,
     3,
+    kCounterTypes,
+    1,
 };
 }   // namespace
 #endif
 
 namespace aue {
 
-void register_counter_types(lua_State *state) {
-    luaL_newmetatable(state, "counter.Counter");
-    lua_pop(state, 1);
-}
+void register_counter_types(lua_State *state) { register_contract_types(state, counter_contract()); }
 
 const Contract &counter_contract() {
 #ifdef AUE_HAVE_GENERATED_CONTRACT

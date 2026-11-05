@@ -341,7 +341,7 @@ set_target_properties(
                OUTPUT_NAME abix-metadata)
 
 add_library(
-    libabix-tools STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Adapter.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Lua.cpp)
+    libabix-tools STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Adapter.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Lua/Lua.cpp)
 target_link_libraries(libabix-tools PUBLIC libabix-metadata)
 set_target_properties(
     libabix-tools
