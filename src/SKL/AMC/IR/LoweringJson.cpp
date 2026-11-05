@@ -476,23 +476,16 @@ bool load_lowering_sidecar(const std::string &artifact_path, LoweringResult &res
     return read_lowering_json(path, result, error);
 }
 
-bool apply_lowering_contracts(const LoweringResult &result, AbiModule &module, std::string &error) {
+bool validate_lowering_references(const LoweringResult &result, const AbiModule &module, std::string &error) {
     if (result.types.empty() && result.functions.empty() && result.ownership.empty() && result.exposed.empty())
         return true;
 
     std::unordered_map<uint64_t, std::unordered_set<uint64_t>> type_ids;
     for (const auto &type : module.types)
         type_ids[type.id.lo].insert(type.id.hi);
-
     std::unordered_map<uint64_t, std::unordered_set<uint64_t>> function_ids;
-    std::vector<uint32_t> parameter_base(module.functions.size(), 0);
-    uint32_t running = 0;
-    for (size_t i = 0; i < module.functions.size(); ++i) {
-        const auto &function = module.functions[i];
+    for (const auto &function : module.functions)
         function_ids[function.signature.lo].insert(function.signature.hi);
-        parameter_base[i] = running;
-        running += static_cast<uint32_t>(function.parameters.size());
-    }
 
     const auto has_type = [&](Hash128 id) {
         const auto lo = type_ids.find(id.lo);
@@ -525,9 +518,8 @@ bool apply_lowering_contracts(const LoweringResult &result, AbiModule &module, s
             continue;
         return missing_function(function.name, function.abi);
     }
-    for (const auto &contract : result.ownership) {
+    for (const auto &contract : result.ownership)
         if (!valid(contract.abi) || !has_function(contract.abi)) return missing_function("ownership", contract.abi);
-    }
     for (const auto &record : result.exposed) {
         if (record.status != LoweringStatus::lowered) continue;
         if (!valid(record.abi) || !has_type(record.abi)) return missing_type(record.name, record.abi);
@@ -538,6 +530,36 @@ bool apply_lowering_contracts(const LoweringResult &result, AbiModule &module, s
         for (const auto &method : record.methods)
             if (!has_function(method.abi)) return missing_function(record.name + "::" + method.name, method.abi);
     }
+    return true;
+}
+
+bool apply_lowering_contracts(const LoweringResult &result, AbiModule &module, std::string &error) {
+    if (result.types.empty() && result.functions.empty() && result.ownership.empty() && result.exposed.empty())
+        return true;
+
+    std::unordered_map<uint64_t, std::unordered_set<uint64_t>> type_ids;
+    for (const auto &type : module.types)
+        type_ids[type.id.lo].insert(type.id.hi);
+
+    std::unordered_map<uint64_t, std::unordered_set<uint64_t>> function_ids;
+    std::vector<uint32_t> parameter_base(module.functions.size(), 0);
+    uint32_t running = 0;
+    for (size_t i = 0; i < module.functions.size(); ++i) {
+        const auto &function = module.functions[i];
+        function_ids[function.signature.lo].insert(function.signature.hi);
+        parameter_base[i] = running;
+        running += static_cast<uint32_t>(function.parameters.size());
+    }
+
+    const auto has_type = [&](Hash128 id) {
+        const auto lo = type_ids.find(id.lo);
+        return lo != type_ids.end() && lo->second.count(id.hi) != 0;
+    };
+    const auto has_function = [&](Hash128 id) {
+        const auto lo = function_ids.find(id.lo);
+        return lo != function_ids.end() && lo->second.count(id.hi) != 0;
+    };
+    if (!validate_lowering_references(result, module, error)) return false;
 
     const auto function_at = [&](Hash128 signature) -> const Function * {
         for (const auto &function : module.functions)

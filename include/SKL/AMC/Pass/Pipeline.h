@@ -22,11 +22,21 @@
 
 namespace amc::pass {
 
-// A3 standard pipeline: validate the ABI view, then run semantic lowering into
-// the explicit LoweringResult carried by ir::Module.
-Pipeline make_default_pipeline();
+struct PipelineOptions {
+    bool verify_semantic = true;
+    bool verify_abi = true;
+    bool lowering = true;
+    bool verify_lowering = true;
+    bool strict = true;
+};
 
-bool run_default_pipeline(ir::Module &module, diagnostics::DiagnosticList &diagnostics, Context context = {});
+// A3 standard pipeline: validate the semantic and ABI views, run lowering, then
+// verify the resulting lowering references.
+Pipeline make_default_pipeline();
+Pipeline make_pipeline(const PipelineOptions &options);
+
+bool run_default_pipeline(
+    ir::Module &module, diagnostics::DiagnosticList &diagnostics, const PipelineOptions &options = {});
 
 }   // namespace amc::pass
 

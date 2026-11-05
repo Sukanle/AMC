@@ -21,18 +21,24 @@
 
 namespace amc::pass {
 
-Pipeline make_default_pipeline() {
+Pipeline make_default_pipeline() { return make_pipeline({}); }
+
+Pipeline make_pipeline(const PipelineOptions &options) {
     Pipeline pipeline;
-    pipeline.passes.push_back({"semantic-verify", verify_semantic});
-    pipeline.passes.push_back({"abi-verify", verify_abi});
-    pipeline.passes.push_back({"lowering",
-        [](ir::Module &module, Context &, diagnostics::DiagnosticList &out) { return lower_pass(module, out); }});
-    pipeline.passes.push_back({"lowering-verify", verify_lowering});
+    if (options.verify_semantic) pipeline.passes.push_back({"semantic-verify", verify_semantic});
+    if (options.verify_abi) pipeline.passes.push_back({"abi-verify", verify_abi});
+    if (options.lowering)
+        pipeline.passes.push_back({"lowering",
+            [](ir::Module &module, Context &, diagnostics::DiagnosticList &out) { return lower_pass(module, out); }});
+    if (options.verify_lowering) pipeline.passes.push_back({"lowering-verify", verify_lowering});
     return pipeline;
 }
 
-bool run_default_pipeline(ir::Module &module, diagnostics::DiagnosticList &diagnostics, Context context) {
-    const Pipeline pipeline = make_default_pipeline();
+bool run_default_pipeline(
+    ir::Module &module, diagnostics::DiagnosticList &diagnostics, const PipelineOptions &options) {
+    const Pipeline pipeline = make_pipeline(options);
+    Context context;
+    context.strict = options.strict;
     return pipeline.run(module, context, diagnostics);
 }
 

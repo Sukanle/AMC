@@ -35,9 +35,8 @@ bool verify_lowering(ir::Module &module, Context &context, diagnostics::Diagnost
         && module.lowering.ownership.empty()
         && module.lowering.exposed.empty())
         return true;
-    amc::AbiModule checked = module.abi;
     std::string error;
-    if (amc::ir::apply_lowering_contracts(module.lowering, checked, error)) return true;
+    if (amc::ir::validate_lowering_references(module.lowering, module.abi, error)) return true;
     diagnostics::add_error(diagnostics, "lowering_invalid", "pass", error);
     return false;
 }

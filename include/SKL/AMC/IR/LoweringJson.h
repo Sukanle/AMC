@@ -40,6 +40,11 @@ bool load_lowering_sidecar(const std::string &artifact_path, LoweringResult &res
 // a function name. A lowered record that references an ABI identity absent from
 // the artifact is a hard error: it means the sidecar and artifact came from
 // different builds.
+// Read-only consistency check: every lowered entity that claims to be lowered
+// must resolve to a TypeID/signature in the artifact. This is shared by the
+// Pass pipeline and the backend application path.
+bool validate_lowering_references(const LoweringResult &result, const AbiModule &module, std::string &error);
+
 bool apply_lowering_contracts(const LoweringResult &result, AbiModule &module, std::string &error);
 
 }   // namespace amc::ir

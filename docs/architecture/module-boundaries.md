@@ -255,9 +255,10 @@ and `amc-boundary-edges`.
 - `IR/Artifact` loads `.abix` + optional `.semantic` / `.lowering` into one
   `ir::Module`; backends use that boundary instead of repeating sidecar paths
 - `Pass/Semantic` validates semantic references, `Pass/Verify` owns ABI and
-  lowering-reference validation, `Pass/Compatibility` wraps contract drift,
-  `Pass/TypeMapping` owns mapping reports, and `Pass/Pipeline` composes
-  semantic/ABI verification + lowering + lowering verification
+  read-only lowering-reference validation, `Pass/Compatibility` wraps contract
+  drift, `Pass/TypeMapping` owns mapping reports, and `Pass/Pipeline` composes
+  semantic/ABI verification + lowering + lowering verification with selectable
+  pass/strict options
 - `Compilation/Build` runs the standard pass pipeline; `amc verify`, `amc diff`
   and `amc compatibility` use Pass entry points; `amc query --compatible` stays
   on the Query-layer Core helper to preserve the Query -> Pass boundary
