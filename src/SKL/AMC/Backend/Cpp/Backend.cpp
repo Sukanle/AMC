@@ -189,7 +189,13 @@ int backend(const char *input, const char *output) {
         "    TypeId auxiliary;\n"
         "}};\n"
         "template <typename Source, typename Target> struct MapPrivate;\n"
-        "template <typename T> struct TypeTraits;\n");
+        "template <typename T> struct TypeTraits;\n"
+        "template <typename T, typename E> struct Result {{\n"
+        "    bool ok = false;\n"
+        "    T value{{}};\n"
+        "    E error{{}};\n"
+        "    explicit operator bool() const noexcept {{ return ok; }}\n"
+        "}};\n");
 
     for (const auto &type : m.types) {
         if (amc::lang::cancellation_requested()) return amc::lang::kCapabilityCancelled;
@@ -663,6 +669,92 @@ int backend(const char *input, const char *output) {
                     params, function->name, args.empty() ? "" : ", " + args);
         }
         o.print("private:\n    {} ptr_ = nullptr;\n}};\n", self_type);
+    }
+
+    // Error-boundary wrappers: turn the declared C status into a typed
+    // `Result<T, E>` instead of exposing a bare status code.
+    for (const auto &record : m.errors) {
+        if (record.function_index >= m.functions.size()) continue;
+        const amc::Function &function = m.functions[record.function_index];
+        const auto find_type = [&](amc::Hash128 id) -> const amc::Type * {
+            for (const auto &type : m.types)
+                if (type.id == id) return &type;
+            return nullptr;
+        };
+        const auto pointee_of = [&](amc::Hash128 id) -> amc::Hash128 {
+            for (const auto &ref : m.pointees)
+                if (ref.pointer == id) return ref.pointee;
+            return {};
+        };
+        const auto parameter_name = [](const amc::Parameter &parameter, size_t index) {
+            return parameter.name.empty() ? fmt::format("arg{}", index) : cpp_name(parameter.name);
+        };
+
+        std::string value_type, status_type;
+        std::string status_access, value_access;
+        std::string params, call_args;
+        if (record.status_source == amc::StatusSource::return_field) {
+            const amc::Type *result = find_type(function.return_type);
+            if (result == nullptr
+                || record.status_parameter >= result->field_count
+                || record.value_parameter >= result->field_count)
+                continue;
+            const auto &status_field = m.fields[result->field_begin + record.status_parameter];
+            const auto &value_field = m.fields[result->field_begin + record.value_parameter];
+            value_type = cpp_type_of(m, value_field.type_id);
+            status_type = cpp_type_of(m, status_field.type_id);
+            status_access = cpp_name(status_field.name);
+            value_access = cpp_name(value_field.name);
+            for (size_t i = 0; i < function.parameters.size(); ++i) {
+                if (i != 0) {
+                    params += ", ";
+                    call_args += ", ";
+                }
+                const std::string name = parameter_name(function.parameters[i], i);
+                params += cpp_type_of(m, function.parameters[i].type_id) + " " + name;
+                call_args += name;
+            }
+        } else if (record.status_source == amc::StatusSource::return_value) {
+            if (record.value_parameter == UINT32_MAX || record.value_parameter >= function.parameters.size()) continue;
+            const amc::Hash128 value_id = pointee_of(function.parameters[record.value_parameter].type_id);
+            if (value_id.lo == 0 && value_id.hi == 0) continue;
+            value_type = cpp_type_of(m, value_id);
+            status_type = cpp_type_of(m, function.return_type);
+            for (size_t i = 0; i < function.parameters.size(); ++i) {
+                if (i == record.value_parameter) {
+                    call_args += (call_args.empty() ? "" : ", ") + std::string("&value");
+                    continue;
+                }
+                if (!params.empty()) {
+                    params += ", ";
+                    call_args += ", ";
+                }
+                const std::string name = parameter_name(function.parameters[i], i);
+                params += cpp_type_of(m, function.parameters[i].type_id) + " " + name;
+                call_args += name;
+            }
+        } else {
+            continue;
+        }
+
+        o.print("\n// Typed error boundary for `{}`.\n", function.name);
+        o.print("inline Result<{}, {}> {}_result({}) {{\n", value_type, status_type, function.name, params);
+        if (record.status_source == amc::StatusSource::return_value) o.print("    {} value{{}};\n", value_type);
+        if (record.status_source == amc::StatusSource::return_field)
+            o.print("    auto raw = {}({});\n", function.name, call_args);
+        else
+            o.print("    auto status = {}({});\n", function.name, call_args);
+        if (record.status_source == amc::StatusSource::return_field)
+            o.print("    if (raw.{} == static_cast<{}>({})) return {{true, raw.{}, {{}}}};\n", status_access,
+                status_type, record.success_value, value_access);
+        else
+            o.print("    if (status == static_cast<{}>({})) return {{true, value, {{}}}};\n", status_type,
+                record.success_value);
+        if (record.status_source == amc::StatusSource::return_field)
+            o.print("    return {{false, {{}}, raw.{}}};\n", status_access);
+        else
+            o.print("    return {{false, {{}}, status}};\n");
+        o.print("}}\n");
     }
 
     o.print(

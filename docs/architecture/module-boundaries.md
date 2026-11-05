@@ -166,9 +166,11 @@ and `amc-boundary-edges`.
 - Zig projects a `<Type>Handle` with `create` / `deinit` / typed methods and now
   emits an opaque blob for `type_opaque` records instead of leaking private
   fields
-- `tests/interop/expose_test.py` drives the same exposed contract through Rust
-  and C++ runtime consumers, and compiles the Zig consumer; all thunk names are
-  resolved from signatures, never parsed
+- Rust, C++ and Zig project declared error boundaries as typed results
+  (`Result<T, E>` / `AmcResult(T, E)`) instead of a bare status code
+- `tests/interop/expose_test.py` drives the same exposed contract and typed
+  Result wrappers through Rust, C++ and Zig runtime consumers; all thunk names
+  are resolved from signatures, never parsed
 
 ## Current → Target Mapping
 

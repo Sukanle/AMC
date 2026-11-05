@@ -282,9 +282,12 @@ def main() -> int:
                 '    counter.deinit();\n'
                 '}\n')
             zig_bin = os.path.join(work, exe_name("zig_handle_consumer"))
-            r = run([zig, "build-exe", "zig_handle_consumer.zig", "-L.", "-lcounter",
+            r = run([zig, "build-exe", "zig_handle_consumer.zig", "-L.", "-lcounter", "-lc",
                      "-rpath", work, "-femit-bin=" + zig_bin], cwd=work)
-            check(r.returncode == 0, "the Zig handle consumer compiles", (r.stdout + r.stderr)[-400:])
+            if check(r.returncode == 0, "the Zig handle consumer compiles", (r.stdout + r.stderr)[-400:]):
+                r = run([zig_bin], env=runtime_env(work))
+                check(r.returncode == 0, "the Zig handle consumer ran through the generated wrapper",
+                      (r.stdout + r.stderr)[-400:])
     else:
         print("  [SKIP] Zig handle consumer (zig not available or unsupported platform)")
 
@@ -335,6 +338,64 @@ def main() -> int:
     r = run([std_consumer], env=env)
     check(r.returncode == 0 and "expose std: OK" in r.stdout,
           "SequenceView / StringView / Result mapped through the exposed API", (r.stdout + r.stderr)[-400:])
+
+    # The same Result contract is projected to C++ and Zig as a typed wrapper.
+    std_abix = os.path.join(work, "std_out", "expose_std.abix")
+    std_cpp_gen = os.path.join(work, "std_gen_cpp")
+    os.makedirs(std_cpp_gen, exist_ok=True)
+    r = run([amc, "generate", std_abix, "-l", "cpp", "-o", std_cpp_gen])
+    if check(r.returncode == 0, "amc generate -l cpp for the ABIX-STD api", (r.stdout + r.stderr)[-400:]):
+        std_cpp_header = open(os.path.join(std_cpp_gen, "amc_generated.hpp"), encoding="utf-8").read()
+        check("abix_Metrics_divide_result" in std_cpp_header and "struct Result" in std_cpp_header,
+              "the C++ projection emits a typed Result wrapper")
+        std_cpp_src = os.path.join(work, "std_cpp_consumer.cpp")
+        open(std_cpp_src, "w", encoding="utf-8").write(
+            '#include "std_api.hpp"\n'
+            '#include "std_gen_cpp/amc_generated.hpp"\n'
+            'int main() {\n'
+            '    auto metrics = amc_generated::MetricsHandle::create();\n'
+            '    if (!metrics) return 1;\n'
+            '    auto ok = amc_generated::abix_Metrics_divide_result(metrics.native_handle(), 10, 2);\n'
+            '    if (!ok || ok.value != 5) return 2;\n'
+            '    auto err = amc_generated::abix_Metrics_divide_result(metrics.native_handle(), 10, 0);\n'
+            '    if (err || err.error != 1) return 3;\n'
+            '    return 0;\n'
+            '}\n')
+        std_cpp_bin = os.path.join(work, exe_name("std_cpp_consumer"))
+        std_cpp_link = ["-L" + work, "-lmetrics"]
+        if not IS_WINDOWS:
+            std_cpp_link.append("-Wl,-rpath," + work)
+        r = run([cxx, "-std=c++17", std_cpp_src, "-I" + work, *include_flags(source_root), *std_cpp_link,
+                 "-o", std_cpp_bin])
+        if check(r.returncode == 0, "the C++ typed Result consumer compiles", r.stderr[-400:]):
+            r = run([std_cpp_bin], env=runtime_env(work))
+            check(r.returncode == 0, "the C++ typed Result consumer ran", (r.stdout + r.stderr)[-400:])
+
+    if zig and not IS_WINDOWS and not IS_MACOS:
+        std_zig_gen = os.path.join(work, "std_gen_zig")
+        os.makedirs(std_zig_gen, exist_ok=True)
+        r = run([amc, "generate", std_abix, "-l", "zig", "-o", std_zig_gen])
+        if check(r.returncode == 0, "amc generate -l zig for the ABIX-STD api", (r.stdout + r.stderr)[-400:]):
+            std_zig_header = open(os.path.join(std_zig_gen, "amc_generated.zig"), encoding="utf-8").read()
+            check("AmcResult" in std_zig_header and "abix_Metrics_divide_result" in std_zig_header,
+                  "the Zig projection emits a typed Result wrapper")
+            std_zig_src = os.path.join(work, "std_zig_consumer.zig")
+            open(std_zig_src, "w", encoding="utf-8").write(
+                'const abi = @import("std_gen_zig/amc_generated.zig");\n'
+                'pub fn main() !void {\n'
+                '    var metrics = abi.MetricsHandle.create() orelse return error.CreateFailed;\n'
+                '    const ok = abi.abix_Metrics_divide_result(metrics.ptr, 10, 2);\n'
+                '    switch (ok) { .ok => |v| { if (v != 5) return error.BadValue; }, .err => return error.Unexpected }\n'
+                '    const err = abi.abix_Metrics_divide_result(metrics.ptr, 10, 0);\n'
+                '    switch (err) { .ok => return error.Unexpected, .err => |e| { if (e != 1) return error.BadStatus; } }\n'
+                '    metrics.deinit();\n'
+                '}\n')
+            std_zig_bin = os.path.join(work, exe_name("std_zig_consumer"))
+            r = run([zig, "build-exe", "std_zig_consumer.zig", "-L.", "-lmetrics", "-lc",
+                     "-rpath", work, "-femit-bin=" + std_zig_bin], cwd=work)
+            if check(r.returncode == 0, "the Zig typed Result consumer compiles", (r.stdout + r.stderr)[-400:]):
+                r = run([std_zig_bin], env=runtime_env(work))
+                check(r.returncode == 0, "the Zig typed Result consumer ran", (r.stdout + r.stderr)[-400:])
 
     # Native↔ABIX-STD parameter adaptation: a declared [[adapt]] maps a native
     # STL parameter type onto an ABIX-STD boundary type, so the frontend exposes

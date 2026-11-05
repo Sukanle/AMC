@@ -144,8 +144,10 @@ CTest 同时运行 `--contracts-only` 和 `--strict`：
 - C++ 投影 move-only RAII `<Type>Handle`，包含工厂、类型化方法和 thunk 的 C linkage 声明
 - Zig 投影 `<Type>Handle`（create/deinit/类型化方法），并对 `type_opaque` 记录输出
   opaque blob，不再泄露私有字段
-- `tests/interop/expose_test.py` 用同一 exposed 契约运行 Rust、C++ 消费者并编译 Zig
-  消费者；thunk 名称全部通过签名解析，不解析符号拼写
+- Rust / C++ / Zig 把声明的错误边界投影为类型化结果
+  （`Result<T, E>` / `AmcResult(T, E)`），而不是裸状态码
+- `tests/interop/expose_test.py` 用同一 exposed 契约和类型化 Result wrapper 运行
+  Rust、C++、Zig 消费者；thunk 名称全部通过签名解析，不解析符号拼写
 
 ## 当前 → 目标映射
 

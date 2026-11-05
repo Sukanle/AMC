@@ -446,6 +446,97 @@ void emit_exposed_handles(Output &o, const Projector &p) {
     }
 }
 
+void emit_error_wrappers(Output &o, const Projector &p) {
+    if (p.m.errors.empty()) return;
+    o.print("\n// Typed error boundary: a declared C status becomes a Result union.\n");
+    o.print("pub fn AmcResult(comptime T: type, comptime E: type) type {{\n");
+    o.print("    return union(enum) {{ ok: T, err: E }};\n");
+    o.print("}}\n");
+    for (const auto &record : p.m.errors) {
+        if (record.function_index >= p.m.functions.size()) continue;
+        const amc::Function &function = p.m.functions[record.function_index];
+        const auto find_type = [&](amc::Hash128 id) -> const amc::Type * {
+            for (const auto &type : p.m.types)
+                if (type.id == id) return &type;
+            return nullptr;
+        };
+        const auto pointee_of = [&](amc::Hash128 id) -> amc::Hash128 {
+            for (const auto &ref : p.m.pointees)
+                if (ref.pointer == id) return ref.pointee;
+            return {};
+        };
+        const auto parameter_name = [](const amc::Parameter &parameter, size_t index) {
+            return parameter.name.empty() ? fmt::format("arg{}", index) : zig_ident(parameter.name);
+        };
+
+        std::string value_type, status_type;
+        std::string status_access, value_access;
+        std::string params, call_args;
+        if (record.status_source == amc::StatusSource::return_field) {
+            const amc::Type *result = find_type(function.return_type);
+            if (result == nullptr
+                || record.status_parameter >= result->field_count
+                || record.value_parameter >= result->field_count)
+                continue;
+            const auto &status_field = p.m.fields[result->field_begin + record.status_parameter];
+            const auto &value_field = p.m.fields[result->field_begin + record.value_parameter];
+            value_type = p.field_type(value_field.type_id);
+            status_type = p.field_type(status_field.type_id);
+            status_access = zig_ident(status_field.name);
+            value_access = zig_ident(value_field.name);
+            for (size_t i = 0; i < function.parameters.size(); ++i) {
+                if (i != 0) {
+                    params += ", ";
+                    call_args += ", ";
+                }
+                const std::string name = parameter_name(function.parameters[i], i);
+                params += fmt::format("{}: {}", name, p.field_type(function.parameters[i].type_id));
+                call_args += name;
+            }
+        } else if (record.status_source == amc::StatusSource::return_value) {
+            if (record.value_parameter == UINT32_MAX || record.value_parameter >= function.parameters.size()) continue;
+            const amc::Hash128 value_id = pointee_of(function.parameters[record.value_parameter].type_id);
+            if (value_id.lo == 0 && value_id.hi == 0) continue;
+            value_type = p.field_type(value_id);
+            status_type = p.field_type(function.return_type);
+            for (size_t i = 0; i < function.parameters.size(); ++i) {
+                if (i == record.value_parameter) {
+                    call_args += (call_args.empty() ? "" : ", ") + std::string("&value");
+                    continue;
+                }
+                if (!params.empty()) {
+                    params += ", ";
+                    call_args += ", ";
+                }
+                const std::string name = parameter_name(function.parameters[i], i);
+                params += fmt::format("{}: {}", name, p.field_type(function.parameters[i].type_id));
+                call_args += name;
+            }
+        } else {
+            continue;
+        }
+
+        o.print(
+            "pub fn {}_result({}) AmcResult({}, {}) {{\n", zig_ident(function.name), params, value_type, status_type);
+        if (record.status_source == amc::StatusSource::return_value)
+            o.print("    var value: {} = undefined;\n", value_type);
+        if (record.status_source == amc::StatusSource::return_field)
+            o.print("    const raw = {}({});\n", zig_ident(function.name), call_args);
+        else
+            o.print("    const status = {}({});\n", zig_ident(function.name), call_args);
+        if (record.status_source == amc::StatusSource::return_field)
+            o.print("    if (raw.{} == @as({}, {})) return .{{ .ok = raw.{} }};\n", status_access, status_type,
+                record.success_value, value_access);
+        else
+            o.print("    if (status == @as({}, {})) return .{{ .ok = value }};\n", status_type, record.success_value);
+        if (record.status_source == amc::StatusSource::return_field)
+            o.print("    return .{{ .err = raw.{} }};\n", status_access);
+        else
+            o.print("    return .{{ .err = status }};\n");
+        o.print("}}\n");
+    }
+}
+
 void emit_layout_checks(Output &o, const Projector &p) {
     bool any = false;
     for (const auto &type : p.m.types) {
@@ -559,6 +650,7 @@ std::string generate_projection(const amc::AbiModule &module, const amc::ir::Low
     }
     emit_functions(o, projector);
     emit_exposed_handles(o, projector);
+    emit_error_wrappers(o, projector);
     emit_layout_checks(o, projector);
     std::string error;
     if (!emit_metadata_region(o, module, error)) fmt::print(stderr, "{}\n", error);
