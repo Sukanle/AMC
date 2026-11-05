@@ -91,10 +91,11 @@ IR 还承载 Type/Interface/Method Identity、所有权、生命周期、错误�
 
 ## A4 进度
 
-- `ExportSpec`、`parse_exports`、`apply_target_and_layout` 已迁入
-  `Compilation/Config`（`amc-compilation`）
-- build/verify/generate 已改为调用 `amc::compilation::*`，不再通过 CLI 伞头解析配置
-- 剩余 CLI → IR 边主要是 build pipeline 和 CLI dispatcher，仍作为 A4 allowlist 跟踪
+- `ExportSpec`、`parse_exports`、`apply_target_and_layout` 已迁入 `Compilation/Config`
+- Provider manifest/IPC/dispatch/generate 已迁入 `Compilation/Provider`
+- build pipeline 已迁入 `Compilation/Build`；`.abix.meta` 输出迁入 `Compilation/Meta`
+- CLI 共享格式化/诊断 helper 迁入 `CLI/Support`；CLI.h 不再把 IR 拖进接口层
+- 未登记禁止边为 0，allowlist 为空
 
 ## 兼容转发头
 
@@ -113,13 +114,7 @@ python3 tools/check_module_boundaries.py --contracts-only
 临时例外记录在 `tools/module_boundary_allowlist.txt`，每行格式为
 `file|from|to|until|reason`。`until` 指定移除该边的阶段；过期条目会在报告中提示，避免 allowlist 腐化。`--strict` 接受已登记例外，只对未登记的禁止边失败。
 
-当前例外：
-
-```text
-include/SKL/AMC/CLI/CLI.h: Interfaces -> IR [until A4]
-src/SKL/AMC/CLI/CLI.cpp: Interfaces -> IR [until A4]
-src/SKL/AMC/CLI/Build.cpp: Interfaces -> IR [until A4]
-```
+当前例外：无。allowlist 文件刻意保持为空。
 
 CTest 同时运行 `--contracts-only` 和 `--strict`：
 `amc-boundary-contracts`、`amc-boundary-edges`。

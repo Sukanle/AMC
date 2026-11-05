@@ -13,8 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "SKL/AMC/CLI/CLI.h"
+#include "SKL/AMC/Compilation/Build.h"
 #include "SKL/AMC/Compilation/Config.h"
+#include "SKL/AMC/Compilation/Meta.h"
+#include "SKL/AMC/Compilation/Provider.h"
+#include "SKL/AMC/Util/Error.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -26,7 +29,11 @@
 
 #include "SKL/AMC/Core/Cache.h"
 
-namespace amc::cli {
+namespace amc::compilation {
+namespace fs = std::filesystem;
+using amc::util::fail;
+using amc::util::read_error_category;
+using amc::util::usage_error;
 
 namespace {
 
@@ -553,7 +560,7 @@ bool copy_file(const fs::path &from, const fs::path &to, std::string &error) {
 
 }   // namespace
 
-int cmd_build(char **args, int arg_count, const fs::path &provider) {
+int build_command(char **args, int arg_count, const fs::path &provider) {
     const std::string command = args[1];
     if (command == "build") {
         fs::path config_path;
@@ -583,14 +590,10 @@ int cmd_build(char **args, int arg_count, const fs::path &provider) {
             } else if (config_path.empty()) {
                 config_path = argument;
             } else {
-                print_usage();
-                return 2;
+                return usage_error("unexpected build argument: " + argument);
             }
         }
-        if (config_path.empty()) {
-            print_usage();
-            return 2;
-        }
+        if (config_path.empty()) return usage_error("build expects -c <file>.abic.toml");
         try {
             const auto config = toml::parse_file(config_path.string());
             const auto *imports = config["import"].as_array();
@@ -604,7 +607,7 @@ int cmd_build(char **args, int arg_count, const fs::path &provider) {
             const auto *import_table = (*imports)[0].as_table();
             const std::string language =
                 import_table ? import_table->get("language")->value_or(std::string("cpp")) : "cpp";
-            const fs::path frontend = provider_executable(provider, language);
+            const fs::path frontend = amc::compilation::provider_executable(provider, language);
             const fs::path base = build_dir.empty() ? fs::absolute(config_path).parent_path() : build_dir;
             const fs::path temporary = base / ".amc" / "frontend.abix";
             const fs::path semantic_temporary = fs::path(temporary.string() + ".semantic");
@@ -713,7 +716,7 @@ int cmd_build(char **args, int arg_count, const fs::path &provider) {
                 }
             }
             if (frontend_ran) {
-                if (!dispatch_provider(frontend, "frontend", config_path, temporary, error))
+                if (!amc::compilation::dispatch_provider(frontend, "frontend", config_path, temporary, error))
                     return fail(amc::ErrorCategory::provider, "frontend", error, config_path.string());
             }
 
@@ -1009,4 +1012,4 @@ int cmd_build(char **args, int arg_count, const fs::path &provider) {
     return usage_error(command + ": unsupported subcommand");
 }
 
-}   // namespace amc::cli
+}   // namespace amc::compilation

@@ -13,13 +13,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "SKL/AMC/CLI/CLI.h"
+#include "SKL/AMC/CLI/Support.h"
+#include "SKL/AMC/Core/Adapter.h"
+#include "SKL/AMC/Core/Cache.h"
+#include "SKL/AMC/Core/Context.h"
+#include "SKL/AMC/Core/Core.h"
+#include "SKL/AMC/Core/ELF.h"
+#include "SKL/AMC/Core/Error.h"
+#include "SKL/AMC/Core/Lua.h"
+#include "SKL/AMC/Core/Metadata.h"
+#include "SKL/AMC/Core/Query.h"
+#include "SKL/AMC/Core/Symbol.h"
+#include "SKL/AMC/Core/Verify.h"
+#include "SKL/AMC/Util/Error.h"
 #include "SKL/AMC/Compilation/Config.h"
+#include "SKL/AMC/Compilation/Provider.h"
 
+#include <filesystem>
 #include <string>
 #include <vector>
 
 #include <fmt/format.h>
+
+namespace fs = std::filesystem;
+using amc::util::fail;
+using amc::util::g_error_format;
+using amc::util::read_error_category;
+using amc::util::usage_error;
 
 namespace amc::cli {
 
@@ -74,10 +94,8 @@ int cmd_verify(char **args, int arg_count, const fs::path &provider) {
             return result.consistent ? 0 : 1;
         }
 
-        if (config_path.empty()) {
-            print_usage();
-            return 2;
-        }
+        if (config_path.empty())
+            return usage_error("verify expects <contract.abix> <implementation.abix> or -c <file>.abic.toml");
 
         try {
             const auto config = toml::parse_file(config_path.string());
@@ -92,7 +110,7 @@ int cmd_verify(char **args, int arg_count, const fs::path &provider) {
             const auto *import_table = (*imports)[0].as_table();
             const std::string language =
                 import_table ? import_table->get("language")->value_or(std::string("cpp")) : "cpp";
-            const fs::path frontend = provider_executable(provider, language);
+            const fs::path frontend = amc::compilation::provider_executable(provider, language);
 
             const fs::path base = build_dir.empty() ? fs::absolute(config_path).parent_path() : build_dir;
             const fs::path temporary = base / ".amc" / "verify-frontend.abix";
@@ -101,7 +119,7 @@ int cmd_verify(char **args, int arg_count, const fs::path &provider) {
             if (ec)
                 return fail(
                     amc::ErrorCategory::io, "verify", "cannot create build directory", base.string(), ec.message());
-            if (!dispatch_provider(frontend, "frontend", config_path, temporary, error))
+            if (!amc::compilation::dispatch_provider(frontend, "frontend", config_path, temporary, error))
                 return fail(amc::ErrorCategory::provider, "frontend", error, config_path.string());
 
             amc::AbiModule full;

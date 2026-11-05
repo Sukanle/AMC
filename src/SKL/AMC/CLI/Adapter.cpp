@@ -13,14 +13,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "SKL/AMC/CLI/CLI.h"
+#include "SKL/AMC/CLI/Support.h"
+#include "SKL/AMC/Core/Adapter.h"
+#include "SKL/AMC/Core/Cache.h"
+#include "SKL/AMC/Core/Context.h"
+#include "SKL/AMC/Core/Core.h"
+#include "SKL/AMC/Core/ELF.h"
+#include "SKL/AMC/Core/Error.h"
+#include "SKL/AMC/Core/Lua.h"
+#include "SKL/AMC/Core/Metadata.h"
+#include "SKL/AMC/Core/Query.h"
+#include "SKL/AMC/Core/Symbol.h"
+#include "SKL/AMC/Core/Verify.h"
+#include "SKL/AMC/Util/Error.h"
 
 #include <exception>
+#include <filesystem>
 #include <string>
 #include <vector>
 
 #include <fmt/format.h>
 #include <fmt/os.h>
+
+namespace fs = std::filesystem;
+using amc::util::fail;
+using amc::util::g_error_format;
+using amc::util::read_error_category;
+using amc::util::usage_error;
 
 namespace amc::cli {
 

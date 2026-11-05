@@ -13,15 +13,35 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "SKL/AMC/CLI/CLI.h"
+#include "SKL/AMC/CLI/Support.h"
+#include "SKL/AMC/Core/Adapter.h"
+#include "SKL/AMC/Core/Cache.h"
+#include "SKL/AMC/Core/Context.h"
+#include "SKL/AMC/Core/Core.h"
+#include "SKL/AMC/Core/ELF.h"
+#include "SKL/AMC/Core/Error.h"
+#include "SKL/AMC/Core/Lua.h"
+#include "SKL/AMC/Core/Metadata.h"
+#include "SKL/AMC/Core/Query.h"
+#include "SKL/AMC/Core/Symbol.h"
+#include "SKL/AMC/Core/Verify.h"
+#include "SKL/AMC/Util/Error.h"
 #include "SKL/AMC/Compilation/Config.h"
+#include "SKL/AMC/Compilation/Provider.h"
 
 #include <exception>
+#include <filesystem>
 #include <string>
 #include <vector>
 
 #include <fmt/format.h>
 #include <fmt/os.h>
+
+namespace fs = std::filesystem;
+using amc::util::fail;
+using amc::util::g_error_format;
+using amc::util::read_error_category;
+using amc::util::usage_error;
 
 namespace amc::cli {
 
@@ -62,31 +82,31 @@ int cmd_generate(char **args, int arg_count, const fs::path &provider) {
         if (language == "cpp") {
             if (command == "backend") {
                 std::string error;
-                if (!dispatch_provider(provider, "backend", args[2], args[6], error))
+                if (!amc::compilation::dispatch_provider(provider, "backend", args[2], args[6], error))
                     return fail(amc::ErrorCategory::provider, "backend", error, args[2]);
                 return 0;
             }
-            return generate(provider, args[2], args[6], ".hpp");
+            return amc::compilation::generate(provider, args[2], args[6], ".hpp");
         }
         if (language == "rust") {
-            const fs::path rust_provider = provider_executable(provider, "rust");
+            const fs::path rust_provider = amc::compilation::provider_executable(provider, "rust");
             if (command == "backend") {
                 std::string error;
-                if (!dispatch_provider(rust_provider, "backend", args[2], args[6], error))
+                if (!amc::compilation::dispatch_provider(rust_provider, "backend", args[2], args[6], error))
                     return fail(amc::ErrorCategory::provider, "backend", error, args[2]);
                 return 0;
             }
-            return generate(rust_provider, args[2], args[6], ".rs");
+            return amc::compilation::generate(rust_provider, args[2], args[6], ".rs");
         }
         if (language == "zig") {
-            const fs::path zig_provider = provider_executable(provider, "zig");
+            const fs::path zig_provider = amc::compilation::provider_executable(provider, "zig");
             if (command == "backend") {
                 std::string error;
-                if (!dispatch_provider(zig_provider, "backend", args[2], args[6], error))
+                if (!amc::compilation::dispatch_provider(zig_provider, "backend", args[2], args[6], error))
                     return fail(amc::ErrorCategory::provider, "backend", error, args[2]);
                 return 0;
             }
-            return generate(zig_provider, args[2], args[6], ".zig");
+            return amc::compilation::generate(zig_provider, args[2], args[6], ".zig");
         }
         return usage_error(command + " expects -l cpp|lua|rust|zig -o <directory|file>");
     }
@@ -113,8 +133,8 @@ int cmd_frontend(char **args, int arg_count, const fs::path &provider) {
         if (language.empty() || config_path.empty() || output_path.empty())
             return usage_error("frontend expects -l <language> -c <config> -o <output>");
         std::string error;
-        const fs::path selected = provider_executable(provider, language);
-        if (!dispatch_provider(selected, "frontend", config_path, output_path, error))
+        const fs::path selected = amc::compilation::provider_executable(provider, language);
+        if (!amc::compilation::dispatch_provider(selected, "frontend", config_path, output_path, error))
             return fail(amc::ErrorCategory::provider, "frontend", error, config_path.string());
         try {
             const toml::table config = toml::parse_file(config_path.string());

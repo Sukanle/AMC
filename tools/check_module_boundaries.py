@@ -45,7 +45,7 @@ ALLOWED = {
     "Platform": {"IR", "Diagnostics", "Support", "Platform"},
     "Artifact": {"IR", "Diagnostics", "Support", "Artifact"},
     "Query": {"IR", "Diagnostics", "Support", "Query"},
-    "Support": {"Support"},
+    "Support": {"Support", "IR", "Artifact", "Diagnostics"},
     "Other": None,
 }
 
@@ -80,7 +80,16 @@ def module_for_path(path: Path, root: Path) -> str:
         return "Frontend"
     if "/Tool/Dump/" in rel or "/Query/" in rel:
         return "Query"
-    if "/CLI/" in rel or "/Tool/MCP/" in rel or "/Interfaces/" in rel or rel.endswith("main.cpp"):
+    if "/CLI/" in rel:
+        cli_name = Path(rel).name
+        if cli_name in {"Support.cpp", "Support.h"}:
+            return "Support"
+        if cli_name in {"Query.cpp", "Context.cpp", "Metadata.cpp", "Symbols.cpp"}:
+            return "Query"
+        if cli_name in {"Verify.cpp", "Diff.cpp", "Adapter.cpp", "Generate.cpp", "Cache.cpp"}:
+            return "Compilation"
+        return "Interfaces"
+    if "/Tool/MCP/" in rel or "/Interfaces/" in rel or rel.endswith("main.cpp"):
         return "Interfaces"
     if "/Core/" in rel:
         return "IR"
@@ -110,6 +119,8 @@ def module_for_include(include: str) -> str | None:
         return "Query"
     if include.startswith("SKL/AMC/Tool/MCP"):
         return "Interfaces"
+    if include == "SKL/AMC/CLI/Support.h":
+        return "Support"
     if include.startswith("SKL/AMC/CLI/") or include.startswith("SKL/AMC/Tool/"):
         return "Interfaces"
     return None

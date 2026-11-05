@@ -6,6 +6,3 @@
 # allowlist stays clean.
 #
 # A4: the CLI will call the Compilation API instead of reading IR directly.
-include/SKL/AMC/CLI/CLI.h|Interfaces|IR|A4|CLI will call Compilation instead of IR
-src/SKL/AMC/CLI/CLI.cpp|Interfaces|IR|A4|CLI will call Compilation instead of IR
-src/SKL/AMC/CLI/Build.cpp|Interfaces|IR|A4|build pipeline moves into Compilation

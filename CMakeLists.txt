@@ -258,9 +258,13 @@ set_target_properties(
 
 # A4 Compilation module: configuration parsing and, later, the shared build
 # pipeline. It is a build-tree library consumed by the CLI.
-add_library(amc-compilation STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Config.cpp)
+add_library(
+    amc-compilation STATIC
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Config.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Provider.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Meta.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Build.cpp)
 target_include_directories(amc-compilation PUBLIC ${AMC_INCLUDE_DIR})
-target_link_libraries(amc-compilation PUBLIC libabix-format tomlplusplus::tomlplusplus)
+target_link_libraries(amc-compilation PUBLIC libabix-format amc-util tomlplusplus::tomlplusplus)
+target_compile_definitions(amc-compilation PRIVATE AMC_DEFAULT_PROVIDERS_FILE="${AMC_SOURCE_DIR}/providers.toml")
 
 add_library(AMC::format ALIAS libabix-format)
 add_library(AMC::abi ALIAS libabix-abi)
@@ -321,9 +325,8 @@ add_executable(
     ${AMC_SOURCE_DIR}/src/SKL/AMC/CLI/Verify.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/CLI/Diff.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/CLI/Generate.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/CLI/Build.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/CLI/Cache.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/CLI/Providers.cpp)
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/CLI/Support.cpp)
 target_include_directories(amc PRIVATE ${AMC_INCLUDE_DIR})
 target_compile_definitions(amc PRIVATE AMC_DEFAULT_PROVIDERS_FILE="${AMC_SOURCE_DIR}/providers.toml")
 target_link_libraries(amc PRIVATE amc-core amc-compilation tomlplusplus::tomlplusplus)

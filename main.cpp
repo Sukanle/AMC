@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 #include "SKL/AMC/CLI/CLI.h"
+#include "SKL/AMC/Compilation/Build.h"
+#include "SKL/AMC/Compilation/Provider.h"
 
 #include <filesystem>
 #include <string>
@@ -76,9 +78,9 @@ int main(int argc, char **argv) {
     const fs::path provider = executable_dir / "amc-cpp";
 
     if (command == "--list-languages") {
-        ProviderManifest manifest;
+        amc::compilation::ProviderManifest manifest;
         std::string manifest_error;
-        if (!load_provider_manifest(executable_dir, manifest, manifest_error))
+        if (!amc::compilation::load_provider_manifest(executable_dir, manifest, manifest_error))
             return fail(amc::ErrorCategory::config, "provider_manifest", manifest_error);
         for (const auto &entry : manifest.providers)
             fmt::print("{}\n", entry.language);
@@ -86,13 +88,13 @@ int main(int argc, char **argv) {
     }
     if (command == "--describe-language") {
         if (arg_count != 3) return usage_error("--describe-language requires a language");
-        ProviderManifest manifest;
+        amc::compilation::ProviderManifest manifest;
         std::string manifest_error;
-        if (!load_provider_manifest(executable_dir, manifest, manifest_error))
+        if (!amc::compilation::load_provider_manifest(executable_dir, manifest, manifest_error))
             return fail(amc::ErrorCategory::config, "provider_manifest", manifest_error);
         const std::string language = args[2];
-        if (const auto *entry = find_provider_manifest(manifest, language)) {
-            fmt::print("{}\n", describe_provider(*entry));
+        if (const auto *entry = amc::compilation::find_provider_manifest(manifest, language)) {
+            fmt::print("{}\n", amc::compilation::describe_provider(*entry));
             return 0;
         }
         std::string supported;
@@ -114,7 +116,7 @@ int main(int argc, char **argv) {
     if (command == "cache") return cmd_cache(args, arg_count);
     if (command == "generate" || command == "backend") return cmd_generate(args, arg_count, provider);
     if (command == "frontend") return cmd_frontend(args, arg_count, provider);
-    if (command == "build") return cmd_build(args, arg_count, provider);
+    if (command == "build") return amc::compilation::build_command(args, arg_count, provider);
     if (command == "inspect" || command == "validate") return cmd_inspect(args, arg_count);
 
     print_usage();

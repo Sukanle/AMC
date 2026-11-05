@@ -102,10 +102,12 @@ independent from the runtime ABI version.
 
 - `ExportSpec`, `parse_exports` and `apply_target_and_layout` moved to
   `Compilation/Config` (`amc-compilation`)
-- build/verify/generate now call `amc::compilation::*` instead of the CLI
-  umbrella header for configuration parsing
-- the remaining CLI → IR edges are the build pipeline and the CLI dispatcher,
-  still tracked as A4 allowlist entries
+- provider manifest/IPC/dispatch/generate moved to `Compilation/Provider`
+- the build pipeline moved to `Compilation/Build`; `.abix.meta` emission moved
+  to `Compilation/Meta`
+- CLI shared formatting/diagnostics helpers moved to `CLI/Support`; `CLI.h` no
+  longer drags the IR into the interface layer
+- zero unlisted boundary edges and an empty allowlist
 
 ## Compatibility Forwarders
 
@@ -128,13 +130,7 @@ Temporary exceptions live in `tools/module_boundary_allowlist.txt`, one
 that removes the edge; stale entries are reported so the allowlist does not
 rot. `--strict` accepts allowlisted edges and fails only on unlisted ones.
 
-Current exceptions:
-
-```text
-include/SKL/AMC/CLI/CLI.h: Interfaces -> IR [until A4]
-src/SKL/AMC/CLI/CLI.cpp: Interfaces -> IR [until A4]
-src/SKL/AMC/CLI/Build.cpp: Interfaces -> IR [until A4]
-```
+Current exceptions: none. The allowlist file is intentionally empty.
 
 CTest runs both `--contracts-only` and `--strict` as `amc-boundary-contracts`
 and `amc-boundary-edges`.
