@@ -89,6 +89,22 @@ IR 必须区分：
 
 IR 还承载 Type/Interface/Method Identity、所有权、生命周期、错误契约、版本、能力和元数据。IR schema version 与运行时 ABI version 独立。
 
+## 兼容转发头
+
+A1 通过显式标记的转发头保持旧 include 可用。每个转发头必须带 `AMC_COMPAT_FORWARD` 标记，写明目标头文件，并在 `tools/check_module_boundaries.py` 报告没有 include 用户后删除。
+
+| 转发头 | 目标 | 当前用户 |
+| --- | --- | --- |
+| `include/SKL/AMC/Lang/C++.h` | `SKL/AMC/Frontend/Cpp/Cpp.h` + `SKL/AMC/Backend/Cpp/Cpp.h` | `src/SKL/AMC/Lang/C++/C++.cpp` |
+
+使用：
+
+```bash
+python3 tools/check_module_boundaries.py            # report-only
+python3 tools/check_module_boundaries.py --strict   # 禁止边失败
+python3 tools/check_module_boundaries.py --contracts-only
+```
+
 ## 当前 → 目标映射
 
 | 当前 | 目标 |
@@ -108,6 +124,13 @@ IR 还承载 Type/Interface/Method Identity、所有权、生命周期、错误�
 | `Core/Query.cpp`、`Core/Context.cpp` | `Query/` |
 | `Tool/Dump/*` | `Interfaces/CLI` 或 `Query/` |
 
+## A1 进度
+
+- `Lang/C++/Frontend.cpp` → `Frontend/Cpp/Frontend.cpp`
+- `Lang/C++/Backend.cpp` → `Backend/Cpp/Backend.cpp`
+- `Lang/C++.h` 已改为带标记的兼容转发头，指向两个新头文件
+- report-only 扫描当前只列出遗留边；A0 契约头没有新增违规
+
 ## 迁移规则
 
 1. 同一步不同时搬目录和改行为。
@@ -124,12 +147,12 @@ IR 还承载 Type/Interface/Method Identity、所有权、生命周期、错误�
 - [x] 数据流、所有权和诊断规则已文档化。
 - [x] 边界头文件存在并可编译。
 - [x] `amc-boundary-test` 覆盖契约类型和 Pass 顺序。
-- [ ] A1 增加依赖检查脚本/CI gate。
+- [x] 已有 report-only 依赖扫描和 A0 契约头 gate。
 - [ ] A1 将现有 include 迁移到契约头文件后面。
 
 ## A1 入口条件
 
 - 契约头文件被接受为模块公共表面。
 - Frontend/Backend 拆分有文件级迁移映射。
-- 依赖检查能以 report-only 模式扫描当前代码树。
+- 依赖检查能以 report-only 模式扫描当前代码树（已完成）。
 - 任何 A0 契约头文件都不包含 Clang AST、Backend 或 Interface 层。

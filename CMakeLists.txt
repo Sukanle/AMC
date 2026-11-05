@@ -252,8 +252,8 @@ add_library(amc-core INTERFACE)
 target_link_libraries(amc-core INTERFACE libabix-format libabix-abi libabix-metadata libabix-tools amc-util fmt::fmt)
 
 add_executable(
-    amc-cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/C++/C++.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/C++/Frontend.cpp
-            ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/C++/Backend.cpp)
+    amc-cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/C++/C++.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Frontend/Cpp/Frontend.cpp
+            ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Cpp/Backend.cpp)
 target_include_directories(amc-cpp PRIVATE ${AMC_INCLUDE_DIR})
 target_include_directories(amc-cpp SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS} ${CLANG_INCLUDE_DIRS})
 target_compile_definitions(amc-cpp PRIVATE ABIX_CLANG_RESOURCE_DIR="${AMC_CLANG_RESOURCE_DIR}")
@@ -479,6 +479,9 @@ if(AMC_BUILD_TESTS AND AMC_PYTHON_EXECUTABLE)
                      ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
     add_test(NAME amc-bootstrap-test COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/cli/bootstrap_test.py
                                              ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
+    add_test(NAME amc-boundary-contracts COMMAND ${AMC_PYTHON_EXECUTABLE}
+                                                 ${AMC_SOURCE_DIR}/tools/check_module_boundaries.py --contracts-only)
+    set_tests_properties(amc-boundary-contracts PROPERTIES TIMEOUT 60)
 
     set_tests_properties(
         amc-feature-test

@@ -98,6 +98,24 @@ It also carries type/interface/method identity, ownership, lifetime, error
 contracts, versions, capabilities and metadata. The schema version is
 independent from the runtime ABI version.
 
+## Compatibility Forwarders
+
+A1 keeps old include paths working through explicitly marked forwarders. Every
+forwarder must carry the `AMC_COMPAT_FORWARD` marker, name its target and be
+removed once `tools/check_module_boundaries.py` reports no include sites.
+
+| Forwarder | Target | Current users |
+| --- | --- | --- |
+| `include/SKL/AMC/Lang/C++.h` | `SKL/AMC/Frontend/Cpp/Cpp.h` + `SKL/AMC/Backend/Cpp/Cpp.h` | `src/SKL/AMC/Lang/C++/C++.cpp` |
+
+Run:
+
+```bash
+python3 tools/check_module_boundaries.py            # report-only
+python3 tools/check_module_boundaries.py --strict   # fail on forbidden edges
+python3 tools/check_module_boundaries.py --contracts-only
+```
+
 ## Current → Target Mapping
 
 | Current | Target |
@@ -117,6 +135,14 @@ independent from the runtime ABI version.
 | `Core/Query.cpp`, `Core/Context.cpp` | `Query/` |
 | `Tool/Dump/*` | `Interfaces/CLI` or `Query/` |
 
+## A1 Progress
+
+- `Lang/C++/Frontend.cpp` → `Frontend/Cpp/Frontend.cpp`
+- `Lang/C++/Backend.cpp` → `Backend/Cpp/Backend.cpp`
+- `Lang/C++.h` is now a marked compatibility forwarder to the two new headers
+- The report-only scanner currently lists the remaining legacy edges; none are
+  introduced by the A0 contract headers
+
 ## Migration Rules
 
 1. Do not move a directory and change its behavior in the same step.
@@ -133,12 +159,12 @@ independent from the runtime ABI version.
 - [x] Data flow, ownership and diagnostic rules documented.
 - [x] Boundary headers exist and compile.
 - [x] `amc-boundary-test` covers the contract types and pass ordering.
-- [ ] A dependency check script/CI gate is added in A1.
+- [x] A report-only dependency scanner and an A0 contract-header gate exist.
 - [ ] Current includes are migrated behind the contract headers in A1.
 
 ## A1 Entry Criteria
 
 - The contract headers are accepted as the public module surface.
 - The Frontend/Backend split has a file-level migration map.
-- A dependency check can run in report-only mode against the current tree.
+- A dependency check runs in report-only mode against the current tree (done).
 - No A0 contract header includes Clang AST, a backend, or an interface layer.
