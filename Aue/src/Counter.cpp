@@ -31,8 +31,15 @@
 namespace {
 // Keep the native layout in sync with `Counter.api.hpp`; the generated contract
 // carries the field offsets, while this struct is the actual storage.
+struct CounterChild {
+    int32_t x;
+    int32_t y;
+};
+
 struct Counter {
     int32_t value;
+    CounterChild child;
+    int32_t samples[4];
 };
 
 int g_live_count = 0;
@@ -47,6 +54,9 @@ extern "C" int counter_new(lua_State *state) {
     const int32_t initial = static_cast<int32_t>(luaL_checkinteger(state, 1));
     auto *counter = static_cast<Counter *>(lua_newuserdatauv(state, sizeof(Counter), 0));
     counter->value = initial;
+    counter->child = {0, 0};
+    for (auto &sample : counter->samples)
+        sample = 0;
     ++g_live_count;
     luaL_setmetatable(state, "counter.Counter");
     return 1;
@@ -78,23 +88,32 @@ const aue::Entry kCounterEntries[] = {
     {"live_count", 0, counter_live_count},
 };
 
+const aue::Field kCounterChildFields[] = {
+    {"x", 0, sizeof(int32_t), aue::FieldKind::integer_signed},
+    {"y", 4, sizeof(int32_t), aue::FieldKind::integer_signed},
+};
+
 const aue::Field kCounterFields[] = {
     {"value", 0, sizeof(int32_t), aue::FieldKind::integer_signed},
+    {"child", 4, sizeof(CounterChild), aue::FieldKind::record, 0},
+    {"samples", 12, sizeof(Counter::samples), aue::FieldKind::array, 0xFFFFFFFFu, 4, 4, aue::FieldKind::integer_signed,
+     4},
 };
 
 const aue::Type kCounterTypes[] = {
-    {"Counter", sizeof(Counter), alignof(Counter), kCounterFields, 1},
+    {"CounterChild", sizeof(CounterChild), alignof(CounterChild), kCounterChildFields, 2},
+    {     "Counter",      sizeof(Counter),      alignof(Counter),      kCounterFields, 3},
 };
 
 const aue::Contract kCounterContract = {
     // Kept in sync with `Aue/Counter.abic.toml`; the generated conformance
     // script asserts the runtime contract and the metadata agree on this hash.
     "counter",
-    "0Xcc79d555a7d016e2f2685c23bd849972",
+    "0Xaaab6f8292ea1894c6d6d1af68844b64",
     kCounterEntries,
     4,
     kCounterTypes,
-    1,
+    2,
 };
 }   // namespace
 #endif

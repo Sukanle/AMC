@@ -69,6 +69,76 @@ const Field *lookup_field(lua_State *state) {
     return field;
 }
 
+uint32_t hash_name(const char *name) {
+    uint32_t hash = 2'166'136'261u;
+    for (const unsigned char *p = reinterpret_cast<const unsigned char *>(name); *p != 0; ++p) {
+        hash ^= *p;
+        hash *= 16'777'619u;
+    }
+    return hash;
+}
+
+// C-side open-addressed index. The flexible slot array is allocated in the same
+// Lua userdata, so the closure upvalue owns and releases it.
+struct NativeIndex {
+    size_t capacity;
+    const Entry *slots[1];
+};
+
+int native_index(lua_State *state) {
+    const char *key = lua_tostring(state, 2);
+    if (key == nullptr) {
+        lua_pushnil(state);
+        return 1;
+    }
+    const auto *index = static_cast<const NativeIndex *>(lua_touserdata(state, lua_upvalueindex(1)));
+    if (index == nullptr || index->capacity == 0) {
+        lua_pushnil(state);
+        return 1;
+    }
+    const size_t mask = index->capacity - 1;
+    size_t slot = static_cast<size_t>(hash_name(key)) & mask;
+    for (size_t probe = 0; probe < index->capacity; ++probe) {
+        const Entry *entry = index->slots[slot];
+        if (entry == nullptr) break;
+        if (std::strcmp(entry->name, key) == 0) {
+            lua_pushcfunction(state, entry->function);
+            return 1;
+        }
+        slot = (slot + 1) & mask;
+    }
+    lua_pushnil(state);
+    return 1;
+}
+
+constexpr uint64_t view_magic = 0x41554556494557ULL;   // "AUEVIEW"
+
+// A non-owning view into a parent userdata. The parent is kept alive through
+// uservalue 1, so nested record/array views cannot outlive their storage.
+struct View {
+    uint64_t magic;
+    void *base;
+};
+
+struct ArrayView {
+    uint64_t magic;
+    void *base;
+    uint32_t count;
+    uint32_t stride;
+    FieldKind element_kind;
+    uint32_t element_size;
+    const Type *element_type;
+    const Contract *contract;
+};
+
+void *object_base(lua_State *state) {
+    void *object = lua_touserdata(state, 1);
+    if (object == nullptr) return nullptr;
+    if (lua_rawlen(state, 1) == sizeof(View) && static_cast<const View *>(object)->magic == view_magic)
+        return static_cast<const View *>(object)->base;
+    return object;
+}
+
 void push_native_value(lua_State *state, const void *address, const Field &field) {
     switch (field.kind) {
         case FieldKind::integer_signed: {
@@ -234,19 +304,119 @@ void store_native_value(lua_State *state, void *address, const Field &field) {
     }
 }
 
+void push_record_view(lua_State *state, void *base, const Type &type, const Contract &contract) {
+    auto *view = static_cast<View *>(lua_newuserdatauv(state, sizeof(View), 1));
+    view->magic = view_magic;
+    view->base = base;
+    lua_pushvalue(state, 1);
+    lua_setiuservalue(state, -2, 1);
+
+    const std::string name = type_metatable_name(contract, type);
+    luaL_getmetatable(state, name.c_str());
+    lua_setmetatable(state, -2);
+}
+
+void push_array_view(lua_State *state, void *base, const Field &field, const Contract &contract) {
+    auto *view = static_cast<ArrayView *>(lua_newuserdatauv(state, sizeof(ArrayView), 1));
+    view->magic = view_magic;
+    view->base = base;
+    view->count = field.count;
+    view->stride = field.stride;
+    view->element_kind = field.element_kind;
+    view->element_size = field.element_size;
+    view->element_type = field.type_index < contract.type_count ? &contract.types[field.type_index] : nullptr;
+    view->contract = &contract;
+    lua_pushvalue(state, 1);
+    lua_setiuservalue(state, -2, 1);
+
+    luaL_getmetatable(state, "aue.array");
+    lua_setmetatable(state, -2);
+}
+
+int array_index(lua_State *state) {
+    auto *view = static_cast<ArrayView *>(lua_touserdata(state, 1));
+    if (view == nullptr || view->magic != view_magic) {
+        lua_pushnil(state);
+        return 1;
+    }
+    const lua_Integer index = luaL_checkinteger(state, 2);
+    if (index < 1 || index > static_cast<lua_Integer>(view->count)) {
+        lua_pushnil(state);
+        return 1;
+    }
+    auto *address = static_cast<uint8_t *>(view->base) + static_cast<size_t>(index - 1) * view->stride;
+    if (view->element_kind == FieldKind::record && view->element_type != nullptr && view->contract != nullptr) {
+        push_record_view(state, address, *view->element_type, *view->contract);
+        return 1;
+    }
+    if (view->element_kind == FieldKind::unknown
+        || view->element_kind == FieldKind::array
+        || view->element_kind == FieldKind::opaque) {
+        return luaL_error(state, "array element type is not described by the contract");
+    }
+    Field element{"[]", 0, view->element_size, view->element_kind};
+    push_native_value(state, address, element);
+    return 1;
+}
+
+int array_newindex(lua_State *state) {
+    auto *view = static_cast<ArrayView *>(lua_touserdata(state, 1));
+    if (view == nullptr || view->magic != view_magic) return luaL_error(state, "invalid array view");
+    const lua_Integer index = luaL_checkinteger(state, 2);
+    if (index < 1 || index > static_cast<lua_Integer>(view->count))
+        return luaL_error(state, "array index %d is out of range", static_cast<int>(index));
+    if (view->element_kind == FieldKind::record
+        || view->element_kind == FieldKind::array
+        || view->element_kind == FieldKind::opaque
+        || view->element_kind == FieldKind::unknown) {
+        return luaL_error(state, "array element type is not directly writable");
+    }
+    auto *address = static_cast<uint8_t *>(view->base) + static_cast<size_t>(index - 1) * view->stride;
+    Field element{"[]", 0, view->element_size, view->element_kind};
+    store_native_value(state, address, element);
+    return 0;
+}
+
+int array_len(lua_State *state) {
+    const auto *view = static_cast<const ArrayView *>(lua_touserdata(state, 1));
+    lua_pushinteger(state, view != nullptr && view->magic == view_magic ? static_cast<lua_Integer>(view->count) : 0);
+    return 1;
+}
+
+int array_gc(lua_State *) { return 0; }
+
 int type_index(lua_State *state) {
     const Field *field = lookup_field(state);
     if (field == nullptr) {
         lua_pushnil(state);
         return 1;
     }
-    const void *base = lua_touserdata(state, 1);
+    void *base = object_base(state);
     if (base == nullptr) {
         lua_pushnil(state);
         return 1;
     }
-    push_native_value(state, static_cast<const uint8_t *>(base) + field->offset, *field);
-    return 1;
+    const auto *contract = static_cast<const Contract *>(lua_touserdata(state, lua_upvalueindex(2)));
+    void *address = static_cast<uint8_t *>(base) + field->offset;
+
+    switch (field->kind) {
+        case FieldKind::record:
+            if (contract != nullptr && field->type_index < contract->type_count) {
+                push_record_view(state, address, contract->types[field->type_index], *contract);
+            } else {
+                lua_pushnil(state);
+            }
+            return 1;
+        case FieldKind::array:
+            if (contract != nullptr)
+                push_array_view(state, address, *field, *contract);
+            else
+                lua_pushnil(state);
+            return 1;
+        case FieldKind::opaque:
+        case FieldKind::unknown: lua_pushnil(state); return 1;
+        default:                 push_native_value(state, address, *field); return 1;
+    }
 }
 
 int type_newindex(lua_State *state) {
@@ -255,8 +425,14 @@ int type_newindex(lua_State *state) {
         const char *key = lua_tostring(state, 2);
         return luaL_error(state, "unknown field '%s'", key == nullptr ? "?" : key);
     }
-    void *base = lua_touserdata(state, 1);
+    void *base = object_base(state);
     if (base == nullptr) return luaL_error(state, "field access on a non-userdata value");
+    if (field->kind == FieldKind::record
+        || field->kind == FieldKind::array
+        || field->kind == FieldKind::opaque
+        || field->kind == FieldKind::unknown) {
+        return luaL_error(state, "field '%s' cannot be written as a whole", field->name);
+    }
     store_native_value(state, static_cast<uint8_t *>(base) + field->offset, *field);
     return 0;
 }
@@ -266,7 +442,11 @@ int type_gc(lua_State *) { return 0; }
 int destroy_gc(lua_State *state) {
     auto *destroy = static_cast<Destroy *>(lua_touserdata(state, lua_upvalueindex(1)));
     if (destroy != nullptr && *destroy != nullptr) {
-        if (void *object = lua_touserdata(state, 1)) (*destroy)(object);
+        void *object = lua_touserdata(state, 1);
+        if (object != nullptr
+            && !(lua_rawlen(state, 1) == sizeof(View) && static_cast<const View *>(object)->magic == view_magic)) {
+            (*destroy)(object);
+        }
     }
     return 0;
 }
@@ -275,6 +455,19 @@ int destroy_gc(lua_State *state) {
 
 void register_contract_types(lua_State *state, const Contract &contract) {
     if (contract.types == nullptr) return;
+
+    if (luaL_newmetatable(state, "aue.array") != 0) {
+        lua_pushcfunction(state, array_index);
+        lua_setfield(state, -2, "__index");
+        lua_pushcfunction(state, array_newindex);
+        lua_setfield(state, -2, "__newindex");
+        lua_pushcfunction(state, array_len);
+        lua_setfield(state, -2, "__len");
+        lua_pushcfunction(state, array_gc);
+        lua_setfield(state, -2, "__gc");
+    }
+    lua_pop(state, 1);
+
     for (size_t i = 0; i < contract.type_count; ++i) {
         const Type &type = contract.types[i];
         const std::string name = type_metatable_name(contract, type);
@@ -290,11 +483,13 @@ void register_contract_types(lua_State *state, const Contract &contract) {
         }
 
         lua_pushvalue(state, -1);
-        lua_pushcclosure(state, type_index, 1);
+        lua_pushlightuserdata(state, const_cast<Contract *>(&contract));
+        lua_pushcclosure(state, type_index, 2);
         lua_setfield(state, -3, "__index");
 
         lua_pushvalue(state, -1);
-        lua_pushcclosure(state, type_newindex, 1);
+        lua_pushlightuserdata(state, const_cast<Contract *>(&contract));
+        lua_pushcclosure(state, type_newindex, 2);
         lua_setfield(state, -3, "__newindex");
 
         lua_pushcfunction(state, type_gc);
@@ -352,6 +547,39 @@ void register_meta(lua_State *state, const Contract &contract) {
     lua_pop(state, 1);
 }
 
+void register_native(lua_State *state, const Contract &contract) {
+    size_t capacity = 8;
+    const size_t wanted = contract.entry_count > 0 ? contract.entry_count * 2 : 1;
+    while (capacity < wanted)
+        capacity <<= 1;
+
+    auto *index =
+        static_cast<NativeIndex *>(lua_newuserdatauv(state, sizeof(NativeIndex) + capacity * sizeof(const Entry *), 0));
+    index->capacity = capacity;
+    std::memset(index->slots, 0, capacity * sizeof(const Entry *));
+
+    const size_t mask = capacity - 1;
+    for (size_t i = 0; i < contract.entry_count; ++i) {
+        const Entry &entry = contract.entries[i];
+        size_t slot = static_cast<size_t>(hash_name(entry.name)) & mask;
+        while (index->slots[slot] != nullptr)
+            slot = (slot + 1) & mask;
+        index->slots[slot] = &entry;
+    }
+
+    lua_newtable(state);
+    set_string_field(state, "_module", contract.module);
+    set_string_field(state, "_abi_hash", contract.abi_hash);
+    set_string_field(state, "_layer", "l2");
+
+    lua_newtable(state);
+    lua_pushvalue(state, -3);
+    lua_pushcclosure(state, native_index, 1);
+    lua_setfield(state, -2, "__index");
+    lua_setmetatable(state, -2);
+    lua_remove(state, -2);   // keep the module table as the return value
+}
+
 const char *level_name(Level level) noexcept {
     switch (level) {
         case Level::l0: return "l0";
@@ -363,11 +591,10 @@ const char *level_name(Level level) noexcept {
 
 Level register_layer(lua_State *state, const Contract &contract, Level requested) {
     const Level selected = select_level(requested);
-    if (selected == Level::l1) {
-        register_meta(state, contract);
-    } else {
-        // L0 also covers a requested L2 that this build cannot provide.
-        register_direct(state, contract);
+    switch (selected) {
+        case Level::l2: register_native(state, contract); break;
+        case Level::l1: register_meta(state, contract); break;
+        case Level::l0: register_direct(state, contract); break;
     }
     return selected;
 }

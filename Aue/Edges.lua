@@ -14,6 +14,15 @@ local ok_field = pcall(function()
 end)
 print("field_guard", ok_field)
 
+local view = counter.new(3).child
+collectgarbage("collect")
+print("view_after_gc", view.x)
+
+local ok_array = pcall(function()
+    a.samples[1] = 1
+end)
+print("array_write", ok_array)
+
 local ok = pcall(function()
     return counter.get(nil)
 end)

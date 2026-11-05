@@ -48,12 +48,21 @@ const Type *find_abi_type(const AbiModule &module, Hash128 id) {
     return nullptr;
 }
 
+const Type *find_abi_type(const AbiModule &module, const std::string &name) {
+    for (const auto &type : module.types)
+        if (type.name == name) return &type;
+    return nullptr;
+}
+
 enum class EmittedFieldKind : uint32_t {
     integer_signed,
     integer_unsigned,
     floating,
     boolean,
     pointer,
+    record,
+    array,
+    opaque,
     unknown,
 };
 
@@ -90,6 +99,9 @@ const char *field_kind_literal(EmittedFieldKind kind) {
         case EmittedFieldKind::floating:         return "aue::FieldKind::floating";
         case EmittedFieldKind::boolean:          return "aue::FieldKind::boolean";
         case EmittedFieldKind::pointer:          return "aue::FieldKind::pointer";
+        case EmittedFieldKind::record:           return "aue::FieldKind::record";
+        case EmittedFieldKind::array:            return "aue::FieldKind::array";
+        case EmittedFieldKind::opaque:           return "aue::FieldKind::opaque";
         case EmittedFieldKind::unknown:          return "aue::FieldKind::unknown";
     }
     return "aue::FieldKind::unknown";
@@ -176,17 +188,74 @@ std::string generate_lua_contract(const AbiModule &module, std::string &error) {
     std::vector<size_t> record_types;
     for (size_t i = 0; i < module.types.size(); ++i) {
         const Type &type = module.types[i];
-        if (type.kind == TypeKind::record && type.field_count > 0) record_types.push_back(i);
+        if (type.kind != TypeKind::record) continue;
+        for (uint32_t j = 0; j < type.field_count; ++j) {
+            const Field &field = module.fields[type.field_begin + j];
+            if (field.owner_type == Hash128{} || field.owner_type == type.id) {
+                record_types.push_back(i);
+                break;
+            }
+        }
     }
+
+    std::vector<uint32_t> record_index(module.types.size(), 0xFFFFFFFFu);
+    for (size_t emitted = 0; emitted < record_types.size(); ++emitted)
+        record_index[record_types[emitted]] = static_cast<uint32_t>(emitted);
 
     for (size_t emitted = 0; emitted < record_types.size(); ++emitted) {
         const Type &type = module.types[record_types[emitted]];
+        std::vector<const Field *> fields;
+        for (uint32_t i = 0; i < type.field_count; ++i) {
+            const Field &field = module.fields[type.field_begin + i];
+            if (!(field.owner_type == Hash128{}) && !(field.owner_type == type.id)) continue;
+            fields.push_back(&field);
+        }
         out += "inline const aue::Field lua_type_";
         out += fmt::to_string(emitted);
         out += "_fields[] = {\n";
-        for (uint32_t i = 0; i < type.field_count; ++i) {
-            const Field &field = module.fields[type.field_begin + i];
+        for (const Field *field_ptr : fields) {
+            const Field &field = *field_ptr;
             const Type *field_type = find_abi_type(module, field.type_id);
+
+            EmittedFieldKind kind = EmittedFieldKind::unknown;
+            uint32_t type_index = 0xFFFFFFFFu;
+            uint32_t count = 0;
+            uint32_t stride = 0;
+            EmittedFieldKind element_kind = EmittedFieldKind::unknown;
+            uint32_t element_size = 0;
+
+            if (field_type != nullptr) {
+                if (field_type->kind == TypeKind::record && field_type->field_count > 0) {
+                    kind = EmittedFieldKind::record;
+                    const auto found = find_abi_type(module, field_type->name);
+                    if (found != nullptr) type_index = record_index[static_cast<size_t>(found - module.types.data())];
+                } else if (field_type->kind == TypeKind::array) {
+                    kind = EmittedFieldKind::array;
+                    count = field_type->array_count;
+                    stride = count != 0 ? field_type->size / count : 0;
+                    const size_t bracket = field_type->name.find('[');
+                    const std::string base =
+                        bracket == std::string::npos ? std::string{} : field_type->name.substr(0, bracket);
+                    const Type *element = base.empty() ? nullptr : find_abi_type(module, base);
+                    if (element != nullptr) {
+                        element_size = element->size;
+                        if (element->kind == TypeKind::record && element->field_count > 0) {
+                            element_kind = EmittedFieldKind::record;
+                            const auto found = find_abi_type(module, element->name);
+                            if (found != nullptr)
+                                type_index = record_index[static_cast<size_t>(found - module.types.data())];
+                        } else {
+                            element_kind = field_kind(*element);
+                        }
+                    } else {
+                        element_size = stride;
+                    }
+                } else {
+                    kind = field_kind(*field_type);
+                }
+            }
+            if (kind == EmittedFieldKind::unknown) kind = EmittedFieldKind::opaque;
+
             out += "    {";
             out += cpp_string(field.name);
             out += ", ";
@@ -194,7 +263,17 @@ std::string generate_lua_contract(const AbiModule &module, std::string &error) {
             out += ", ";
             out += fmt::to_string(field_type == nullptr ? 0 : field_type->size);
             out += ", ";
-            out += field_kind_literal(field_type == nullptr ? EmittedFieldKind::unknown : field_kind(*field_type));
+            out += field_kind_literal(kind);
+            out += ", ";
+            out += fmt::to_string(type_index);
+            out += "u, ";
+            out += fmt::to_string(count);
+            out += ", ";
+            out += fmt::to_string(stride);
+            out += ", ";
+            out += field_kind_literal(element_kind);
+            out += ", ";
+            out += fmt::to_string(element_size);
             out += "},\n";
         }
         out += "};\n\n";
@@ -204,6 +283,11 @@ std::string generate_lua_contract(const AbiModule &module, std::string &error) {
         out += "inline const aue::Type lua_types[] = {\n";
         for (size_t emitted = 0; emitted < record_types.size(); ++emitted) {
             const Type &type = module.types[record_types[emitted]];
+            size_t owned_fields = 0;
+            for (uint32_t i = 0; i < type.field_count; ++i) {
+                const Field &field = module.fields[type.field_begin + i];
+                if (field.owner_type == Hash128{} || field.owner_type == type.id) ++owned_fields;
+            }
             out += "    {";
             out += cpp_string(type.name);
             out += ", ";
@@ -213,7 +297,7 @@ std::string generate_lua_contract(const AbiModule &module, std::string &error) {
             out += ", lua_type_";
             out += fmt::to_string(emitted);
             out += "_fields, ";
-            out += fmt::to_string(type.field_count);
+            out += fmt::to_string(owned_fields);
             out += "},\n";
         }
         out += "};\n\n";

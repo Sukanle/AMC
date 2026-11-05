@@ -6,6 +6,8 @@
 # is identical. When AMC is available the contract is generated from
 # `counter.abic.toml` at build time, so the runtime binds to real ABIX metadata.
 
+option(AUE_ENABLE_L2 "Build the L2 native-dispatch prototype" OFF)
+
 set(AUE_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
 set(AUE_CONTRACT_HEADER "")
 
@@ -42,8 +44,11 @@ function(aue_configure_target target)
         target_link_directories(${target} PRIVATE ${LUA_LIBRARY_DIRS})
     endif()
     target_link_libraries(${target} PRIVATE ${LUA_LIBRARIES})
-    # The L1 Meta layer is compiled in; a runtime request for L2 degrades to L1.
+    # L1 Meta is always compiled in; L2 native dispatch is opt-in.
     target_compile_definitions(${target} PRIVATE AUE_ENABLE_L1=1)
+    if(AUE_ENABLE_L2)
+        target_compile_definitions(${target} PRIVATE AUE_ENABLE_L2=1)
+    endif()
     set_target_properties(${target} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
     if(AUE_CONTRACT_HEADER)
         target_sources(${target} PRIVATE ${AUE_CONTRACT_HEADER})
@@ -62,10 +67,16 @@ if(NOT TARGET abix-conformance)
     if(AMC_BUILD_TESTS OR BUILD_TESTING)
         add_test(NAME aue-conformance COMMAND abix-conformance ${CMAKE_CURRENT_SOURCE_DIR}/Conformance.lua)
         add_test(NAME aue-conformance-edges COMMAND abix-conformance ${CMAKE_CURRENT_SOURCE_DIR}/Edges.lua)
-        # Requesting L2 must degrade to the compiled-in L1 (downgrade only).
-        add_test(NAME aue-level-downgrade COMMAND abix-conformance ${CMAKE_CURRENT_SOURCE_DIR}/Conformance.lua
-                                                  --requested l2)
-        set_tests_properties(aue-level-downgrade PROPERTIES PASS_REGULAR_EXPRESSION "requested=l2 selected=l1")
+        if(AUE_ENABLE_L2)
+            add_test(NAME aue-conformance-l2 COMMAND abix-conformance ${CMAKE_CURRENT_SOURCE_DIR}/Conformance.lua
+                                                      --requested l2)
+            set_tests_properties(aue-conformance-l2 PROPERTIES PASS_REGULAR_EXPRESSION "requested=l2 selected=l2")
+        else()
+            # Requesting L2 must degrade to the compiled-in L1 (downgrade only).
+            add_test(NAME aue-level-downgrade COMMAND abix-conformance ${CMAKE_CURRENT_SOURCE_DIR}/Conformance.lua
+                                                      --requested l2)
+            set_tests_properties(aue-level-downgrade PROPERTIES PASS_REGULAR_EXPRESSION "requested=l2 selected=l1")
+        endif()
     endif()
 
     add_executable(abix-bench src/Layers.cpp src/Counter.cpp src/Bench.cpp)

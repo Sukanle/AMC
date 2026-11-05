@@ -274,8 +274,16 @@ CTest 同时运行 `--contracts-only` 和 `--strict`：
   执行 `collectgarbage`，验证 destructor 在 userdata 释放前运行
 - `Core/Lua.*` 迁移到 `Backend/Lua/Lua.*`，generator 归入 Backend，未新增边界边
 - A6.4：`Aue/standalone/CMakeLists.txt` 提供不依赖 AMC driver 的
-  conformance/benchmark 入口，使用 checked-in fallback contract，并要求已安装
-  ABIX/fmt/Lua；版本化 package/release 验证仍待完成
+  conformance/benchmark 入口，安装 `bin/abix-conformance`、`bin/abix-bench`
+  与 `share/aue/*`，并通过 `cpack` 生成版本化
+  `Aue-<version>-<system>.tar.gz`；已用安装后的 ABIX runtime 验证
+- A6.5：`-DAUE_ENABLE_L2=ON` 构建 opt-in 的 L2 native-dispatch prototype。
+  它使用 C 侧开放寻址 contract index，不做 memoization；这是研究原型，不是
+  Lua VM patch。默认构建仍只提供 L0/L1
+- A6.6：field descriptor 现在区分 scalar、pointer、record、array、opaque。
+  record/array 字段返回非拥有 view，通过 Lua uservalue 1 保持 parent 存活；
+  array 元素访问使用 `type_index` 或 `element_kind`/`element_size`，不支持的
+  写入会明确拒绝
 
 ## A1 进度
 

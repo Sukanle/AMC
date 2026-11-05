@@ -40,7 +40,7 @@ bool rawget_is_function(lua_State *state, const char *key) {
 }
 
 bool check_dispatch(lua_State *state, aue::Level level, std::string &error) {
-    if (level != aue::Level::l1) {
+    if (level == aue::Level::l0) {
         if (!rawget_is_function(state, "new")) {
             error = "L0 did not eagerly bind functions";
             return false;
@@ -48,7 +48,7 @@ bool check_dispatch(lua_State *state, aue::Level level, std::string &error) {
         return true;
     }
     if (rawget_is_function(state, "new")) {
-        error = "L1 bound functions eagerly instead of using __index";
+        error = std::string(aue::level_name(level)) + " bound functions eagerly instead of using __index";
         return false;
     }
     lua_getglobal(state, "counter");
@@ -56,8 +56,17 @@ bool check_dispatch(lua_State *state, aue::Level level, std::string &error) {
     const bool resolved = lua_isfunction(state, -1) != 0;
     lua_pop(state, 2);
     if (!resolved) {
-        error = "L1 __index did not resolve the function";
+        error = std::string(aue::level_name(level)) + " __index did not resolve the function";
         return false;
+    }
+    if (level == aue::Level::l2) {
+        // L2 deliberately does not memoize: every access crosses native
+        // dispatch, so a rawget must still see no function.
+        if (rawget_is_function(state, "new")) {
+            error = "L2 memoized the resolved function instead of using native dispatch";
+            return false;
+        }
+        return true;
     }
     if (!rawget_is_function(state, "new")) {
         error = "L1 did not memoize the resolved function";

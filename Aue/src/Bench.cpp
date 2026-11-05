@@ -33,15 +33,21 @@ namespace {
 
 using Clock = std::chrono::steady_clock;
 
+enum class Mode {
+    l0,
+    l1,
+    l2
+};
+
 volatile int64_t g_sink = 0;
 
 void push_counter(lua_State *state) { lua_getfield(state, LUA_REGISTRYINDEX, "aue_bench_counter"); }
 
-double call_nanoseconds(lua_State *state, bool meta, bool force_index, int iterations) {
+double call_nanoseconds(lua_State *state, Mode mode, bool force_index, int iterations) {
     const auto start = Clock::now();
     for (int i = 0; i < iterations; ++i) {
         lua_getglobal(state, "counter");
-        if (meta && force_index) {
+        if (mode == Mode::l1 && force_index) {
             // Invalidate the memoized binding so __index runs again.
             lua_pushstring(state, "get");
             lua_pushnil(state);
@@ -60,15 +66,16 @@ double call_nanoseconds(lua_State *state, bool meta, bool force_index, int itera
     return std::chrono::duration<double, std::nano>(end - start).count() / iterations;
 }
 
-bool prepare(bool meta, lua_State **out) {
+bool prepare(Mode mode, lua_State **out) {
     lua_State *state = luaL_newstate();
     if (state == nullptr) return false;
     luaL_openlibs(state);
     aue::register_counter_types(state);
-    if (meta)
-        aue::register_meta(state, aue::counter_contract());
-    else
-        aue::register_direct(state, aue::counter_contract());
+    switch (mode) {
+        case Mode::l0: aue::register_direct(state, aue::counter_contract()); break;
+        case Mode::l1: aue::register_meta(state, aue::counter_contract()); break;
+        case Mode::l2: aue::register_native(state, aue::counter_contract()); break;
+    }
     lua_setglobal(state, "counter");
 
     // One shared Counter stored in the registry for the call path.
@@ -91,19 +98,32 @@ int main() {
     constexpr int kIterations = 200'000;
 
     lua_State *l0 = nullptr, *l1 = nullptr;
-    if (!prepare(false, &l0) || !prepare(true, &l1)) {
+    if (!prepare(Mode::l0, &l0) || !prepare(Mode::l1, &l1)) {
         fmt::print(stderr, "abix-bench: could not initialise the Lua state\n");
         return 1;
     }
 
-    const double l0_call = call_nanoseconds(l0, false, false, kIterations);
-    const double l1_call_warm = call_nanoseconds(l1, true, false, kIterations);
-    const double l1_call_cold = call_nanoseconds(l1, true, true, kIterations);
+    const double l0_call = call_nanoseconds(l0, Mode::l0, false, kIterations);
+    const double l1_call_warm = call_nanoseconds(l1, Mode::l1, false, kIterations);
+    const double l1_call_cold = call_nanoseconds(l1, Mode::l1, true, kIterations);
 
     lua_close(l0);
     lua_close(l1);
 
-    fmt::print("abix-bench: l0_call={:.1f}ns l1_call_warm={:.1f}ns l1_call_cold={:.1f}ns\n", l0_call, l1_call_warm,
+    fmt::print("abix-bench: l0_call={:.1f}ns l1_call_warm={:.1f}ns l1_call_cold={:.1f}ns", l0_call, l1_call_warm,
         l1_call_cold);
+
+#if defined(AUE_ENABLE_L2)
+    lua_State *l2 = nullptr;
+    if (!prepare(Mode::l2, &l2)) {
+        fmt::print(stderr, "\nabix-bench: could not initialise the L2 Lua state\n");
+        return 1;
+    }
+    const double l2_call = call_nanoseconds(l2, Mode::l2, false, kIterations);
+    lua_close(l2);
+    fmt::print(" l2_call={:.1f}ns", l2_call);
+#endif
+
+    fmt::print("\n");
     return 0;
 }

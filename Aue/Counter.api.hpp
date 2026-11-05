@@ -10,8 +10,15 @@
 extern "C" {
 #endif
 
+struct CounterChild {
+    int32_t x;
+    int32_t y;
+};
+
 struct Counter {
     int32_t value;
+    CounterChild child;
+    int32_t samples[4];
 };
 
 Counter *counter_new(int initial);

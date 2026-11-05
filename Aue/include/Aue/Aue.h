@@ -54,6 +54,9 @@ enum class FieldKind : uint32_t {
     floating,
     boolean,
     pointer,
+    record,
+    array,
+    opaque,
     unknown,
 };
 
@@ -64,9 +67,18 @@ struct Field {
     uint32_t offset;
     uint32_t size;
     FieldKind kind;
+    // Record/array element type index into Contract::types (0xFFFFFFFF = none).
+    uint32_t type_index = 0xFFFFFFFFu;
+    // Array length and element stride (0 for non-arrays).
+    uint32_t count = 0;
+    uint32_t stride = 0;
+    // Array scalar element descriptor (used when type_index is not set).
+    FieldKind element_kind = FieldKind::unknown;
+    uint32_t element_size = 0;
 };
 
-// A record type whose fields can be projected directly into Lua.
+// A record type whose fields can be projected directly into Lua. Nested
+// records and array elements refer to this table by index.
 struct Type {
     const char *name;
     uint32_t size;
@@ -100,9 +112,12 @@ enum class Level : uint32_t {
     l2 = 2,   // Native: VM inline dispatch (reserved)
 };
 
-// Highest level compiled into this build. L1 is available whenever the Meta
-// layer is; L2 is reserved and never compiled in yet.
-#ifdef AUE_ENABLE_L1
+// Highest level compiled into this build. L2 is an opt-in native-dispatch
+// prototype; it does not patch the Lua VM. When enabled it replaces L1's Lua
+// table index with a C-side hash index built at registration.
+#if defined(AUE_ENABLE_L2)
+constexpr Level compiled_level = Level::l2;
+#elif defined(AUE_ENABLE_L1)
 constexpr Level compiled_level = Level::l1;
 #else
 constexpr Level compiled_level = Level::l0;
@@ -121,6 +136,12 @@ void register_direct(lua_State *state, const Contract &contract);
 // L1 Meta: expose a lazy table; `__index` looks a function up in the contract
 // and memoizes it on first access.
 void register_meta(lua_State *state, const Contract &contract);
+
+// L2 Native (opt-in prototype): expose a lazy table whose `__index` uses a
+// C-side open-addressed hash index built at registration. It does not memoize,
+// so every access goes through native dispatch; see Aue/README.md for the
+// research scope (this is not a Lua VM patch).
+void register_native(lua_State *state, const Contract &contract);
 
 // Registers the module at `requested`, clamped to `compiled_level`. Returns the
 // level actually used, so callers can report the (possibly degraded) choice.

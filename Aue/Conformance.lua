@@ -10,6 +10,17 @@ print("field", c.value)
 c.value = 42
 print("field_after", c.value, counter.get(c))
 
+print("child", c.child.x, c.child.y)
+c.child.x = 5
+c.child.y = 6
+print("child_after", c.child.x, c.child.y)
+
+print("array_len", #c.samples)
+print("array_first", c.samples[1])
+c.samples[1] = 7
+c.samples[2] = 8
+print("array_after", c.samples[1], c.samples[2])
+
 local live_before = counter.live_count()
 local temp = counter.new(7)
 print("live_new", counter.live_count() - live_before)

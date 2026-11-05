@@ -324,9 +324,17 @@ and `amc-boundary-edges`.
 - `Core/Lua.*` moved to `Backend/Lua/Lua.*`; the generator now lives in the
   Backend module and adds no new boundary edge
 - A6.4: `Aue/standalone/CMakeLists.txt` provides a driver-independent
-  conformance/benchmark entry point; it uses the checked-in fallback contract
-  and requires installed ABIX/fmt/Lua. Package/versioned release validation
-  remains
+  conformance/benchmark entry point. It installs `bin/abix-conformance`,
+  `bin/abix-bench` and `share/aue/*`, and `cpack` produces a versioned
+  `Aue-<version>-<system>.tar.gz`; the install was validated against an
+  installed ABIX runtime
+- A6.5: `-DAUE_ENABLE_L2=ON` builds the opt-in L2 native-dispatch prototype.
+  It uses a C-side open-addressed contract index without memoization; it is a
+  research step, not a Lua VM patch. Default builds remain L0/L1
+- A6.6: field descriptors now distinguish scalar, pointer, record, array and
+  opaque fields. Record/array fields return non-owning views that retain their
+  parent through Lua uservalue 1; array element access uses `type_index` or
+  `element_kind`/`element_size`, and unsupported writes are rejected
 
 ## A1 Progress
 
