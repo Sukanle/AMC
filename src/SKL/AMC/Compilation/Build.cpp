@@ -17,6 +17,11 @@
 #include "SKL/AMC/Compilation/Config.h"
 #include "SKL/AMC/Compilation/Meta.h"
 #include "SKL/AMC/Compilation/Provider.h"
+#include "SKL/AMC/Diagnostics/Diagnostics.h"
+#include "SKL/AMC/IR/LoweringJson.h"
+#include "SKL/AMC/Pass/Lowering.h"
+#include "SKL/AMC/Semantic/Serialize.h"
+#include "SKL/AMC/Semantic/Sync.h"
 #include "SKL/AMC/Util/Error.h"
 
 #include <algorithm>
@@ -24,7 +29,9 @@
 #include <cstdlib>
 #include <fstream>
 #include <iterator>
+#include <set>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "SKL/AMC/Core/Cache.h"
@@ -543,6 +550,111 @@ std::vector<std::string> parse_makefile_dependencies(const std::string &text) {
     return paths;
 }
 
+// Map the resolved ABI ownership contracts back onto the semantic model before
+// lowering. A `[[contract]]` names a source function, but the ownership record
+// is an interaction-level fact: lowering links it to the ABI signature and the
+// parameter index once, so each backend consumes the result instead of
+// re-resolving names.
+void attach_semantic_ownership(amc::AbiModule &module, amc::semantic::SemanticModule &semantic) {
+    const auto semantic_id = [&](amc::Hash128 signature) -> amc::semantic::SemanticFunctionId {
+        for (const auto &function : semantic.functions)
+            if (function.abi_signature == signature) return function.id;
+        return {};
+    };
+    std::vector<uint32_t> parameter_base(module.functions.size(), 0);
+    uint32_t running = 0;
+    for (size_t i = 0; i < module.functions.size(); ++i) {
+        parameter_base[i] = running;
+        running += static_cast<uint32_t>(module.functions[i].parameters.size());
+    }
+    const auto function_for_parameter = [&](uint32_t target_index) -> int {
+        for (size_t i = 0; i < module.functions.size(); ++i)
+            if (target_index >= parameter_base[i]
+                && target_index < parameter_base[i] + module.functions[i].parameters.size())
+                return static_cast<int>(i);
+        return -1;
+    };
+    const auto duplicate = [&](const amc::semantic::SemanticOwnership &candidate) {
+        for (auto &existing : semantic.ownership)
+            if (existing.function == candidate.function
+                && existing.interaction == candidate.interaction
+                && existing.index == candidate.index) {
+                if (!existing.release.valid()) existing.release = candidate.release;
+                if (existing.ownership == amc::semantic::OwnershipKind::unspecified)
+                    existing.ownership = candidate.ownership;
+                if (existing.lifetime == amc::semantic::LifetimeKind::unknown) existing.lifetime = candidate.lifetime;
+                return true;
+            }
+        return false;
+    };
+
+    for (const auto &contract : module.contracts) {
+        amc::semantic::SemanticOwnership ownership;
+        uint32_t function_index = contract.target_index;
+        if (contract.target == amc::OwnershipTarget::parameter) {
+            const int index = function_for_parameter(contract.target_index);
+            if (index < 0) continue;
+            function_index = static_cast<uint32_t>(index);
+            ownership.interaction = amc::semantic::InteractionKind::parameter;
+            ownership.index = contract.target_index - parameter_base[function_index];
+        } else {
+            ownership.interaction = amc::semantic::InteractionKind::return_value;
+        }
+        if (function_index >= module.functions.size()) continue;
+        ownership.function = semantic_id(module.functions[function_index].signature);
+        if (!ownership.function.valid()) continue;
+        switch (contract.mode) {
+            case amc::OwnershipMode::borrowed: ownership.ownership = amc::semantic::OwnershipKind::borrowed; break;
+            case amc::OwnershipMode::owned:    ownership.ownership = amc::semantic::OwnershipKind::owned; break;
+            case amc::OwnershipMode::copy:     ownership.ownership = amc::semantic::OwnershipKind::transferred; break;
+            default:                           ownership.ownership = amc::semantic::OwnershipKind::unspecified; break;
+        }
+        ownership.release = semantic_id(contract.release);
+        if (!duplicate(ownership)) semantic.ownership.push_back(std::move(ownership));
+    }
+
+    // `[[owned]]` is a create/destroy pair. Record the create return value as an
+    // owned interaction so the same lowering result carries the handle policy.
+    for (const auto &record : module.owned) {
+        amc::semantic::SemanticOwnership ownership;
+        ownership.function = semantic_id(record.create);
+        if (!ownership.function.valid()) continue;
+        ownership.interaction = amc::semantic::InteractionKind::return_value;
+        ownership.ownership = amc::semantic::OwnershipKind::owned;
+        ownership.lifetime = amc::semantic::LifetimeKind::caller;
+        ownership.release = semantic_id(record.destroy);
+        if (!duplicate(ownership)) semantic.ownership.push_back(std::move(ownership));
+    }
+}
+
+// Keep only the lowered entities that survive symbol projection. The lowering
+// sidecar describes the artifact it sits next to, not the whole frontend
+// module, so an unexported entity must not appear in `<artifact>.lowering`.
+amc::ir::LoweringResult project_lowering(const amc::ir::LoweringResult &lowering, const amc::AbiModule &projected) {
+    std::set<std::pair<uint64_t, uint64_t>> types;
+    std::set<std::pair<uint64_t, uint64_t>> functions;
+    for (const auto &type : projected.types)
+        types.emplace(type.id.lo, type.id.hi);
+    for (const auto &function : projected.functions)
+        functions.emplace(function.signature.lo, function.signature.hi);
+
+    amc::ir::LoweringResult result;
+    result.rules_version = lowering.rules_version;
+    for (const auto &type : lowering.types)
+        if (types.count({type.abi.lo, type.abi.hi}) != 0) result.types.push_back(type);
+    for (const auto &function : lowering.functions)
+        if (functions.count({function.abi.lo, function.abi.hi}) != 0) result.functions.push_back(function);
+    for (const auto &contract : lowering.ownership)
+        if (functions.count({contract.abi.lo, contract.abi.hi}) != 0) result.ownership.push_back(contract);
+    for (const auto &instance : lowering.templates)
+        if (types.count({instance.abi_type.lo, instance.abi_type.hi}) != 0
+            || functions.count({instance.abi_function.lo, instance.abi_function.hi}) != 0
+            || types.count({instance.result.lo, instance.result.hi}) != 0
+            || functions.count({instance.result.lo, instance.result.hi}) != 0)
+            result.templates.push_back(instance);
+    return result;
+}
+
 bool copy_file(const fs::path &from, const fs::path &to, std::string &error) {
     std::ifstream input(from, std::ios::binary);
     if (!input) {
@@ -733,6 +845,36 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
             if (!resolve_interfaces(config, full, error))
                 return fail(amc::ErrorCategory::config, "build", error, config_path.string());
             amc::compilation::apply_target_and_layout(config, full);
+
+            // M4.2: read the frontend semantic sidecar, complete any missing ABI
+            // links, run the lowering pass and emit `<artifact>.lowering` per
+            // export. The lowering result is a contract, not a rewrite: the
+            // artifact itself is unchanged.
+            amc::semantic::SemanticModule semantic;
+            if (fs::exists(semantic_temporary)) {
+                std::string semantic_error;
+                if (!amc::semantic::read_semantic_json(semantic_temporary.string(), semantic, semantic_error))
+                    return fail(
+                        amc::ErrorCategory::validation, "semantic", semantic_error, semantic_temporary.string());
+            }
+            amc::semantic::synchronize_from_abi(full, semantic);
+            attach_semantic_ownership(full, semantic);
+            // A provider that does not write a semantic sidecar (the Rust
+            // frontend today) still gets one: the synthesized links are the
+            // input of the lowering pass and must be reproducible next to the
+            // artifact.
+            if (!fs::exists(semantic_temporary)
+                && (!semantic.types.empty() || !semantic.functions.empty() || !semantic.records.empty())) {
+                if (!amc::semantic::write_semantic_json(semantic, semantic_temporary.string(), error))
+                    return fail(amc::ErrorCategory::io, "semantic", error, semantic_temporary.string());
+            }
+            amc::ir::Module lowering_module;
+            lowering_module.abi = full;
+            lowering_module.semantic = std::move(semantic);
+            amc::ir::LoweringResult lowering;
+            amc::diagnostics::DiagnosticList lowering_diagnostics;
+            amc::pass::lower(lowering_module, lowering, lowering_diagnostics, {});
+
             // ABIX-STD lowering: match each contracted instantiation against its
             // contract. Instantiation succeeded already (the frontend did it);
             // this decides whether the concrete type is the boundary entity
@@ -956,6 +1098,11 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
                 if (fs::exists(semantic_temporary)
                     && !copy_file(semantic_temporary, fs::path(output.string() + ".semantic"), error))
                     return fail(amc::ErrorCategory::io, "semantic", error, output.string() + ".semantic");
+                // The lowered contract is sidecar data: backends consume it when
+                // present and fall back to the ABI view when it is absent.
+                const amc::ir::LoweringResult projected_lowering = project_lowering(lowering, projected);
+                if (!amc::ir::write_lowering_json(projected_lowering, output.string() + ".lowering", error))
+                    return fail(amc::ErrorCategory::io, "lowering", error, output.string() + ".lowering");
             }
             // Populate the cache with the frontend artifact and its full
             // dependency closure, so a later build with unchanged inputs can

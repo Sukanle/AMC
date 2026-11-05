@@ -124,8 +124,15 @@ CTest 同时运行 `--contracts-only` 和 `--strict`：
 - `IR/Lowering.h` 定义 `AbiTypeId` / `AbiFunctionId`、lowered type/function/
   ownership/template 记录和 `LoweringResult` 契约
 - `Pass/Lowering` 把语义类型、函数、继承、字段、所有权和已实例化模板链接到 ABI 实体
-- `ir::Module` 携带 lowering 结果；`amc-lowering-test` 覆盖映射、缺失/歧义实体和 strict 模式
-- Backend 消费 lowering 后的 Contract、semantic sidecar reader 是下一段 M4
+- `ir::Module` 携带 lowering 结果；`amc-lowering-test` 覆盖映射、直接
+  `abi_type` / `abi_signature` 链接、缺失/歧义实体、strict 模式和 lowering JSON 往返
+- C++ frontend 把每个 ABI type/function 同步进语义模型并写入直接链接；
+  `Semantic/Sync` 可供其他 frontend 复用
+- `Semantic/Serialize` 支持读写 sidecar，包含 records、functions、ownership 和 ABI 链接
+- `Compilation/Build` 读取 sidecar、补齐缺失链接、运行 `pass::lower`，在符号投影后写出
+  `<artifact>.lowering`
+- Backend 加载可选的 lowering sidecar，消费 lowered type/function 索引和所有权契约，
+  不再按名称重新推导
 
 ## 当前 → 目标映射
 

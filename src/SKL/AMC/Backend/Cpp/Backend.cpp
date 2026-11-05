@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "SKL/AMC/Backend/Cpp/Cpp.h"
+#include "SKL/AMC/IR/LoweringJson.h"
 #include "SKL/AMC/Lang/Lang.h"
 #include "SKL/AMC/Core/Core.h"
 #include "SKL/AMC/Core/Generated.h"
@@ -130,6 +131,13 @@ int backend(const char *input, const char *output) {
         fmt::print(stderr, "{}\n", e);
         return 1;
     }
+    amc::ir::LoweringResult lowering;
+    std::string lowering_error;
+    if (!amc::ir::load_lowering_sidecar(input, lowering, lowering_error)) {
+        fmt::print(stderr, "{}\n", lowering_error);
+        return 1;
+    }
+    amc::ir::apply_lowering_contracts(lowering, m);
     if (amc::lang::cancellation_requested()) return amc::lang::kCapabilityCancelled;
     auto o = fmt::output_file(output);
     o.print("#pragma once\n");

@@ -120,6 +120,7 @@ struct SemanticType {
     SemanticTypeId canonical{};   // canonical semantic type id
     SemanticTypeId element{};     // pointee / element / underlying
     TemplateInstanceId template_instance{};
+    Hash128 abi_type{};   // direct ABI TypeID link (written by the frontend)
     SourceLocation source;
     uint32_t flags = 0;
 };
@@ -230,6 +231,7 @@ struct SemanticFunction {
     bool is_constexpr = false;
     bool is_template_primary = false;
     TemplateInstanceId template_instance{};
+    Hash128 abi_signature{};   // direct ABI signature link (written by the frontend)
     ConstraintResult constraint;
     SourceLocation source;
 };

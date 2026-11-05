@@ -216,6 +216,47 @@ def main() -> int:
             else:
                 report.fail(f"{name}: amc build produced a .abix", built.stderr + built.stdout)
 
+        # M4.2: the semantic sidecar carries the direct ABI links, and the
+        # lowered contract is written next to every exported artifact.
+        for name, artifact in artifacts.items():
+            lowering_path = Path(str(artifact) + ".lowering")
+            semantic_path = Path(str(artifact) + ".semantic")
+            if not lowering_path.is_file():
+                report.fail(f"{name}: lowering sidecar is written", str(lowering_path))
+                continue
+            if not semantic_path.is_file():
+                report.fail(f"{name}: semantic sidecar is written", str(semantic_path))
+                continue
+            try:
+                lowering = json.loads(lowering_path.read_text(encoding="utf-8"))
+                semantic = json.loads(semantic_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as error:
+                report.fail(f"{name}: M4 sidecars are valid JSON", str(error))
+                continue
+            linked_types = [item for item in semantic.get("types", []) if item.get("abi_type")]
+            linked_functions = [item for item in semantic.get("functions", []) if item.get("abi_signature")]
+            rejected = [
+                item for item in lowering.get("types", [])
+                if item.get("status") == "rejected"
+            ] + [
+                item for item in lowering.get("functions", [])
+                if item.get("status") == "rejected"
+            ]
+            if lowering.get("schema") == "amc.lowering/1" and not rejected:
+                report.ok(f"{name}: lowering sidecar has no rejected exported entity")
+            else:
+                report.fail(f"{name}: lowering sidecar has no rejected exported entity", str(rejected[:3]))
+            if linked_types:
+                report.ok(f"{name}: semantic types carry abi_type links")
+            else:
+                report.fail(f"{name}: semantic types carry abi_type links")
+            if not semantic.get("functions"):
+                report.ok(f"{name}: no semantic functions to link")
+            elif linked_functions:
+                report.ok(f"{name}: semantic functions carry abi_signature links")
+            else:
+                report.fail(f"{name}: semantic functions carry abi_signature links")
+
         # The v2 error contract requires a domain; a v1 declaration (no domain)
         # must be rejected instead of being read with an implicit contract.
         legacy_config = work / "legacy_error.abic.toml"

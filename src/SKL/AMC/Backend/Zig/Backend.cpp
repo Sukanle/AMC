@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "SKL/AMC/Backend/Zig/Zig.h"
+#include "SKL/AMC/IR/LoweringJson.h"
 #include "SKL/AMC/Lang/Lang.h"
 
 #include "SKL/AMC/Core/Generated.h"
@@ -137,8 +138,9 @@ bool spelling_has_qualifier(const std::string &spelling, const std::string &qual
 
 class Projector {
 public:
-    explicit Projector(const amc::AbiModule &module)
-        : m(module) {
+    explicit Projector(const amc::AbiModule &module, const amc::ir::LoweringResult *lowering)
+        : m(module)
+        , lowering(lowering) {
         names.reserve(m.types.size());
         std::unordered_map<std::string, uint32_t> used;
         for (const auto &type : m.types) {
@@ -153,6 +155,10 @@ public:
     }
 
     int index_of(amc::Hash128 id) const {
+        if (lowering != nullptr)
+            for (const auto &type : lowering->types)
+                if (type.abi == id && type.abi_index < m.types.size() && m.types[type.abi_index].id == id)
+                    return static_cast<int>(type.abi_index);
         for (size_t i = 0; i < m.types.size(); ++i)
             if (m.types[i].id == id) return static_cast<int>(i);
         return -1;
@@ -210,6 +216,7 @@ private:
         return field_type(m.types[static_cast<size_t>(found->second)].id);
     }
 
+    const amc::ir::LoweringResult *lowering = nullptr;
     std::vector<std::string> names;
     std::unordered_map<std::string, int> by_spelling;
     std::string empty;
@@ -429,8 +436,8 @@ std::string primitive_zig_type(uint32_t primitive_abi) {
     }
 }
 
-std::string generate_projection(const amc::AbiModule &module) {
-    Projector projector(module);
+std::string generate_projection(const amc::AbiModule &module, const amc::ir::LoweringResult *lowering) {
+    Projector projector(module, lowering);
     fmt::memory_buffer buffer;
     Output o{buffer};
     o.print(AMC_GENERATED_FILE_WARNING("//"));
@@ -460,9 +467,16 @@ int backend(const char *input, const char *output) {
         fmt::print(stderr, "{}\n", error);
         return 1;
     }
+    amc::ir::LoweringResult lowering;
+    std::string lowering_error;
+    if (!amc::ir::load_lowering_sidecar(input, lowering, lowering_error)) {
+        fmt::print(stderr, "{}\n", lowering_error);
+        return 1;
+    }
+    amc::ir::apply_lowering_contracts(lowering, module);
     if (amc::lang::cancellation_requested()) return amc::lang::kCapabilityCancelled;
     try {
-        const std::string projection = generate_projection(module);
+        const std::string projection = generate_projection(module, &lowering);
         if (amc::lang::cancellation_requested()) return amc::lang::kCapabilityCancelled;
         std::error_code ec;
         llvm::raw_fd_ostream file(output, ec, llvm::sys::fs::OF_Text);

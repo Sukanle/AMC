@@ -16,6 +16,7 @@
 #pragma once
 
 #include "SKL/AMC/Core/Core.h"
+#include "SKL/AMC/IR/Lowering.h"
 
 #include <string>
 
@@ -29,6 +30,6 @@ int backend(const char *input, const char *output);
 std::string primitive_rust_type(uint32_t primitive_abi);
 
 // Render the Rust projection for a module. Exposed for tests.
-std::string generate_projection(const amc::AbiModule &module);
+std::string generate_projection(const amc::AbiModule &module, const amc::ir::LoweringResult *lowering = nullptr);
 
 }   // namespace amc::lang::rust

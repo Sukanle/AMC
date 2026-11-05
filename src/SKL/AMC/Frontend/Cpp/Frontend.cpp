@@ -20,6 +20,7 @@
 #include "SKL/AMC/Semantic/Identity.h"
 #include "SKL/AMC/Semantic/Model.h"
 #include "SKL/AMC/Semantic/Serialize.h"
+#include "SKL/AMC/Semantic/Sync.h"
 
 // The Clang resource directory detected at build time (`clang -print-resource-dir`).
 // It is injected by CMake for the `amc-cpp` target; empty if unavailable.
@@ -1892,12 +1893,22 @@ int run_frontend(const char *config_path, const char *output_path) {
         fmt::print(stderr, "{}\n", e);
         return EXIT_FAILURE;
     }
+    // Complete the semantic view after thunk registration: every ABI type and
+    // function now has a semantic counterpart with a direct `abi_type` /
+    // `abi_signature` link, so lowering does not have to re-identify entities
+    // by spelling.
+    amc::semantic::synchronize_from_abi(module, semantic);
     if (amc::lang::cancellation_requested()) return amc::lang::kCapabilityCancelled;
     if (!amc::write_abix(module, output_path, e)) {
         fmt::print(stderr, "{}\n", e);
         return EXIT_FAILURE;
     }
-    if (!semantic.templates.empty() || !semantic.instances.empty()) {
+    if (!semantic.types.empty()
+        || !semantic.functions.empty()
+        || !semantic.records.empty()
+        || !semantic.templates.empty()
+        || !semantic.instances.empty()
+        || !semantic.ownership.empty()) {
         const std::string semantic_path = std::string(output_path) + ".semantic";
         if (!amc::semantic::write_semantic_json(semantic, semantic_path, e)) {
             fmt::print(stderr, "{}\n", e);

@@ -24,8 +24,13 @@ namespace amc::semantic {
 
 // Writes the semantic sidecar (`<artifact>.semantic`) as JSON. The sidecar is
 // not part of the stable ABI artifact: it carries template declarations,
-// instances and source-level facts for tools, diagnostics and future backends.
+// instances and source-level facts for tools, diagnostics and lowering.
 bool write_semantic_json(const SemanticModule &module, const std::string &path, std::string &error);
+
+// Reads a semantic sidecar written by `write_semantic_json`. Unknown fields are
+// ignored; a missing required field is reported instead of silently producing a
+// partially linked model.
+bool read_semantic_json(const std::string &path, SemanticModule &module, std::string &error);
 
 }   // namespace amc::semantic
 

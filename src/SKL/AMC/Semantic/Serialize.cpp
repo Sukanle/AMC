@@ -16,16 +16,49 @@
 #include "SKL/AMC/Semantic/Serialize.h"
 
 #include "SKL/AMC/Core/Json.h"
+#include "SKL/AMC/Semantic/Identity.h"
 
+#include <cerrno>
+#include <cstdlib>
 #include <exception>
 #include <fstream>
+#include <iterator>
+#include <string_view>
 
 #include <fmt/format.h>
 
 namespace amc::semantic {
 namespace {
 
+constexpr std::string_view semantic_schema = "amc.semantic/2";
+
 std::string id_hex(Hash128 value) { return fmt::format("{:016x}{:016x}", value.hi, value.lo); }
+
+bool parse_hex_u64(std::string_view text, uint64_t &value) {
+    if (text.empty()) return false;
+    std::string owned(text);
+    errno = 0;
+    char *end = nullptr;
+    const unsigned long long parsed = std::strtoull(owned.c_str(), &end, 16);
+    if (errno != 0 || end == owned.c_str() || *end != '\0') return false;
+    value = static_cast<uint64_t>(parsed);
+    return true;
+}
+
+Hash128 hash_from_hex(const std::string &text) {
+    Hash128 value{};
+    if (text.size() > 16) {
+        uint64_t hi = 0;
+        uint64_t lo = 0;
+        if (parse_hex_u64(std::string_view(text).substr(0, text.size() - 16), hi)
+            && parse_hex_u64(std::string_view(text).substr(text.size() - 16), lo))
+            value = {lo, hi};
+        return value;
+    }
+    uint64_t lo = 0;
+    if (parse_hex_u64(text, lo)) value.lo = lo;
+    return value;
+}
 
 const char *type_kind_name(SemanticTypeKind kind) {
     switch (kind) {
@@ -86,6 +119,47 @@ const char *origin_name(InstantiationOrigin origin) {
     return "implicit_compiler";
 }
 
+const char *function_kind_name(SemanticFunctionKind kind) {
+    switch (kind) {
+        case SemanticFunctionKind::free_function:   return "free_function";
+        case SemanticFunctionKind::member_function: return "member_function";
+        case SemanticFunctionKind::constructor:     return "constructor";
+        case SemanticFunctionKind::destructor:      return "destructor";
+        case SemanticFunctionKind::operator_:       return "operator";
+        case SemanticFunctionKind::conversion:      return "conversion";
+    }
+    return "free_function";
+}
+
+const char *ownership_kind_name(OwnershipKind kind) {
+    switch (kind) {
+        case OwnershipKind::unspecified: return "unspecified";
+        case OwnershipKind::borrowed:    return "borrowed";
+        case OwnershipKind::owned:       return "owned";
+        case OwnershipKind::shared:      return "shared";
+        case OwnershipKind::opaque:      return "opaque";
+        case OwnershipKind::transferred: return "transferred";
+    }
+    return "unspecified";
+}
+
+const char *lifetime_kind_name(LifetimeKind kind) {
+    switch (kind) {
+        case LifetimeKind::unknown: return "unknown";
+        case LifetimeKind::static_: return "static";
+        case LifetimeKind::caller:  return "caller";
+        case LifetimeKind::owner:   return "owner";
+        case LifetimeKind::scope:   return "scope";
+    }
+    return "unknown";
+}
+
+const char *mutability_name(Mutability value) { return value == Mutability::mutable_ ? "mutable" : "immutable"; }
+
+const char *interaction_name(InteractionKind kind) {
+    return kind == InteractionKind::return_value ? "return_value" : "parameter";
+}
+
 Json source_json(const SourceLocation &source) {
     Json value = Json::object();
     value.set("file", source.file);
@@ -117,11 +191,113 @@ Json argument_json(const TemplateArgument &argument) {
     return value;
 }
 
+SemanticTypeKind parse_type_kind(const std::string &name) {
+    if (name == "builtin") return SemanticTypeKind::builtin;
+    if (name == "pointer") return SemanticTypeKind::pointer;
+    if (name == "lvalue_reference") return SemanticTypeKind::lvalue_reference;
+    if (name == "rvalue_reference") return SemanticTypeKind::rvalue_reference;
+    if (name == "array") return SemanticTypeKind::array;
+    if (name == "record") return SemanticTypeKind::record;
+    if (name == "enumeration") return SemanticTypeKind::enumeration;
+    if (name == "function") return SemanticTypeKind::function;
+    if (name == "member_pointer") return SemanticTypeKind::member_pointer;
+    if (name == "template_parameter") return SemanticTypeKind::template_parameter;
+    if (name == "template_instance") return SemanticTypeKind::template_instance;
+    if (name == "dependent") return SemanticTypeKind::dependent;
+    return SemanticTypeKind::unknown;
+}
+
+TemplateKind parse_template_kind(const std::string &name) {
+    if (name == "class") return TemplateKind::class_;
+    if (name == "alias") return TemplateKind::alias;
+    if (name == "variable") return TemplateKind::variable;
+    return TemplateKind::function;
+}
+
+TemplateParameterKind parse_parameter_kind(const std::string &name) {
+    if (name == "non_type") return TemplateParameterKind::non_type;
+    if (name == "template_template") return TemplateParameterKind::template_template;
+    return TemplateParameterKind::type;
+}
+
+TemplateArgumentKind parse_argument_kind(const std::string &name) {
+    if (name == "integral") return TemplateArgumentKind::integral;
+    if (name == "template") return TemplateArgumentKind::template_;
+    if (name == "pack") return TemplateArgumentKind::pack;
+    if (name == "other") return TemplateArgumentKind::other;
+    return TemplateArgumentKind::type;
+}
+
+InstantiationOrigin parse_origin(const std::string &name) {
+    if (name == "explicit_source") return InstantiationOrigin::explicit_source;
+    if (name == "amc_requested") return InstantiationOrigin::amc_requested;
+    if (name == "config_requested") return InstantiationOrigin::config_requested;
+    return InstantiationOrigin::implicit_compiler;
+}
+
+SemanticFunctionKind parse_function_kind(const std::string &name) {
+    if (name == "member_function") return SemanticFunctionKind::member_function;
+    if (name == "constructor") return SemanticFunctionKind::constructor;
+    if (name == "destructor") return SemanticFunctionKind::destructor;
+    if (name == "operator") return SemanticFunctionKind::operator_;
+    if (name == "conversion") return SemanticFunctionKind::conversion;
+    return SemanticFunctionKind::free_function;
+}
+
+OwnershipKind parse_ownership_kind(const std::string &name) {
+    if (name == "borrowed") return OwnershipKind::borrowed;
+    if (name == "owned") return OwnershipKind::owned;
+    if (name == "shared") return OwnershipKind::shared;
+    if (name == "opaque") return OwnershipKind::opaque;
+    if (name == "transferred") return OwnershipKind::transferred;
+    return OwnershipKind::unspecified;
+}
+
+LifetimeKind parse_lifetime_kind(const std::string &name) {
+    if (name == "static") return LifetimeKind::static_;
+    if (name == "caller") return LifetimeKind::caller;
+    if (name == "owner") return LifetimeKind::owner;
+    if (name == "scope") return LifetimeKind::scope;
+    return LifetimeKind::unknown;
+}
+
+SourceLocation parse_source(const Json *node) {
+    SourceLocation source;
+    if (node == nullptr || !node->is_object()) return source;
+    if (const auto *file = node->find("file"); file != nullptr) source.file = file->as_string();
+    if (const auto *line = node->find("line"); line != nullptr) source.line = static_cast<uint32_t>(line->as_number());
+    if (const auto *column = node->find("column"); column != nullptr)
+        source.column = static_cast<uint32_t>(column->as_number());
+    return source;
+}
+
+const Json *field(const Json &object, const char *name) { return object.is_object() ? object.find(name) : nullptr; }
+
+std::string string_field(const Json &object, const char *name) {
+    const Json *node = field(object, name);
+    return node != nullptr ? node->as_string() : std::string{};
+}
+
+long long number_field(const Json &object, const char *name) {
+    const Json *node = field(object, name);
+    return node != nullptr ? static_cast<long long>(node->as_number()) : 0;
+}
+
+bool bool_field(const Json &object, const char *name) {
+    const Json *node = field(object, name);
+    return node != nullptr && node->as_bool();
+}
+
+Hash128 hash_field(const Json &object, const char *name) {
+    const Json *node = field(object, name);
+    return node != nullptr ? hash_from_hex(node->as_string()) : Hash128{};
+}
+
 }   // namespace
 
 bool write_semantic_json(const SemanticModule &module, const std::string &path, std::string &error) {
     Json root = Json::object();
-    root.set("schema", "amc.semantic/1");
+    root.set("schema", std::string(semantic_schema));
     root.set("rules_version", static_cast<long long>(module.rules_version));
     root.set("package", module.package_name);
     root.set("version", module.package_version);
@@ -137,9 +313,95 @@ bool write_semantic_json(const SemanticModule &module, const std::string &path, 
         if (type.canonical.valid()) value.set("canonical", id_hex(type.canonical.value));
         if (type.element.valid()) value.set("element", id_hex(type.element.value));
         if (type.template_instance.valid()) value.set("template_instance", id_hex(type.template_instance.value));
+        if (type.abi_type.lo != 0 || type.abi_type.hi != 0) value.set("abi_type", id_hex(type.abi_type));
         types.push_back(std::move(value));
     }
     root.set("types", std::move(types));
+
+    Json records = Json::array();
+    for (const auto &record : module.records) {
+        Json value = Json::object();
+        value.set("type", id_hex(record.type.value));
+        value.set("polymorphic", record.is_polymorphic);
+        value.set("abstract", record.is_abstract);
+        value.set("template_primary", record.is_template_primary);
+        Json bases = Json::array();
+        for (const auto &base : record.bases) {
+            Json item = Json::object();
+            item.set("type", id_hex(base.type.value));
+            item.set("bit_offset", static_cast<long long>(base.bit_offset));
+            item.set("visibility", static_cast<long long>(base.visibility));
+            item.set("virtual", base.is_virtual);
+            bases.push_back(std::move(item));
+        }
+        value.set("bases", std::move(bases));
+        Json fields = Json::array();
+        for (const auto &field : record.fields) {
+            Json item = Json::object();
+            item.set("name", field.name);
+            item.set("type", id_hex(field.type.value));
+            item.set("bit_offset", static_cast<long long>(field.bit_offset));
+            item.set("bit_width", static_cast<long long>(field.bit_width));
+            item.set("visibility", static_cast<long long>(field.visibility));
+            item.set("static", field.is_static);
+            item.set("mutable", field.is_mutable);
+            fields.push_back(std::move(item));
+        }
+        value.set("fields", std::move(fields));
+        value.set("source", source_json(record.source));
+        records.push_back(std::move(value));
+    }
+    root.set("records", std::move(records));
+
+    Json functions = Json::array();
+    for (const auto &function : module.functions) {
+        Json value = Json::object();
+        value.set("id", id_hex(function.id.value));
+        value.set("kind", function_kind_name(function.kind));
+        value.set("name", function.qualified_name);
+        value.set("unqualified_name", function.unqualified_name);
+        if (function.owner.valid()) value.set("owner", id_hex(function.owner.value));
+        if (function.return_type.valid()) value.set("return_type", id_hex(function.return_type.value));
+        value.set("variadic", function.is_variadic);
+        value.set("noexcept", function.is_noexcept);
+        value.set("static", function.is_static);
+        value.set("virtual", function.is_virtual);
+        value.set("constexpr", function.is_constexpr);
+        value.set("template_primary", function.is_template_primary);
+        if (function.template_instance.valid())
+            value.set("template_instance", id_hex(function.template_instance.value));
+        if (function.abi_signature.lo != 0 || function.abi_signature.hi != 0)
+            value.set("abi_signature", id_hex(function.abi_signature));
+        Json parameters = Json::array();
+        for (const auto &parameter : function.parameters) {
+            Json item = Json::object();
+            item.set("name", parameter.name);
+            item.set("type", id_hex(parameter.type.value));
+            item.set("category", static_cast<long long>(parameter.category));
+            item.set("variadic", parameter.is_variadic);
+            if (!parameter.default_value.empty()) item.set("default", parameter.default_value);
+            parameters.push_back(std::move(item));
+        }
+        value.set("parameters", std::move(parameters));
+        value.set("source", source_json(function.source));
+        functions.push_back(std::move(value));
+    }
+    root.set("functions", std::move(functions));
+
+    Json ownership = Json::array();
+    for (const auto &contract : module.ownership) {
+        Json value = Json::object();
+        value.set("function", id_hex(contract.function.value));
+        value.set("interaction", interaction_name(contract.interaction));
+        value.set("index", static_cast<long long>(contract.index));
+        value.set("ownership", ownership_kind_name(contract.ownership));
+        value.set("lifetime", lifetime_kind_name(contract.lifetime));
+        value.set("mutability", mutability_name(contract.mutability));
+        if (contract.release.valid()) value.set("release", id_hex(contract.release.value));
+        if (!contract.invalidation.empty()) value.set("invalidation", contract.invalidation);
+        ownership.push_back(std::move(value));
+    }
+    root.set("ownership", std::move(ownership));
 
     Json templates = Json::array();
     for (const auto &declaration : module.templates) {
@@ -196,6 +458,193 @@ bool write_semantic_json(const SemanticModule &module, const std::string &path, 
         error = "cannot write semantic sidecar: " + path + ": " + e.what();
         return false;
     }
+    return true;
+}
+
+bool read_semantic_json(const std::string &path, SemanticModule &module, std::string &error) {
+    std::ifstream input(path, std::ios::binary);
+    if (!input) {
+        error = "cannot read semantic sidecar: " + path;
+        return false;
+    }
+    const std::string text((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+
+    Json root;
+    if (!parse_json(text, root, error)) {
+        error = "invalid semantic sidecar " + path + ": " + error;
+        return false;
+    }
+    if (!root.is_object()) {
+        error = "invalid semantic sidecar " + path + ": root must be an object";
+        return false;
+    }
+    const std::string schema = string_field(root, "schema");
+    if (schema != "amc.semantic/1" && schema != "amc.semantic/2") {
+        error = "unsupported semantic sidecar schema: " + schema;
+        return false;
+    }
+
+    module = {};
+    module.rules_version = static_cast<uint32_t>(number_field(root, "rules_version"));
+    if (module.rules_version == 0) module.rules_version = semantic_rules_version;
+    module.package_name = string_field(root, "package");
+    module.package_version = string_field(root, "version");
+
+    if (const Json *types = field(root, "types"); types != nullptr && types->is_array()) {
+        for (const auto &value : types->items()) {
+            SemanticType type;
+            type.id = SemanticTypeId{hash_field(value, "id")};
+            type.kind = parse_type_kind(string_field(value, "kind"));
+            type.qualified_name = string_field(value, "name");
+            type.qualifiers.is_const = bool_field(value, "const");
+            type.qualifiers.is_volatile = bool_field(value, "volatile");
+            type.canonical = SemanticTypeId{hash_field(value, "canonical")};
+            type.element = SemanticTypeId{hash_field(value, "element")};
+            type.template_instance = TemplateInstanceId{hash_field(value, "template_instance")};
+            type.abi_type = hash_field(value, "abi_type");
+            module.types.push_back(std::move(type));
+        }
+    }
+
+    if (const Json *records = field(root, "records"); records != nullptr && records->is_array()) {
+        for (const auto &value : records->items()) {
+            SemanticRecord record;
+            record.type = SemanticTypeId{hash_field(value, "type")};
+            record.is_polymorphic = bool_field(value, "polymorphic");
+            record.is_abstract = bool_field(value, "abstract");
+            record.is_template_primary = bool_field(value, "template_primary");
+            if (const Json *bases = field(value, "bases"); bases != nullptr && bases->is_array()) {
+                for (const auto &item : bases->items()) {
+                    SemanticBase base;
+                    base.type = SemanticTypeId{hash_field(item, "type")};
+                    base.bit_offset = static_cast<uint32_t>(number_field(item, "bit_offset"));
+                    base.visibility = static_cast<Visibility>(number_field(item, "visibility"));
+                    base.is_virtual = bool_field(item, "virtual");
+                    record.bases.push_back(std::move(base));
+                }
+            }
+            if (const Json *fields = field(value, "fields"); fields != nullptr && fields->is_array()) {
+                for (const auto &item : fields->items()) {
+                    SemanticField field;
+                    field.name = string_field(item, "name");
+                    field.type = SemanticTypeId{hash_field(item, "type")};
+                    field.bit_offset = static_cast<uint32_t>(number_field(item, "bit_offset"));
+                    field.bit_width = static_cast<uint32_t>(number_field(item, "bit_width"));
+                    field.visibility = static_cast<Visibility>(number_field(item, "visibility"));
+                    field.is_static = bool_field(item, "static");
+                    field.is_mutable = bool_field(item, "mutable");
+                    record.fields.push_back(std::move(field));
+                }
+            }
+            record.source = parse_source(field(value, "source"));
+            module.records.push_back(std::move(record));
+        }
+    }
+
+    if (const Json *functions = field(root, "functions"); functions != nullptr && functions->is_array()) {
+        for (const auto &value : functions->items()) {
+            SemanticFunction function;
+            function.id = SemanticFunctionId{hash_field(value, "id")};
+            function.kind = parse_function_kind(string_field(value, "kind"));
+            function.qualified_name = string_field(value, "name");
+            function.unqualified_name = string_field(value, "unqualified_name");
+            function.owner = SemanticTypeId{hash_field(value, "owner")};
+            function.return_type = SemanticTypeId{hash_field(value, "return_type")};
+            function.is_variadic = bool_field(value, "variadic");
+            function.is_noexcept = bool_field(value, "noexcept");
+            function.is_static = bool_field(value, "static");
+            function.is_virtual = bool_field(value, "virtual");
+            function.is_constexpr = bool_field(value, "constexpr");
+            function.is_template_primary = bool_field(value, "template_primary");
+            function.template_instance = TemplateInstanceId{hash_field(value, "template_instance")};
+            function.abi_signature = hash_field(value, "abi_signature");
+            if (const Json *parameters = field(value, "parameters"); parameters != nullptr && parameters->is_array()) {
+                for (const auto &item : parameters->items()) {
+                    SemanticParameter parameter;
+                    parameter.name = string_field(item, "name");
+                    parameter.type = SemanticTypeId{hash_field(item, "type")};
+                    parameter.category = static_cast<ValueCategory>(number_field(item, "category"));
+                    parameter.is_variadic = bool_field(item, "variadic");
+                    parameter.default_value = string_field(item, "default");
+                    function.parameters.push_back(std::move(parameter));
+                }
+            }
+            function.source = parse_source(field(value, "source"));
+            module.functions.push_back(std::move(function));
+        }
+    }
+
+    if (const Json *ownership = field(root, "ownership"); ownership != nullptr && ownership->is_array()) {
+        for (const auto &value : ownership->items()) {
+            SemanticOwnership contract;
+            contract.function = SemanticFunctionId{hash_field(value, "function")};
+            contract.interaction = string_field(value, "interaction") == "return_value" ? InteractionKind::return_value
+                                                                                        : InteractionKind::parameter;
+            contract.index = static_cast<uint32_t>(number_field(value, "index"));
+            contract.ownership = parse_ownership_kind(string_field(value, "ownership"));
+            contract.lifetime = parse_lifetime_kind(string_field(value, "lifetime"));
+            contract.mutability =
+                string_field(value, "mutability") == "mutable" ? Mutability::mutable_ : Mutability::immutable;
+            contract.release = SemanticFunctionId{hash_field(value, "release")};
+            contract.invalidation = string_field(value, "invalidation");
+            module.ownership.push_back(std::move(contract));
+        }
+    }
+
+    if (const Json *templates = field(root, "templates"); templates != nullptr && templates->is_array()) {
+        for (const auto &value : templates->items()) {
+            TemplateDecl declaration;
+            declaration.id = TemplateDeclId{hash_field(value, "id")};
+            declaration.kind = parse_template_kind(string_field(value, "kind"));
+            declaration.qualified_name = string_field(value, "name");
+            declaration.requires_source = string_field(value, "requires");
+            declaration.requires_hash = hash_field(value, "requires_hash");
+            if (const Json *parameters = field(value, "parameters"); parameters != nullptr && parameters->is_array()) {
+                for (const auto &item : parameters->items()) {
+                    TemplateParameter parameter;
+                    parameter.kind = parse_parameter_kind(string_field(item, "kind"));
+                    parameter.index = static_cast<uint32_t>(number_field(item, "index"));
+                    parameter.name = string_field(item, "name");
+                    parameter.default_argument = hash_field(item, "default_argument");
+                    parameter.constraint = hash_field(item, "constraint");
+                    parameter.constraint_source = string_field(item, "constraint_source");
+                    declaration.parameters.push_back(std::move(parameter));
+                }
+            }
+            declaration.source = parse_source(field(value, "source"));
+            module.templates.push_back(std::move(declaration));
+        }
+    }
+
+    if (const Json *instances = field(root, "instances"); instances != nullptr && instances->is_array()) {
+        for (const auto &value : instances->items()) {
+            TemplateInstance instance;
+            instance.id = TemplateInstanceId{hash_field(value, "id")};
+            instance.declaration = TemplateDeclId{hash_field(value, "declaration")};
+            instance.origin = parse_origin(string_field(value, "origin"));
+            instance.is_explicit_specialization = bool_field(value, "explicit_specialization");
+            instance.result = hash_field(value, "result");
+            if (const Json *arguments = field(value, "arguments"); arguments != nullptr && arguments->is_array()) {
+                for (const auto &item : arguments->items()) {
+                    TemplateArgument argument;
+                    argument.kind = parse_argument_kind(string_field(item, "kind"));
+                    argument.type = SemanticTypeId{hash_field(item, "type")};
+                    argument.value = number_field(item, "value");
+                    argument.template_decl = TemplateDeclId{hash_field(item, "template_decl")};
+                    argument.canonical = hash_field(item, "canonical");
+                    instance.arguments.push_back(std::move(argument));
+                }
+            }
+            if (const Json *constraint = field(value, "constraint"); constraint != nullptr) {
+                instance.constraint.evaluated = bool_field(*constraint, "evaluated");
+                instance.constraint.satisfied = bool_field(*constraint, "satisfied");
+                instance.constraint.reason = string_field(*constraint, "reason");
+            }
+            instance.source = parse_source(field(value, "source"));
+            module.instances.push_back(std::move(instance));
+        }
+    }
+
     return true;
 }
 

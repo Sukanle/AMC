@@ -13,11 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "SKL/AMC/IR/LoweringJson.h"
 #include "SKL/AMC/Pass/Lowering.h"
 #include "SKL/AMC/Semantic/Identity.h"
+#include "SKL/AMC/Semantic/Sync.h"
 
 #include <fmt/base.h>
 
+#include <cstdio>
 #include <string>
 
 namespace {
@@ -89,18 +92,22 @@ void test_lowering_links_types_functions_and_templates() {
     base_type.id = base_semantic;
     base_type.kind = amc::semantic::SemanticTypeKind::record;
     base_type.qualified_name = "demo::Base";
+    base_type.abi_type = base.id;
     amc::semantic::SemanticType foo_type;
     foo_type.id = foo_semantic;
     foo_type.kind = amc::semantic::SemanticTypeKind::record;
-    foo_type.qualified_name = "demo::Foo";
+    foo_type.qualified_name = "renamed::Foo";
+    foo_type.abi_type = foo.id;
     amc::semantic::SemanticType int_sem_type;
     int_sem_type.id = int_semantic;
     int_sem_type.kind = amc::semantic::SemanticTypeKind::builtin;
     int_sem_type.qualified_name = "int";
+    int_sem_type.abi_type = int_type.id;
     amc::semantic::SemanticType void_sem_type;
     void_sem_type.id = void_semantic;
     void_sem_type.kind = amc::semantic::SemanticTypeKind::builtin;
     void_sem_type.qualified_name = "void";
+    void_sem_type.abi_type = void_type.id;
     module.semantic.types = {base_type, foo_type, int_sem_type, void_sem_type};
 
     amc::semantic::SemanticRecord record;
@@ -121,8 +128,9 @@ void test_lowering_links_types_functions_and_templates() {
         amc::semantic::semantic_function_identity(amc::semantic::SemanticFunctionKind::member_function, foo_semantic,
             "set", {int_semantic}, {}, amc::semantic::ValueCategory::value, {}, amc::semantic::semantic_rules_version);
     function.kind = amc::semantic::SemanticFunctionKind::member_function;
-    function.qualified_name = "demo::Foo::set";
+    function.qualified_name = "renamed::Foo::set";
     function.unqualified_name = "set";
+    function.abi_signature = set.signature;
     function.owner = foo_semantic;
     function.return_type = void_semantic;
     function.parameters.push_back(parameter);
@@ -144,14 +152,15 @@ void test_lowering_links_types_functions_and_templates() {
     amc::diagnostics::DiagnosticList diagnostics;
     check(amc::pass::lower(module, result, diagnostics), "lowering succeeds with warnings");
     check(result.types.size() == 4, "all semantic types are lowered");
-    check(result.types[1].abi == foo.id && result.types[1].abi_index == 1, "type id and ABI index are linked");
+    check(result.types[1].abi == foo.id && result.types[1].abi_index == 1,
+        "type id and ABI index are linked through the direct abi_type field");
     check(result.types[1].size == 8 && result.types[1].align == 8, "layout facts are copied");
     check(result.types[1].bases.size() == 1 && result.types[1].bases[0].abi == base.id,
         "base-class lowering keeps the ABI type id");
     check(result.types[1].fields.size() == 1 && result.types[1].fields[0].type == int_type.id,
         "field lowering keeps the ABI type id");
     check(result.functions.size() == 1 && result.functions[0].abi == set.signature,
-        "function lowering keeps the ABI signature");
+        "function lowering keeps the ABI signature through the direct link");
     check(result.functions[0].parameters.size() == 1 && result.functions[0].parameters[0].type == int_type.id,
         "function parameter lowering keeps the ABI type id");
     check(result.ownership.size() == 1 && result.ownership[0].abi == set.signature,
@@ -211,11 +220,97 @@ void test_lowering_reports_missing_and_ambiguous_entities() {
     check(amc::diagnostics::has_errors(strict_diagnostics), "strict lowering emits errors");
 }
 
+void test_sync_from_abi_creates_direct_links() {
+    amc::AbiModule module;
+    amc::Type widget;
+    widget.name = "demo::Widget";
+    widget.kind = amc::TypeKind::record;
+    widget.id = id("demo::Widget");
+    widget.size = 4;
+    widget.align = 4;
+    amc::Type int_type;
+    int_type.name = "int";
+    int_type.kind = amc::TypeKind::primitive;
+    int_type.id = id("int");
+    int_type.size = 4;
+    int_type.align = 4;
+    amc::Type void_type;
+    void_type.name = "void";
+    void_type.kind = amc::TypeKind::primitive;
+    void_type.id = id("void");
+    module.types = {widget, int_type, void_type};
+    amc::Field field;
+    field.owner_type = widget.id;
+    field.name = "value";
+    field.type_id = int_type.id;
+    module.fields.push_back(field);
+    module.types[0].field_begin = 0;
+    module.types[0].field_count = 1;
+    amc::Function fn;
+    fn.name = "demo::Widget::get";
+    fn.owner_type = widget.id;
+    fn.return_type = int_type.id;
+    fn.signature = amc::hash_text("demo::Widget::get()", 0x5349474eULL);
+    module.functions.push_back(fn);
+
+    amc::semantic::SemanticModule semantic;
+    amc::semantic::synchronize_from_abi(module, semantic);
+    check(semantic.types.size() == 3, "every ABI type gets a semantic counterpart");
+    check(semantic.records.size() == 1 && semantic.records[0].fields.size() == 1,
+        "ABI record layout is mirrored into the semantic model");
+    check(semantic.functions.size() == 1 && semantic.functions[0].abi_signature == fn.signature,
+        "every ABI function gets a direct semantic signature link");
+    bool linked = true;
+    for (const auto &type : semantic.types)
+        if (type.abi_type.lo == 0 && type.abi_type.hi == 0) linked = false;
+    check(linked, "all synthesized semantic types carry abi_type");
+
+    amc::ir::Module ir;
+    ir.abi = module;
+    ir.semantic = semantic;
+    amc::ir::LoweringResult result;
+    amc::diagnostics::DiagnosticList diagnostics;
+    check(amc::pass::lower(ir, result, diagnostics), "synchronized semantic model lowers");
+    check(result.types.size() == 3 && !result.has_rejections(), "synchronized types lower without rejections");
+}
+
+void test_lowering_json_roundtrip() {
+    amc::ir::Module module;
+    amc::Type int_type;
+    int_type.name = "int";
+    int_type.kind = amc::TypeKind::primitive;
+    int_type.id = id("int");
+    int_type.size = 4;
+    int_type.align = 4;
+    module.abi.types.push_back(int_type);
+    amc::semantic::SemanticType int_semantic;
+    int_semantic.id = semantic_type("int");
+    int_semantic.kind = amc::semantic::SemanticTypeKind::builtin;
+    int_semantic.qualified_name = "int";
+    int_semantic.abi_type = int_type.id;
+    module.semantic.types.push_back(int_semantic);
+
+    amc::ir::LoweringResult result;
+    amc::diagnostics::DiagnosticList diagnostics;
+    check(amc::pass::lower(module, result, diagnostics), "lowering succeeds for the round-trip test");
+
+    const std::string path = "amc-lowering-test.json";
+    std::string error;
+    check(amc::ir::write_lowering_json(result, path, error), "lowering JSON is written");
+    amc::ir::LoweringResult decoded;
+    check(amc::ir::read_lowering_json(path, decoded, error), "lowering JSON is read back");
+    check(decoded.types.size() == 1 && decoded.types[0].abi == int_type.id,
+        "lowering round-trip preserves the ABI type id");
+    std::remove(path.c_str());
+}
+
 }   // namespace
 
 int main() {
     test_lowering_links_types_functions_and_templates();
     test_lowering_reports_missing_and_ambiguous_entities();
+    test_sync_from_abi_creates_direct_links();
+    test_lowering_json_roundtrip();
 
     if (failures != 0) {
         fmt::print(stderr, "amc-lowering-test: {} failure(s)\n", failures);

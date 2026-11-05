@@ -142,9 +142,16 @@ and `amc-boundary-edges`.
 - `Pass/Lowering` links semantic types, functions, inheritance, fields,
   ownership and materialized templates to their ABI counterparts
 - `ir::Module` carries the lowering result; `amc-lowering-test` covers mapping,
-  missing/ambiguous entities and strict mode
-- Backend consumption of the lowered contract and the semantic sidecar reader
-  are the next M4 slice
+  direct `abi_type` / `abi_signature` links, missing/ambiguous entities, strict
+  mode and the lowering JSON round trip
+- the C++ frontend synchronizes every ABI type/function into the semantic model
+  with a direct link; `Semantic/Sync` is reusable by other frontends
+- `Semantic/Serialize` reads and writes the sidecar, including records,
+  functions, ownership and the ABI links
+- `Compilation/Build` reads the sidecar, completes missing links, runs
+  `pass::lower` and writes `<artifact>.lowering` after symbol projection
+- backends load the optional lowering sidecar and consume lowered type/function
+  indexes and ownership contracts instead of re-deriving them by name
 
 ## Current → Target Mapping
 

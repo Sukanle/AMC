@@ -61,12 +61,32 @@ bool lower(const ir::Module &module, ir::LoweringResult &result, diagnostics::Di
         ir::LoweredType lowered;
         lowered.semantic = type.id;
         lowered.name = type.qualified_name;
-        if (const auto found = abi_types.find(normalize_name(type.qualified_name)); found != abi_types.end()) {
-            lowered.abi = found->second.first->id;
-            lowered.abi_index = found->second.second;
-            lowered.size = found->second.first->size;
-            lowered.align = found->second.first->align;
-            lowered.layout_hash = found->second.first->layout_hash;
+
+        // The frontend records a direct `abi_type` link. Prefer it so lowering
+        // never has to re-identify a type by its spelling; the name lookup is a
+        // compatibility fallback for older semantic sidecars.
+        const Type *abi_type = nullptr;
+        uint32_t abi_index = UINT32_MAX;
+        if (type.abi_type.lo != 0 || type.abi_type.hi != 0) {
+            for (uint32_t i = 0; i < module.abi.types.size(); ++i)
+                if (module.abi.types[i].id == type.abi_type) {
+                    abi_type = &module.abi.types[i];
+                    abi_index = i;
+                    break;
+                }
+        }
+        if (abi_type == nullptr) {
+            if (const auto found = abi_types.find(normalize_name(type.qualified_name)); found != abi_types.end()) {
+                abi_type = found->second.first;
+                abi_index = found->second.second;
+            }
+        }
+        if (abi_type != nullptr) {
+            lowered.abi = abi_type->id;
+            lowered.abi_index = abi_index;
+            lowered.size = abi_type->size;
+            lowered.align = abi_type->align;
+            lowered.layout_hash = abi_type->layout_hash;
             lowered.status = ir::LoweringStatus::lowered;
             lowered.reason = ir::LoweringReason::ok;
         } else {
@@ -112,16 +132,25 @@ bool lower(const ir::Module &module, ir::LoweringResult &result, diagnostics::Di
         lowered.semantic = function.id;
         lowered.name = function.qualified_name;
 
-        std::vector<std::pair<const Function *, uint32_t>> candidates;
-        const auto qualified = abi_functions.find(normalize_name(function.qualified_name));
-        if (qualified != abi_functions.end()) candidates = qualified->second;
-        if (candidates.empty()) {
-            const auto plain = abi_functions.find(normalize_name(function.unqualified_name));
-            if (plain != abi_functions.end()) candidates = plain->second;
-        }
+        // The frontend records the ABI signature produced for this overload;
+        // that is the authoritative link. Name + arity remains only for
+        // semantic sidecars written before the direct link existed.
         std::vector<std::pair<const Function *, uint32_t>> matching;
-        for (const auto &candidate : candidates)
-            if (candidate.first->parameters.size() == function.parameters.size()) matching.push_back(candidate);
+        if (function.abi_signature.lo != 0 || function.abi_signature.hi != 0) {
+            for (uint32_t i = 0; i < module.abi.functions.size(); ++i)
+                if (module.abi.functions[i].signature == function.abi_signature)
+                    matching.emplace_back(&module.abi.functions[i], i);
+        } else {
+            std::vector<std::pair<const Function *, uint32_t>> candidates;
+            const auto qualified = abi_functions.find(normalize_name(function.qualified_name));
+            if (qualified != abi_functions.end()) candidates = qualified->second;
+            if (candidates.empty()) {
+                const auto plain = abi_functions.find(normalize_name(function.unqualified_name));
+                if (plain != abi_functions.end()) candidates = plain->second;
+            }
+            for (const auto &candidate : candidates)
+                if (candidate.first->parameters.size() == function.parameters.size()) matching.push_back(candidate);
+        }
 
         if (matching.size() == 1) {
             lowered.abi = matching.front().first->signature;
@@ -155,10 +184,35 @@ bool lower(const ir::Module &module, ir::LoweringResult &result, diagnostics::Di
         lowered.ownership = ownership.ownership;
         lowered.lifetime = ownership.lifetime;
         lowered.mutability = ownership.mutability;
-        if (const auto found = lowered_function_index.find(ownership.function); found != lowered_function_index.end())
+        if (const auto found = lowered_function_index.find(ownership.function); found != lowered_function_index.end()) {
             lowered.abi = result.functions[found->second].abi;
-        else
+            if (const auto release = lowered_function_index.find(ownership.release);
+                release != lowered_function_index.end())
+                lowered.release = result.functions[release->second].abi;
+            // Confirm the ownership declaration against the ABI contract that
+            // was resolved from configuration. The backend consumes this flag
+            // instead of comparing names.
+            if (lowered.abi.lo != 0 || lowered.abi.hi != 0) {
+                for (uint32_t i = 0; i < module.abi.functions.size(); ++i) {
+                    if (!(module.abi.functions[i].signature == lowered.abi)) continue;
+                    uint32_t parameter_base = 0;
+                    for (uint32_t j = 0; j < i; ++j)
+                        parameter_base += static_cast<uint32_t>(module.abi.functions[j].parameters.size());
+                    const uint32_t target = lowered.interaction == semantic::InteractionKind::return_value
+                                              ? i
+                                              : parameter_base + lowered.index;
+                    for (const auto &contract : module.abi.contracts)
+                        if (static_cast<uint32_t>(contract.target) == static_cast<uint32_t>(lowered.interaction)
+                            && contract.target_index == target) {
+                            lowered.matched_abi_contract = true;
+                            break;
+                        }
+                    break;
+                }
+            }
+        } else {
             report(diagnostics, options, "lowering_ownership_unresolved", "ownership contract has no lowered function");
+        }
         result.ownership.push_back(std::move(lowered));
     }
 

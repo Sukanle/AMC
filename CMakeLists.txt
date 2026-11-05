@@ -215,6 +215,8 @@ add_library(
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Condition.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Semantic/Identity.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Semantic/Serialize.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Semantic/Sync.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/LoweringJson.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/ELF.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Json.cpp
     ${AMC_SOURCE_DIR}/src/ljson/json.c
@@ -275,6 +277,12 @@ set_target_properties(
                POSITION_INDEPENDENT_CODE ON
                OUTPUT_NAME abix-tools)
 
+# M4: semantic -> ABI lowering pass. It links the semantic model to the ABI
+# view without rewriting either; backends consume the resulting contract.
+add_library(amc-pass STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Lowering.cpp)
+target_include_directories(amc-pass PUBLIC ${AMC_INCLUDE_DIR})
+target_link_libraries(amc-pass PUBLIC libabix-format)
+
 # A4 Compilation module: configuration parsing and, later, the shared build
 # pipeline. It is a build-tree library consumed by the CLI.
 add_library(
@@ -282,14 +290,8 @@ add_library(
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Config.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Provider.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Meta.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Build.cpp)
 target_include_directories(amc-compilation PUBLIC ${AMC_INCLUDE_DIR})
-target_link_libraries(amc-compilation PUBLIC libabix-format amc-util tomlplusplus::tomlplusplus)
+target_link_libraries(amc-compilation PUBLIC libabix-format amc-util amc-pass tomlplusplus::tomlplusplus)
 target_compile_definitions(amc-compilation PRIVATE AMC_DEFAULT_PROVIDERS_FILE="${AMC_SOURCE_DIR}/providers.toml")
-
-# M4: semantic -> ABI lowering pass. It links the semantic model to the ABI
-# view without rewriting either; backends consume the resulting contract.
-add_library(amc-pass STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Lowering.cpp)
-target_include_directories(amc-pass PUBLIC ${AMC_INCLUDE_DIR})
-target_link_libraries(amc-pass PUBLIC libabix-format)
 
 add_library(AMC::format ALIAS libabix-format)
 add_library(AMC::abi ALIAS libabix-abi)
