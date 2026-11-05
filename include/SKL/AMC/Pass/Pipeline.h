@@ -23,6 +23,7 @@
 namespace amc::pass {
 
 struct PipelineOptions {
+    bool verify_artifact = true;
     bool verify_semantic = true;
     bool verify_abi = true;
     bool lowering = true;

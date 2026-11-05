@@ -39,8 +39,14 @@ bool load_artifact(const std::string &abi_path, Module &module, std::string &err
     if (!amc::read_abix(abi_path, module.abi, error)) return false;
 
     const ArtifactPaths paths = artifact_paths(abi_path);
-    if (exists(paths.semantic) && !semantic::read_semantic_json(paths.semantic, module.semantic, error)) return false;
-    if (exists(paths.lowering) && !read_lowering_json(paths.lowering, module.lowering, error)) return false;
+    if (exists(paths.semantic)) {
+        if (!semantic::read_semantic_json(paths.semantic, module.semantic, error)) return false;
+        module.artifact.semantic_loaded = true;
+    }
+    if (exists(paths.lowering)) {
+        if (!read_lowering_json(paths.lowering, module.lowering, error)) return false;
+        module.artifact.lowering_loaded = true;
+    }
     return true;
 }
 

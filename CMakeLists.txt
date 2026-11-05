@@ -338,6 +338,7 @@ add_library(
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Lowering.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Verify.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Semantic.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Artifact.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Compatibility.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/TypeMapping.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Pipeline.cpp)

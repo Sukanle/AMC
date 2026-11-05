@@ -16,6 +16,7 @@
 #include "SKL/AMC/Pass/Pipeline.h"
 
 #include "SKL/AMC/Pass/Lowering.h"
+#include "SKL/AMC/Pass/Artifact.h"
 #include "SKL/AMC/Pass/Semantic.h"
 #include "SKL/AMC/Pass/Verify.h"
 
@@ -25,6 +26,7 @@ Pipeline make_default_pipeline() { return make_pipeline({}); }
 
 Pipeline make_pipeline(const PipelineOptions &options) {
     Pipeline pipeline;
+    if (options.verify_artifact) pipeline.passes.push_back({"artifact-verify", verify_artifact});
     if (options.verify_semantic) pipeline.passes.push_back({"semantic-verify", verify_semantic});
     if (options.verify_abi) pipeline.passes.push_back({"abi-verify", verify_abi});
     if (options.lowering)

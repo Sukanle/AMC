@@ -15,6 +15,7 @@
  */
 #include "SKL/AMC/Core/Core.h"
 #include "SKL/AMC/IR/Artifact.h"
+#include "SKL/AMC/Pass/Artifact.h"
 #include "SKL/AMC/Pass/Compatibility.h"
 #include "SKL/AMC/Pass/Semantic.h"
 #include "SKL/AMC/Pass/TypeMapping.h"
@@ -89,6 +90,27 @@ void test_compatibility_pass() {
     check(amc::pass::compare_modules(contract, implementation, result, context, strict),
         "strict comparison still completes");
     check(amc::diagnostics::has_errors(strict), "strict drift becomes an error");
+}
+
+void test_verify_artifact_pass() {
+    amc::ir::Module module;
+    module.schema_version = amc::ir::module_schema_version;
+    module.artifact.semantic_loaded = true;
+    module.semantic.rules_version = 1;
+    amc::pass::Context context;
+    amc::diagnostics::DiagnosticList diagnostics;
+    check(amc::pass::verify_artifact(module, context, diagnostics), "verify_artifact accepts the current schema");
+
+    module.schema_version = amc::ir::module_schema_version + 1;
+    amc::diagnostics::DiagnosticList newer;
+    check(!amc::pass::verify_artifact(module, context, newer), "verify_artifact rejects a newer IR schema");
+    check(amc::diagnostics::has_errors(newer), "newer schema emits an error");
+
+    module.schema_version = amc::ir::module_schema_version;
+    module.semantic.rules_version = 0;
+    amc::diagnostics::DiagnosticList bad_semantic;
+    check(!amc::pass::verify_artifact(module, context, bad_semantic),
+        "verify_artifact rejects a semantic sidecar without rules version");
 }
 
 void test_verify_semantic_pass() {
@@ -174,6 +196,7 @@ void test_default_pipeline() {
 int main() {
     test_verify_abi_pass();
     test_compatibility_pass();
+    test_verify_artifact_pass();
     test_verify_semantic_pass();
     test_verify_lowering_pass();
     test_compatibility_mapping_pass();

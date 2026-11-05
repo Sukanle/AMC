@@ -216,9 +216,10 @@ CTest 同时运行 `--contracts-only` 和 `--strict`：
 
 - `IR/Artifact` 把 `.abix` + 可选 `.semantic` / `.lowering` 加载为一个
   `ir::Module`；backend 统一使用该边界，不再重复 sidecar 路径
-- `Pass/Semantic` 校验语义引用，`Pass/Verify` 负责 ABI 与只读 lowering 引用校验，
-  `Pass/Compatibility` 包装契约漂移，`Pass/TypeMapping` 负责映射报告，
-  `Pass/Pipeline` 组合 semantic/ABI 校验 + lowering + lowering 校验，并支持选择 Pass/strict 选项
+- `Pass/Artifact` 校验 IR schema 与 sidecar 元数据；`Pass/Semantic` 校验语义引用；
+  `Pass/Verify` 负责 ABI 与只读 lowering 引用校验；`Pass/Compatibility` 包装契约漂移；
+  `Pass/TypeMapping` 负责映射报告；`Pass/Pipeline` 组合 artifact/semantic/ABI 校验 +
+  lowering + lowering 校验，并支持选择 Pass/strict 选项
 - `Compilation/Build` 运行标准 Pass pipeline；`amc verify`、`amc diff`、
   `amc compatibility` 使用 Pass 入口；`amc query --compatible` 仍走 Query 层 Core helper，
   以保持 Query -> Pass 边界

@@ -30,10 +30,16 @@ namespace amc::ir {
 // without moving code.
 inline constexpr uint32_t module_schema_version = 2;
 
+struct ArtifactInfo {
+    bool semantic_loaded = false;
+    bool lowering_loaded = false;
+};
+
 struct Module {
     AbiModule abi;
     semantic::SemanticModule semantic;
     LoweringResult lowering;
+    ArtifactInfo artifact;
     uint32_t schema_version = module_schema_version;
 };
 
