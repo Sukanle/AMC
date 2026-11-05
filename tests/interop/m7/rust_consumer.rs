@@ -3,7 +3,16 @@ mod abi;
 
 use abi::*;
 use core::ffi::*;
+use std::ffi::CString;
 use std::sync::atomic::{AtomicUsize, Ordering};
+
+extern "C" {
+    fn m7_lease_release(token: *mut c_void);
+    fn m7_lease_load(path: *const c_char) -> *mut c_void;
+    fn m7_lease_object(lease: *mut c_void) -> *mut c_void;
+    fn m7_lease_token(lease: *mut c_void) -> *mut c_void;
+    fn m7_lease_destroy(lease: *mut c_void) -> c_int;
+}
 
 static RELEASED: AtomicUsize = AtomicUsize::new(0);
 
@@ -97,6 +106,30 @@ fn main() {
             assert!(leased.has_lease());
         }
         assert_eq!(RELEASED.load(Ordering::SeqCst), 1, "lease released on drop");
+
+        // Real loader path: the C ABI bridge loads the module, activates its
+        // ModuleControl and transfers a real ABIX ModuleLease token.
+        let module = std::env::args().nth(1).expect("module path");
+        let module = CString::new(module).expect("module path NUL");
+        let lease = m7_lease_load(module.as_ptr());
+        assert!(!lease.is_null(), "m7_lease_load");
+        let token = m7_lease_token(lease);
+        assert!(!token.is_null(), "m7_lease_token");
+        let object = m7_lease_object(lease);
+        assert!(!object.is_null(), "m7_lease_object");
+        {
+            let proxy = L3SessionOpsProxy::bind(
+                (L3SessionOpsProxy::ID_LO, L3SessionOpsProxy::ID_HI),
+                L3SessionOpsProxy::VERSION,
+                object,
+                &methods,
+                Some(InterfaceLease::from_raw(token, m7_lease_release)),
+            )
+            .expect("dynamic bind");
+            assert_eq!(proxy.l3_session_set(11), 0);
+            assert_eq!(proxy.l3_session_get(), 11);
+        }
+        assert_eq!(m7_lease_destroy(lease), 0, "module unload after lease drop");
     }
     println!("m7 rust: OK");
 }

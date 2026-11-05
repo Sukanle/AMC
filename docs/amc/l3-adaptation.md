@@ -41,6 +41,7 @@ The script also covers negative cases:
 - a native header with a different layout is rejected by the generated ABI
   check at compile time;
 - interface version mismatch is rejected at bind time;
+- cross-artifact interface version drift is reported by `amc verify`;
 - the generated proxy releases its `InterfaceLease` on drop/deinit.
 
 ## Example: real project (cmdly)

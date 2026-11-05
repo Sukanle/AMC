@@ -15,12 +15,20 @@ fn set_adapter(object: ?*anyopaque, value: c_int) callconv(.c) c_int {
     return abi.l3_session_set(object, value);
 }
 
+extern fn m7_lease_load(path: [*c]const u8) ?*anyopaque;
+extern fn m7_lease_object(lease: ?*anyopaque) ?*anyopaque;
+extern fn m7_lease_token(lease: ?*anyopaque) ?*anyopaque;
+extern fn m7_lease_release(token: ?*anyopaque) callconv(.c) void;
+extern fn m7_lease_destroy(lease: ?*anyopaque) c_int;
+
 fn release_lease(context: ?*anyopaque) callconv(.c) void {
     const released: *u32 = @ptrCast(@alignCast(context.?));
     released.* += 1;
 }
 
 pub fn main() !void {
+    const module_path = "M7_MODULE_PATH";
+
     const session = abi.l3_session_create(@ptrCast("demo"));
     if (session == null) return error.CreateFailed;
     var total: i32 = 0;
@@ -80,6 +88,27 @@ pub fn main() !void {
         leased.deinit();
     }
     if (released != 1) return error.LeaseNotReleased;
+
+    // Real loader path through the C ABI bridge.
+    const loaded = m7_lease_load(module_path);
+    if (loaded == null) return error.LeaseLoadFailed;
+    const token = m7_lease_token(loaded);
+    if (token == null) return error.LeaseTokenFailed;
+    const object = m7_lease_object(loaded) orelse return error.LeaseObjectFailed;
+    {
+        var dynamic = try abi.L3SessionOpsProxy.bind(
+            abi.L3SessionOpsProxy.ID_LO,
+            abi.L3SessionOpsProxy.ID_HI,
+            abi.L3SessionOpsProxy.VERSION,
+            object,
+            methods[0..],
+            abi.InterfaceLease.init(token, &m7_lease_release),
+        );
+        if (dynamic.l3_session_set(11) != 0) return error.DynamicSetFailed;
+        if (dynamic.l3_session_get() != 11) return error.DynamicGetFailed;
+        dynamic.deinit();
+    }
+    if (m7_lease_destroy(loaded) != 0) return error.LeaseDestroyFailed;
 
     _ = abi.l3_session_destroy(session);
     std.debug.print("m7 zig: OK\n", .{});

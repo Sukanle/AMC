@@ -49,6 +49,7 @@ enum class ChangeKind {
     calling_convention_changed,
     ownership_changed,
     error_boundary_changed,
+    interface_changed,
 };
 
 const char *change_kind_name(ChangeKind kind);

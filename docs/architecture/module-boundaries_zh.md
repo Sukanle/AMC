@@ -171,7 +171,8 @@ CTest 同时运行 `--contracts-only` 和 `--strict`：
   并拒绝 stale version/signature 契约
 - registry consumer 覆盖 module lease / begin_unload / wait_for_idle 生命周期；
   `tests/interop/m7/` 是独立 same-library/same-contract L3 fixture，并覆盖 target /
-  stale lowering / 编译期 layout 拒绝
+  stale lowering / 跨 artifact interface 版本 / 编译期 layout 拒绝
+- `Verify` 会比较 interface contract，跨 artifact 的版本/slot/签名变化会报告为契约漂移
 - 若 lowering sidecar 引用了 artifact 中不存在的 TypeID 或签名，生成阶段直接失败，
   不再投影过期数据
 - `tests/interop/expose_test.py` 用同一 exposed 契约和类型化 Result wrapper 运行

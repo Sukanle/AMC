@@ -201,7 +201,10 @@ and `amc-boundary-edges`.
   contracts
 - the registry consumer covers module lease / begin_unload / wait_for_idle
   lifecycle, and `tests/interop/m7/` is an independent same-library/same-contract
-  L3 fixture with target, stale-lowering and compile-time layout rejection
+  L3 fixture with target, stale-lowering, cross-artifact interface-version and
+  compile-time layout rejection
+- `Verify` compares interface contracts, so an interface version/slot/signature
+  change is reported as contract drift across artifacts
 - generation rejects a lowering sidecar that references a TypeID or signature
   absent from the artifact, instead of projecting stale data
 - `tests/interop/expose_test.py` drives the same exposed contract and typed

@@ -278,8 +278,57 @@ const char *change_kind_name(ChangeKind kind) {
         case ChangeKind::calling_convention_changed: return "calling_convention_changed";
         case ChangeKind::ownership_changed:          return "ownership_changed";
         case ChangeKind::error_boundary_changed:     return "error_boundary_changed";
+        case ChangeKind::interface_changed:          return "interface_changed";
     }
     return "unknown";
+}
+
+std::map<TypeKey, const InterfaceRecord *> index_interfaces(const AbiModule &module) {
+    std::map<TypeKey, const InterfaceRecord *> entries;
+    for (const auto &record : module.interfaces)
+        entries.emplace(key(record.id), &record);
+    return entries;
+}
+
+const InterfaceMethod *find_interface_method(const AbiModule &module, const InterfaceRecord &record, uint32_t slot) {
+    for (uint32_t i = 0; i < record.method_count; ++i) {
+        const auto &method = module.interface_methods[record.method_begin + i];
+        if (method.slot == slot) return &method;
+    }
+    return nullptr;
+}
+
+void compare_interfaces(const AbiModule &contract, const AbiModule &implementation, VerifyResult &result) {
+    const auto contract_interfaces = index_interfaces(contract);
+    const auto implementation_interfaces = index_interfaces(implementation);
+    for (const auto &[id, record] : contract_interfaces) {
+        const auto found = implementation_interfaces.find(id);
+        if (found == implementation_interfaces.end()) {
+            add_change(
+                result, ChangeKind::interface_changed, record->name, {}, "interface missing from implementation");
+            continue;
+        }
+        if (record->version != found->second->version) {
+            add_change(result, ChangeKind::interface_changed, record->name, {},
+                fmt::format("version {} -> {}", record->version, found->second->version));
+        }
+        if (record->method_count != found->second->method_count) {
+            add_change(result, ChangeKind::interface_changed, record->name, {},
+                fmt::format("method count {} -> {}", record->method_count, found->second->method_count));
+            continue;
+        }
+        for (uint32_t i = 0; i < record->method_count; ++i) {
+            const auto &before = contract.interface_methods[record->method_begin + i];
+            const auto *after = find_interface_method(implementation, *found->second, before.slot);
+            if (after == nullptr || !(before.signature == after->signature)) {
+                add_change(result, ChangeKind::interface_changed, record->name, before.name,
+                    after == nullptr ? "method slot missing" : "method signature changed");
+            }
+        }
+    }
+    for (const auto &[id, record] : implementation_interfaces)
+        if (!contract_interfaces.count(id))
+            add_change(result, ChangeKind::interface_changed, record->name, {}, "interface added to implementation");
 }
 
 bool verify_modules(
@@ -354,6 +403,7 @@ bool verify_modules(
     }
 
     compare_contracts(contract, implementation, result);
+    compare_interfaces(contract, implementation, result);
 
     return true;
 }

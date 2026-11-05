@@ -93,12 +93,22 @@ def main():
     try:
         fixture = os.path.dirname(os.path.abspath(__file__))
         for name in ("api.hpp", "api.cpp", "api.abic.toml", "layout_bad.hpp",
+                     "lease_bridge.hpp", "lease_bridge.cpp",
                      "rust_consumer.rs", "cpp_consumer.cpp", "zig_consumer.zig"):
             shutil.copyfile(os.path.join(fixture, name), os.path.join(work, name))
         lib = module_path(work, "m7")
+        zig_src_path = os.path.join(work, "zig_consumer.zig")
+        zig_text = open(zig_src_path, encoding="utf-8").read().replace(
+            "M7_MODULE_PATH", lib.replace("\\", "/"))
+        open(zig_src_path, "w", encoding="utf-8").write(zig_text)
         r = run([cxx, "-std=c++17", "-shared", "-fPIC", "-O2", os.path.join(work, "api.cpp"),
                  "-o", lib])
         check(r.returncode == 0, "native M7 library built", r.stderr[-400:])
+        bridge = module_path(work, "m7bridge")
+        bridge_link = [] if sys.platform != "linux" else ["-ldl"]
+        r = run([cxx, "-std=c++17", "-shared", "-fPIC", "-O2", os.path.join(work, "lease_bridge.cpp"),
+                 "-I", work, *include_flags(str(source_root)), "-o", bridge, *bridge_link])
+        check(r.returncode == 0, "ABIX lease bridge built", r.stderr[-400:])
 
         config = os.path.join(work, "api.abic.toml")
         text = open(config, encoding="utf-8").read().replace(
@@ -109,14 +119,35 @@ def main():
         artifact = os.path.join(out, "m7.abix")
         check(r.returncode == 0 and os.path.isfile(artifact), "M7 artifact built", (r.stdout + r.stderr)[-400:])
 
+        # Cross-artifact version compatibility: the same contract at interface
+        # version 2 must be reported as interface drift by `amc verify`.
+        v2_config = os.path.join(work, "api_v2.abic.toml")
+        v2_text = open(config, encoding="utf-8").read().replace(
+            'name = "L3SessionOps"\nversion = 1', 'name = "L3SessionOps"\nversion = 2', 1)
+        v2_text = v2_text.replace('output = "m7.abix"', 'output = "m7_v2.abix"', 1)
+        open(v2_config, "w", encoding="utf-8").write(v2_text)
+        v2_out = os.path.join(work, "abix_v2")
+        r = run([amc, "build", "-c", v2_config, "-B", v2_out])
+        v2_artifact = os.path.join(v2_out, "m7_v2.abix")
+        if check(r.returncode == 0 and os.path.isfile(v2_artifact),
+                 "M7 v2 artifact built", (r.stdout + r.stderr)[-400:]):
+            r = run([amc, "verify", artifact, v2_artifact])
+            text = r.stdout + r.stderr
+            check(r.returncode != 0 and "interface_changed" in text,
+                  "M7 cross-artifact interface version drift is rejected", text[-400:])
+        r = run([amc, "verify", artifact, artifact])
+        check(r.returncode == 0 and "consistent" in (r.stdout + r.stderr),
+              "M7 same-artifact verification is consistent", (r.stdout + r.stderr)[-400:])
+
         gen_rust = os.path.join(work, "gen")
         r = run([amc, "generate", artifact, "-l", "rust", "-o", gen_rust])
         check(r.returncode == 0, "M7 Rust projection generated", (r.stdout + r.stderr)[-400:])
         rust_src = os.path.join(work, "rust_consumer.rs")
         rust_bin = os.path.join(work, exe("rust_consumer"))
-        r = run([rustc, "--edition", "2021", rust_src, "-o", rust_bin] + rust_link(work, "m7"))
+        r = run([rustc, "--edition", "2021", rust_src, "-o", rust_bin]
+                + rust_link(work, "m7") + ["-L", "native=" + work, "-l", "dylib=m7bridge"])
         if check(r.returncode == 0, "M7 Rust consumer compiled", r.stderr[-400:]):
-            r = run([rust_bin], env=env_for(work))
+            r = run([rust_bin, lib], env=env_for(work))
             check(r.returncode == 0 and "m7 rust: OK" in r.stdout,
                   "M7 Rust consumer ran", (r.stdout + r.stderr)[-400:])
 
@@ -152,10 +183,10 @@ def main():
             r = run([amc, "generate", artifact, "-l", "zig", "-o", gen_zig])
             check(r.returncode == 0, "M7 Zig projection generated", (r.stdout + r.stderr)[-400:])
             zig_bin = os.path.join(work, exe("zig_consumer"))
-            r = run([zig, "build-exe", "zig_consumer.zig", "-lc", "-L", work, "-lm7",
+            r = run([zig, "build-exe", "zig_consumer.zig", "-lc", "-L", work, "-lm7", "-lm7bridge",
                      "-rpath", work, "-femit-bin=" + zig_bin], cwd=work)
             if check(r.returncode == 0, "M7 Zig consumer compiled", r.stderr[-400:]):
-                r = run([zig_bin], env=env_for(work))
+                r = run([zig_bin, lib], env=env_for(work))
                 check(r.returncode == 0 and "m7 zig: OK" in (r.stdout + r.stderr),
                       "M7 Zig consumer ran", (r.stdout + r.stderr)[-400:])
         else:
