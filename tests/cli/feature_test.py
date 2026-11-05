@@ -448,6 +448,10 @@ def main() -> int:
             elif not rustc:
                 report.skip("Rust binding compile check (no rustc)")
             else:
+                if "pub mod metadata" in rust_proj.read_text(encoding="utf-8"):
+                    report.ok("the CodeIn Rust metadata reader is embedded")
+                else:
+                    report.fail("the CodeIn Rust metadata reader is embedded")
                 compile_result = run([rustc, "--edition", "2021", "--crate-type", "lib",
                                       str(rust_proj), "-o", str(work / "amc_generated.rlib")])
                 if compile_result.returncode == 0:

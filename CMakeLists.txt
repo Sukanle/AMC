@@ -34,6 +34,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# CodeIn templates are plain source assets (Rust metadata reader, future
+# backends). The generated Config.h exposes the build-tree path; installed
+# providers resolve the install-relative path at runtime.
+set(AMC_CODEIN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/CodeIn")
+set(AMC_GENERATED_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+file(MAKE_DIRECTORY "${AMC_GENERATED_INCLUDE_DIR}/SKL/AMC")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Config.h.in" "${AMC_GENERATED_INCLUDE_DIR}/SKL/AMC/Config.h" @ONLY)
+
 option(AMC_BUILD_TESTS "Build AMC unit/e2e tests" ON)
 option(AMC_INSTALL "Generate AMC install rules" ON)
 option(AMC_ENABLE_LLDB_PLUGIN "Build the optional LLDB plugin" ON)
@@ -269,7 +277,7 @@ target_link_libraries(amc-cpp PRIVATE amc-core amc-lang ${AMC_CLANG_CPP_LIBRARY}
 add_executable(
     amc-rust ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Rust/Rust.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Frontend/Rust/Frontend.cpp
              ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Rust/Backend.cpp)
-target_include_directories(amc-rust PRIVATE ${AMC_INCLUDE_DIR})
+target_include_directories(amc-rust PRIVATE ${AMC_INCLUDE_DIR} ${AMC_GENERATED_INCLUDE_DIR})
 target_link_libraries(amc-rust PRIVATE amc-core amc-lang fmt::fmt)
 
 add_executable(amc-zig ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Zig/Zig.cpp
@@ -439,6 +447,7 @@ if(AMC_INSTALL)
         FILES ${AMC_SOURCE_DIR}/providers.toml
         DESTINATION ${CMAKE_INSTALL_BINDIR}
         RENAME amc-providers.toml)
+    install(DIRECTORY ${AMC_CODEIN_DIR}/ DESTINATION ${CMAKE_INSTALL_DATADIR}/AMC/CodeIn)
     install(DIRECTORY ${AMC_SOURCE_DIR}/include/SKL/AMC DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/SKL)
     install(DIRECTORY ${AMC_SOURCE_DIR}/include/ljson DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
     install(FILES ${AMC_SOURCE_DIR}/LICENSE ${AMC_SOURCE_DIR}/NOTICE ${AMC_SOURCE_DIR}/THIRD_PARTY_NOTICES.md
