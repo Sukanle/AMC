@@ -476,8 +476,9 @@ bool load_lowering_sidecar(const std::string &artifact_path, LoweringResult &res
     return read_lowering_json(path, result, error);
 }
 
-void apply_lowering_contracts(const LoweringResult &result, AbiModule &module) {
-    if (result.types.empty() && result.functions.empty() && result.ownership.empty() && result.exposed.empty()) return;
+bool apply_lowering_contracts(const LoweringResult &result, AbiModule &module, std::string &error) {
+    if (result.types.empty() && result.functions.empty() && result.ownership.empty() && result.exposed.empty())
+        return true;
 
     std::unordered_map<uint64_t, std::unordered_set<uint64_t>> type_ids;
     for (const auto &type : module.types)
@@ -501,6 +502,43 @@ void apply_lowering_contracts(const LoweringResult &result, AbiModule &module) {
         const auto lo = function_ids.find(id.lo);
         return lo != function_ids.end() && lo->second.count(id.hi) != 0;
     };
+    const auto missing_type = [&](const std::string &what, Hash128 id) {
+        error = "lowering sidecar references an ABI type missing from the artifact: " + what + " (" + id_hex(id) + ")";
+        return false;
+    };
+    const auto missing_function = [&](const std::string &what, Hash128 id) {
+        error =
+            "lowering sidecar references an ABI function missing from the artifact: " + what + " (" + id_hex(id) + ")";
+        return false;
+    };
+    for (const auto &type : result.types) {
+        if (type.status != LoweringStatus::lowered) continue;
+        if (!valid(type.abi) || !has_type(type.abi)) return missing_type(type.name, type.abi);
+        if (type.abi_index < module.types.size() && module.types[type.abi_index].id == type.abi) continue;
+        return missing_type(type.name, type.abi);
+    }
+    for (const auto &function : result.functions) {
+        if (function.status != LoweringStatus::lowered) continue;
+        if (!valid(function.abi) || !has_function(function.abi)) return missing_function(function.name, function.abi);
+        if (function.abi_index < module.functions.size()
+            && module.functions[function.abi_index].signature == function.abi)
+            continue;
+        return missing_function(function.name, function.abi);
+    }
+    for (const auto &contract : result.ownership) {
+        if (!valid(contract.abi) || !has_function(contract.abi)) return missing_function("ownership", contract.abi);
+    }
+    for (const auto &record : result.exposed) {
+        if (record.status != LoweringStatus::lowered) continue;
+        if (!valid(record.abi) || !has_type(record.abi)) return missing_type(record.name, record.abi);
+        if (valid(record.create) && !has_function(record.create))
+            return missing_function(record.name + "::create", record.create);
+        if (valid(record.destroy) && !has_function(record.destroy))
+            return missing_function(record.name + "::destroy", record.destroy);
+        for (const auto &method : record.methods)
+            if (!has_function(method.abi)) return missing_function(record.name + "::" + method.name, method.abi);
+    }
+
     const auto function_at = [&](Hash128 signature) -> const Function * {
         for (const auto &function : module.functions)
             if (function.signature == signature) return &function;
@@ -584,6 +622,7 @@ void apply_lowering_contracts(const LoweringResult &result, AbiModule &module) {
             if (!existing) module.owned.push_back({create->return_type, contract.abi, contract.release, 0});
         }
     }
+    return true;
 }
 
 }   // namespace amc::ir

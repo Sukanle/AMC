@@ -640,10 +640,28 @@ amc::ir::LoweringResult project_lowering(const amc::ir::LoweringResult &lowering
 
     amc::ir::LoweringResult result;
     result.rules_version = lowering.rules_version;
-    for (const auto &type : lowering.types)
-        if (types.count({type.abi.lo, type.abi.hi}) != 0) result.types.push_back(type);
-    for (const auto &function : lowering.functions)
-        if (functions.count({function.abi.lo, function.abi.hi}) != 0) result.functions.push_back(function);
+    for (const auto &type : lowering.types) {
+        if (types.count({type.abi.lo, type.abi.hi}) == 0) continue;
+        amc::ir::LoweredType projected_type = type;
+        projected_type.abi_index = UINT32_MAX;
+        for (uint32_t i = 0; i < projected.types.size(); ++i)
+            if (projected.types[i].id == projected_type.abi) {
+                projected_type.abi_index = i;
+                break;
+            }
+        result.types.push_back(std::move(projected_type));
+    }
+    for (const auto &function : lowering.functions) {
+        if (functions.count({function.abi.lo, function.abi.hi}) == 0) continue;
+        amc::ir::LoweredFunction projected_function = function;
+        projected_function.abi_index = UINT32_MAX;
+        for (uint32_t i = 0; i < projected.functions.size(); ++i)
+            if (projected.functions[i].signature == projected_function.abi) {
+                projected_function.abi_index = i;
+                break;
+            }
+        result.functions.push_back(std::move(projected_function));
+    }
     for (const auto &contract : lowering.ownership)
         if (functions.count({contract.abi.lo, contract.abi.hi}) != 0) result.ownership.push_back(contract);
     for (const auto &record : lowering.exposed) {

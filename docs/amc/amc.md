@@ -281,6 +281,12 @@ The optional `domain` / `value` fields carry the stable EPCD identity of the
 AMC error category. Older consumers can ignore them; `code` / `category` /
 `stage` / `message` remain stable.
 
+## Capability discovery
+
+See [capability-discovery.md](capability-discovery.md) for what AMC can prove
+from source, what it can discover from a compiled module, and how stale
+lowering sidecars are rejected.
+
 ## Other tools
 
 | Tool | Purpose |

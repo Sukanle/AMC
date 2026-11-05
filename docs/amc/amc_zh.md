@@ -195,6 +195,11 @@ amc validate missing.abix --error-format json
 可选的 `domain` / `value` 字段携带 AMC 错误类别的稳定 EPCD 身份；旧消费者可以忽略，
 `code` / `category` / `stage` / `message` 保持稳定。
 
+## 能力发现
+
+AMC 能从源码证明哪些能力、从已编译模块能发现哪些信息，以及过期 lowering
+sidecar 如何被拒绝，见 [capability-discovery.md](capability-discovery.md)。
+
 ## 其他工具
 
 | 工具 | 用途 |

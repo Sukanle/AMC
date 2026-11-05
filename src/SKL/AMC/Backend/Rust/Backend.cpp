@@ -584,6 +584,46 @@ void emit_owned(Output &o, const Projector &p) {
     }
 }
 
+void emit_capability_contracts(Output &o, const Projector &p) {
+    if (p.m.interfaces.empty()) return;
+    o.print("\n// Interface capability contracts: identity, version, slots and signatures.\n");
+    o.print("pub mod capabilities {{\n");
+    o.print("    #[derive(Clone, Copy)]\n");
+    o.print(
+        "    pub struct Method {{\n        pub name: &'static str,\n        pub slot: u32,\n"
+        "        pub signature_lo: u64,\n        pub signature_hi: u64,\n    }}\n");
+    o.print("    #[derive(Clone, Copy)]\n");
+    o.print(
+        "    pub struct Contract {{\n        pub name: &'static str,\n        pub id_lo: u64,\n"
+        "        pub id_hi: u64,\n        pub version: u32,\n        pub methods: &'static [Method],\n    }}\n");
+    std::vector<std::string> names;
+    for (const auto &record : p.m.interfaces) {
+        std::vector<const amc::InterfaceMethod *> by_slot;
+        for (uint32_t i = 0; i < record.method_count; ++i) {
+            const auto &method = p.m.interface_methods[record.method_begin + i];
+            if (method.slot >= by_slot.size()) by_slot.resize(method.slot + 1, nullptr);
+            by_slot[method.slot] = &method;
+        }
+        const std::string constant = rust_const_ident(record.name) + "_CONTRACT";
+        names.push_back(constant);
+        o.print("    pub const {}: Contract = Contract {{\n", constant);
+        o.print("        name: {},\n", rust_string(record.name));
+        o.print("        id_lo: 0x{:x},\n        id_hi: 0x{:x},\n", record.id.lo, record.id.hi);
+        o.print("        version: {},\n", record.version);
+        o.print("        methods: &[\n");
+        for (const auto *method : by_slot) {
+            if (method == nullptr) continue;
+            o.print("            Method {{ name: {}, slot: {}, signature_lo: 0x{:x}, signature_hi: 0x{:x} }},\n",
+                rust_string(method->name), method->slot, method->signature.lo, method->signature.hi);
+        }
+        o.print("        ],\n    }};\n");
+    }
+    o.print("    pub const ALL: &[Contract] = &[\n");
+    for (const auto &name : names)
+        o.print("        {},\n", name);
+    o.print("    ];\n}}\n");
+}
+
 const amc::ErrorSet *find_error_set(const amc::AbiModule &module, amc::Hash128 id) {
     if (id.lo == 0 && id.hi == 0) return nullptr;
     for (const auto &set : module.error_sets)
@@ -992,6 +1032,7 @@ std::string generate_projection(const amc::AbiModule &module, const amc::ir::Low
     }
     emit_functions(o, projector);
     emit_owned(o, projector);
+    emit_capability_contracts(o, projector);
     emit_error_sets(o, projector);
     emit_errors(o, projector);
     emit_lowerings(o, projector);
@@ -1024,7 +1065,10 @@ int backend(const char *input, const char *output) {
         fmt::print(stderr, "{}\n", lowering_error);
         return 1;
     }
-    amc::ir::apply_lowering_contracts(lowering, module);
+    if (!amc::ir::apply_lowering_contracts(lowering, module, lowering_error)) {
+        fmt::print(stderr, "{}\n", lowering_error);
+        return 1;
+    }
     if (amc::lang::cancellation_requested()) return amc::lang::kCapabilityCancelled;
     try {
         const std::string projection = generate_projection(module, &lowering);

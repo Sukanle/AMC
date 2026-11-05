@@ -447,6 +447,42 @@ void emit_exposed_handles(Output &o, const Projector &p) {
     }
 }
 
+void emit_capability_contracts(Output &o, const Projector &p) {
+    if (p.m.interfaces.empty()) return;
+    o.print("\n// Interface capability contracts: identity, version, slots and signatures.\n");
+    o.print(
+        "pub const CapabilityMethod = struct {{\n    name: []const u8,\n    slot: u32,\n"
+        "    signature_lo: u64,\n    signature_hi: u64,\n}};\n");
+    o.print(
+        "pub const CapabilityContract = struct {{\n    name: []const u8,\n    id_lo: u64,\n    id_hi: u64,\n"
+        "    version: u32,\n    methods: []const CapabilityMethod,\n}};\n");
+    std::vector<std::string> names;
+    for (const auto &record : p.m.interfaces) {
+        std::vector<const amc::InterfaceMethod *> by_slot;
+        for (uint32_t i = 0; i < record.method_count; ++i) {
+            const auto &method = p.m.interface_methods[record.method_begin + i];
+            if (method.slot >= by_slot.size()) by_slot.resize(method.slot + 1, nullptr);
+            by_slot[method.slot] = &method;
+        }
+        const std::string constant = zig_ident(record.name) + "_CONTRACT";
+        names.push_back(constant);
+        o.print("pub const {} = CapabilityContract{{\n", constant);
+        o.print("    .name = \"{}\",\n    .id_lo = 0x{:x},\n    .id_hi = 0x{:x},\n    .version = {},\n", record.name,
+            record.id.lo, record.id.hi, record.version);
+        o.print("    .methods = &[_]CapabilityMethod{{\n");
+        for (const auto *method : by_slot) {
+            if (method == nullptr) continue;
+            o.print("        .{{ .name = \"{}\", .slot = {}, .signature_lo = 0x{:x}, .signature_hi = 0x{:x} }},\n",
+                method->name, method->slot, method->signature.lo, method->signature.hi);
+        }
+        o.print("    }},\n}};\n");
+    }
+    o.print("pub const CAPABILITIES = [_]CapabilityContract{{\n");
+    for (const auto &name : names)
+        o.print("    {},\n", name);
+    o.print("}};\n");
+}
+
 void emit_error_sets(Output &o, const Projector &p) {
     if (p.m.error_sets.empty()) return;
     o.print("\n// Named error sets: stable numeric values, names and conditions.\n");
@@ -685,6 +721,7 @@ std::string generate_projection(const amc::AbiModule &module, const amc::ir::Low
     }
     emit_functions(o, projector);
     emit_exposed_handles(o, projector);
+    emit_capability_contracts(o, projector);
     emit_error_sets(o, projector);
     emit_error_wrappers(o, projector);
     emit_layout_checks(o, projector);
@@ -707,7 +744,10 @@ int backend(const char *input, const char *output) {
         fmt::print(stderr, "{}\n", lowering_error);
         return 1;
     }
-    amc::ir::apply_lowering_contracts(lowering, module);
+    if (!amc::ir::apply_lowering_contracts(lowering, module, lowering_error)) {
+        fmt::print(stderr, "{}\n", lowering_error);
+        return 1;
+    }
     if (amc::lang::cancellation_requested()) return amc::lang::kCapabilityCancelled;
     try {
         const std::string projection = generate_projection(module, &lowering);

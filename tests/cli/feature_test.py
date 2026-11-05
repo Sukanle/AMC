@@ -257,6 +257,32 @@ def main() -> int:
             else:
                 report.fail(f"{name}: semantic functions carry abi_signature links")
 
+        # A lowering sidecar from a different build must fail generation
+        # explicitly rather than silently projecting stale entities.
+        mismatch_source = artifacts.get("templates")
+        if mismatch_source is not None:
+            stale_abix = work / "stale_lowering.abix"
+            shutil.copyfile(mismatch_source, stale_abix)
+            stale_lowering = Path(str(mismatch_source) + ".lowering")
+            if stale_lowering.is_file():
+                lowered = json.loads(stale_lowering.read_text(encoding="utf-8"))
+                if lowered.get("types"):
+                    lowered["types"][0]["abi"] = "0" * 32
+                    lowered["types"][0]["status"] = "lowered"
+                    Path(str(stale_abix) + ".lowering").write_text(
+                        json.dumps(lowered, indent=2), encoding="utf-8")
+                    stale = run([str(amc), "generate", str(stale_abix), "-l", "rust",
+                                 "-o", str(work / "stale_gen")])
+                    stale_output = stale.stdout + stale.stderr
+                    if stale.returncode != 0 and "lowering sidecar references" in stale_output:
+                        report.ok("a stale lowering sidecar is rejected at generation")
+                    else:
+                        report.fail("a stale lowering sidecar is rejected at generation", stale_output)
+                else:
+                    report.skip("a stale lowering sidecar is rejected at generation")
+            else:
+                report.skip("a stale lowering sidecar is rejected at generation")
+
         # The v2 error contract requires a domain; a v1 declaration (no domain)
         # must be rejected instead of being read with an implicit contract.
         legacy_config = work / "legacy_error.abic.toml"

@@ -170,6 +170,9 @@ def main() -> int:
                   "Rust projection keeps an FFI-safe newtype for an unknown-status error boundary")
             check("demo_add_result" not in generated_text,
                   "Rust projection does not invent a Result wrapper for a function without an error contract")
+            check("pub mod capabilities" in generated_text and "IVECTORMATH_CONTRACT" in generated_text
+                  and "demo_add" in generated_text,
+                  "Rust projection exposes typed interface capability contracts")
 
         # 3b. The same artifact projects to a C++ header. The interface contract
         #     must surface its identity, version, typed slot table and adapter
@@ -262,6 +265,8 @@ def main() -> int:
                       "amc generate -l zig emitted the named error set")
                 check("pub fn condition_name(value: c_int)" in zig_text,
                       "amc generate -l zig maps error codes to generic conditions")
+                check("CapabilityContract" in zig_text and "IVectorMath_CONTRACT" in zig_text,
+                      "amc generate -l zig exposes typed interface capability contracts")
 
             zig_src = os.path.join(work, "zig_consumer.zig")
             shutil.copyfile(os.path.join(SCRIPT_DIR, "zig_consumer.zig"), zig_src)

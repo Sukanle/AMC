@@ -37,9 +37,10 @@ bool load_lowering_sidecar(const std::string &artifact_path, LoweringResult &res
 // Applies the lowered ownership/type/function contract to the ABI view a
 // backend projects. This is intentionally the only place a backend turns
 // lowering records into ABI ownership data: it never re-derives ownership from
-// a function name. Lowered entries whose ABI identity is absent from the
-// projected artifact are ignored.
-void apply_lowering_contracts(const LoweringResult &result, AbiModule &module);
+// a function name. A lowered record that references an ABI identity absent from
+// the artifact is a hard error: it means the sidecar and artifact came from
+// different builds.
+bool apply_lowering_contracts(const LoweringResult &result, AbiModule &module, std::string &error);
 
 }   // namespace amc::ir
 

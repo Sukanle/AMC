@@ -139,7 +139,10 @@ int backend(const char *input, const char *output) {
         fmt::print(stderr, "{}\n", lowering_error);
         return 1;
     }
-    amc::ir::apply_lowering_contracts(lowering, m);
+    if (!amc::ir::apply_lowering_contracts(lowering, m, lowering_error)) {
+        fmt::print(stderr, "{}\n", lowering_error);
+        return 1;
+    }
     if (amc::lang::cancellation_requested()) return amc::lang::kCapabilityCancelled;
     auto o = fmt::output_file(output);
     o.print("#pragma once\n");

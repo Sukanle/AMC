@@ -146,8 +146,13 @@ CTest 同时运行 `--contracts-only` 和 `--strict`：
   opaque blob，不再泄露私有字段
 - Rust / C++ / Zig 把声明的错误边界投影为类型化结果
   （`Result<T, E>` / `AmcResult(T, E)`），而不是裸状态码
+- Rust / Zig 还会生成类型化接口能力契约（identity、version、slot、签名）；
+  C++ 已有 `k<Name>Interface` / `<Name>Traits`
+- 若 lowering sidecar 引用了 artifact 中不存在的 TypeID 或签名，生成阶段直接失败，
+  不再投影过期数据
 - `tests/interop/expose_test.py` 用同一 exposed 契约和类型化 Result wrapper 运行
   Rust、C++、Zig 消费者；thunk 名称全部通过签名解析，不解析符号拼写
+- 能力发现范围与 stale sidecar 失败策略记录在 `docs/amc/capability-discovery.md`
 
 ## M6 进度
 

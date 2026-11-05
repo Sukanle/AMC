@@ -168,9 +168,16 @@ and `amc-boundary-edges`.
   fields
 - Rust, C++ and Zig project declared error boundaries as typed results
   (`Result<T, E>` / `AmcResult(T, E)`) instead of a bare status code
+- Rust and Zig also emit typed interface capability contracts (identity,
+  version, slots, signatures); C++ already emits `k<Name>Interface` /
+  `<Name>Traits`
+- generation rejects a lowering sidecar that references a TypeID or signature
+  absent from the artifact, instead of projecting stale data
 - `tests/interop/expose_test.py` drives the same exposed contract and typed
   Result wrappers through Rust, C++ and Zig runtime consumers; all thunk names
   are resolved from signatures, never parsed
+- capability discovery scope and the stale-sidecar failure policy are documented
+  in `docs/amc/capability-discovery.md`
 
 ## M6 Progress
 
