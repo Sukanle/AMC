@@ -3,6 +3,13 @@ mod abi;
 
 use abi::*;
 use core::ffi::*;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+static RELEASED: AtomicUsize = AtomicUsize::new(0);
+
+unsafe extern "C" fn release_lease(_raw: *mut c_void) {
+    RELEASED.fetch_add(1, Ordering::SeqCst);
+}
 
 extern "C" fn on_value(context: *mut c_void, value: c_int) -> c_int {
     unsafe {
@@ -61,7 +68,7 @@ fn main() {
             L3SessionOpsProxy::VERSION,
             session.as_ptr() as *mut c_void,
             &methods,
-            core::ptr::null_mut(),
+            None,
         )
         .expect("bind interface");
         assert_eq!(proxy.l3_session_get(), 0);
@@ -73,9 +80,23 @@ fn main() {
             L3SessionOpsProxy::VERSION + 1,
             session.as_ptr() as *mut c_void,
             &methods,
-            core::ptr::null_mut(),
+            None,
         );
         assert_eq!(wrong.err(), Some(BindError::VersionMismatch));
+
+        {
+            let lease = InterfaceLease::from_raw(core::ptr::null_mut(), release_lease);
+            let leased = L3SessionOpsProxy::bind(
+                (L3SessionOpsProxy::ID_LO, L3SessionOpsProxy::ID_HI),
+                L3SessionOpsProxy::VERSION,
+                session.as_ptr() as *mut c_void,
+                &methods,
+                Some(lease),
+            )
+            .expect("leased bind");
+            assert!(leased.has_lease());
+        }
+        assert_eq!(RELEASED.load(Ordering::SeqCst), 1, "lease released on drop");
     }
     println!("m7 rust: OK");
 }

@@ -70,7 +70,7 @@ fn main() {
             IVectorScaleProxy::VERSION,
             &mut scaled_value as *mut DemoVec2 as *mut core::ffi::c_void,
             &[scale_method],
-            core::ptr::null_mut(),
+            None,
         )
         .expect("interface bind");
         assert_eq!(scale_proxy.demo_scale_handle(2.0), 13.0, "interface call");

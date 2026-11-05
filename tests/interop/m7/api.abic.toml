@@ -8,6 +8,7 @@ flags = ["-std=c++17"]
 files = ["api.hpp"]
 symbols = [
     "L3Session",
+    "M7Layout",
     "l3_session_create",
     "l3_session_destroy",
     "l3_session_subscribe",

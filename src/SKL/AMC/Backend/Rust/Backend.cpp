@@ -635,6 +635,17 @@ void emit_interface_proxies(Output &o, const Projector &p) {
     o.print(
         "pub enum BindError {{\n    InterfaceNotFound,\n    VersionMismatch,\n    MethodMissing,\n"
         "    SignatureMismatch,\n}}\n");
+    o.print("/// Opaque module/loader lease held by an interface proxy.\n");
+    o.print("pub struct InterfaceLease {{\n    raw: *mut core::ffi::c_void,\n");
+    o.print("    release: unsafe extern \"C\" fn(*mut core::ffi::c_void),\n}}\n");
+    o.print("impl InterfaceLease {{\n");
+    o.print("    /// The caller must pass a token whose release function keeps the\n");
+    o.print("    /// module alive until the proxy is dropped.\n");
+    o.print("    pub unsafe fn from_raw(raw: *mut core::ffi::c_void,\n");
+    o.print("        release: unsafe extern \"C\" fn(*mut core::ffi::c_void)) -> Self {{\n");
+    o.print("        Self {{ raw, release }}\n    }}\n}}\n");
+    o.print("impl Drop for InterfaceLease {{\n    fn drop(&mut self) {{\n");
+    o.print("        unsafe {{ (self.release)(self.raw); }}\n    }}\n}}\n");
     for (const auto &record : p.m.interfaces) {
         std::vector<const amc::InterfaceMethod *> by_slot;
         for (uint32_t i = 0; i < record.method_count; ++i) {
@@ -657,9 +668,7 @@ void emit_interface_proxies(Output &o, const Projector &p) {
             o.print("    {}: unsafe extern \"C\" fn({}){},\n", rust_field_ident(method->name), params,
                 returns_void ? "" : " -> " + p.field_type(method->return_type));
         }
-        o.print("    /// Opaque keepalive: the caller must keep the module/lease alive\n");
-        o.print("    /// for as long as this proxy is used.\n");
-        o.print("    keepalive: *mut core::ffi::c_void,\n}}\n");
+        o.print("    lease: Option<InterfaceLease>,\n}}\n");
 
         o.print("impl {} {{\n", type);
         o.print("    pub const ID_LO: u64 = 0x{:x};\n    pub const ID_HI: u64 = 0x{:x};\n", record.id.lo, record.id.hi);
@@ -673,7 +682,7 @@ void emit_interface_proxies(Output &o, const Projector &p) {
         }
         o.print(
             "    pub unsafe fn bind(interface_id: (u64, u64), version: u32, object: *mut core::ffi::c_void,\n"
-            "        methods: &[InterfaceMethodEntry], keepalive: *mut core::ffi::c_void) -> Result<Self, BindError> "
+            "        methods: &[InterfaceMethodEntry], lease: Option<InterfaceLease>) -> Result<Self, BindError> "
             "{{\n");
         o.print(
             "        if interface_id != (Self::ID_LO, Self::ID_HI) {{ return Err(BindError::InterfaceNotFound); }}\n");
@@ -696,7 +705,7 @@ void emit_interface_proxies(Output &o, const Projector &p) {
                 "Err(BindError::SignatureMismatch); }}\n",
                 name, name);
         }
-        o.print("        Ok(Self {{\n            object,\n            keepalive,\n");
+        o.print("        Ok(Self {{\n            object,\n            lease,\n");
         for (const auto *method : by_slot) {
             if (method == nullptr) continue;
             std::string params = "*mut core::ffi::c_void";
@@ -714,7 +723,7 @@ void emit_interface_proxies(Output &o, const Projector &p) {
                 rust_const_ident(method->name));
         }
         o.print("        }})\n    }}\n");
-        o.print("    pub fn keepalive(&self) -> *mut core::ffi::c_void {{ self.keepalive }}\n");
+        o.print("    pub fn has_lease(&self) -> bool {{ self.lease.is_some() }}\n");
         for (const auto *method : by_slot) {
             if (method == nullptr) continue;
             std::string params, args;

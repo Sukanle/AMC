@@ -194,12 +194,14 @@ and `amc-boundary-edges`.
   `<Name>Traits`
 - Rust and Zig emit typed interface proxies that validate interface id,
   version, slot and signature at bind time; C++ uses the ABIX proxy runtime
+- generated proxies carry an `InterfaceLease`/`lease` value whose drop/deinit
+  releases the caller-owned module lease
 - the interop suite binds the same handle-shaped interface through C++, Rust
   and Zig against the same native library and rejects stale version/signature
   contracts
 - the registry consumer covers module lease / begin_unload / wait_for_idle
   lifecycle, and `tests/interop/m7/` is an independent same-library/same-contract
-  L3 fixture with target and stale-lowering rejection
+  L3 fixture with target, stale-lowering and compile-time layout rejection
 - generation rejects a lowering sidecar that references a TypeID or signature
   absent from the artifact, instead of projecting stale data
 - `tests/interop/expose_test.py` drives the same exposed contract and typed

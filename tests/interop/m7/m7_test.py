@@ -85,14 +85,15 @@ def main():
         else:
             failed += 1
             print("  [FAIL] " + message + ((" :: " + detail) if detail else ""))
+        return ok
 
     def run(args, **kwargs):
         return subprocess.run(args, capture_output=True, text=True, **kwargs)
 
     try:
         fixture = os.path.dirname(os.path.abspath(__file__))
-        for name in ("api.hpp", "api.cpp", "api.abic.toml", "rust_consumer.rs",
-                     "cpp_consumer.cpp", "zig_consumer.zig"):
+        for name in ("api.hpp", "api.cpp", "api.abic.toml", "layout_bad.hpp",
+                     "rust_consumer.rs", "cpp_consumer.cpp", "zig_consumer.zig"):
             shutil.copyfile(os.path.join(fixture, name), os.path.join(work, name))
         lib = module_path(work, "m7")
         r = run([cxx, "-std=c++17", "-shared", "-fPIC", "-O2", os.path.join(work, "api.cpp"),
@@ -121,7 +122,20 @@ def main():
 
         gen_cpp = os.path.join(work, "gen_cpp")
         r = run([amc, "generate", artifact, "-l", "cpp", "-o", gen_cpp])
-        check(r.returncode == 0, "M7 C++ projection generated", (r.stdout + r.stderr)[-400:])
+        if check(r.returncode == 0, "M7 C++ projection generated", (r.stdout + r.stderr)[-400:]):
+            # Compile-time layout mismatch: the generated ABI check must reject
+            # a native header whose layout differs from the artifact.
+            bad_src = os.path.join(work, "layout_mismatch.cpp")
+            open(bad_src, "w", encoding="utf-8").write(
+                '#include "layout_bad.hpp"\n'
+                '#include "amc_abi_check.hpp"\n'
+                'int main() { return 0; }\n')
+            r = run([cxx, "-std=c++17", "-fsyntax-only", bad_src, "-I", work,
+                     "-I", gen_cpp, *include_flags(str(source_root))])
+            text = r.stdout + r.stderr
+            check(r.returncode != 0 and ("size mismatch" in text or "offset mismatch" in text),
+                  "M7 compile-time layout mismatch is rejected", text[-400:])
+
         cpp_bin = os.path.join(work, exe("cpp_consumer"))
         link = []
         if sys.platform != "win32":

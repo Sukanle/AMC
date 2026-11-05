@@ -15,6 +15,11 @@ fn set_adapter(object: ?*anyopaque, value: c_int) callconv(.c) c_int {
     return abi.l3_session_set(object, value);
 }
 
+fn release_lease(context: ?*anyopaque) callconv(.c) void {
+    const released: *u32 = @ptrCast(@alignCast(context.?));
+    released.* += 1;
+}
+
 pub fn main() !void {
     const session = abi.l3_session_create(@ptrCast("demo"));
     if (session == null) return error.CreateFailed;
@@ -60,6 +65,21 @@ pub fn main() !void {
     );
     if (proxy.l3_session_set(9) != 0) return error.SetFailed;
     if (proxy.l3_session_get() != 9) return error.GetFailed;
+
+    var released: u32 = 0;
+    const lease = abi.InterfaceLease.init(@ptrCast(&released), &release_lease);
+    {
+        var leased = try abi.L3SessionOpsProxy.bind(
+            abi.L3SessionOpsProxy.ID_LO,
+            abi.L3SessionOpsProxy.ID_HI,
+            abi.L3SessionOpsProxy.VERSION,
+            session,
+            methods[0..],
+            lease,
+        );
+        leased.deinit();
+    }
+    if (released != 1) return error.LeaseNotReleased;
 
     _ = abi.l3_session_destroy(session);
     std.debug.print("m7 zig: OK\n", .{});

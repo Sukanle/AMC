@@ -14,6 +14,11 @@ extern "C" {
 
 struct L3Session;
 
+struct M7Layout {
+    int32_t a;
+    int64_t b;
+};
+
 // A caller-owned callback: the library never stores beyond the session.
 typedef int32_t (*l3_callback)(void *context, int32_t value);
 

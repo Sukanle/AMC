@@ -38,7 +38,10 @@ The script also covers negative cases:
 
 - target mismatch is rejected by `amc target`;
 - a stale `.lowering` sidecar is rejected by `amc generate`;
-- interface version mismatch is rejected at bind time.
+- a native header with a different layout is rejected by the generated ABI
+  check at compile time;
+- interface version mismatch is rejected at bind time;
+- the generated proxy releases its `InterfaceLease` on drop/deinit.
 
 ## Example: real project (cmdly)
 

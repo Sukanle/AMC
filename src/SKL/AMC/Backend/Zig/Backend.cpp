@@ -492,6 +492,16 @@ void emit_interface_proxies(Output &o, const Projector &p) {
     o.print(
         "pub const InterfaceBindError = error{{\n    InterfaceNotFound,\n    VersionMismatch,\n    MethodMissing,\n"
         "    SignatureMismatch,\n}};\n");
+    o.print("/// Opaque module/loader lease held by an interface proxy.\n");
+    o.print(
+        "pub const InterfaceLease = struct {{\n    raw: ?*anyopaque,\n"
+        "    release: *const fn (?*anyopaque) callconv(.c) void,\n");
+    o.print(
+        "    pub fn init(raw: ?*anyopaque, release: *const fn (?*anyopaque) callconv(.c) void) InterfaceLease {{\n"
+        "        return .{{ .raw = raw, .release = release }};\n    }}\n");
+    o.print(
+        "    pub fn deinit(self: *InterfaceLease) void {{\n"
+        "        if (self.raw) |raw| self.release(raw);\n        self.raw = null;\n    }}\n}};\n");
     for (const auto &record : p.m.interfaces) {
         std::vector<const amc::InterfaceMethod *> by_slot;
         for (uint32_t i = 0; i < record.method_count; ++i) {
@@ -514,9 +524,7 @@ void emit_interface_proxies(Output &o, const Projector &p) {
             o.print("    {}: *const fn ({}) callconv(.c) {},\n", zig_ident("fn_" + method->name), params,
                 returns_void ? "void" : p.field_type(method->return_type));
         }
-        o.print("    /// Opaque keepalive: the caller must keep the module/lease alive\n");
-        o.print("    /// for as long as this proxy is used.\n");
-        o.print("    keepalive: ?*anyopaque,\n");
+        o.print("    lease: ?InterfaceLease,\n");
         o.print("    pub const ID_LO: u64 = 0x{:x};\n    pub const ID_HI: u64 = 0x{:x};\n", record.id.lo, record.id.hi);
         o.print("    pub const VERSION: u32 = {};\n", record.version);
         o.print("    const SLOT_CAPACITY: usize = {};\n", by_slot.size());
@@ -529,7 +537,7 @@ void emit_interface_proxies(Output &o, const Projector &p) {
         }
         o.print(
             "    pub fn bind(interface_id_lo: u64, interface_id_hi: u64, version: u32, object: *anyopaque,\n"
-            "        methods: []const InterfaceMethodEntry, keepalive: ?*anyopaque) InterfaceBindError!{} {{\n",
+            "        methods: []const InterfaceMethodEntry, lease: ?InterfaceLease) InterfaceBindError!{} {{\n",
             type);
         o.print("        if (interface_id_lo != ID_LO or interface_id_hi != ID_HI) return error.InterfaceNotFound;\n");
         o.print("        if (version != VERSION) return error.VersionMismatch;\n");
@@ -554,7 +562,7 @@ void emit_interface_proxies(Output &o, const Projector &p) {
             o.print("        if (signatures_lo[{}] != {} or signatures_hi[{}] != {}) return error.SignatureMismatch;\n",
                 slot, sig_lo, slot, sig_hi);
         }
-        o.print("        return .{{\n            .object = object,\n            .keepalive = keepalive,\n");
+        o.print("        return .{{\n            .object = object,\n            .lease = lease,\n");
         for (const auto *method : by_slot) {
             if (method == nullptr) continue;
             const std::string field = zig_ident("fn_" + method->name);
@@ -573,6 +581,8 @@ void emit_interface_proxies(Output &o, const Projector &p) {
                 zig_ident(zig_ident(method->name) + "_slot"));
         }
         o.print("        }};\n    }}\n");
+        o.print(
+            "    pub fn deinit(self: *{}) void {{\n        if (self.lease) |*lease| lease.deinit();\n    }}\n", type);
         for (const auto *method : by_slot) {
             if (method == nullptr) continue;
             const std::string name = zig_ident(method->name);
