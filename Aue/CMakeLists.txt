@@ -86,5 +86,6 @@ if(NOT TARGET abix-conformance)
 
     if(AMC_BUILD_TESTS OR BUILD_TESTING)
         add_test(NAME aue-bench COMMAND abix-bench)
+        set_tests_properties(aue-bench PROPERTIES LABELS perf)
     endif()
 endif()

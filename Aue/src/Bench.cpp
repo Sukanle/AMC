@@ -66,6 +66,86 @@ double call_nanoseconds(lua_State *state, Mode mode, bool force_index, int itera
     return std::chrono::duration<double, std::nano>(end - start).count() / iterations;
 }
 
+double field_nanoseconds(lua_State *state, int iterations) {
+    const auto start = Clock::now();
+    for (int i = 0; i < iterations; ++i) {
+        push_counter(state);
+        lua_getfield(state, -1, "value");
+        g_sink += static_cast<int64_t>(lua_tointeger(state, -1));
+        lua_pop(state, 2);
+    }
+    const auto end = Clock::now();
+    return std::chrono::duration<double, std::nano>(end - start).count() / iterations;
+}
+
+double field_set_nanoseconds(lua_State *state, int iterations) {
+    const auto start = Clock::now();
+    for (int i = 0; i < iterations; ++i) {
+        push_counter(state);
+        lua_pushinteger(state, i);
+        lua_setfield(state, -2, "value");
+        lua_pop(state, 1);
+    }
+    const auto end = Clock::now();
+    return std::chrono::duration<double, std::nano>(end - start).count() / iterations;
+}
+
+double child_nanoseconds(lua_State *state, int iterations) {
+    const auto start = Clock::now();
+    for (int i = 0; i < iterations; ++i) {
+        push_counter(state);
+        lua_getfield(state, -1, "child");
+        lua_getfield(state, -1, "x");
+        g_sink += static_cast<int64_t>(lua_tointeger(state, -1));
+        lua_pop(state, 3);
+    }
+    const auto end = Clock::now();
+    return std::chrono::duration<double, std::nano>(end - start).count() / iterations;
+}
+
+double array_len_nanoseconds(lua_State *state, int iterations) {
+    const auto start = Clock::now();
+    for (int i = 0; i < iterations; ++i) {
+        push_counter(state);
+        lua_getfield(state, -1, "samples");
+        lua_len(state, -1);
+        g_sink += static_cast<int64_t>(lua_tointeger(state, -1));
+        lua_pop(state, 3);
+    }
+    const auto end = Clock::now();
+    return std::chrono::duration<double, std::nano>(end - start).count() / iterations;
+}
+
+double array_get_nanoseconds(lua_State *state, int iterations) {
+    const auto start = Clock::now();
+    for (int i = 0; i < iterations; ++i) {
+        push_counter(state);
+        lua_getfield(state, -1, "samples");
+        lua_pushinteger(state, (i % 4) + 1);
+        lua_gettable(state, -2);
+        g_sink += static_cast<int64_t>(lua_tointeger(state, -1));
+        lua_pop(state, 3);
+    }
+    const auto end = Clock::now();
+    return std::chrono::duration<double, std::nano>(end - start).count() / iterations;
+}
+
+double gc_nanoseconds(lua_State *state, int iterations) {
+    const auto start = Clock::now();
+    for (int i = 0; i < iterations; ++i) {
+        lua_getglobal(state, "counter");
+        lua_getfield(state, -1, "new");
+        lua_pushinteger(state, i);
+        if (lua_pcall(state, 1, 1, 0) == LUA_OK)
+            lua_pop(state, 2);
+        else
+            lua_pop(state, 2);
+    }
+    lua_gc(state, LUA_GCCOLLECT, 0);
+    const auto end = Clock::now();
+    return std::chrono::duration<double, std::nano>(end - start).count() / iterations;
+}
+
 bool prepare(Mode mode, lua_State **out) {
     lua_State *state = luaL_newstate();
     if (state == nullptr) return false;
@@ -106,12 +186,21 @@ int main() {
     const double l0_call = call_nanoseconds(l0, Mode::l0, false, kIterations);
     const double l1_call_warm = call_nanoseconds(l1, Mode::l1, false, kIterations);
     const double l1_call_cold = call_nanoseconds(l1, Mode::l1, true, kIterations);
+    const double field_get = field_nanoseconds(l1, kIterations);
+    const double field_set = field_set_nanoseconds(l1, kIterations);
+    const double child_access = child_nanoseconds(l1, kIterations / 4);
+    const double array_len = array_len_nanoseconds(l1, kIterations / 4);
+    const double array_get = array_get_nanoseconds(l1, kIterations / 4);
+    const double gc_alloc = gc_nanoseconds(l1, kIterations / 10);
 
     lua_close(l0);
     lua_close(l1);
 
-    fmt::print("abix-bench: l0_call={:.1f}ns l1_call_warm={:.1f}ns l1_call_cold={:.1f}ns", l0_call, l1_call_warm,
-        l1_call_cold);
+    fmt::print(
+        "abix-bench: l0_call={:.1f}ns l1_call_warm={:.1f}ns l1_call_cold={:.1f}ns"
+        " field_get={:.1f}ns field_set={:.1f}ns child_access={:.1f}ns"
+        " array_len={:.1f}ns array_get={:.1f}ns gc_alloc={:.1f}ns",
+        l0_call, l1_call_warm, l1_call_cold, field_get, field_set, child_access, array_len, array_get, gc_alloc);
 
 #if defined(AUE_ENABLE_L2)
     lua_State *l2 = nullptr;
