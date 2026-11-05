@@ -16,7 +16,7 @@
 
 </details>
 
-Rust 是 ABIX 的第一个非 C++ provider。`amc-rust` 包含源码级前端与 Rust 后端，不链接 Clang/LLVM。
+Rust 是 ABIX 的第一个非 C++ provider。`amc-rust` 包含源码级前端与 Rust 后端；它链接 LLVM Support 处理文件系统与文件 I/O，但不使用 Clang AST。
 
 ## 角色
 
@@ -112,4 +112,4 @@ Rust 文件仍需要链接原生库；当启用 `abix_link` 选项时，投影�
 - 记录的 ABI 是 target 相关的；Rust 消费方必须按与 provider 相同的 target 与 C ABI 编译。
 - panic 与异常不得穿越边界；错误边界契约是受支持的路径。
 - 生成文件是普通 Rust，可以在外层再封装成安全的 crate API。
-- `amc-rust` 不链接 Clang/LLVM；它的前端自行计算布局。
+- `amc-rust` 链接 LLVM Support 但不使用 Clang AST；它的前端自行计算布局。

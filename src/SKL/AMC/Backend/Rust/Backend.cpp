@@ -22,8 +22,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <filesystem>
-#include <fstream>
 #include <stdint.h>
 #include <iterator>
 #include <stdexcept>
@@ -33,6 +31,13 @@
 
 #include <fmt/format.h>
 #include <fmt/os.h>
+
+#include <llvm/ADT/SmallString.h>
+#include <llvm/ADT/SmallVector.h>
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Support/MemoryBuffer.h>
+#include <llvm/Support/Path.h>
+#include <llvm/Support/raw_ostream.h>
 
 #if defined(_WIN32)
 #  ifndef NOMINMAX
@@ -766,27 +771,36 @@ std::string primitive_rust_type(uint32_t primitive_abi) {
     }
 }
 
-std::filesystem::path executable_directory() {
+llvm::SmallString<256> executable_directory() {
 #if defined(_WIN32)
-    std::vector<char> buffer(4096);
+    llvm::SmallVector<char, 4096> buffer(4096, 0);
     const DWORD length = GetModuleFileNameA(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
-    if (length > 0 && length < buffer.size())
-        return std::filesystem::path(std::string(buffer.data(), length)).parent_path();
+    if (length > 0 && length < buffer.size()) {
+        llvm::SmallString<256> path(llvm::StringRef(buffer.data(), length));
+        llvm::sys::path::remove_filename(path);
+        return path;
+    }
 #elif defined(__APPLE__)
     uint32_t size = 0;
     _NSGetExecutablePath(nullptr, &size);
-    std::vector<char> buffer(size);
+    llvm::SmallVector<char, 4096> buffer(size, 0);
     if (_NSGetExecutablePath(buffer.data(), &size) == 0) {
-        std::error_code ec;
-        const auto canonical = std::filesystem::weakly_canonical(buffer.data(), ec);
-        return (ec ? std::filesystem::path(buffer.data()) : canonical).parent_path();
+        llvm::SmallString<256> path(llvm::StringRef(buffer.data()));
+        llvm::SmallString<256> canonical;
+        if (!llvm::sys::fs::real_path(path, canonical)) {
+            llvm::sys::path::remove_filename(canonical);
+            return canonical;
+        }
+        llvm::sys::path::remove_filename(path);
+        return path;
     }
 #else
-    std::vector<char> buffer(4096);
+    llvm::SmallVector<char, 4096> buffer(4096, 0);
     const ssize_t length = readlink("/proc/self/exe", buffer.data(), buffer.size() - 1);
     if (length > 0) {
-        buffer[static_cast<size_t>(length)] = '\0';
-        return std::filesystem::path(buffer.data()).parent_path();
+        llvm::SmallString<256> path(llvm::StringRef(buffer.data(), static_cast<size_t>(length)));
+        llvm::sys::path::remove_filename(path);
+        return path;
     }
 #endif
     return {};
@@ -795,20 +809,29 @@ std::filesystem::path executable_directory() {
 // Read a static template from CodeIn. The configured build-tree path is tried
 // first; installed providers fall back to the install-relative data directory
 // and to a CodeIn directory next to the executable.
-std::string read_codein_text(const std::string &relative) {
-    std::vector<std::filesystem::path> candidates;
-    candidates.emplace_back(std::filesystem::path(AMC_CODEIN_DIR) / relative);
-    if (const auto executable = executable_directory(); !executable.empty()) {
-        candidates.push_back(executable.parent_path() / ".." / AMC_CODEIN_INSTALL_SUBDIR / relative);
-        candidates.push_back(executable / "CodeIn" / relative);
+std::string read_codein_text(llvm::StringRef relative) {
+    llvm::SmallVector<llvm::SmallString<256>, 4> candidates;
+    const auto add_candidate = [&](llvm::StringRef base) {
+        if (base.empty()) return;
+        llvm::SmallString<256> path(base);
+        llvm::sys::path::append(path, relative);
+        candidates.push_back(std::move(path));
+    };
+    add_candidate(AMC_CODEIN_DIR);
+    if (const llvm::SmallString<256> executable = executable_directory(); !executable.empty()) {
+        llvm::SmallString<256> install(executable);
+        llvm::sys::path::append(install, "..", AMC_CODEIN_INSTALL_SUBDIR, relative);
+        candidates.push_back(std::move(install));
+        llvm::SmallString<256> beside(executable);
+        llvm::sys::path::append(beside, "CodeIn", relative);
+        candidates.push_back(std::move(beside));
     }
     for (const auto &candidate : candidates) {
-        std::ifstream input(candidate, std::ios::binary);
-        if (!input) continue;
-        std::string text((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
-        if (!text.empty()) return text;
+        if (auto buffer = llvm::MemoryBuffer::getFile(candidate))
+            return (*buffer)->getBuffer().str();
     }
-    throw std::runtime_error("cannot read CodeIn asset: " + relative + " (searched " + candidates.front().string() + ")");
+    throw std::runtime_error("cannot read CodeIn asset: " + relative.str() + " (searched "
+                             + candidates.front().str().str() + ")");
 }
 
 std::string generate_projection(const amc::AbiModule &module) {
@@ -868,8 +891,18 @@ int backend(const char *input, const char *output) {
     try {
         const std::string projection = generate_projection(module);
         if (amc::lang::cancellation_requested()) return amc::lang::kCapabilityCancelled;
-        auto file = fmt::output_file(output);
-        file.print("{}", projection);
+        std::error_code ec;
+        llvm::raw_fd_ostream file(output, ec, llvm::sys::fs::OF_Text);
+        if (ec) {
+            fmt::print(stderr, "cannot write {}: {}\n", output, ec.message());
+            return 1;
+        }
+        file << projection;
+        file.close();
+        if (file.has_error()) {
+            fmt::print(stderr, "cannot write {}: {}\n", output, file.error().message());
+            return 1;
+        }
     } catch (const std::exception &e) {
         fmt::print(stderr, "cannot write {}: {}\n", output, e.what());
         return 1;

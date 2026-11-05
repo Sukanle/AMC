@@ -29,6 +29,9 @@
 #include <fmt/format.h>
 #include <fmt/os.h>
 
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Support/raw_ostream.h>
+
 namespace amc::lang::zig {
 namespace {
 
@@ -461,8 +464,18 @@ int backend(const char *input, const char *output) {
     try {
         const std::string projection = generate_projection(module);
         if (amc::lang::cancellation_requested()) return amc::lang::kCapabilityCancelled;
-        auto file = fmt::output_file(output);
-        file.print("{}", projection);
+        std::error_code ec;
+        llvm::raw_fd_ostream file(output, ec, llvm::sys::fs::OF_Text);
+        if (ec) {
+            fmt::print(stderr, "cannot write {}: {}\n", output, ec.message());
+            return 1;
+        }
+        file << projection;
+        file.close();
+        if (file.has_error()) {
+            fmt::print(stderr, "cannot write {}: {}\n", output, file.error().message());
+            return 1;
+        }
     } catch (const std::exception &e) {
         fmt::print(stderr, "cannot write {}: {}\n", output, e.what());
         return 1;

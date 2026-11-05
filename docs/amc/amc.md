@@ -281,8 +281,8 @@ amc validate missing.abix --error-format json
 | Tool | Purpose |
 |------|---------|
 | `amc-cpp` | C++ frontend/backend provider (JSON-lines IPC) |
-| `amc-rust` | Rust frontend/backend provider (JSON-lines IPC); no Clang/LLVM dependency |
-| `amc-zig` | Zig backend-only provider (JSON-lines IPC); consumes the same IR, no Clang/LLVM dependency |
+| `amc-rust` | Rust frontend/backend provider (JSON-lines IPC); links LLVM Support for filesystem/IO, but does not use Clang AST |
+| `amc-zig` | Zig backend-only provider (JSON-lines IPC); consumes the same IR and links LLVM Support for filesystem/IO |
 | `amc-dump` | raw `.abix` dump (text / JSON) |
 | `amc-mcp` | MCP server exposing ABIX tools; indexes multiple artifacts as a knowledge base ([MCP.md](../ai/MCP.md)) |
 | `libabix_lldb.so` | native LLDB command plugin (`abix ...`) linked against `libabix-*` ([`tools/lldb_abix.cpp`](https://github.com/Sukanle/AMC/blob/main/tools/lldb_abix.cpp)) |

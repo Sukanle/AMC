@@ -42,13 +42,15 @@
 #include <clang/Tooling/Tooling.h>
 
 #include <llvm/ADT/APFloat.h>
+#include <llvm/ADT/SmallString.h>
+#include <llvm/Support/Path.h>
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Support/raw_ostream.h>
 
 #include <fmt/base.h>
 #include <fmt/format.h>
 
 #include <cctype>
-#include <filesystem>
-#include <fstream>
 
 namespace amc::lang::cpp {
 namespace {
@@ -1219,14 +1221,26 @@ private:
 // and only fall back to the declared string. This keeps generated thunks free
 // of machine-specific absolute prefixes while still resolving at compile time.
 std::string include_spelling(
-    const std::string &file, const std::filesystem::path &base, const std::vector<std::string> &flags) {
-    const std::filesystem::path declared(file);
-    if (declared.is_relative()) return file;   // already relative to the config dir
-    const auto under = [&](const std::filesystem::path &root) -> std::string {
-        std::error_code ec;
-        const std::filesystem::path rel = std::filesystem::relative(declared, root, ec);
-        if (ec || rel.empty() || *rel.begin() == "..") return {};
-        return rel.generic_string();
+    const std::string &file, llvm::StringRef base, const std::vector<std::string> &flags) {
+    llvm::SmallString<256> declared(file);
+    if (llvm::sys::path::is_relative(declared)) return file;   // already relative to the config dir
+    const auto under = [&](llvm::StringRef root) -> std::string {
+        llvm::SmallString<256> root_abs(root);
+        if (const std::error_code ec = llvm::sys::fs::make_absolute(root_abs)) return {};
+        llvm::sys::path::remove_dots(root_abs, true);
+        llvm::SmallString<256> declared_abs(declared);
+        if (const std::error_code ec = llvm::sys::fs::make_absolute(declared_abs)) return {};
+        llvm::sys::path::remove_dots(declared_abs, true);
+        llvm::StringRef root_ref(root_abs);
+        llvm::StringRef declared_ref(declared_abs);
+        if (!declared_ref.starts_with(root_ref)) return {};
+        llvm::StringRef rel = declared_ref.drop_front(root_ref.size());
+        while (!rel.empty() && llvm::sys::path::is_separator(rel.front())) rel = rel.drop_front();
+        if (rel.empty() || rel.starts_with("..")) return {};
+        std::string result = rel.str();
+        for (char &c : result)
+            if (c == '\\') c = '/';
+        return result;
     };
     if (const std::string rel = under(base); !rel.empty()) return rel;
     for (const std::string &flag : flags) {
@@ -1237,7 +1251,7 @@ std::string include_spelling(
 }
 
 bool expose_thunks(amc::AbiModule &module, const amc::lang::Config &config, std::vector<NativeAdapt> &adaptations,
-    const std::filesystem::path &base, std::string &error) {
+    llvm::StringRef base, std::string &error) {
     if (config.exposed.empty()) return true;
     if (config.thunks_output.empty()) {
         error = "[[expose]] requires a [thunks] output path";
@@ -1706,15 +1720,18 @@ bool expose_thunks(amc::AbiModule &module, const amc::lang::Config &config, std:
     }
     source += manifest;
 
-    const std::filesystem::path path = base / config.thunks_output;
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    if (!out) {
-        error = "cannot write thunk source: " + path.string();
+    llvm::SmallString<256> path(base);
+    llvm::sys::path::append(path, config.thunks_output);
+    std::error_code ec;
+    llvm::raw_fd_ostream out(path, ec, llvm::sys::fs::OF_Text);
+    if (ec) {
+        error = "cannot write thunk source: " + path.str().str() + ": " + ec.message();
         return false;
     }
-    out.write(source.data(), static_cast<std::streamsize>(source.size()));
-    if (!out) {
-        error = "cannot write thunk source: " + path.string();
+    out << source;
+    out.close();
+    if (out.has_error()) {
+        error = "cannot write thunk source: " + path.str().str() + ": " + out.error().message();
         return false;
     }
     return true;
@@ -1730,16 +1747,33 @@ int run_frontend(const char *config_path, const char *output_path) {
         fmt::print(stderr, "{}\n", e);
         return EXIT_FAILURE;
     }
-    std::filesystem::path base = std::filesystem::absolute(config_path).parent_path();
-    if (!c.db.empty() && std::filesystem::path(c.db).is_relative()) c.db = (base / c.db).string();
+    llvm::SmallString<256> config_path_abs(config_path);
+    if (const std::error_code ec = llvm::sys::fs::make_absolute(config_path_abs)) {
+        fmt::print(stderr, "cannot resolve {}: {}\n", config_path, ec.message());
+        return EXIT_FAILURE;
+    }
+    llvm::SmallString<256> base(config_path_abs);
+    llvm::sys::path::remove_filename(base);
+    if (!c.db.empty() && llvm::sys::path::is_relative(c.db)) {
+        llvm::SmallString<256> db_path(base);
+        llvm::sys::path::append(db_path, c.db);
+        c.db = db_path.str().str();
+    }
     // Clang needs absolute paths, but `c.files` is left exactly as declared:
     // `expose_thunks` emits it verbatim into the generated `#include`, so a
     // declared relative path stays relative instead of leaking a machine-
     // specific absolute prefix. Only the tool file list is resolved here.
     std::vector<std::string> tool_files;
     tool_files.reserve(c.files.size());
-    for (const auto &f : c.files)
-        tool_files.push_back(std::filesystem::path(f).is_relative() ? (base / f).string() : f);
+    for (const auto &f : c.files) {
+        if (llvm::sys::path::is_relative(f)) {
+            llvm::SmallString<256> path(base);
+            llvm::sys::path::append(path, f);
+            tool_files.push_back(path.str().str());
+        } else {
+            tool_files.push_back(f);
+        }
+    }
 #if defined(__APPLE__)
     append_macos_sysroot(c.flags);
 #else
@@ -1751,7 +1785,7 @@ int run_frontend(const char *config_path, const char *output_path) {
         db = clang::tooling::JSONCompilationDatabase::loadFromFile(
             c.db, db_error, clang::tooling::JSONCommandLineSyntax::AutoDetect);
     else
-        db = std::make_unique<clang::tooling::FixedCompilationDatabase>(base.string(), c.flags);
+        db = std::make_unique<clang::tooling::FixedCompilationDatabase>(base.str(), c.flags);
     if (!db) {
         fmt::print(stderr, "{}\n", db_error);
         return EXIT_FAILURE;
@@ -1791,9 +1825,15 @@ int run_frontend(const char *config_path, const char *output_path) {
             if (!inst.as.empty()) anchor += "using " + inst.as + " = " + concrete + ";\n";
             anchor += "static_assert(sizeof(" + concrete + ") > 0, \"abix instantiate\");\n";
         }
-        anchor_path = (base / ".amc" / "instantiate.hpp").string();
-        std::error_code ec;
-        std::filesystem::create_directories((base / ".amc").string(), ec);
+        llvm::SmallString<256> anchor_file(base);
+        llvm::sys::path::append(anchor_file, ".amc", "instantiate.hpp");
+        anchor_path = anchor_file.str().str();
+        llvm::SmallString<256> anchor_dir(base);
+        llvm::sys::path::append(anchor_dir, ".amc");
+        if (const std::error_code ec = llvm::sys::fs::create_directories(anchor_dir)) {
+            fmt::print(stderr, "cannot create {}: {}\n", anchor_dir.str().str(), ec.message());
+            return EXIT_FAILURE;
+        }
         tool_files = {anchor_path};
     }
 

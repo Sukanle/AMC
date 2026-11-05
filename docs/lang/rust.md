@@ -16,7 +16,7 @@
 
 </details>
 
-Rust is ABIX's first non-C++ provider. `amc-rust` has a source-level frontend and a Rust backend, and does not link Clang/LLVM.
+Rust is ABIX's first non-C++ provider. `amc-rust` has a source-level frontend and a Rust backend. It links LLVM Support for filesystem and file I/O, but does not use Clang AST.
 
 ## Role
 
@@ -112,4 +112,4 @@ The Rust file still needs to link the native library; the projection provides `#
 - The recorded ABI is target-specific; compile the Rust consumer for the same target and C ABI as the provider.
 - Panics and exceptions must not cross the boundary; the error boundary contract is the supported path.
 - The generated file is ordinary Rust and can be wrapped in a safe crate API.
-- `amc-rust` does not link Clang/LLVM; its frontend computes the layout itself.
+- `amc-rust` links LLVM Support but not Clang AST; its frontend computes the layout itself.

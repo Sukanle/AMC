@@ -196,8 +196,8 @@ amc validate missing.abix --error-format json
 | 工具 | 用途 |
 |------|------|
 | `amc-cpp` | C++ 前端/后端 provider（JSON-lines IPC） |
-| `amc-rust` | Rust 前端/后端 provider（JSON-lines IPC）；不依赖 Clang/LLVM |
-| `amc-zig` | Zig 仅后端 provider（JSON-lines IPC）；消费同一份 IR，不依赖 Clang/LLVM |
+| `amc-rust` | Rust 前端/后端 provider（JSON-lines IPC）；链接 LLVM Support 处理文件系统/IO，但不使用 Clang AST |
+| `amc-zig` | Zig 仅后端 provider（JSON-lines IPC）；消费同一份 IR，链接 LLVM Support 处理文件系统/IO |
 | `amc-dump` | `.abix` 原始 dump（text/JSON） |
 | `amc-mcp` | MCP server；可把多个 artifact 索引成 ABI 知识库（见 [MCP_zh.md](../ai/MCP_zh.md)） |
 | `libabix_lldb.so` | 原生 LLDB 命令插件（`abix ...`），直接链接 `libabix-*`（[`tools/lldb_abix.cpp`](https://github.com/Sukanle/AMC/blob/main/tools/lldb_abix.cpp)） |

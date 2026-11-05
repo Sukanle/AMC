@@ -130,6 +130,7 @@ else()
 endif()
 
 find_package(LLVM CONFIG REQUIRED)
+llvm_map_components_to_libnames(AMC_LLVM_SUPPORT_LIBS support)
 
 # Use Clang through clang-cpp instead of find_package(Clang). Some packagers
 # (notably MSYS2) export Clang target files that reference static archives they
@@ -277,17 +278,20 @@ target_link_libraries(amc-cpp PRIVATE amc-core amc-lang ${AMC_CLANG_CPP_LIBRARY}
 add_executable(
     amc-rust ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Rust/Rust.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Frontend/Rust/Frontend.cpp
              ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Rust/Backend.cpp)
-target_include_directories(amc-rust PRIVATE ${AMC_INCLUDE_DIR} ${AMC_GENERATED_INCLUDE_DIR})
-target_link_libraries(amc-rust PRIVATE amc-core amc-lang fmt::fmt)
+target_include_directories(amc-rust PRIVATE ${AMC_INCLUDE_DIR} ${AMC_GENERATED_INCLUDE_DIR} ${LLVM_INCLUDE_DIRS})
+target_compile_options(amc-rust PRIVATE ${LLVM_DEFINITIONS})
+target_link_libraries(amc-rust PRIVATE amc-core amc-lang fmt::fmt ${AMC_LLVM_SUPPORT_LIBS})
 
 add_executable(amc-zig ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Zig/Zig.cpp
                        ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Zig/Backend.cpp)
-target_include_directories(amc-zig PRIVATE ${AMC_INCLUDE_DIR})
-target_link_libraries(amc-zig PRIVATE amc-core amc-lang fmt::fmt)
+target_include_directories(amc-zig PRIVATE ${AMC_INCLUDE_DIR} ${LLVM_INCLUDE_DIRS})
+target_compile_options(amc-zig PRIVATE ${LLVM_DEFINITIONS})
+target_link_libraries(amc-zig PRIVATE amc-core amc-lang fmt::fmt ${AMC_LLVM_SUPPORT_LIBS})
 
 add_executable(amc-cancel-test-provider ${AMC_SOURCE_DIR}/tests/providers/cancellation/cancellation_provider.cpp)
-target_include_directories(amc-cancel-test-provider PRIVATE ${AMC_INCLUDE_DIR})
-target_link_libraries(amc-cancel-test-provider PRIVATE amc-lang fmt::fmt)
+target_include_directories(amc-cancel-test-provider PRIVATE ${AMC_INCLUDE_DIR} ${LLVM_INCLUDE_DIRS})
+target_compile_options(amc-cancel-test-provider PRIVATE ${LLVM_DEFINITIONS})
+target_link_libraries(amc-cancel-test-provider PRIVATE amc-lang fmt::fmt ${AMC_LLVM_SUPPORT_LIBS})
 set_target_properties(amc-cancel-test-provider PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 add_executable(

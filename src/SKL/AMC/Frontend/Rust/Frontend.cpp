@@ -21,8 +21,10 @@
 #include <cctype>
 #include <stdint.h>
 #include <stdlib.h>
-#include <filesystem>
-#include <fstream>
+#include <llvm/ADT/SmallString.h>
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Support/MemoryBuffer.h>
+#include <llvm/Support/Path.h>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -906,25 +908,34 @@ int run_frontend(const char *config_path, const char *output_path) {
         fmt::print(stderr, "{}\n", error);
         return EXIT_FAILURE;
     }
-    const std::filesystem::path base = std::filesystem::absolute(config_path).parent_path();
+    llvm::SmallString<256> config_path_abs(config_path);
+    if (const std::error_code ec = llvm::sys::fs::make_absolute(config_path_abs)) {
+        fmt::print(stderr, "cannot resolve {}: {}\n", config_path, ec.message());
+        return EXIT_FAILURE;
+    }
+    const llvm::StringRef base = llvm::sys::path::parent_path(config_path_abs);
 
     std::vector<RawItem> items;
     std::vector<RawFunction> functions;
     std::unordered_map<std::string, bool> seen_items;
     for (const auto &file : config.files) {
         if (amc::lang::cancellation_requested()) return amc::lang::kCapabilityCancelled;
-        std::filesystem::path path = file;
-        if (path.is_relative()) path = base / path;
-        std::ifstream input(path);
-        if (!input) {
-            fmt::print(stderr, "cannot read {}\n", path.string());
+        llvm::SmallString<256> path(file);
+        if (llvm::sys::path::is_relative(path)) {
+            llvm::SmallString<256> resolved(base);
+            llvm::sys::path::append(resolved, llvm::StringRef(file));
+            path = std::move(resolved);
+        }
+        auto buffer = llvm::MemoryBuffer::getFile(path);
+        if (!buffer) {
+            fmt::print(stderr, "cannot read {}\n", path.str().str());
             return EXIT_FAILURE;
         }
-        std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+        std::string source = (*buffer)->getBuffer().str();
         Parser parser(lex(source));
         parser.parse();
         if (!parser.ok()) {
-            fmt::print(stderr, "{}: {}\n", path.string(), parser.error());
+            fmt::print(stderr, "{}: {}\n", path.str().str(), parser.error());
             return EXIT_FAILURE;
         }
         for (auto &item : parser.items())

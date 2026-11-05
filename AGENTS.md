@@ -27,21 +27,27 @@ lifetime clarity or LLVM API interoperability.
 
 ### Scope restriction
 
-LLVM ADT/Support may only be used where the target already links LLVM:
+All AMC language providers link LLVM Support intentionally:
 
 - `amc-cpp` / `Frontend/Cpp` / `Backend/Cpp`
-- LLVM-aware tests that already link LLVM
+- `amc-rust` / `Frontend/Rust` / `Backend/Rust`
+- `amc-zig` / `Backend/Zig`
+- `amc-cancel-test-provider` and LLVM-aware tests
+
+Use LLVM ADT/Support in provider implementation code, especially for
+filesystem access, file I/O, line iteration and regex-like parsing. Avoid
+reimplementing these facilities with `std::filesystem`, `std::fstream` or
+`std::regex` inside a provider.
 
 Do **not** add LLVM includes to:
 
-- `amc-rust`, `amc-zig` or any non-LLVM provider
 - public A0/A4 contract headers (`IR`, `Frontend`, `Pass`, `Backend`,
   `Compilation`, `Diagnostics`)
 - stable IR/artifact records or headers intended for external consumers
+- `Core` libraries that are linked by non-provider consumers/tests
 
-Those targets must remain buildable without an LLVM dependency. In non-LLVM
-code use the C++ standard library (`std::string`, `std::vector`, `std::optional`,
-`std::filesystem`, `std::ifstream`, ...).
+Keep LLVM as an implementation detail of provider executables. Public headers
+stay C++17-standard-library-only (or standard types already used by the API).
 
 ### Preferred replacements
 
@@ -54,9 +60,11 @@ code use the C++ standard library (`std::string`, `std::vector`, `std::optional`
 | `std::set` / `std::unordered_set` | `llvm::SmallSet` / `llvm::DenseSet` | Small or hash-friendly sets |
 | `std::function` for immediate calls | `llvm::function_ref` | Non-owning, synchronous callbacks only |
 | move-only stored callback | `llvm::unique_function` | The callback must outlive the call site |
-| `std::ifstream` whole-file read | `llvm::MemoryBuffer` | LLVM-linked code only; not for providers that must stay LLVM-free |
-| filesystem queries | `llvm::sys::fs` | LLVM-linked code only; otherwise `std::filesystem` |
-| line-by-line reading | `llvm::line_iterator` | LLVM-linked code only |
+| `std::ifstream` whole-file read | `llvm::MemoryBuffer` | Provider file reads; check the returned `ErrorOr` |
+| `std::ofstream` file writes | `llvm::raw_fd_ostream` | Provider file writes; check `has_error()`/`error()` |
+| `std::regex` | `llvm::Regex` | Provider parsing only; prefer a small hand-written parser on hot paths |
+| filesystem queries | `llvm::sys::fs` / `llvm::sys::path` | Provider filesystem access; do not add `std::filesystem` to providers |
+| line-by-line reading | `llvm::line_iterator` | Provider line-oriented parsing |
 | `std::optional` | `std::optional` | Prefer the standard type; `llvm::Optional` is obsolete and must not be added |
 | error-or-value | `llvm::ErrorOr<T>` / `llvm::Expected<T>` | LLVM APIs that already use them, or rich error propagation in LLVM-linked code |
 | `std::thread` | `llvm::thread` | Only when stack-size or LLVM's single-thread mode is required |
