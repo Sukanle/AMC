@@ -131,6 +131,12 @@ endif()
 
 find_package(LLVM CONFIG REQUIRED)
 llvm_map_components_to_libnames(AMC_LLVM_SUPPORT_LIBS support)
+# LLVM's cxxflags include -D_GNU_SOURCE, but GCC/Clang on Linux already define
+# it for C++, which produces a redefinition warning on every provider TU.
+separate_arguments(AMC_LLVM_DEFINITIONS NATIVE_COMMAND "${LLVM_DEFINITIONS}")
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    list(REMOVE_ITEM AMC_LLVM_DEFINITIONS "-D_GNU_SOURCE")
+endif()
 
 # Prefer the LLVM shared library so providers do not each embed a copy of
 # LLVMSupport. Fall back to component static libraries when the installed LLVM
@@ -290,6 +296,7 @@ add_executable(
             ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Cpp/Backend.cpp)
 target_include_directories(amc-cpp PRIVATE ${AMC_INCLUDE_DIR})
 target_include_directories(amc-cpp SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS} ${CLANG_INCLUDE_DIRS})
+target_compile_options(amc-cpp PRIVATE ${AMC_LLVM_DEFINITIONS})
 target_compile_definitions(amc-cpp PRIVATE ABIX_CLANG_RESOURCE_DIR="${AMC_CLANG_RESOURCE_DIR}")
 target_link_libraries(amc-cpp PRIVATE amc-core amc-lang ${AMC_CLANG_CPP_LIBRARY} LLVM fmt::fmt
                                       tomlplusplus::tomlplusplus)
@@ -298,18 +305,18 @@ add_executable(
     amc-rust ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Rust/Rust.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Frontend/Rust/Frontend.cpp
              ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Rust/Backend.cpp)
 target_include_directories(amc-rust PRIVATE ${AMC_INCLUDE_DIR} ${AMC_GENERATED_INCLUDE_DIR} ${LLVM_INCLUDE_DIRS})
-target_compile_options(amc-rust PRIVATE ${LLVM_DEFINITIONS})
+target_compile_options(amc-rust PRIVATE ${AMC_LLVM_DEFINITIONS})
 target_link_libraries(amc-rust PRIVATE amc-core amc-lang fmt::fmt ${AMC_LLVM_LINK_LIBRARIES})
 
 add_executable(amc-zig ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Zig/Zig.cpp
                        ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Zig/Backend.cpp)
 target_include_directories(amc-zig PRIVATE ${AMC_INCLUDE_DIR} ${LLVM_INCLUDE_DIRS})
-target_compile_options(amc-zig PRIVATE ${LLVM_DEFINITIONS})
+target_compile_options(amc-zig PRIVATE ${AMC_LLVM_DEFINITIONS})
 target_link_libraries(amc-zig PRIVATE amc-core amc-lang fmt::fmt ${AMC_LLVM_LINK_LIBRARIES})
 
 add_executable(amc-cancel-test-provider ${AMC_SOURCE_DIR}/tests/providers/cancellation/cancellation_provider.cpp)
 target_include_directories(amc-cancel-test-provider PRIVATE ${AMC_INCLUDE_DIR} ${LLVM_INCLUDE_DIRS})
-target_compile_options(amc-cancel-test-provider PRIVATE ${LLVM_DEFINITIONS})
+target_compile_options(amc-cancel-test-provider PRIVATE ${AMC_LLVM_DEFINITIONS})
 target_link_libraries(amc-cancel-test-provider PRIVATE amc-lang fmt::fmt ${AMC_LLVM_LINK_LIBRARIES})
 set_target_properties(amc-cancel-test-provider PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
