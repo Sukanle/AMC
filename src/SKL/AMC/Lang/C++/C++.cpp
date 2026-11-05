@@ -32,7 +32,7 @@ int main(int argc, char **argv) {
         "cpp",
         {
           {"frontend", amc::lang::cpp::run_frontend},
-          {"backend", amc::lang::cpp::backend},
+          {"backend", amc::lang::cpp::run_backend},
           },
         "0.2.0",
         {"templates", "interfaces"},

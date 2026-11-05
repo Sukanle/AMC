@@ -23,7 +23,7 @@
 namespace amc::lang::rust {
 
 // ABIX IR -> Rust projection (`repr(C)` types + metadata region).
-int backend(const char *input, const char *output);
+int run_backend(const char *input, const char *output);
 
 // Map a packed ABIX primitive descriptor (see `amc::primitive_abi`) to the
 // Rust type that preserves the C ABI on the target. Exposed for tests.

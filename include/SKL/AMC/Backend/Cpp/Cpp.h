@@ -19,6 +19,6 @@ namespace amc::lang::cpp {
 
 // C++ projection generator: consumes an ABIX IR artifact and emits the C++
 // header with compile-time layout checks.
-int backend(const char *input, const char *output);
+int run_backend(const char *input, const char *output);
 
 }   // namespace amc::lang::cpp

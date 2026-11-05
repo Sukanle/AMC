@@ -38,6 +38,17 @@ of duplicating path lookup. Use the error-returning overload when a missing
 asset should become a normal backend error; use the string overload when the
 caller treats it as fatal.
 
+## Shared codegen helpers
+
+Language-neutral spelling helpers live in
+`include/SKL/AMC/Backend/Codegen.h`:
+
+- `hex_u64` / `hex_u64_ull` — stable hexadecimal literals.
+- `sanitize_identifier` — `::` and non-identifier characters become `_`.
+- `escape_string_literal` — C-family string literal escaping.
+
+Backends should call these instead of reimplementing the same loops.
+
 ## Adding a template
 
 1. Put the file under `CodeIn/<language>/<name>.<ext>`.

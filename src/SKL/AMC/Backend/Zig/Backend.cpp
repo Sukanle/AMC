@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "SKL/AMC/Backend/Codegen.h"
 #include "SKL/AMC/Backend/Zig/Zig.h"
 #include "SKL/AMC/IR/Artifact.h"
 #include "SKL/AMC/IR/LoweringJson.h"
@@ -80,21 +81,7 @@ std::string zig_ident(const std::string &name) {
     return out;
 }
 
-std::string zig_string(const std::string &value) {
-    std::string out = "\"";
-    for (const char c : value) {
-        switch (c) {
-            case '\\': out += "\\\\"; break;
-            case '"':  out += "\\\""; break;
-            case '\n': out += "\\n"; break;
-            case '\r': out += "\\r"; break;
-            case '\t': out += "\\t"; break;
-            default:   out += c; break;
-        }
-    }
-    out += '"';
-    return out;
-}
+std::string zig_string(const std::string &value) { return amc::backend::escape_string_literal(value); }
 
 // Reduce a type spelling to its bare name so a pointer's pointee can be matched
 // against the value types in the module (same approach as the Rust backend).
@@ -863,7 +850,7 @@ std::string generate_projection(const amc::AbiModule &module, const amc::ir::Low
     return fmt::to_string(buffer);
 }
 
-int backend(const char *input, const char *output) {
+int run_backend(const char *input, const char *output) {
     if (amc::lang::cancellation_requested()) return amc::lang::kCapabilityCancelled;
     amc::ir::Module artifact;
     std::string error;

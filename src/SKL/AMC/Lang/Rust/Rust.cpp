@@ -22,7 +22,7 @@ int main(int argc, char **argv) {
         "rust",
         {
           {"frontend", amc::lang::rust::run_frontend},
-          {"backend", amc::lang::rust::backend},
+          {"backend", amc::lang::rust::run_backend},
           },
         "0.2.0",
         {"ownership", "error", "target"},

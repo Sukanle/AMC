@@ -20,7 +20,7 @@ int main(int argc, char **argv) {
     static const amc::lang::Provider provider{
         "zig",
         {
-          {"backend", amc::lang::zig::backend},
+          {"backend", amc::lang::zig::run_backend},
           },
         "0.2.0",
         {"target"},

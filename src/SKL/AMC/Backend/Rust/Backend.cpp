@@ -19,6 +19,7 @@
 #include "SKL/AMC/Lang/Lang.h"
 
 #include "SKL/AMC/Backend/CodeIn.h"
+#include "SKL/AMC/Backend/Codegen.h"
 #include "SKL/AMC/Core/Generated.h"
 #include "SKL/AMC/Artifact/Metadata.h"
 
@@ -124,23 +125,9 @@ std::string pascal_ident(const std::string &name) {
     return out;
 }
 
-std::string rust_string(const std::string &value) {
-    std::string out = "\"";
-    for (const char c : value) {
-        switch (c) {
-            case '\\': out += "\\\\"; break;
-            case '"':  out += "\\\""; break;
-            case '\n': out += "\\n"; break;
-            case '\r': out += "\\r"; break;
-            case '\t': out += "\\t"; break;
-            default:   out += c; break;
-        }
-    }
-    out += '"';
-    return out;
-}
+std::string rust_string(const std::string &value) { return amc::backend::escape_string_literal(value); }
 
-std::string hex_u64(uint64_t value) { return fmt::format("0x{:x}", value); }
+std::string hex_u64(uint64_t value) { return amc::backend::hex_u64(value); }
 
 // Reduce a type spelling to its bare name by dropping C/C++ qualifier keywords
 // and all separators, so that `const struct DemoVec2` and `DemoVec2` compare
@@ -1106,7 +1093,7 @@ std::string generate_projection(const amc::AbiModule &module, const amc::ir::Low
     return fmt::to_string(buffer);
 }
 
-int backend(const char *input, const char *output) {
+int run_backend(const char *input, const char *output) {
     if (amc::lang::cancellation_requested()) return amc::lang::kCapabilityCancelled;
     amc::ir::Module artifact;
     std::string error;

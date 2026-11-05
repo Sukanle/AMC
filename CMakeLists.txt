@@ -45,6 +45,7 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Config.h.in" "${AMC_GENERATED_
 option(AMC_BUILD_TESTS "Build AMC unit/e2e tests" ON)
 option(AMC_BUILD_BENCHMARKS "Build Google Benchmark performance baselines" ON)
 option(AMC_INSTALL "Generate AMC install rules" ON)
+option(AMC_INSTALL_PRIVATE_HEADERS "Install AMC private implementation headers" OFF)
 option(AMC_ENABLE_LLDB_PLUGIN "Build the optional LLDB plugin" ON)
 option(AMC_BUILD_AUE "Build the optional Aue Lua conformance prototype" ON)
 set(AMC_ABIX_REF
@@ -407,7 +408,8 @@ target_include_directories(amc-util PUBLIC ${AMC_INCLUDE_DIR})
 target_link_libraries(amc-util PUBLIC libabix-format fmt::fmt)
 
 add_library(amc-lang STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Lang.cpp
-                             ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/CodeIn.cpp)
+                             ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/CodeIn.cpp
+                             ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Codegen.cpp)
 target_include_directories(amc-lang PUBLIC ${AMC_INCLUDE_DIR})
 target_include_directories(amc-lang PRIVATE ${AMC_GENERATED_INCLUDE_DIR})
 target_link_libraries(amc-lang PUBLIC amc-util amc-llvm fmt::fmt tomlplusplus::tomlplusplus)
@@ -419,7 +421,18 @@ target_link_libraries(
 
 add_executable(
     amc-cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/C++/C++.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Frontend/Cpp/Frontend.cpp
-            ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Cpp/Backend.cpp)
+            ${AMC_SOURCE_DIR}/src/SKL/AMC/Frontend/Cpp/Toolchain.cpp
+            ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Frontend/Cpp/Native.cpp
+            ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Frontend/Cpp/Extractor.cpp
+            ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Frontend/Cpp/Thunks.cpp
+            ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Cpp/Backend.cpp
+            ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Backend/Cpp/CppNames.cpp
+            ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Backend/Cpp/Preamble.cpp
+            ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Backend/Cpp/Projection.cpp
+            ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Backend/Cpp/Interfaces.cpp
+            ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Backend/Cpp/Handles.cpp
+            ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Backend/Cpp/Errors.cpp
+            ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Backend/Cpp/StaticChecks.cpp)
 target_include_directories(amc-cpp PRIVATE ${AMC_INCLUDE_DIR})
 target_compile_definitions(amc-cpp PRIVATE ABIX_CLANG_RESOURCE_DIR="${AMC_CLANG_RESOURCE_DIR}")
 target_link_libraries(amc-cpp PRIVATE amc-core amc-lang amc-llvm ${AMC_CLANG_CPP_LIBRARY} fmt::fmt
@@ -624,7 +637,15 @@ if(AMC_INSTALL)
         DESTINATION ${CMAKE_INSTALL_BINDIR}
         RENAME amc-providers.toml)
     install(DIRECTORY ${AMC_CODEIN_DIR}/ DESTINATION ${CMAKE_INSTALL_DATADIR}/AMC/CodeIn)
-    install(DIRECTORY ${AMC_SOURCE_DIR}/include/SKL/AMC DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/SKL)
+    install(DIRECTORY ${AMC_SOURCE_DIR}/include/SKL/AMC DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/SKL
+            PATTERN "Private" EXCLUDE)
+    if(AMC_INSTALL_PRIVATE_HEADERS)
+        # Private implementation headers are only useful to embedders that build
+        # against AMC internals; they are opt-in and never part of the public
+        # include surface.
+        install(DIRECTORY ${AMC_SOURCE_DIR}/include/SKL/AMC/Private
+                DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/SKL/AMC)
+    endif()
     install(DIRECTORY ${AMC_SOURCE_DIR}/include/ljson DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
     install(FILES ${AMC_SOURCE_DIR}/LICENSE ${AMC_SOURCE_DIR}/NOTICE ${AMC_SOURCE_DIR}/THIRD_PARTY_NOTICES.md
             DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/licenses/AMC)
