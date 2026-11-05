@@ -18,6 +18,8 @@
 
 #include "SKL/AMC/Core/Core.h"
 
+#include <llvm/Support/raw_ostream.h>
+
 #include <string>
 
 namespace amc {
@@ -33,6 +35,12 @@ namespace amc {
 // `include_names` mirrors `amc dump --no-names`: when false, semantic names
 // are omitted (useful once `.abix.names` has been stripped) while indices and
 // hashes keep the context fully resolvable.
+// Stream the context document directly to `out`. These overloads avoid
+// materializing the complete document in memory; the string versions above are
+// thin wrappers for callers that need a single value.
+void context_to_llm(const AbiModule &module, bool include_names, llvm::raw_ostream &out);
+void context_to_json(const AbiModule &module, bool include_names, llvm::raw_ostream &out);
+
 std::string context_to_llm(const AbiModule &module, bool include_names);
 std::string context_to_json(const AbiModule &module, bool include_names);
 

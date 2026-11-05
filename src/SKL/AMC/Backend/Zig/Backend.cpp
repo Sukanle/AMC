@@ -854,7 +854,11 @@ int run_backend(const char *input, const char *output) {
     if (amc::lang::cancellation_requested()) return amc::lang::kCapabilityCancelled;
     amc::ir::Module artifact;
     std::string error;
-    if (!amc::ir::load_artifact(input, artifact, error)) {
+    // Backends project the ABI and lowering contract; the semantic sidecar is
+    // not consumed on this path, so skip parsing it.
+    amc::ir::LoadOptions load_options;
+    load_options.semantic = false;
+    if (!amc::ir::load_artifact(input, artifact, error, load_options)) {
         fmt::print(stderr, "{}\n", error);
         return 1;
     }

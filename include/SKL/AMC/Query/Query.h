@@ -19,6 +19,8 @@
 #include "SKL/AMC/Core/Core.h"
 #include "SKL/AMC/IR/Verify.h"
 
+#include <llvm/Support/raw_ostream.h>
+
 #include <string>
 #include <string_view>
 #include <vector>
@@ -43,13 +45,19 @@ const Type *find_type_by_id(const AbiModule &module, Hash128 id);
 std::string query_types_text(const AbiModule &module, const std::vector<size_t> &indices, bool include_layout);
 std::string query_types_json(
     const AbiModule &module, const std::vector<size_t> &indices, bool include_layout, std::string_view needle);
+void query_types_json(const AbiModule &module, const std::vector<size_t> &indices, bool include_layout,
+    std::string_view needle, llvm::raw_ostream &out);
 std::string query_functions_text(const AbiModule &module, const std::vector<size_t> &indices);
 std::string query_functions_json(const AbiModule &module, const std::vector<size_t> &indices, std::string_view needle);
+void query_functions_json(
+    const AbiModule &module, const std::vector<size_t> &indices, std::string_view needle, llvm::raw_ostream &out);
 // "Is `target` a safe replacement for `source`?" — strict: every type, layout,
 // field set and function signature in `source` must exist unchanged in
 // `target`. Additions in `target` are reported as drift too.
 std::string compatibility_query_text(const AbiModule &source, const AbiModule &target, const VerifyResult &result);
 std::string compatibility_query_json(const AbiModule &source, const AbiModule &target, const VerifyResult &result);
+void compatibility_query_json(
+    const AbiModule &source, const AbiModule &target, const VerifyResult &result, llvm::raw_ostream &out);
 
 }   // namespace amc
 

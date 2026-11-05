@@ -24,6 +24,8 @@
 
 #include <benchmark/benchmark.h>
 
+#include <llvm/Support/raw_ostream.h>
+
 #include <cstdint>
 #include <cstdio>
 #include <string>
@@ -203,6 +205,15 @@ BENCHMARK_DEFINE_F(QueryFixture, ContextLlm)(benchmark::State &state) {
 }
 BENCHMARK_REGISTER_F(QueryFixture, ContextLlm)->Arg(5'000)->Arg(20'000);
 
+BENCHMARK_DEFINE_F(QueryFixture, ContextLlmStream)(benchmark::State &state) {
+    llvm::raw_null_ostream out;
+    for (auto _ : state) {
+        amc::context_to_llm(module, true, out);
+    }
+    state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(count));
+}
+BENCHMARK_REGISTER_F(QueryFixture, ContextLlmStream)->Arg(5'000)->Arg(20'000);
+
 BENCHMARK_DEFINE_F(QueryFixture, ContextJson)(benchmark::State &state) {
     for (auto _ : state) {
         auto result = amc::context_to_json(module, true);
@@ -211,3 +222,12 @@ BENCHMARK_DEFINE_F(QueryFixture, ContextJson)(benchmark::State &state) {
     state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(count));
 }
 BENCHMARK_REGISTER_F(QueryFixture, ContextJson)->Arg(5'000)->Arg(20'000);
+
+BENCHMARK_DEFINE_F(QueryFixture, ContextJsonStream)(benchmark::State &state) {
+    llvm::raw_null_ostream out;
+    for (auto _ : state) {
+        amc::context_to_json(module, true, out);
+    }
+    state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(count));
+}
+BENCHMARK_REGISTER_F(QueryFixture, ContextJsonStream)->Arg(5'000)->Arg(20'000);

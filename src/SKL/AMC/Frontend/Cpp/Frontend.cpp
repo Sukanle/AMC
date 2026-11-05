@@ -24,6 +24,7 @@
 #include "SKL/AMC/Semantic/Model.h"
 #include "SKL/AMC/Semantic/Serialize.h"
 #include "SKL/AMC/Semantic/Sync.h"
+#include "SKL/AMC/Support/Process.h"
 
 // The Clang resource directory detected at build time (`clang -print-resource-dir`).
 // It is injected by CMake for the `amc-cpp` target; empty if unavailable.
@@ -204,8 +205,12 @@ int run_frontend(const char *config_path, const char *output_path) {
             if (!inst.as.empty()) anchor += "using " + inst.as + " = " + concrete + ";\n";
             anchor += "static_assert(sizeof(" + concrete + ") > 0, \"abix instantiate\");\n";
         }
+        // Several `amc` processes may analyze files in the same directory.
+        // Give each invocation its own virtual anchor so diagnostics, depfiles
+        // and ClangTool state never observe another process's anchor.
         llvm::SmallString<256> anchor_file(base);
-        llvm::sys::path::append(anchor_file, ".amc", "instantiate.hpp");
+        const std::string anchor_name = "instantiate-" + amc::support::unique_process_suffix() + ".hpp";
+        llvm::sys::path::append(anchor_file, ".amc", anchor_name);
         anchor_path = anchor_file.str().str();
         llvm::SmallString<256> anchor_dir(base);
         llvm::sys::path::append(anchor_dir, ".amc");

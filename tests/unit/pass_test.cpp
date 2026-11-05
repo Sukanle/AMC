@@ -27,6 +27,7 @@
 #include <fmt/base.h>
 
 #include <cstdio>
+#include <fstream>
 #include <string>
 
 namespace {
@@ -227,6 +228,36 @@ void test_artifact_loader() {
     std::remove(path.c_str());
 }
 
+void test_artifact_loader_options() {
+    const std::string path = "amc-pass-options-test.abix";
+    auto contract = module_with_layout(8, 8);
+    contract.types[0].layout_hash = amc::hash_text("layout", 0x4c41594fULL);
+    std::string error;
+    check(amc::write_abix(contract, path, error), "artifact written for sidecar options");
+    {
+        std::ofstream semantic(path + ".semantic", std::ios::binary);
+        semantic << "not semantic json";
+        std::ofstream lowering(path + ".lowering", std::ios::binary);
+        lowering << "not lowering json";
+    }
+
+    amc::ir::LoadOptions abi_only;
+    abi_only.semantic = false;
+    abi_only.lowering = false;
+    amc::ir::Module loaded;
+    check(amc::ir::load_artifact(path, loaded, error, abi_only), "ABI-only load skips malformed sidecars");
+    check(
+        !loaded.artifact.semantic_loaded && !loaded.artifact.lowering_loaded, "ABI-only load marks sidecars unloaded");
+
+    error.clear();
+    amc::ir::Module full;
+    check(!amc::ir::load_artifact(path, full, error), "full load rejects malformed sidecars");
+
+    std::remove(path.c_str());
+    std::remove((path + ".semantic").c_str());
+    std::remove((path + ".lowering").c_str());
+}
+
 void test_default_pipeline() {
     amc::ir::Module module;
     module.abi = module_with_layout(8, 8);
@@ -248,6 +279,7 @@ int main() {
     test_verify_lowering_pass();
     test_compatibility_mapping_pass();
     test_artifact_loader();
+    test_artifact_loader_options();
     test_default_pipeline();
 
     if (failures != 0) {

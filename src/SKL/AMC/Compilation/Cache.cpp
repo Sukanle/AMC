@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "SKL/AMC/Compilation/Cache.h"
+#include "SKL/AMC/Support/Process.h"
 
 #include <algorithm>
 #include <atomic>
@@ -27,26 +28,10 @@
 
 #include <fmt/format.h>
 
-#if defined(_WIN32)
-#  include <process.h>
-#else
-#  include <unistd.h>
-#endif
-
 namespace amc {
 namespace {
 
 namespace fs = std::filesystem;
-
-// Process id, so two processes writing the same key never share a temporary
-// directory name (the atomic counter is only unique within one process).
-long current_process_id() noexcept {
-#if defined(_WIN32)
-    return static_cast<long>(_getpid());
-#else
-    return static_cast<long>(getpid());
-#endif
-}
 
 constexpr const char *kManifestName = "manifest.json";
 constexpr const char *kManifestSchema = "abix.instantiation-cache/1";
@@ -486,7 +471,7 @@ bool InstantiationCache::store(const InstantiationBuildInputs &inputs,
     // Write to a unique temporary directory, then commit with a rename.
     const std::string suffix = hash_hex_plain(manifest.build_key)
                              + "-"
-                             + std::to_string(current_process_id())
+                             + std::to_string(amc::support::process_id())
                              + "-"
                              + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())
                              + "-"

@@ -249,6 +249,52 @@ BENCHMARK_DEFINE_F(ArtifactFixture, LoadArtifact)(benchmark::State &state) {
 }
 BENCHMARK_REGISTER_F(ArtifactFixture, LoadArtifact)->Arg(5'000)->Arg(10'000);
 
+BENCHMARK_DEFINE_F(ArtifactFixture, LoadAbiOnly)(benchmark::State &state) {
+    amc::ir::LoadOptions options;
+    options.semantic = false;
+    options.lowering = false;
+    std::string error;
+    for (auto _ : state) {
+        amc::ir::Module loaded;
+        error.clear();
+        bool ok = amc::ir::load_artifact(artifact.string(), loaded, error, options);
+        benchmark::DoNotOptimize(loaded);
+        benchmark::DoNotOptimize(ok);
+    }
+    state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(count));
+}
+BENCHMARK_REGISTER_F(ArtifactFixture, LoadAbiOnly)->Arg(5'000)->Arg(10'000);
+
+BENCHMARK_DEFINE_F(ArtifactFixture, LoadWithSemantic)(benchmark::State &state) {
+    amc::ir::LoadOptions options;
+    options.lowering = false;
+    std::string error;
+    for (auto _ : state) {
+        amc::ir::Module loaded;
+        error.clear();
+        bool ok = amc::ir::load_artifact(artifact.string(), loaded, error, options);
+        benchmark::DoNotOptimize(loaded);
+        benchmark::DoNotOptimize(ok);
+    }
+    state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(count));
+}
+BENCHMARK_REGISTER_F(ArtifactFixture, LoadWithSemantic)->Arg(5'000)->Arg(10'000);
+
+BENCHMARK_DEFINE_F(ArtifactFixture, LoadWithLowering)(benchmark::State &state) {
+    amc::ir::LoadOptions options;
+    options.semantic = false;
+    std::string error;
+    for (auto _ : state) {
+        amc::ir::Module loaded;
+        error.clear();
+        bool ok = amc::ir::load_artifact(artifact.string(), loaded, error, options);
+        benchmark::DoNotOptimize(loaded);
+        benchmark::DoNotOptimize(ok);
+    }
+    state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(count));
+}
+BENCHMARK_REGISTER_F(ArtifactFixture, LoadWithLowering)->Arg(5'000)->Arg(10'000);
+
 BENCHMARK_DEFINE_F(ArtifactFixture, BuildMetadata)(benchmark::State &state) {
     amc::MetadataOptions options;
     options.build_id = amc::hash_text("artifact-perf-build", 0x4255494cULL);

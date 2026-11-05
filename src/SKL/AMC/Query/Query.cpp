@@ -16,6 +16,8 @@
 #include "SKL/AMC/Query/Query.h"
 #include "SKL/AMC/Diagnostics/Error.h"
 
+#include <llvm/Support/raw_ostream.h>
+
 #include <algorithm>
 #include <cctype>
 #include <map>
@@ -168,42 +170,50 @@ std::string query_types_text(const AbiModule &module, const std::vector<size_t> 
     return out;
 }
 
-std::string query_types_json(
-    const AbiModule &module, const std::vector<size_t> &indices, bool include_layout, std::string_view needle) {
+void query_types_json(const AbiModule &module, const std::vector<size_t> &indices, bool include_layout,
+    std::string_view needle, llvm::raw_ostream &out) {
     const auto index = index_types(module);
-    std::string out = fmt::format(
+    out << fmt::format(
         "{{\"schema\":\"abix.query/1\",\"query\":{{\"kind\":\"type\",\"needle\":\"{}\"}},\"match_count\":{},"
         "\"matches\":[",
         json_escape(needle), indices.size());
     for (size_t m = 0; m < indices.size(); ++m) {
         const auto i = indices[m];
         const auto &type = module.types[i];
-        if (m) out += ",";
-        out += fmt::format(
+        if (m) out << ",";
+        out << fmt::format(
             "{{\"index\":{},\"name\":\"{}\",\"kind\":\"{}\",\"id\":\"{}\",\"layout_hash\":\"{}\",\"size\":{},"
             "\"align\":{},\"flags\":{},\"field_count\":{}",
             i, json_escape(type.name), type_kind_name(type.kind), hash_string(type.id), hash_string(type.layout_hash),
             type.size, type.align, type.flags, type.field_count);
         if (const auto *source = find_source_origin(module, type.id))
-            out += fmt::format(",\"source\":{{\"file\":\"{}\",\"line\":{},\"column\":{}}}", json_escape(source->file),
+            out << fmt::format(",\"source\":{{\"file\":\"{}\",\"line\":{},\"column\":{}}}", json_escape(source->file),
                 source->line, source->column);
         if (include_layout) {
-            out += ",\"fields\":[";
+            out << ",\"fields\":[";
             for (uint32_t f = 0; f < type.field_count; ++f) {
                 const auto &field = module.fields[type.field_begin + f];
-                if (f) out += ",";
-                out += fmt::format(
+                if (f) out << ",";
+                out << fmt::format(
                     "{{\"index\":{},\"name\":\"{}\",\"type_id\":\"{}\",\"type_name\":\"{}\",\"offset\":{},"
                     "\"flags\":{}}}",
                     type.field_begin + f, json_escape(field.name), hash_string(field.type_id),
                     json_escape(type_name(index, field.type_id)), field.offset, field.flags);
             }
-            out += "]";
+            out << "]";
         }
-        out += "}";
+        out << "}";
     }
-    out += "]}\n";
-    return out;
+    out << "]}\n";
+}
+
+std::string query_types_json(
+    const AbiModule &module, const std::vector<size_t> &indices, bool include_layout, std::string_view needle) {
+    std::string text;
+    llvm::raw_string_ostream out(text);
+    query_types_json(module, indices, include_layout, needle, out);
+    out.flush();
+    return text;
 }
 
 std::string query_functions_text(const AbiModule &module, const std::vector<size_t> &indices) {
@@ -224,17 +234,18 @@ std::string query_functions_text(const AbiModule &module, const std::vector<size
     return out;
 }
 
-std::string query_functions_json(const AbiModule &module, const std::vector<size_t> &indices, std::string_view needle) {
+void query_functions_json(
+    const AbiModule &module, const std::vector<size_t> &indices, std::string_view needle, llvm::raw_ostream &out) {
     const auto index = index_types(module);
-    std::string out = fmt::format(
+    out << fmt::format(
         "{{\"schema\":\"abix.query/1\",\"query\":{{\"kind\":\"function\",\"needle\":\"{}\"}},\"match_count\":{},"
         "\"matches\":[",
         json_escape(needle), indices.size());
     for (size_t m = 0; m < indices.size(); ++m) {
         const auto i = indices[m];
         const auto &function = module.functions[i];
-        if (m) out += ",";
-        out += fmt::format(
+        if (m) out << ",";
+        out << fmt::format(
             "{{\"index\":{},\"name\":\"{}\",\"owner_type\":\"{}\",\"owner_name\":\"{}\",\"signature\":\"{}\","
             "\"return_type\":\"{}\",\"return_type_name\":\"{}\",\"calling_convention\":{},\"flags\":{},"
             "\"parameters\":[",
@@ -244,15 +255,22 @@ std::string query_functions_json(const AbiModule &module, const std::vector<size
             json_escape(type_name(index, function.return_type)), function.calling_convention, function.flags);
         for (size_t p = 0; p < function.parameters.size(); ++p) {
             const auto &parameter = function.parameters[p];
-            if (p) out += ",";
-            out += fmt::format("{{\"index\":{},\"name\":\"{}\",\"type_id\":\"{}\",\"type_name\":\"{}\",\"flags\":{}}}",
+            if (p) out << ",";
+            out << fmt::format("{{\"index\":{},\"name\":\"{}\",\"type_id\":\"{}\",\"type_name\":\"{}\",\"flags\":{}}}",
                 p, json_escape(parameter.name), hash_string(parameter.type_id),
                 json_escape(type_name(index, parameter.type_id)), parameter.flags);
         }
-        out += "]}";
+        out << "]}";
     }
-    out += "]}\n";
-    return out;
+    out << "]}\n";
+}
+
+std::string query_functions_json(const AbiModule &module, const std::vector<size_t> &indices, std::string_view needle) {
+    std::string text;
+    llvm::raw_string_ostream out(text);
+    query_functions_json(module, indices, needle, out);
+    out.flush();
+    return text;
 }
 
 std::string compatibility_query_text(const AbiModule &source, const AbiModule &target, const VerifyResult &result) {
@@ -268,21 +286,29 @@ std::string compatibility_query_text(const AbiModule &source, const AbiModule &t
     return out;
 }
 
-std::string compatibility_query_json(const AbiModule &source, const AbiModule &target, const VerifyResult &result) {
-    std::string out = fmt::format(
+void compatibility_query_json(
+    const AbiModule &source, const AbiModule &target, const VerifyResult &result, llvm::raw_ostream &out) {
+    out << fmt::format(
         "{{\"schema\":\"abix.query/1\",\"query\":{{\"kind\":\"compatibility\"}},\"source\":{{\"package\":\"{}\"}},"
         "\"target\":{{\"package\":\"{}\"}},\"compatible\":{},\"status\":\"{}\",\"changes\":[",
         json_escape(source.package_name), json_escape(target.package_name), result.consistent ? "true" : "false",
         result.consistent ? "consistent" : "drift");
     for (size_t i = 0; i < result.changes.size(); ++i) {
         const auto &change = result.changes[i];
-        if (i) out += ",";
-        out += fmt::format("{{\"kind\":\"{}\",\"type\":\"{}\",\"name\":\"{}\",\"detail\":\"{}\"}}",
+        if (i) out << ",";
+        out << fmt::format("{{\"kind\":\"{}\",\"type\":\"{}\",\"name\":\"{}\",\"detail\":\"{}\"}}",
             change_kind_name(change.kind), json_escape(change.type), json_escape(change.name),
             json_escape(change.detail));
     }
-    out += "]}\n";
-    return out;
+    out << "]}\n";
+}
+
+std::string compatibility_query_json(const AbiModule &source, const AbiModule &target, const VerifyResult &result) {
+    std::string text;
+    llvm::raw_string_ostream out(text);
+    compatibility_query_json(source, target, result, out);
+    out.flush();
+    return text;
 }
 
 }   // namespace amc

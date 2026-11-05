@@ -21,13 +21,12 @@
 #include "SKL/AMC/Artifact/Metadata.h"
 #include "SKL/AMC/Util/Error.h"
 
-#include <exception>
 #include <filesystem>
 #include <string>
 #include <vector>
 
-#include <fmt/format.h>
-#include <fmt/os.h>
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Support/raw_ostream.h>
 
 namespace fs = std::filesystem;
 using amc::util::fail;
@@ -70,18 +69,25 @@ int cmd_context(char **args, int arg_count) {
         if (!amc::load_module_source(input.string(), module, error))
             return fail(read_error_category(error), "read_abix", error, input.string());
 
-        const std::string rendered =
-            format == "json" ? amc::context_to_json(module, include_names) : amc::context_to_llm(module, include_names);
+        const auto emit = [&](llvm::raw_ostream &out) {
+            if (format == "json")
+                amc::context_to_json(module, include_names, out);
+            else
+                amc::context_to_llm(module, include_names, out);
+        };
         if (output.empty()) {
-            fmt::print("{}", rendered);
+            emit(llvm::outs());
+            llvm::outs().flush();
             return 0;
         }
-        try {
-            auto file = fmt::output_file(output.string());
-            file.print("{}", rendered);
-        } catch (const std::exception &e) {
-            return fail(amc::ErrorCategory::io, "context", "cannot write output", output.string(), e.what());
-        }
+        std::error_code ec;
+        llvm::raw_fd_ostream file(output.string(), ec, llvm::sys::fs::OF_Text);
+        if (ec) return fail(amc::ErrorCategory::io, "context", "cannot write output", output.string(), ec.message());
+        emit(file);
+        file.close();
+        if (file.has_error())
+            return fail(
+                amc::ErrorCategory::io, "context", "cannot write output", output.string(), file.error().message());
         return 0;
     }
     return usage_error(command + ": unsupported subcommand");

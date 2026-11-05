@@ -28,3 +28,10 @@ target_link_libraries(amc-query-perf-bench PRIVATE amc-core benchmark::benchmark
 set_target_properties(amc-query-perf-bench PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_test(NAME amc-query-perf-bench COMMAND amc-query-perf-bench --benchmark_min_time=0.05s)
 set_tests_properties(amc-query-perf-bench PROPERTIES LABELS perf)
+
+add_executable(amc-multifile-perf-bench multifile_perf_bench.cpp)
+target_include_directories(amc-multifile-perf-bench PRIVATE ${AMC_INCLUDE_DIR})
+target_link_libraries(amc-multifile-perf-bench PRIVATE amc-core benchmark::benchmark_main)
+set_target_properties(amc-multifile-perf-bench PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+add_test(NAME amc-multifile-perf-bench COMMAND amc-multifile-perf-bench --benchmark_min_time=0.05s)
+set_tests_properties(amc-multifile-perf-bench PROPERTIES LABELS perf)

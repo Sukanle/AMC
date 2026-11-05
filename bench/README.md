@@ -26,6 +26,7 @@ performance targets are skipped with a CMake status message.
 | `amc-artifact-perf-bench` | B2   | `.abix`, sidecars, metadata region, materialize   |
 | `amc-cache-perf-bench`    | B3   | cold store, hit/miss, dependencies, concurrency   |
 | `amc-query-perf-bench`    | B4   | type/function lookup, text/JSON/context rendering |
+| `amc-multifile-perf-bench`| OPT-6| sequential vs thread-pool multi-file ABI load     |
 | `abix-bench`              | B5   | Aue L0/L1/L2, fields, arrays and GC               |
 
 ## Run
@@ -82,6 +83,33 @@ PassFixture/FullPipeline/5000
 
 `CacheReadFixture/LookupConcurrent` creates its worker threads inside the
 measured region; thread creation is intentionally part of that micro-benchmark.
+
+## External multi-process scaling
+
+AMC does not embed a process pool. Multi-file throughput comes from the build
+system launching independent `amc` processes, just like Ninja launches
+`clang`/`gcc`. Use the external harness to measure that model:
+
+```bash
+python tools/run_multiprocess_bench.py \
+  --artifact build/Release/Aue/generated/build/build/counter.abix \
+  --instances 1 2 4 8 16 --repetitions 3
+```
+
+The harness starts N `amc generate` processes at once with distinct output
+paths. It is not a production process pool and is not part of CTest.
+
+For shared-cache contention, run several `amc build` processes with distinct
+`-B` directories and one `--cache`:
+
+```bash
+python tools/stress_concurrent_build.py \
+  --config Aue/Counter.abic.toml --instances 8 \
+  --cold-rounds 2 --warm-rounds 4
+```
+
+The stress tool checks that every build succeeds, every output has the same
+digest, and concurrent writers leave exactly one cache entry.
 
 Aue's `abix-bench` remains a standalone Lua micro-benchmark because it is also
 built by `Aue/standalone` without the AMC benchmark dependency.

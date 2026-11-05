@@ -47,6 +47,7 @@ DEFAULT_BENCHES = [
     "amc-artifact-perf-bench",
     "amc-cache-perf-bench",
     "amc-query-perf-bench",
+    "amc-multifile-perf-bench",
 ]
 
 TIME_UNIT_NS = {
@@ -368,11 +369,11 @@ def summarize(path: Path) -> list[tuple[str, int, float, float]]:
             base = name[: -len("_" + agg)] if agg and name.endswith("_" + agg) else name
             threads[base] = row.get("threads", 1)
             if agg == "mean":
-                mean[base] = to_ns(row["cpu_time"], unit)
+                mean[base] = to_ns(row.get("real_time", row["cpu_time"]), unit)
             elif agg == "stddev":
-                sd[base] = to_ns(row["cpu_time"], unit)
+                sd[base] = to_ns(row.get("real_time", row["cpu_time"]), unit)
         elif run_type == "iteration":
-            iterations.setdefault(name, []).append(to_ns(row["cpu_time"], unit))
+            iterations.setdefault(name, []).append(to_ns(row.get("real_time", row["cpu_time"]), unit))
             threads.setdefault(name, row.get("threads", 1))
 
     if not mean:

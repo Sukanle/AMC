@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "SKL/AMC/Compilation/Build.h"
+#include "SKL/AMC/Support/Process.h"
 #include "SKL/AMC/Compilation/Config.h"
 #include "SKL/AMC/Compilation/Meta.h"
 #include "SKL/AMC/Compilation/Provider.h"
@@ -749,7 +750,10 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
                 import_table ? import_table->get("language")->value_or(std::string("cpp")) : "cpp";
             const fs::path frontend = amc::compilation::provider_executable(provider, language);
             const fs::path base = build_dir.empty() ? fs::absolute(config_path).parent_path() : build_dir;
-            const fs::path temporary = base / ".amc" / "frontend.abix";
+            // A build system may launch several `amc build` processes for the
+            // same project. Keep every temporary artifact unique to this
+            // process so they never clobber each other's frontend output.
+            const fs::path temporary = base / ".amc" / ("frontend-" + amc::support::unique_process_suffix() + ".abix");
             const fs::path semantic_temporary = fs::path(temporary.string() + ".semantic");
             std::error_code ec;
             fs::create_directories(temporary.parent_path(), ec);

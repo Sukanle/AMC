@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "SKL/AMC/CLI/Support.h"
+#include "SKL/AMC/Support/Process.h"
 #include "SKL/AMC/Core/Adapter.h"
 #include "SKL/AMC/Core/Core.h"
 #include "SKL/AMC/Diagnostics/Error.h"
@@ -117,7 +118,8 @@ int cmd_verify(char **args, int arg_count, const fs::path &provider) {
             const fs::path frontend = amc::compilation::provider_executable(provider, language);
 
             const fs::path base = build_dir.empty() ? fs::absolute(config_path).parent_path() : build_dir;
-            const fs::path temporary = base / ".amc" / "verify-frontend.abix";
+            const std::string process_suffix = amc::support::unique_process_suffix();
+            const fs::path temporary = base / ".amc" / ("verify-frontend-" + process_suffix + ".abix");
             std::error_code ec;
             fs::create_directories(temporary.parent_path(), ec);
             if (ec)
@@ -148,7 +150,7 @@ int cmd_verify(char **args, int arg_count, const fs::path &provider) {
                 amc::AbiModule projected;
                 if (!amc::project_symbols(full, spec.symbols, projected, error))
                     return fail(amc::ErrorCategory::validation, "project_symbols", error, config_path.string());
-                const fs::path fresh = base / ".amc" / fmt::format("verify-{}.abix", index);
+                const fs::path fresh = base / ".amc" / fmt::format("verify-{}-{}.abix", process_suffix, index);
                 if (!amc::write_abix(projected, fresh.string(), error))
                     return fail(amc::ErrorCategory::io, "write_abix", error, fresh.string());
 

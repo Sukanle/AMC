@@ -32,11 +32,20 @@ struct ArtifactPaths {
 
 ArtifactPaths artifact_paths(const std::string &abi_path);
 
+// Loading policy for the optional sidecars. Backends that only consume the
+// ABI and lowering views can skip `.semantic` entirely, which avoids parsing
+// the largest sidecar on the generation path.
+struct LoadOptions {
+    bool semantic = true;
+    bool lowering = true;
+};
+
 // Loads the ABI artifact and its optional semantic/lowering sidecars into one
 // IR module. A missing sidecar is not an error; a present but malformed sidecar
-// is. This keeps artifact naming and consistency in one place instead of
-// duplicating `<path>.semantic` / `<path>.lowering` in every backend.
-bool load_artifact(const std::string &abi_path, Module &module, std::string &error);
+// is. `options` selects which sidecars are read. This keeps artifact naming and
+// consistency in one place instead of duplicating `<path>.semantic` /
+// `<path>.lowering` in every backend.
+bool load_artifact(const std::string &abi_path, Module &module, std::string &error, LoadOptions options = {});
 
 }   // namespace amc::ir
 
