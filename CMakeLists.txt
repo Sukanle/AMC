@@ -481,7 +481,9 @@ if(AMC_BUILD_TESTS AND AMC_PYTHON_EXECUTABLE)
                                              ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
     add_test(NAME amc-boundary-contracts COMMAND ${AMC_PYTHON_EXECUTABLE}
                                                  ${AMC_SOURCE_DIR}/tools/check_module_boundaries.py --contracts-only)
-    set_tests_properties(amc-boundary-contracts PROPERTIES TIMEOUT 60)
+    add_test(NAME amc-boundary-edges COMMAND ${AMC_PYTHON_EXECUTABLE}
+                                             ${AMC_SOURCE_DIR}/tools/check_module_boundaries.py --strict)
+    set_tests_properties(amc-boundary-contracts amc-boundary-edges PROPERTIES TIMEOUT 60)
 
     set_tests_properties(
         amc-feature-test

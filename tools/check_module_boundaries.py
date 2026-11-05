@@ -78,6 +78,8 @@ def module_for_path(path: Path, root: Path) -> str:
         return "Provider"
     if "/Lang/" in rel:
         return "Frontend"
+    if "/Tool/Dump/" in rel or "/Query/" in rel:
+        return "Query"
     if "/CLI/" in rel or "/Tool/MCP/" in rel or "/Interfaces/" in rel or rel.endswith("main.cpp"):
         return "Interfaces"
     if "/Core/" in rel:
@@ -104,6 +106,10 @@ def module_for_include(include: str) -> str | None:
         return "Frontend"
     if include.startswith("SKL/AMC/Core/") or include.startswith("SKL/AMC/Platform/"):
         return "IR"
+    if include.startswith("SKL/AMC/Tool/Dump"):
+        return "Query"
+    if include.startswith("SKL/AMC/Tool/MCP"):
+        return "Interfaces"
     if include.startswith("SKL/AMC/CLI/") or include.startswith("SKL/AMC/Tool/"):
         return "Interfaces"
     return None
@@ -152,6 +158,24 @@ def compat_forwarders(root: Path) -> dict[Path, list[Path]]:
     return result
 
 
+def load_allowlist(root: Path) -> list[tuple[str, str, str, str, str]]:
+    path = root / "tools" / "module_boundary_allowlist.txt"
+    if not path.is_file():
+        return []
+    entries: list[tuple[str, str, str, str, str]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = [part.strip() for part in line.split("|")]
+        if len(parts) < 4:
+            continue
+        file, source, target, until = parts[:4]
+        reason = parts[4] if len(parts) > 4 else ""
+        entries.append((file, source, target, until, reason))
+    return entries
+
+
 def check_contracts(root: Path) -> list[str]:
     errors: list[str] = []
     for rel in CONTRACT_HEADERS:
@@ -190,6 +214,8 @@ def main() -> int:
         print("module boundaries: A0 contract headers are clean")
         return 0
 
+    allowlist = load_allowlist(root)
+    allowlist_used = {key: False for key in allowlist}
     edges: list[tuple[str, str, str]] = []
     violations: list[tuple[str, str, str]] = []
     for path in source_files(root):
@@ -207,7 +233,15 @@ def main() -> int:
             edges.append((rel, source_module, target_module))
             allowed = ALLOWED.get(source_module)
             if not is_compat_forwarder and allowed is not None and target_module not in allowed:
-                violations.append((rel, source_module, target_module))
+                matched = None
+                for entry in allowlist:
+                    file, source, target, until, reason = entry
+                    if file == rel and source == source_module and target == target_module:
+                        matched = entry
+                        allowlist_used[entry] = True
+                        break
+                if matched is None:
+                    violations.append((rel, source_module, target_module))
 
     forwarders = compat_forwarders(root)
     if args.json:
@@ -248,6 +282,16 @@ def main() -> int:
                 print(f"  {file}: {source} -> {target}")
         else:
             print("\nNo forbidden dependency edges.")
+        temporary = [entry for entry in allowlist if allowlist_used.get(entry)]
+        if temporary:
+            print(f"\nTemporary allowlisted edges ({len(temporary)}):")
+            for file, source, target, until, reason in temporary:
+                print(f"  {file}: {source} -> {target} [until {until}] {reason}")
+        stale = [entry for entry in allowlist if not allowlist_used.get(entry)]
+        if stale:
+            print(f"\nStale allowlist entries ({len(stale)}):")
+            for file, source, target, until, reason in stale:
+                print(f"  {file}: {source} -> {target} [until {until}] {reason}")
 
     if args.strict and violations:
         return 1

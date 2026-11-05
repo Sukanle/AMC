@@ -118,6 +118,22 @@ python3 tools/check_module_boundaries.py --strict   # fail on forbidden edges
 python3 tools/check_module_boundaries.py --contracts-only
 ```
 
+Temporary exceptions live in `tools/module_boundary_allowlist.txt`, one
+`file|from|to|until|reason` entry per line. The `until` column names the stage
+that removes the edge; stale entries are reported so the allowlist does not
+rot. `--strict` accepts allowlisted edges and fails only on unlisted ones.
+
+Current exceptions:
+
+```text
+include/SKL/AMC/CLI/CLI.h: Interfaces -> IR [until A4]
+src/SKL/AMC/CLI/CLI.cpp: Interfaces -> IR [until A4]
+src/SKL/AMC/CLI/Build.cpp: Interfaces -> IR [until A4]
+```
+
+CTest runs both `--contracts-only` and `--strict` as `amc-boundary-contracts`
+and `amc-boundary-edges`.
+
 ## Current → Target Mapping
 
 | Current | Target |
@@ -146,8 +162,9 @@ python3 tools/check_module_boundaries.py --contracts-only
 - `Lang/Zig/Backend.cpp` → `Backend/Zig/Backend.cpp`
 - `Lang/{C++,Rust,Zig}.h` are marked compatibility forwarders; Rust/Zig have no
   in-tree users and are ready for removal after the external check
-- The report-only scanner currently lists the remaining legacy edges; none are
-  introduced by the A0 contract headers
+- The scanner reports zero unlisted forbidden edges; three CLI -> IR edges
+  remain as allowlisted A4 exceptions
+- `amc-boundary-contracts` and `amc-boundary-edges` run in CTest
 
 ## Migration Rules
 
@@ -166,6 +183,7 @@ python3 tools/check_module_boundaries.py --contracts-only
 - [x] Boundary headers exist and compile.
 - [x] `amc-boundary-test` covers the contract types and pass ordering.
 - [x] A report-only dependency scanner and an A0 contract-header gate exist.
+- [x] `--strict` edge gate passes with documented A4 exceptions.
 - [ ] Current includes are migrated behind the contract headers in A1.
 
 ## A1 Entry Criteria

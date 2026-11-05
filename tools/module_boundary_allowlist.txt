@@ -1,0 +1,11 @@
+# Temporary module-boundary exceptions for the A1 -> A4 migration.
+#
+# Format: <file>|<from>|<to>|<until>|<reason>
+# `until` names the refactor stage that removes the edge. The report-only and
+# --strict runs both accept these entries; stale entries are reported so the
+# allowlist stays clean.
+#
+# A4: the CLI will call the Compilation API instead of reading IR directly.
+include/SKL/AMC/CLI/CLI.h|Interfaces|IR|A4|CLI will call Compilation instead of IR
+src/SKL/AMC/CLI/CLI.cpp|Interfaces|IR|A4|CLI will call Compilation instead of IR
+src/SKL/AMC/CLI/Build.cpp|Interfaces|IR|A4|build pipeline moves into Compilation

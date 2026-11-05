@@ -107,6 +107,20 @@ python3 tools/check_module_boundaries.py --strict   # 禁止边失败
 python3 tools/check_module_boundaries.py --contracts-only
 ```
 
+临时例外记录在 `tools/module_boundary_allowlist.txt`，每行格式为
+`file|from|to|until|reason`。`until` 指定移除该边的阶段；过期条目会在报告中提示，避免 allowlist 腐化。`--strict` 接受已登记例外，只对未登记的禁止边失败。
+
+当前例外：
+
+```text
+include/SKL/AMC/CLI/CLI.h: Interfaces -> IR [until A4]
+src/SKL/AMC/CLI/CLI.cpp: Interfaces -> IR [until A4]
+src/SKL/AMC/CLI/Build.cpp: Interfaces -> IR [until A4]
+```
+
+CTest 同时运行 `--contracts-only` 和 `--strict`：
+`amc-boundary-contracts`、`amc-boundary-edges`。
+
 ## 当前 → 目标映射
 
 | 当前 | 目标 |
@@ -134,7 +148,8 @@ python3 tools/check_module_boundaries.py --contracts-only
 - `Lang/Rust/Backend.cpp` → `Backend/Rust/Backend.cpp`
 - `Lang/Zig/Backend.cpp` → `Backend/Zig/Backend.cpp`
 - `Lang/{C++,Rust,Zig}.h` 已改为带标记的兼容转发头；Rust/Zig 当前没有 in-tree 用户，外部确认后可删除
-- report-only 扫描当前只列出遗留边；A0 契约头没有新增违规
+- 扫描当前未列出任何未登记禁止边；只剩 3 条 CLI -> IR 的 A4 例外
+- `amc-boundary-contracts` 与 `amc-boundary-edges` 已加入 CTest
 
 ## 迁移规则
 
@@ -153,6 +168,7 @@ python3 tools/check_module_boundaries.py --contracts-only
 - [x] 边界头文件存在并可编译。
 - [x] `amc-boundary-test` 覆盖契约类型和 Pass 顺序。
 - [x] 已有 report-only 依赖扫描和 A0 契约头 gate。
+- [x] `--strict` 边 gate 通过，并保留有记录的 A4 例外。
 - [ ] A1 将现有 include 迁移到契约头文件后面。
 
 ## A1 入口条件
