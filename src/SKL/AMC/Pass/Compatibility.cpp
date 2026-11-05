@@ -15,17 +15,17 @@
  */
 #include "SKL/AMC/Pass/Compatibility.h"
 
-#include "SKL/AMC/Core/Adapter.h"
+#include "SKL/AMC/IR/Compatibility.h"
 
 #include <fmt/format.h>
 
 namespace amc::pass {
 
-bool compare_modules(const AbiModule &contract, const AbiModule &implementation, VerifyResult &result, Context &context,
-    diagnostics::DiagnosticList &diagnostics) {
+bool compare_modules(const AbiModule &contract, const AbiModule &implementation, ir::CompatibilityResult &result,
+    Context &context, diagnostics::DiagnosticList &diagnostics) {
     (void)context;
     std::string error;
-    if (!amc::verify_modules(contract, implementation, result, error)) {
+    if (!amc::ir::compare_contracts(contract, implementation, result, error)) {
         diagnostics::add_error(diagnostics, "compatibility_failed", "pass", error);
         return false;
     }

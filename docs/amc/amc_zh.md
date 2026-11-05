@@ -101,9 +101,20 @@ amc compatibility v1.abix v2.abix        # 不兼容退出 1
 amc verify -c package.abic.toml [-B <build_dir>]
 amc verify contract.abix implementation.abix
 amc verify contract.abix implementation.abix --format diagnostics
+amc verify contract.abix implementation.abix --format diagnostics-json
 ```
 
 `--format diagnostics` 输出 `file:line:column: error: ABI <kind> ...`（使用契约的 Source Origin），供编辑器/CI 使用。
+
+`--format diagnostics-json` 输出统一的 `amc.diagnostics/1` schema：
+
+```json
+{"schema":"amc.diagnostics/1","status":"error","notes":0,"warnings":0,"errors":1,
+ "diagnostics":[{"severity":"error","code":"abi_layout_changed","stage":"verify",
+                 "message":"ABI layout_changed for demo::Widget","file":"widget.hpp","line":12,"column":3}]}
+```
+
+Pass、verify 与 build 诊断共用同一聚合模型；`--error-format json` 仍保持 `abix.error/1` 单错误信封。
 
 verify 也会报告调用约定、ownership 契约与 error boundary 漂移（`calling_convention_changed`、`ownership_changed`、`error_boundary_changed`）。这些是契约层变化：不进入 `TypeID`/`LayoutHash`，ownership/error 差异也不会被折叠进 layout 兼容性分类。
 

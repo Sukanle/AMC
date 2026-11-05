@@ -141,9 +141,20 @@ Compares a frozen contract against a regenerated implementation, or two artifact
 amc verify -c package.abic.toml [-B <build_dir>]
 amc verify contract.abix implementation.abix
 amc verify contract.abix implementation.abix --format diagnostics
+amc verify contract.abix implementation.abix --format diagnostics-json
 ```
 
 `--format diagnostics` emits `file:line:column: error: ABI <kind> ...` lines using the contract's Source Origin, for editors and CI annotations.
+
+`--format diagnostics-json` emits the shared `amc.diagnostics/1` schema:
+
+```json
+{"schema":"amc.diagnostics/1","status":"error","notes":0,"warnings":0,"errors":1,
+ "diagnostics":[{"severity":"error","code":"abi_layout_changed","stage":"verify",
+                 "message":"ABI layout_changed for demo::Widget","file":"widget.hpp","line":12,"column":3}]}
+```
+
+Pass, verify and build diagnostics use the same aggregation model; `abix.error/1` remains the single-error envelope selected by `--error-format json`.
 
 Verification also reports calling-convention, ownership-contract and error-boundary drift (`calling_convention_changed`, `ownership_changed`, `error_boundary_changed`). These are contract-level changes: they never enter `TypeID`/`LayoutHash`, and ownership/error differences are not folded into the layout compatibility classification.
 

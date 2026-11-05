@@ -221,9 +221,15 @@ CTest 同时运行 `--contracts-only` 和 `--strict`：
   `Pass/TypeMapping` 负责映射报告；`Pass/Pipeline` 组合 artifact/semantic/ABI 校验 +
   lowering + lowering 校验，并支持选择 Pass/strict 选项
 - `Compilation/Build` 运行标准 Pass pipeline；`amc verify`、`amc diff`、
-  `amc compatibility` 使用 Pass 入口；`amc query --compatible` 仍走 Query 层 Core helper，
-  以保持 Query -> Pass 边界
-- A3 剩余工作是把 `Core/Verify` 的其余策略和未来的类型映射检查完全收敛到 Pass API
+  `amc compatibility` 使用 Pass 入口
+- A3.5 策略门面：`IR/Compatibility` 与 `IR/TypeMapping` 命名比较/映射策略；
+  `Pass/*` 增加诊断与 strict 行为，`Query/Compatibility` 复用同一策略，且不引入
+  Query -> Pass 边
+- `Diagnostics` 负责聚合（`Summary`）、文本渲染和 `amc.diagnostics/1` JSON schema；
+  `Diagnostics/Verify` 把 `VerifyResult` 漂移转换为统一诊断模型，
+  `amc verify --format diagnostics-json` 输出该 schema
+- A2/A3.5 收口：剩余工作是 A5 物理拆分而不是策略设计；
+  `amc-pass-perf-test`（默认 5k，`AMC_PASS_PERF_LARGE=1` 时 20k）为拆分记录 Pass 基线
 
 ## A1 进度
 

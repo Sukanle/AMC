@@ -261,6 +261,8 @@ add_library(
     libabix-format STATIC
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Core.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Error.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Diagnostics/Diagnostics.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Diagnostics/Verify.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Error.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Condition.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Semantic/Identity.cpp
@@ -268,6 +270,7 @@ add_library(
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Semantic/Sync.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/LoweringJson.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/Artifact.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/TypeMapping.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/ELF.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Json.cpp
     ${AMC_SOURCE_DIR}/src/ljson/json.c
@@ -302,7 +305,10 @@ target_compile_definitions(
             JSON_PARSE_FINISHED_CHAR=0
             JSON_ERROR_PRINT_ENABLE=0)
 
-add_library(libabix-abi STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Verify.cpp)
+add_library(
+    libabix-abi STATIC
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Verify.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/Compatibility.cpp)
 target_link_libraries(libabix-abi PUBLIC libabix-format)
 set_target_properties(
     libabix-abi
@@ -313,7 +319,8 @@ set_target_properties(
 add_library(
     libabix-metadata STATIC
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Metadata.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Materialize.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Context.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Query.cpp)
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Context.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Query.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Query/Compatibility.cpp)
 target_link_libraries(libabix-metadata PUBLIC libabix-abi)
 set_target_properties(
     libabix-metadata
@@ -343,7 +350,7 @@ add_library(
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/TypeMapping.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Pipeline.cpp)
 target_include_directories(amc-pass PUBLIC ${AMC_INCLUDE_DIR})
-target_link_libraries(amc-pass PUBLIC libabix-format)
+target_link_libraries(amc-pass PUBLIC libabix-format libabix-abi)
 
 # A4 Compilation module: configuration parsing and, later, the shared build
 # pipeline. It is a build-tree library consumed by the CLI.
@@ -510,6 +517,12 @@ if(AMC_BUILD_TESTS)
     target_link_libraries(amc-pass-test PRIVATE amc-core amc-pass fmt::fmt)
     set_target_properties(amc-pass-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
     add_test(NAME amc-pass-test COMMAND amc-pass-test)
+
+    add_executable(amc-pass-perf-test ${AMC_SOURCE_DIR}/tests/unit/pass_perf_test.cpp)
+    target_include_directories(amc-pass-perf-test PRIVATE ${AMC_INCLUDE_DIR})
+    target_link_libraries(amc-pass-perf-test PRIVATE amc-core amc-pass fmt::fmt)
+    set_target_properties(amc-pass-perf-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+    add_test(NAME amc-pass-perf-test COMMAND amc-pass-perf-test)
 
     find_package(Catch2 3 QUIET)
     if(Catch2_FOUND)

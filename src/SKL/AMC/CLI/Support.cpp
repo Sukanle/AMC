@@ -19,10 +19,10 @@
 #include "SKL/AMC/Core/Error.h"
 #include "SKL/AMC/Core/Json.h"
 #include "SKL/AMC/Core/Metadata.h"
-#include "SKL/AMC/Core/Query.h"
 #include "SKL/AMC/Core/Verify.h"
+#include "SKL/AMC/Diagnostics/Verify.h"
 
-#include <algorithm>
+#include <cctype>
 #include <string>
 
 #include <fmt/format.h>
@@ -87,40 +87,31 @@ std::string elf_meta_document(const std::string &key, const amc::MetadataHeader 
 // Editor-consumable ABI diagnostics: one `file:line:column: error: ...` line
 // per drift, using the contract artifact's Source Origin when available.
 std::string abi_diagnostics(const amc::AbiModule &reference, const amc::VerifyResult &result) {
-    std::string out;
-    for (const auto &change : result.changes) {
-        const amc::Type *type = nullptr;
-        if (!change.type.empty()) {
-            const auto indices = amc::query_type_indices(reference, change.type);
-            if (!indices.empty()) type = &reference.types[indices.front()];
-        }
-        if (type != nullptr) {
-            if (const auto *source = amc::find_source_origin(reference, type->id)) {
-                out += source->file;
-                out += ':';
-                out += fmt::to_string(source->line);
-                out += ':';
-                out += fmt::to_string(source->column);
-                out += ": ";
+    std::string output;
+    for (const auto &diagnostic : amc::diagnostics::from_verify_result(reference, result)) {
+        if (!diagnostic.file.empty()) {
+            output += diagnostic.file;
+            if (diagnostic.line != 0) {
+                output += ":";
+                output += fmt::to_string(diagnostic.line);
+                if (diagnostic.column != 0) {
+                    output += ":";
+                    output += fmt::to_string(diagnostic.column);
+                }
             }
+            output += ": ";
         }
-        out += "error: ABI ";
-        out += amc::change_kind_name(change.kind);
-        if (!change.type.empty()) {
-            out += " for ";
-            out += change.type;
-        }
-        if (!change.name.empty()) {
-            out += ".";
-            out += change.name;
-        }
-        if (!change.detail.empty()) {
-            out += ": ";
-            out += change.detail;
-        }
-        out += "\n";
+        output += amc::diagnostics::severity_name(diagnostic.severity);
+        output += ": ";
+        output += diagnostic.message;
+        output += "\n";
     }
-    return out;
+    return output;
+}
+
+// Machine-readable form of the same ABI diagnostics (`amc.diagnostics/1`).
+std::string abi_diagnostics_json(const amc::AbiModule &reference, const amc::VerifyResult &result) {
+    return amc::diagnostics::diagnostics_to_json(amc::diagnostics::from_verify_result(reference, result));
 }
 
 }   // namespace amc::cli

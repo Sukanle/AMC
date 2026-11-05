@@ -15,7 +15,7 @@
  */
 #include "SKL/AMC/Pass/TypeMapping.h"
 
-#include "SKL/AMC/Core/Adapter.h"
+#include "SKL/AMC/IR/TypeMapping.h"
 
 namespace amc::pass {
 
@@ -23,7 +23,7 @@ bool build_compatibility_report(const AbiModule &source, const AbiModule &target
     diagnostics::DiagnosticList &diagnostics) {
     (void)context;
     std::string error;
-    if (!amc::build_compatibility(source, target, report, error)) {
+    if (!amc::ir::build_type_mapping(source, target, report, error)) {
         diagnostics::add_error(diagnostics, "compatibility_failed", "pass", error);
         return false;
     }

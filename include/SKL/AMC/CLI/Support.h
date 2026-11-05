@@ -34,6 +34,7 @@ bool parse_hash128(const std::string &text, amc::Hash128 &value);
 std::string hash_key(amc::Hash128 value);
 std::string elf_meta_document(const std::string &key, const amc::MetadataHeader &header);
 std::string abi_diagnostics(const amc::AbiModule &reference, const amc::VerifyResult &result);
+std::string abi_diagnostics_json(const amc::AbiModule &reference, const amc::VerifyResult &result);
 
 }   // namespace amc::cli
 

@@ -261,10 +261,17 @@ and `amc-boundary-edges`.
   artifact/semantic/ABI verification + lowering + lowering verification with
   selectable pass/strict options
 - `Compilation/Build` runs the standard pass pipeline; `amc verify`, `amc diff`
-  and `amc compatibility` use Pass entry points; `amc query --compatible` stays
-  on the Query-layer Core helper to preserve the Query -> Pass boundary
-- remaining A3 work is moving the rest of `Core/Verify` policy and future type
-  mapping checks fully behind `Pass` APIs
+  and `amc compatibility` use Pass entry points
+- A3.5 policy facades: `IR/Compatibility` and `IR/TypeMapping` name the
+  comparison/mapping policies; `Pass/*` adds diagnostics/strict behaviour and
+  `Query/Compatibility` consumes the same policy without a Query -> Pass edge
+- `Diagnostics` owns aggregation (`Summary`), text rendering and the
+  `amc.diagnostics/1` JSON schema; `Diagnostics/Verify` converts
+  `VerifyResult` drift into the shared model, and `amc verify --format
+  diagnostics-json` emits it
+- A2/A3.5 close-out: the remaining work is the A5 physical split, not policy
+  design; `amc-pass-perf-test` (5k default, 20k with
+  `AMC_PASS_PERF_LARGE=1`) records the pass baseline for that move
 
 ## A1 Progress
 

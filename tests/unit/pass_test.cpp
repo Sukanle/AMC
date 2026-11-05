@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 #include "SKL/AMC/Core/Core.h"
+#include "SKL/AMC/Diagnostics/Verify.h"
 #include "SKL/AMC/IR/Artifact.h"
+#include "SKL/AMC/IR/Compatibility.h"
 #include "SKL/AMC/Pass/Artifact.h"
 #include "SKL/AMC/Pass/Compatibility.h"
 #include "SKL/AMC/Pass/Semantic.h"
@@ -90,6 +92,49 @@ void test_compatibility_pass() {
     check(amc::pass::compare_modules(contract, implementation, result, context, strict),
         "strict comparison still completes");
     check(amc::diagnostics::has_errors(strict), "strict drift becomes an error");
+}
+
+void test_diagnostics_aggregation() {
+    amc::diagnostics::DiagnosticList diagnostics;
+    amc::diagnostics::add_warning(diagnostics, "warn", "pass", "warning text");
+    amc::diagnostics::add_error(diagnostics, "err", "pass", "error text");
+    const auto summary = amc::diagnostics::summarize(diagnostics);
+    check(summary.errors == 1 && summary.warnings == 1 && !summary.ok(), "diagnostic summary counts severities");
+    const std::string json = amc::diagnostics::diagnostics_to_json(diagnostics);
+    check(json.find("\"schema\":\"amc.diagnostics/1\"") != std::string::npos, "diagnostics JSON schema");
+    check(json.find("\"errors\":1") != std::string::npos && json.find("\"warnings\":1") != std::string::npos,
+        "diagnostics JSON counts");
+    check(amc::diagnostics::diagnostics_to_text(diagnostics).find("pass") != std::string::npos,
+        "diagnostics text includes the stage");
+
+    amc::diagnostics::Diagnostic located;
+    located.severity = amc::diagnostics::Severity::error;
+    located.code = "abi_layout_changed";
+    located.stage = "verify";
+    located.message = "ABI layout_changed";
+    located.file = "widget.hpp";
+    located.line = 12;
+    located.column = 3;
+    check(amc::diagnostics::diagnostics_to_text({located}) == "widget.hpp:12:3: error: ABI layout_changed\n",
+        "located diagnostics use compiler annotation format");
+}
+
+void test_verify_result_diagnostics() {
+    auto contract = module_with_layout(8, 8);
+    auto implementation = module_with_layout(16, 8);
+    contract.types[0].layout_hash = amc::hash_text("layout-a", 0x4c41594fULL);
+    implementation.types[0].layout_hash = amc::hash_text("layout-b", 0x4c41594fULL);
+
+    amc::VerifyResult result;
+    std::string error;
+    check(amc::ir::compare_contracts(contract, implementation, result, error), "IR compatibility facade reports drift");
+    const auto diagnostics = amc::diagnostics::from_verify_result(contract, result);
+    check(!diagnostics.empty(), "verify drift converts to diagnostics");
+    check(diagnostics.front().stage == "verify", "verify diagnostics carry the verify stage");
+    check(diagnostics.front().code == "abi_layout_changed", "verify diagnostics carry a stable code");
+    const std::string json = amc::diagnostics::diagnostics_to_json(diagnostics);
+    check(json.find("\"stage\":\"verify\"") != std::string::npos, "verify diagnostics JSON keeps the stage");
+    check(json.find("\"code\":\"abi_layout_changed\"") != std::string::npos, "verify diagnostics JSON keeps the code");
 }
 
 void test_verify_artifact_pass() {
@@ -196,6 +241,8 @@ void test_default_pipeline() {
 int main() {
     test_verify_abi_pass();
     test_compatibility_pass();
+    test_diagnostics_aggregation();
+    test_verify_result_diagnostics();
     test_verify_artifact_pass();
     test_verify_semantic_pass();
     test_verify_lowering_pass();

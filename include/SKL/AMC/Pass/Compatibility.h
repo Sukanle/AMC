@@ -16,18 +16,17 @@
 #ifndef AMC_PASS_COMPATIBILITY_H
 #define AMC_PASS_COMPATIBILITY_H
 
-#include "SKL/AMC/Core/Core.h"
-#include "SKL/AMC/Core/Verify.h"
 #include "SKL/AMC/Diagnostics/Diagnostics.h"
+#include "SKL/AMC/IR/Compatibility.h"
 #include "SKL/AMC/Pass/Pass.h"
 
 namespace amc::pass {
 
-// A3: frozen-contract / implementation compatibility. The comparison policy
-// lives in Core/Verify; the pass turns its result into the shared diagnostic
-// channel so CLI, Compilation and future tooling use the same path.
-bool compare_modules(const AbiModule &contract, const AbiModule &implementation, VerifyResult &result, Context &context,
-    diagnostics::DiagnosticList &diagnostics);
+// frozen-contract / implementation compatibility. The comparison policy is
+// named by IR/Compatibility; the pass turns its result into the shared
+// diagnostic channel so CLI, Compilation and future tooling use the same path.
+bool compare_modules(const AbiModule &contract, const AbiModule &implementation, ir::CompatibilityResult &result,
+    Context &context, diagnostics::DiagnosticList &diagnostics);
 
 }   // namespace amc::pass
 

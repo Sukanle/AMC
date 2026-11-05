@@ -124,8 +124,8 @@ amc::Json tool_compare_abi(const amc::Json &args, std::string &error) {
         error = "cannot read '" + other_path + "': " + read_error;
         return amc::Json();
     }
-    amc::VerifyResult verification;
-    if (!amc::verify_modules(module, other, verification, error)) return amc::Json();
+    amc::ir::CompatibilityResult verification;
+    if (!amc::ir::compare_contracts(module, other, verification, error)) return amc::Json();
     amc::Json result;
     if (!json_from_string(amc::compatibility_query_json(module, other, verification), result, error))
         return amc::Json();

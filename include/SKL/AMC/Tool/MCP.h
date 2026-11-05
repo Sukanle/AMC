@@ -25,7 +25,7 @@
 #include "SKL/AMC/Core/Json.h"
 #include "SKL/AMC/Core/Metadata.h"
 #include "SKL/AMC/Core/Query.h"
-#include "SKL/AMC/Core/Verify.h"
+#include "SKL/AMC/IR/Compatibility.h"
 
 #include "SKL/AMC/Util/Hex.h"
 #include "SKL/AMC/Util/Names.h"

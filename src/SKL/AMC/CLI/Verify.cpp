@@ -25,12 +25,14 @@
 #include "SKL/AMC/Core/Query.h"
 #include "SKL/AMC/Core/Symbol.h"
 #include "SKL/AMC/Core/Verify.h"
+#include "SKL/AMC/Diagnostics/Verify.h"
 #include "SKL/AMC/Pass/Compatibility.h"
 #include "SKL/AMC/Util/Error.h"
 #include "SKL/AMC/Compilation/Config.h"
 #include "SKL/AMC/Compilation/Provider.h"
 
 #include <filesystem>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -67,10 +69,11 @@ int cmd_verify(char **args, int arg_count, const fs::path &provider) {
                 positionals.push_back(argument);
             }
         }
-        if (format != "text" && format != "json" && format != "diagnostics")
-            return usage_error("verify --format must be text, json or diagnostics");
+        if (format != "text" && format != "json" && format != "diagnostics" && format != "diagnostics-json")
+            return usage_error("verify --format must be text, json, diagnostics or diagnostics-json");
         const bool json_output = format == "json";
         const bool diagnostics = format == "diagnostics";
+        const bool diagnostics_json = format == "diagnostics-json";
 
         if (!positionals.empty()) {
             // Two-file form: amc verify <contract.abix> <implementation.abix>
@@ -92,9 +95,12 @@ int cmd_verify(char **args, int arg_count, const fs::path &provider) {
             result.implementation_path = positionals[1];
             if (diagnostics)
                 fmt::print("{}", abi_diagnostics(contract, result));
+            else if (diagnostics_json)
+                fmt::print("{}", abi_diagnostics_json(contract, result));
             else
                 fmt::print("{}", json_output ? amc::verify_report_to_json({result}, result.consistent)
                                              : amc::verify_report_to_text({result}));
+            if (diagnostics_json) fmt::print("\n");
             return result.consistent ? 0 : 1;
         }
 
@@ -135,6 +141,7 @@ int cmd_verify(char **args, int arg_count, const fs::path &provider) {
 
             std::vector<amc::VerifyResult> results;
             std::string diagnostics_buffer;
+            amc::diagnostics::DiagnosticList diagnostic_list;
             bool consistent = true;
             for (size_t index = 0; index < exports.size(); ++index) {
                 const auto &spec = exports[index];
@@ -164,6 +171,11 @@ int cmd_verify(char **args, int arg_count, const fs::path &provider) {
                 result.implementation_path = config_path.string() + " (regenerated)";
                 consistent = consistent && result.consistent;
                 if (diagnostics) diagnostics_buffer += abi_diagnostics(contract, result);
+                if (diagnostics_json) {
+                    auto converted = amc::diagnostics::from_verify_result(contract, result);
+                    diagnostic_list.insert(diagnostic_list.end(), std::make_move_iterator(converted.begin()),
+                        std::make_move_iterator(converted.end()));
+                }
                 results.push_back(std::move(result));
                 fs::remove(fresh, ec);
             }
@@ -171,6 +183,8 @@ int cmd_verify(char **args, int arg_count, const fs::path &provider) {
 
             if (diagnostics)
                 fmt::print("{}", diagnostics_buffer);
+            else if (diagnostics_json)
+                fmt::print("{}\n", amc::diagnostics::diagnostics_to_json(diagnostic_list));
             else
                 fmt::print("{}", json_output ? amc::verify_report_to_json(results, consistent)
                                              : amc::verify_report_to_text(results));

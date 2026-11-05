@@ -18,9 +18,11 @@
 
 #include <stdint.h>
 
-#include <string>
-#include <vector>
 #include <algorithm>
+#include <cstddef>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace amc::diagnostics {
 
@@ -59,6 +61,19 @@ inline void add_error(DiagnosticList &diagnostics, std::string code, std::string
 inline void add_warning(DiagnosticList &diagnostics, std::string code, std::string stage, std::string message) {
     diagnostics.push_back({Severity::warning, std::move(code), std::move(stage), std::move(message), {}, 0, 0});
 }
+
+struct Summary {
+    size_t notes = 0;
+    size_t warnings = 0;
+    size_t errors = 0;
+
+    [[nodiscard]] bool ok() const noexcept { return errors == 0; }
+};
+
+const char *severity_name(Severity severity);
+Summary summarize(const DiagnosticList &diagnostics);
+std::string diagnostics_to_text(const DiagnosticList &diagnostics);
+std::string diagnostics_to_json(const DiagnosticList &diagnostics);
 
 }   // namespace amc::diagnostics
 

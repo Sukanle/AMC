@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "SKL/AMC/Core/Core.h"
+#include "SKL/AMC/IR/TypeMapping.h"
 #include "SKL/AMC/Tool/Dump.h"
 
 #include "SKL/AMC/Util/Error.h"
@@ -78,7 +79,7 @@ int main(int argc, char **argv) {
             return fail(read_error_category(error), "read_abix", error, args[2]);
         if (!amc::read_abix(args[3], target, error))
             return fail(read_error_category(error), "read_abix", error, args[3]);
-        if (!amc::build_compatibility(source, target, report, error))
+        if (!amc::ir::build_type_mapping(source, target, report, error))
             return fail(amc::ErrorCategory::compatibility, "build_compatibility", error);
         std::string text;
         if (!json) {

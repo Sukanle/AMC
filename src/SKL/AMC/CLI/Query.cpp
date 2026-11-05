@@ -25,6 +25,7 @@
 #include "SKL/AMC/Core/Query.h"
 #include "SKL/AMC/Core/Symbol.h"
 #include "SKL/AMC/Core/Verify.h"
+#include "SKL/AMC/Query/Compatibility.h"
 #include "SKL/AMC/Util/Error.h"
 
 #include <filesystem>
@@ -105,8 +106,8 @@ int cmd_query(char **args, int arg_count) {
         amc::AbiModule target;
         if (!amc::load_module_source(other.string(), target, error))
             return fail(read_error_category(error), "read_abix", error, other.string());
-        amc::VerifyResult result;
-        if (!amc::verify_modules(module, target, result, error))
+        amc::ir::CompatibilityResult result;
+        if (!amc::query::compare(module, target, result, error))
             return fail(amc::ErrorCategory::internal, "verify", error);
         fmt::print("{}", json ? amc::compatibility_query_json(module, target, result)
                               : amc::compatibility_query_text(module, target, result));
