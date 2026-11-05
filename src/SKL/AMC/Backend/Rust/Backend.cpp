@@ -13,7 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "SKL/AMC/Lang/Rust.h"
+#include "SKL/AMC/Backend/Rust/Rust.h"
+#include "SKL/AMC/Lang/Lang.h"
 
 #include "SKL/AMC/Core/Generated.h"
 #include "SKL/AMC/Core/Metadata.h"

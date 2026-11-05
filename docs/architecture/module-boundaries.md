@@ -107,6 +107,8 @@ removed once `tools/check_module_boundaries.py` reports no include sites.
 | Forwarder | Target | Current users |
 | --- | --- | --- |
 | `include/SKL/AMC/Lang/C++.h` | `SKL/AMC/Frontend/Cpp/Cpp.h` + `SKL/AMC/Backend/Cpp/Cpp.h` | `src/SKL/AMC/Lang/C++/C++.cpp` |
+| `include/SKL/AMC/Lang/Rust.h` | `SKL/AMC/Frontend/Rust/Rust.h` + `SKL/AMC/Backend/Rust/Rust.h` | none (remove after external check) |
+| `include/SKL/AMC/Lang/Zig.h` | `SKL/AMC/Backend/Zig/Zig.h` | none (remove after external check) |
 
 Run:
 
@@ -139,7 +141,11 @@ python3 tools/check_module_boundaries.py --contracts-only
 
 - `Lang/C++/Frontend.cpp` → `Frontend/Cpp/Frontend.cpp`
 - `Lang/C++/Backend.cpp` → `Backend/Cpp/Backend.cpp`
-- `Lang/C++.h` is now a marked compatibility forwarder to the two new headers
+- `Lang/Rust/Frontend.cpp` → `Frontend/Rust/Frontend.cpp`
+- `Lang/Rust/Backend.cpp` → `Backend/Rust/Backend.cpp`
+- `Lang/Zig/Backend.cpp` → `Backend/Zig/Backend.cpp`
+- `Lang/{C++,Rust,Zig}.h` are marked compatibility forwarders; Rust/Zig have no
+  in-tree users and are ready for removal after the external check
 - The report-only scanner currently lists the remaining legacy edges; none are
   introduced by the A0 contract headers
 

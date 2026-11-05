@@ -261,13 +261,13 @@ target_link_libraries(amc-cpp PRIVATE amc-core amc-lang ${AMC_CLANG_CPP_LIBRARY}
                                       tomlplusplus::tomlplusplus)
 
 add_executable(
-    amc-rust ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Rust/Rust.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Rust/Frontend.cpp
-             ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Rust/Backend.cpp)
+    amc-rust ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Rust/Rust.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Frontend/Rust/Frontend.cpp
+             ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Rust/Backend.cpp)
 target_include_directories(amc-rust PRIVATE ${AMC_INCLUDE_DIR})
 target_link_libraries(amc-rust PRIVATE amc-core amc-lang fmt::fmt)
 
 add_executable(amc-zig ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Zig/Zig.cpp
-                       ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Zig/Backend.cpp)
+                       ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Zig/Backend.cpp)
 target_include_directories(amc-zig PRIVATE ${AMC_INCLUDE_DIR})
 target_link_libraries(amc-zig PRIVATE amc-core amc-lang fmt::fmt)
 

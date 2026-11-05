@@ -13,7 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "SKL/AMC/Lang/Rust.h"
+#include "SKL/AMC/Backend/Rust/Rust.h"
+#include "SKL/AMC/Frontend/Rust/Rust.h"
+#include "SKL/AMC/Lang/Lang.h"
 
 int main(int argc, char **argv) {
     static const amc::lang::Provider provider{

@@ -96,6 +96,8 @@ A1 通过显式标记的转发头保持旧 include 可用。每个转发头必�
 | 转发头 | 目标 | 当前用户 |
 | --- | --- | --- |
 | `include/SKL/AMC/Lang/C++.h` | `SKL/AMC/Frontend/Cpp/Cpp.h` + `SKL/AMC/Backend/Cpp/Cpp.h` | `src/SKL/AMC/Lang/C++/C++.cpp` |
+| `include/SKL/AMC/Lang/Rust.h` | `SKL/AMC/Frontend/Rust/Rust.h` + `SKL/AMC/Backend/Rust/Rust.h` | 无（外部确认后删除） |
+| `include/SKL/AMC/Lang/Zig.h` | `SKL/AMC/Backend/Zig/Zig.h` | 无（外部确认后删除） |
 
 使用：
 
@@ -128,7 +130,10 @@ python3 tools/check_module_boundaries.py --contracts-only
 
 - `Lang/C++/Frontend.cpp` → `Frontend/Cpp/Frontend.cpp`
 - `Lang/C++/Backend.cpp` → `Backend/Cpp/Backend.cpp`
-- `Lang/C++.h` 已改为带标记的兼容转发头，指向两个新头文件
+- `Lang/Rust/Frontend.cpp` → `Frontend/Rust/Frontend.cpp`
+- `Lang/Rust/Backend.cpp` → `Backend/Rust/Backend.cpp`
+- `Lang/Zig/Backend.cpp` → `Backend/Zig/Backend.cpp`
+- `Lang/{C++,Rust,Zig}.h` 已改为带标记的兼容转发头；Rust/Zig 当前没有 in-tree 用户，外部确认后可删除
 - report-only 扫描当前只列出遗留边；A0 契约头没有新增违规
 
 ## 迁移规则
