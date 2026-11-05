@@ -233,22 +233,25 @@ and `amc-boundary-edges`.
 
 ## Current → Target Mapping
 
-| Current | Target |
-| --- | --- |
-| `Core/Core.h` (`AbiModule`) | `IR/` ABI view |
-| `Semantic/*` | `IR/` semantic view |
-| `Lang/C++/Frontend.cpp` | `Frontend/Cpp/` |
-| `Lang/C++/Backend.cpp` | `Backend/Cpp/` |
-| `Lang/Rust/*` | `Frontend/Rust/` + `Backend/Rust/` |
-| `Lang/Zig/*` | `Backend/Zig/` |
-| `CLI/*` | `Interfaces/CLI/` + `Compilation/` |
-| `Tool/MCP/*` | `Interfaces/MCP/` |
-| `Core/Verify.cpp` | `Pass/Compatibility` |
-| `Core/Cache.cpp` | `Compilation/Cache` |
-| `Core/ELF.cpp`, `Core/ELF.h` | `Platform/ELF` |
-| `Core/Metadata.cpp` | `Artifact/` / `Serialization/` |
-| `Core/Query.cpp`, `Core/Context.cpp` | `Query/` |
-| `Tool/Dump/*` | `Interfaces/CLI` or `Query/` |
+| Item | Target | Status |
+| --- | --- | --- |
+| `Core/Core.h` (`AbiModule`) | `IR/` ABI view | remaining |
+| `Semantic/*` | `IR/` semantic view | remaining |
+| `Lang/C++/Frontend.cpp` | `Frontend/Cpp/` | moved |
+| `Lang/C++/Backend.cpp` | `Backend/Cpp/` | moved |
+| `Lang/Rust/*` | `Frontend/Rust/` + `Backend/Rust/` | moved |
+| `Lang/Zig/*` | `Backend/Zig/` | moved |
+| `CLI/*` | `Interfaces/CLI/` + `Compilation/` | remaining |
+| `Tool/MCP/*` | `Interfaces/MCP/` | remaining |
+| `Core/Verify.*` | `IR/Verify` (types/policy) + `Pass/Compatibility` (pass) | moved (A5.7) |
+| `Core/Error.*` | `Diagnostics/Error` | moved (A5.1) |
+| `Core/Cache.*` | `Compilation/Cache` | moved (A5.2) |
+| `Core/Metadata.*`, `Core/Materialize.*` | `Artifact/` | moved (A5.3) |
+| `Core/ELF.*`, `Core/Symbol.*` | `Platform/` | moved (A5.4) |
+| `Core/Query.*`, `Core/Context.*` | `Query/` | moved (A5.5) |
+| `Core/Json.*` | `Support/Json` | moved (A5.6) |
+| `Core/Condition.*` | `IR/Condition` | moved (A5.8) |
+| `Tool/Dump/*` | `Interfaces/CLI` or `Query/` | remaining |
 
 ## A2/A3 Progress
 
@@ -272,6 +275,36 @@ and `amc-boundary-edges`.
 - A2/A3.5 close-out: the remaining work is the A5 physical split, not policy
   design; `amc-pass-perf-test` (5k default, 20k with
   `AMC_PASS_PERF_LARGE=1`) records the pass baseline for that move
+
+## A5 Progress
+
+- A5.1 Diagnostics: `Core/Error.*` → `Diagnostics/Error.*`; AMC error
+  presentation now lives with the diagnostics schema, while EPCD remains the
+  error-identity source
+- A5.2 Cache: `Core/Cache.*` → `Compilation/Cache.*`; the implementation moved
+  from `libabix-tools` to `amc-compilation`, and `amc-core-test` links
+  `amc-compilation` for the cache cases
+- A5.3 Artifact: `Core/Metadata.*` and `Core/Materialize.*` →
+  `Artifact/Metadata.*` and `Artifact/Materialize.*`; `libabix-metadata` is
+  the artifact library and keeps the region/materialization implementation
+- A5.4 Platform: `Core/ELF.*` and `Core/Symbol.*` → `Platform/ELF.*` and
+  `Platform/Symbol.*`; new `amc-platform` static library (`AMC::platform`)
+  owns ELF/Mach-O/PE section access and build-id/symbol-store helpers
+- boundary tooling now maps `Artifact`, `Platform`, `Query`, `Interfaces` and
+  `Support` includes; Backend/Compilation/Query may consume Artifact,
+  Query/Artifact may consume Platform, and no forwarders were added
+- A5.5 Query: `Core/Query.*` and `Core/Context.*` → `Query/Query.*` and
+  `Query/Context.*`; unused Query/Context includes were pruned from the
+  CLI compilation commands, so boundary edges only exist where they are used
+- A5.6 Support: `Core/Json.*` → `Support/Json.*`; the JSON wrapper stays in
+  `libabix-format`, while the boundary scanner now recognizes `Support/`
+  source paths and includes
+- A5.7 Verify: `Core/Verify.*` → `IR/Verify.*`; `VerifyResult`/`ChangeKind`
+  stay in the IR policy layer, Pass/Compatibility continues to add diagnostics
+- A5.8 Condition: `Core/Condition.*` → `IR/Condition.*`, keeping the frozen
+  error-boundary enum next to the ABI model
+- remaining Core leftovers are the ABI model itself (`Core.h`/`Core.cpp`),
+  `Adapter`, and `Lua`; they are outside the A5 infrastructure slice
 
 ## A1 Progress
 

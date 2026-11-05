@@ -15,7 +15,7 @@
  */
 #include "SKL/AMC/Semantic/Serialize.h"
 
-#include "SKL/AMC/Core/Json.h"
+#include "SKL/AMC/Support/Json.h"
 #include "SKL/AMC/Semantic/Identity.h"
 
 #include <cerrno>

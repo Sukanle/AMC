@@ -46,11 +46,11 @@
 #include <lldb/API/SBValue.h>
 
 #include "SKL/AMC/Core/Core.h"
-#include "SKL/AMC/Core/ELF.h"
-#include "SKL/AMC/Core/Metadata.h"
-#include "SKL/AMC/Core/Query.h"
-#include "SKL/AMC/Core/Symbol.h"
-#include "SKL/AMC/Core/Verify.h"
+#include "SKL/AMC/Platform/ELF.h"
+#include "SKL/AMC/Artifact/Metadata.h"
+#include "SKL/AMC/Query/Query.h"
+#include "SKL/AMC/Platform/Symbol.h"
+#include "SKL/AMC/IR/Verify.h"
 
 #include <stdio.h>
 #include <string.h>

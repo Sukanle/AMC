@@ -15,7 +15,7 @@
  */
 #include "SKL/AMC/IR/LoweringJson.h"
 
-#include "SKL/AMC/Core/Json.h"
+#include "SKL/AMC/Support/Json.h"
 
 #include <cerrno>
 #include <cstdlib>

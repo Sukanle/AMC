@@ -16,7 +16,7 @@
 #ifndef AMC_IR_COMPATIBILITY_H
 #define AMC_IR_COMPATIBILITY_H
 
-#include "SKL/AMC/Core/Verify.h"
+#include "SKL/AMC/IR/Verify.h"
 
 #include <string>
 

@@ -36,7 +36,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "SKL/AMC/Core/Cache.h"
+#include "SKL/AMC/Compilation/Cache.h"
 
 namespace amc::compilation {
 namespace fs = std::filesystem;

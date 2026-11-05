@@ -21,7 +21,7 @@
 #include <string_view>
 #include <vector>
 
-#include "SKL/AMC/Core/Condition.h"
+#include "SKL/AMC/IR/Condition.h"
 
 namespace amc {
 

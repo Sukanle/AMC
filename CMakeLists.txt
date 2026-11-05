@@ -260,19 +260,18 @@ endif()
 add_library(
     libabix-format STATIC
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Core.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Error.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Diagnostics/Error.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Diagnostics/Diagnostics.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Diagnostics/Verify.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Error.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Condition.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/Condition.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Semantic/Identity.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Semantic/Serialize.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Semantic/Sync.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/LoweringJson.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/Artifact.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/TypeMapping.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/ELF.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Json.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Support/Json.cpp
     ${AMC_SOURCE_DIR}/src/ljson/json.c
     ${AMC_SOURCE_DIR}/src/ljson/jnum.c
     ${AMC_SOURCE_DIR}/src/ljson/grisu2.c
@@ -307,7 +306,7 @@ target_compile_definitions(
 
 add_library(
     libabix-abi STATIC
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Verify.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/Verify.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/Compatibility.cpp)
 target_link_libraries(libabix-abi PUBLIC libabix-format)
 set_target_properties(
@@ -317,11 +316,24 @@ set_target_properties(
                OUTPUT_NAME abix-abi)
 
 add_library(
+    amc-platform STATIC
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Platform/ELF.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Platform/Symbol.cpp)
+target_include_directories(amc-platform PUBLIC ${AMC_INCLUDE_DIR})
+target_link_libraries(amc-platform PUBLIC ABIX::runtime fmt::fmt)
+target_compile_features(amc-platform PUBLIC cxx_std_17)
+set_target_properties(
+    amc-platform
+    PROPERTIES EXPORT_NAME platform
+               POSITION_INDEPENDENT_CODE ON
+               OUTPUT_NAME amc-platform)
+
+add_library(
     libabix-metadata STATIC
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Metadata.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Materialize.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Context.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Query.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Artifact/Metadata.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Artifact/Materialize.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Query/Context.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Query/Query.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Query/Compatibility.cpp)
-target_link_libraries(libabix-metadata PUBLIC libabix-abi)
+target_link_libraries(libabix-metadata PUBLIC libabix-abi amc-platform)
 set_target_properties(
     libabix-metadata
     PROPERTIES EXPORT_NAME metadata
@@ -329,8 +341,7 @@ set_target_properties(
                OUTPUT_NAME abix-metadata)
 
 add_library(
-    libabix-tools STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Adapter.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Lua.cpp
-                         ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Symbol.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Cache.cpp)
+    libabix-tools STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Adapter.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Lua.cpp)
 target_link_libraries(libabix-tools PUBLIC libabix-metadata)
 set_target_properties(
     libabix-tools
@@ -357,15 +368,18 @@ target_link_libraries(amc-pass PUBLIC libabix-format libabix-abi)
 add_library(
     amc-compilation STATIC
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Config.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Provider.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Meta.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Build.cpp)
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Meta.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Build.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Cache.cpp)
 target_include_directories(amc-compilation PUBLIC ${AMC_INCLUDE_DIR})
-target_link_libraries(amc-compilation PUBLIC libabix-format amc-util amc-pass tomlplusplus::tomlplusplus)
+target_link_libraries(
+    amc-compilation PUBLIC libabix-format libabix-metadata amc-util amc-pass tomlplusplus::tomlplusplus)
 target_compile_definitions(amc-compilation PRIVATE AMC_DEFAULT_PROVIDERS_FILE="${AMC_SOURCE_DIR}/providers.toml")
 
 add_library(AMC::format ALIAS libabix-format)
 add_library(AMC::abi ALIAS libabix-abi)
 add_library(AMC::metadata ALIAS libabix-metadata)
 add_library(AMC::tools ALIAS libabix-tools)
+add_library(AMC::platform ALIAS amc-platform)
 
 # AMC helpers (hex/name rendering, JSON text helpers and the structured error
 # envelope).
@@ -379,7 +393,8 @@ target_include_directories(amc-lang PUBLIC ${AMC_INCLUDE_DIR})
 target_link_libraries(amc-lang PUBLIC amc-util fmt::fmt tomlplusplus::tomlplusplus)
 
 add_library(amc-core INTERFACE)
-target_link_libraries(amc-core INTERFACE libabix-format libabix-abi libabix-metadata libabix-tools amc-util fmt::fmt)
+target_link_libraries(
+    amc-core INTERFACE libabix-format libabix-abi libabix-metadata libabix-tools amc-platform amc-util fmt::fmt)
 
 add_executable(
     amc-cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/C++/C++.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Frontend/Cpp/Frontend.cpp
@@ -529,7 +544,7 @@ if(AMC_BUILD_TESTS)
         include(Catch)
         add_executable(amc-core-test ${AMC_SOURCE_DIR}/tests/unit/core_test.cpp)
         target_include_directories(amc-core-test PRIVATE ${AMC_INCLUDE_DIR})
-        target_link_libraries(amc-core-test PRIVATE amc-core Catch2::Catch2WithMain)
+        target_link_libraries(amc-core-test PRIVATE amc-core amc-compilation Catch2::Catch2WithMain)
         set_target_properties(amc-core-test PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
         add_test(NAME amc-core-test COMMAND amc-core-test)
 
@@ -559,7 +574,7 @@ if(AMC_INSTALL)
             EXPORT AMCTargets
             RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
         install(
-            TARGETS libabix-format libabix-abi libabix-metadata libabix-tools
+            TARGETS libabix-format libabix-abi libabix-metadata libabix-tools amc-platform
             EXPORT AMCTargets
             ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
             LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

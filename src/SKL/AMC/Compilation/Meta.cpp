@@ -15,7 +15,7 @@
  */
 #include "SKL/AMC/Compilation/Meta.h"
 
-#include "SKL/AMC/Core/Metadata.h"
+#include "SKL/AMC/Artifact/Metadata.h"
 
 #include <exception>
 #include <vector>

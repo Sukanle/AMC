@@ -22,9 +22,9 @@
 #define AMC_MCP_MCP_H
 
 #include "SKL/AMC/Core/Core.h"
-#include "SKL/AMC/Core/Json.h"
-#include "SKL/AMC/Core/Metadata.h"
-#include "SKL/AMC/Core/Query.h"
+#include "SKL/AMC/Support/Json.h"
+#include "SKL/AMC/Artifact/Metadata.h"
+#include "SKL/AMC/Query/Query.h"
 #include "SKL/AMC/IR/Compatibility.h"
 
 #include "SKL/AMC/Util/Hex.h"

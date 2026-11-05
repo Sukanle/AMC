@@ -17,7 +17,7 @@
 #define AMC_QUERY_H
 
 #include "SKL/AMC/Core/Core.h"
-#include "SKL/AMC/Core/Verify.h"
+#include "SKL/AMC/IR/Verify.h"
 
 #include <string>
 #include <string_view>

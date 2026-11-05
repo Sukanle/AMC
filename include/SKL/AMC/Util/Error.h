@@ -18,7 +18,7 @@
 
 #include <string>
 
-#include "SKL/AMC/Core/Error.h"
+#include "SKL/AMC/Diagnostics/Error.h"
 
 namespace amc::util {
 

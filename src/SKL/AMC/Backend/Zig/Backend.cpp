@@ -19,7 +19,7 @@
 #include "SKL/AMC/Lang/Lang.h"
 
 #include "SKL/AMC/Core/Generated.h"
-#include "SKL/AMC/Core/Metadata.h"
+#include "SKL/AMC/Artifact/Metadata.h"
 
 #include <algorithm>
 #include <cctype>

@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "SKL/AMC/Core/Materialize.h"
-#include "SKL/AMC/Core/Metadata.h"
+#include "SKL/AMC/Artifact/Materialize.h"
+#include "SKL/AMC/Artifact/Metadata.h"
 
 namespace amc {
 namespace {

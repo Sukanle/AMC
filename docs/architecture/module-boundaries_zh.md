@@ -195,22 +195,25 @@ CTest 同时运行 `--contracts-only` 和 `--strict`：
 
 ## 当前 → 目标映射
 
-| 当前 | 目标 |
-| --- | --- |
-| `Core/Core.h`（`AbiModule`） | `IR/` ABI view |
-| `Semantic/*` | `IR/` semantic view |
-| `Lang/C++/Frontend.cpp` | `Frontend/Cpp/` |
-| `Lang/C++/Backend.cpp` | `Backend/Cpp/` |
-| `Lang/Rust/*` | `Frontend/Rust/` + `Backend/Rust/` |
-| `Lang/Zig/*` | `Backend/Zig/` |
-| `CLI/*` | `Interfaces/CLI/` + `Compilation/` |
-| `Tool/MCP/*` | `Interfaces/MCP/` |
-| `Core/Verify.cpp` | `Pass/Compatibility` |
-| `Core/Cache.cpp` | `Compilation/Cache` |
-| `Core/ELF.cpp` | `Platform/ELF` |
-| `Core/Metadata.cpp` | `Artifact/` / `Serialization/` |
-| `Core/Query.cpp`、`Core/Context.cpp` | `Query/` |
-| `Tool/Dump/*` | `Interfaces/CLI` 或 `Query/` |
+| 项目 | 目标 | 状态 |
+| --- | --- | --- |
+| `Core/Core.h`（`AbiModule`） | `IR/` ABI view | 未迁移 |
+| `Semantic/*` | `IR/` semantic view | 未迁移 |
+| `Lang/C++/Frontend.cpp` | `Frontend/Cpp/` | 已迁移 |
+| `Lang/C++/Backend.cpp` | `Backend/Cpp/` | 已迁移 |
+| `Lang/Rust/*` | `Frontend/Rust/` + `Backend/Rust/` | 已迁移 |
+| `Lang/Zig/*` | `Backend/Zig/` | 已迁移 |
+| `CLI/*` | `Interfaces/CLI/` + `Compilation/` | 未迁移 |
+| `Tool/MCP/*` | `Interfaces/MCP/` | 未迁移 |
+| `Core/Verify.*` | `IR/Verify`（类型/策略）+ `Pass/Compatibility`（Pass） | 已迁移（A5.7） |
+| `Core/Error.*` | `Diagnostics/Error` | 已迁移（A5.1） |
+| `Core/Cache.*` | `Compilation/Cache` | 已迁移（A5.2） |
+| `Core/Metadata.*`、`Core/Materialize.*` | `Artifact/` | 已迁移（A5.3） |
+| `Core/ELF.*`、`Core/Symbol.*` | `Platform/` | 已迁移（A5.4） |
+| `Core/Query.*`、`Core/Context.*` | `Query/` | 已迁移（A5.5） |
+| `Core/Json.*` | `Support/Json` | 已迁移（A5.6） |
+| `Core/Condition.*` | `IR/Condition` | 已迁移（A5.8） |
+| `Tool/Dump/*` | `Interfaces/CLI` 或 `Query/` | 未迁移 |
 
 ## A2/A3 进度
 
@@ -230,6 +233,32 @@ CTest 同时运行 `--contracts-only` 和 `--strict`：
   `amc verify --format diagnostics-json` 输出该 schema
 - A2/A3.5 收口：剩余工作是 A5 物理拆分而不是策略设计；
   `amc-pass-perf-test`（默认 5k，`AMC_PASS_PERF_LARGE=1` 时 20k）为拆分记录 Pass 基线
+
+## A5 进度
+
+- A5.1 Diagnostics：`Core/Error.*` → `Diagnostics/Error.*`；AMC 错误呈现与诊断
+  schema 同属 Diagnostics，错误身份仍由 EPCD 提供
+- A5.2 Cache：`Core/Cache.*` → `Compilation/Cache.*`；实现从 `libabix-tools`
+  移入 `amc-compilation`，`amc-core-test` 为缓存用例链接 `amc-compilation`
+- A5.3 Artifact：`Core/Metadata.*`、`Core/Materialize.*` →
+  `Artifact/Metadata.*`、`Artifact/Materialize.*`；`libabix-metadata` 作为
+  artifact 库保留 region/materialization 实现
+- A5.4 Platform：`Core/ELF.*`、`Core/Symbol.*` → `Platform/ELF.*`、
+  `Platform/Symbol.*`；新增 `amc-platform` 静态库（`AMC::platform`），负责
+  ELF/Mach-O/PE section 访问与 build-id/symbol-store 辅助
+- 边界工具现在识别 `Artifact`、`Platform`、`Query`、`Interfaces`、`Support`
+  头文件；Backend/Compilation/Query 可消费 Artifact，Query/Artifact 可消费
+  Platform，未添加兼容转发头
+- A5.5 Query：`Core/Query.*`、`Core/Context.*` → `Query/Query.*`、
+  `Query/Context.*`；CLI 编译命令中未使用的 Query/Context include 已清理
+- A5.6 Support：`Core/Json.*` → `Support/Json.*`；JSON wrapper 仍位于
+  `libabix-format`，边界扫描器现在识别 `Support/` 源路径和头文件
+- A5.7 Verify：`Core/Verify.*` → `IR/Verify.*`；`VerifyResult`/`ChangeKind`
+  留在 IR 策略层，`Pass/Compatibility` 继续负责诊断
+- A5.8 Condition：`Core/Condition.*` → `IR/Condition.*`，冻结的错误边界枚举
+  与 ABI 模型放在一起
+- Core 剩余项是 ABI 模型本身（`Core.h`/`Core.cpp`）、`Adapter` 与 `Lua`，
+  不属于 A5 基础设施切片
 
 ## A1 进度
 

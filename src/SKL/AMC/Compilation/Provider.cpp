@@ -15,7 +15,7 @@
  */
 #include "SKL/AMC/Compilation/Provider.h"
 
-#include "SKL/AMC/Core/Json.h"
+#include "SKL/AMC/Support/Json.h"
 #include "SKL/AMC/Util/Error.h"
 
 #include <stdint.h>

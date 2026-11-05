@@ -38,13 +38,13 @@ ALLOWED = {
     "IR": {"IR", "Diagnostics", "Support"},
     "Frontend": {"IR", "Diagnostics", "Support", "Frontend"},
     "Pass": {"IR", "Diagnostics", "Support", "Pass"},
-    "Backend": {"IR", "Diagnostics", "Support", "Backend"},
-    "Compilation": {"IR", "Diagnostics", "Frontend", "Pass", "Backend", "Support", "Compilation"},
+    "Backend": {"IR", "Diagnostics", "Support", "Backend", "Artifact"},
+    "Compilation": {"IR", "Diagnostics", "Frontend", "Pass", "Backend", "Support", "Compilation", "Artifact"},
     "Interfaces": {"Compilation", "Diagnostics", "Support", "Interfaces"},
     "Provider": {"Frontend", "Backend", "Diagnostics", "Support", "Provider"},
     "Platform": {"IR", "Diagnostics", "Support", "Platform"},
-    "Artifact": {"IR", "Diagnostics", "Support", "Artifact"},
-    "Query": {"IR", "Diagnostics", "Support", "Query"},
+    "Artifact": {"IR", "Diagnostics", "Support", "Artifact", "Platform"},
+    "Query": {"IR", "Diagnostics", "Support", "Query", "Artifact", "Platform"},
     "Support": {"Support", "IR", "Artifact", "Diagnostics"},
     "Other": None,
 }
@@ -74,6 +74,8 @@ def module_for_path(path: Path, root: Path) -> str:
         return "Artifact"
     if "/Core/Query" in rel or "/Core/Context" in rel or "/Tool/Dump/" in rel or "/Query/" in rel:
         return "Query"
+    if "/Support/" in rel:
+        return "Support"
     if "/Lang/C++/C++.cpp" in rel or "/Lang/Rust/Rust.cpp" in rel or "/Lang/Zig/Zig.cpp" in rel:
         return "Provider"
     if "/Lang/" in rel:
@@ -110,6 +112,16 @@ def module_for_include(include: str) -> str | None:
     if include.startswith("SKL/AMC/Compilation/"):
         return "Compilation"
     if include.startswith("SKL/AMC/Diagnostics/"):
+        return "Support"
+    if include.startswith("SKL/AMC/Artifact/"):
+        return "Artifact"
+    if include.startswith("SKL/AMC/Platform/"):
+        return "Platform"
+    if include.startswith("SKL/AMC/Query/"):
+        return "Query"
+    if include.startswith("SKL/AMC/Interfaces/"):
+        return "Interfaces"
+    if include.startswith("SKL/AMC/Support/"):
         return "Support"
     if include.startswith("SKL/AMC/Lang/"):
         return "Frontend"

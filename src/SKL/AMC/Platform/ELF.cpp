@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "SKL/AMC/Core/ELF.h"
+#include "SKL/AMC/Platform/ELF.h"
 
 #include "SKL/ABIX/Binary/BinaryImage.h"
 

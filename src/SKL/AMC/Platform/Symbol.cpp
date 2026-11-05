@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "SKL/AMC/Core/Symbol.h"
-#include "SKL/AMC/Core/ELF.h"
+#include "SKL/AMC/Platform/Symbol.h"
+#include "SKL/AMC/Platform/ELF.h"
 
 #include <cctype>
 #include <stdlib.h>

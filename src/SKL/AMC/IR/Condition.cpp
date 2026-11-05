@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-#include "SKL/AMC/Core/Condition.h"
+#include "SKL/AMC/IR/Condition.h"
 
 #include <algorithm>
 #include <array>

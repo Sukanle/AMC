@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "SKL/AMC/Core/Error.h"
+#include "SKL/AMC/Diagnostics/Error.h"
 
 #include <cctype>
 #include <utility>

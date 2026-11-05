@@ -16,7 +16,7 @@
 #include "SKL/AMC/Diagnostics/Verify.h"
 
 #include "SKL/AMC/Core/Core.h"
-#include "SKL/AMC/Core/Verify.h"
+#include "SKL/AMC/IR/Verify.h"
 
 #include <fmt/format.h>
 

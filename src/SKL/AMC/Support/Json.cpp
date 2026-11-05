@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "SKL/AMC/Core/Json.h"
+#include "SKL/AMC/Support/Json.h"
 
 #include <stdint.h>
 #include <string>

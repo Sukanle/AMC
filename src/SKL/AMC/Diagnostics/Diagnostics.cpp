@@ -15,7 +15,7 @@
  */
 #include "SKL/AMC/Diagnostics/Diagnostics.h"
 
-#include "SKL/AMC/Core/Error.h"
+#include "SKL/AMC/Diagnostics/Error.h"
 
 #include <fmt/format.h>
 
