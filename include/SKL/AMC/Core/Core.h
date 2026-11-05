@@ -38,16 +38,16 @@ enum class TypeKind : uint32_t {
     array,
     function,
     namespace_type,
-    alias
+    alias,
 };
 
 // A template primary has metadata useful for dependency closure, but it is not
 // a concrete native C++ type that can receive a TypeTraits specialization.
-constexpr uint32_t type_template_primary = 1u << 0;
+constexpr uint32_t type_template_primary = 1;
 // A type exposed as an opaque handle: a consumer language sees an explicitly
 // sized blob, never the fields. The producer still owns the real definition, so
 // "layout is describable" and "fields are accessible" stay separate.
-constexpr uint32_t type_opaque = 1u << 1;
+constexpr uint32_t type_opaque = 2;
 
 // Runtime ABI kind for primitive types, independent of the source spelling.
 // It captures how the type behaves at the binary boundary: signed/unsigned
@@ -75,14 +75,14 @@ enum class PrimitiveAbiKind : uint32_t {
     wchar_unsigned,
     sint,
     uint,
-    floating
+    floating,
 };
 
 constexpr uint32_t primitive_width_shift = 8;
-constexpr uint32_t primitive_width_mask = 0xffu << primitive_width_shift;
+constexpr uint32_t primitive_width_mask = 0XFFU << primitive_width_shift;
 constexpr uint32_t primitive_format_shift = 16;
-constexpr uint32_t primitive_format_mask = 0xffu << primitive_format_shift;
-constexpr uint32_t primitive_signed_bit = 1u << 24;
+constexpr uint32_t primitive_format_mask = 0XFFU << primitive_format_shift;
+constexpr uint32_t primitive_signed_bit = 1U << 24;
 
 // Floating-point format codes stored in `primitive_format`.
 enum class FloatFormat : uint32_t {
@@ -93,7 +93,7 @@ enum class FloatFormat : uint32_t {
     ieee64,
     ieee128,
     x87_80,
-    ppc_double_double
+    ppc_double_double,
 };
 
 inline uint32_t primitive_abi(
@@ -105,10 +105,10 @@ inline uint32_t primitive_abi(
 }
 
 // Field flags are part of the AMC semantic ABI, not Clang implementation details.
-constexpr uint32_t field_bitfield = 1u << 0;
-constexpr uint32_t field_base = 1u << 1;
+constexpr uint32_t field_bitfield = 1;
+constexpr uint32_t field_base = 1;
 constexpr uint32_t field_visibility_shift = 8;
-constexpr uint32_t field_visibility_mask = 3u << field_visibility_shift;
+constexpr uint32_t field_visibility_mask = 3U << field_visibility_shift;
 constexpr uint32_t field_bit_offset_shift = 16;
 constexpr uint32_t field_bit_width_shift = 24;
 
@@ -116,7 +116,7 @@ enum class Visibility : uint32_t {
     public_ = 0,
     protected_ = 1,
     private_ = 2,
-    none = 3
+    none = 3,
 };
 constexpr uint32_t visibility_flags(Visibility value) { return static_cast<uint32_t>(value) << field_visibility_shift; }
 struct Type {
@@ -154,7 +154,7 @@ struct Function {
 enum class SymbolKind : uint32_t {
     type,
     field,
-    function
+    function,
 };
 struct Symbol {
     std::string name;
@@ -165,12 +165,12 @@ enum class HashKind : uint32_t {
     artifact,
     type_id,
     layout,
-    signature
+    signature,
 };
 enum class HashTargetKind : uint32_t {
     module,
     type,
-    function
+    function,
 };
 struct HashRecord {
     HashKind kind = HashKind::artifact;
@@ -189,7 +189,7 @@ enum class CompatibilityKind : uint32_t {
     identical,
     layout_compatible,
     map_compatible,
-    incompatible
+    incompatible,
 };
 struct CompatibilityRecord {
     Hash128 source_type{}, target_type{};
@@ -202,7 +202,7 @@ enum class MapOpcode : uint8_t {
     convert_int,
     convert_float,
     add_default,
-    skip_field
+    skip_field,
 };
 struct MapOperation {
     MapOpcode opcode = MapOpcode::skip_field;
@@ -211,7 +211,8 @@ struct MapOperation {
     Hash128 auxiliary{};
 };
 struct MapRecord {
-    Hash128 source_type{}, target_type{};
+    Hash128 source_type{};
+    Hash128 target_type{};
     std::string source_name, target_name;
     uint32_t operation_begin = 0, operation_count = 0, flags = 0;
     std::vector<MapOperation> operations;
@@ -234,7 +235,7 @@ enum class OwnershipMode : uint32_t {
     unspecified = 0,
     borrowed = 1,
     owned = 2,
-    copy = 3
+    copy = 3,
 };
 
 // Release policy: the entry points that create and release a value type. It is
@@ -249,7 +250,7 @@ struct OwnedType {
 // Which ABI interaction an ownership contract describes.
 enum class OwnershipTarget : uint32_t {
     parameter = 0,
-    return_value = 1
+    return_value = 1,
 };
 
 // One ownership contract: the declared mode of a parameter or return value,
@@ -272,7 +273,7 @@ enum class StatusSource : uint32_t {
     // status field index and `value_parameter` is the value field index within
     // the returned record, so a Result return binds to the error boundary
     // without a separate out-parameter.
-    return_field = 2
+    return_field = 2,
 };
 
 // A named error set: the stable identity, optional domain, and the default
@@ -318,9 +319,9 @@ struct ErrorContract {
     uint32_t value_parameter = UINT32_MAX;    // local parameter index carrying the value, the value field
                                               // index for return_field, or UINT32_MAX when the return
                                               // value itself is the value
-    uint64_t domain = 0;                       // v2 error identity domain (required)
+    uint64_t domain = 0;                      // v2 error identity domain (required)
     int32_t condition = static_cast<int32_t>(GenericCondition::unknown);   // EPCD GenericCondition
-    Hash128 error_set{};                       // optional error-set identity (zero = none)
+    Hash128 error_set{};                                                   // optional error-set identity (zero = none)
     uint32_t flags = 0;
 };
 
@@ -334,12 +335,12 @@ enum class LoweringKind : uint32_t {
     result = 4,
     callback = 5,
     range = 6,
-    opaque = 7
+    opaque = 7,
 };
 enum class LoweringStatus : uint32_t {
     direct = 0,          // the concrete type is already the boundary entity
     needs_adapter = 1,   // compatible shape, but a thin adapter must be generated
-    unsupported = 2      // cannot be lowered to the contract
+    unsupported = 2,     // cannot be lowered to the contract
 };
 // Why a lowering landed on its status. Recorded so tools can explain the
 // decision (amc check/diff, diagnostics, MCP/Agent) instead of only "incompatible".
@@ -352,7 +353,7 @@ enum class LoweringReason : uint32_t {
     element_mismatch,      // pointee element differs from the declared element
     mutability_mismatch,   // a mutable contract needs a non-const pointer
     length_type,           // length is not an acceptable unsigned integer
-    layout                 // field order/offset/size differ from the canonical view
+    layout,                // field order/offset/size differ from the canonical view
 };
 struct LoweringResult {
     Hash128 type_id{};                     // the concrete instantiated type
@@ -393,7 +394,7 @@ struct InstantiationRecord {
 // A pointer type's pointee, recorded so element/contract matching can use ABI
 // identity (TypeID) instead of a spelling. Mutability is a separate qualifier,// not part of the base element identity:
 // the contract matcher checks it. A pointer without a pointee entry is matched by spelling as a fallback.
-constexpr uint32_t pointee_const = 1u << 0;
+constexpr uint32_t pointee_const = 1;
 struct PointeeRef {
     Hash128 pointer{};
     Hash128 pointee{};
@@ -412,7 +413,7 @@ struct PointeeRef {
 //   * Implementation      — how one concrete type reaches each method.
 // Like ownership, these are contracts, not layout facts, so they never feed
 // the layout/ABI identity.
-constexpr uint32_t interface_method_virtual = 1u << 0;   // adapted from a native virtual method
+constexpr uint32_t interface_method_virtual = 1;   // adapted from a native virtual method
 
 // One method contract inside an interface. Identity is (interface_id, slot);
 // `signature` is the method ABI hash and is validated independently of the

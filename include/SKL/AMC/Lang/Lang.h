@@ -57,8 +57,8 @@ struct ErrorDecl {
     std::string function;
     std::string status;   // "return" (default) | "parameter"
     int64_t success = 0;
-    int64_t value = -1;   // local parameter index, or -1 when the return value is the value
-    uint64_t domain = 0;  // v2 error identity domain (required)
+    int64_t value = -1;    // local parameter index, or -1 when the return value is the value
+    uint64_t domain = 0;   // v2 error identity domain (required)
 };
 
 // A request to instantiate a language generic into a concrete type. The

@@ -69,18 +69,18 @@ void test_pass_contract() {
     std::vector<std::string> order;
 
     amc::pass::Pipeline pipeline;
-    pipeline.passes.push_back({"first", [&](amc::ir::Module &, amc::pass::Context &,
-                                            amc::diagnostics::DiagnosticList &out) {
-        order.push_back("first");
-        amc::diagnostics::add_warning(out, "demo_warning", "pass", "example warning");
-        return true;
-    }});
-    pipeline.passes.push_back({"second", [&](amc::ir::Module &, amc::pass::Context &,
-                                             amc::diagnostics::DiagnosticList &out) {
-        order.push_back("second");
-        out.push_back({amc::diagnostics::Severity::note, "demo_note", "pass", "example note", {}, 0, 0});
-        return true;
-    }});
+    pipeline.passes.push_back(
+        {"first", [&](amc::ir::Module &, amc::pass::Context &, amc::diagnostics::DiagnosticList &out) {
+             order.push_back("first");
+             amc::diagnostics::add_warning(out, "demo_warning", "pass", "example warning");
+             return true;
+         }});
+    pipeline.passes.push_back(
+        {"second", [&](amc::ir::Module &, amc::pass::Context &, amc::diagnostics::DiagnosticList &out) {
+             order.push_back("second");
+             out.push_back({amc::diagnostics::Severity::note, "demo_note", "pass", "example note", {}, 0, 0});
+             return true;
+         }});
 
     check(pipeline.run(module, context, diagnostics), "pass pipeline runs in order");
     check(order.size() == 2 && order[0] == "first" && order[1] == "second", "pass order is preserved");
@@ -88,8 +88,8 @@ void test_pass_contract() {
 
     amc::diagnostics::DiagnosticList failed;
     amc::pass::Pipeline failing;
-    failing.passes.push_back({"broken", [](amc::ir::Module &, amc::pass::Context &,
-                                           amc::diagnostics::DiagnosticList &) { return false; }});
+    failing.passes.push_back(
+        {"broken", [](amc::ir::Module &, amc::pass::Context &, amc::diagnostics::DiagnosticList &) { return false; }});
     check(!failing.run(module, context, failed), "a failing pass stops the pipeline");
     check(amc::diagnostics::has_errors(failed), "a failing pass produces a diagnostic");
     check(!failed.empty() && failed[0].code == "pass_failed", "missing pass diagnostics get a stable code");
@@ -103,7 +103,9 @@ void test_backend_contract() {
     request.output_directory = "out";
 
     amc::backend::Result result;
-    result.artifacts.push_back({"generated.rs", "out/generated.rs", {1, 2, 3}});
+    result.artifacts.push_back({
+        "generated.rs", "out/generated.rs", {1, 2, 3}
+    });
     check(result.ok(), "backend result without diagnostics is successful");
     check(result.artifacts.size() == 1 && result.artifacts[0].bytes.size() == 3, "backend emits artifacts");
     check(request.module == &module, "backend request borrows the IR without owning it");

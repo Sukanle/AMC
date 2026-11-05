@@ -117,9 +117,9 @@ void test_lowering_links_types_functions_and_templates() {
     parameter.name = "value";
     parameter.type = int_semantic;
     amc::semantic::SemanticFunction function;
-    function.id = amc::semantic::semantic_function_identity(amc::semantic::SemanticFunctionKind::member_function,
-        foo_semantic, "set", {int_semantic}, {}, amc::semantic::ValueCategory::value, {},
-        amc::semantic::semantic_rules_version);
+    function.id =
+        amc::semantic::semantic_function_identity(amc::semantic::SemanticFunctionKind::member_function, foo_semantic,
+            "set", {int_semantic}, {}, amc::semantic::ValueCategory::value, {}, amc::semantic::semantic_rules_version);
     function.kind = amc::semantic::SemanticFunctionKind::member_function;
     function.qualified_name = "demo::Foo::set";
     function.unqualified_name = "set";
@@ -152,12 +152,12 @@ void test_lowering_links_types_functions_and_templates() {
         "field lowering keeps the ABI type id");
     check(result.functions.size() == 1 && result.functions[0].abi == set.signature,
         "function lowering keeps the ABI signature");
-    check(result.functions[0].parameters.size() == 1
-              && result.functions[0].parameters[0].type == int_type.id,
+    check(result.functions[0].parameters.size() == 1 && result.functions[0].parameters[0].type == int_type.id,
         "function parameter lowering keeps the ABI type id");
     check(result.ownership.size() == 1 && result.ownership[0].abi == set.signature,
         "ownership is linked to the ABI function");
-    check(result.templates.size() == 1 && result.templates[0].status == amc::ir::LoweringStatus::lowered
+    check(result.templates.size() == 1
+              && result.templates[0].status == amc::ir::LoweringStatus::lowered
               && result.templates[0].abi_type == foo.id,
         "materialized template instances reference the ABI type");
     check(!result.has_rejections(), "known entities are not rejected");
@@ -185,9 +185,8 @@ void test_lowering_reports_missing_and_ambiguous_entities() {
     module.semantic.types.push_back(missing_type);
 
     amc::semantic::SemanticFunction pick;
-    pick.id = amc::semantic::semantic_function_identity(amc::semantic::SemanticFunctionKind::free_function, {},
-        "pick", {semantic_type("int")}, {}, amc::semantic::ValueCategory::value, {},
-        amc::semantic::semantic_rules_version);
+    pick.id = amc::semantic::semantic_function_identity(amc::semantic::SemanticFunctionKind::free_function, {}, "pick",
+        {semantic_type("int")}, {}, amc::semantic::ValueCategory::value, {}, amc::semantic::semantic_rules_version);
     pick.qualified_name = "demo::pick";
     pick.unqualified_name = "pick";
     amc::semantic::SemanticParameter pick_parameter;
@@ -201,8 +200,7 @@ void test_lowering_reports_missing_and_ambiguous_entities() {
     check(amc::pass::lower(module, result, diagnostics), "lowering returns diagnostics as warnings by default");
     check(result.types.size() == 1 && result.types[0].reason == amc::ir::LoweringReason::missing_abi_type,
         "missing ABI types are reported");
-    check(result.functions.size() == 1
-              && result.functions[0].reason == amc::ir::LoweringReason::ambiguous_abi_function,
+    check(result.functions.size() == 1 && result.functions[0].reason == amc::ir::LoweringReason::ambiguous_abi_function,
         "ambiguous ABI functions are rejected");
     check(result.has_rejections(), "rejections are visible in the result");
 

@@ -47,8 +47,7 @@ std::string describe_provider(const ProviderManifestEntry &provider);
 // Resolve the `amc-<language>` provider executable that sits next to `amc`.
 // `base_provider` is the path to the reference `amc-cpp` provider computed by
 // the driver; the C++ provider is returned unchanged for the default language.
-std::filesystem::path provider_executable(
-    const std::filesystem::path &base_provider, const std::string &language);
+std::filesystem::path provider_executable(const std::filesystem::path &base_provider, const std::string &language);
 
 // Run a provider capability over the JSON-lines IPC protocol.
 bool dispatch_provider(const std::filesystem::path &provider, const char *capability,
@@ -56,9 +55,8 @@ bool dispatch_provider(const std::filesystem::path &provider, const char *capabi
 
 // Dispatch a provider `backend` capability, defaulting the output to
 // `amc_generated<extension>` when `destination` does not already carry it.
-int generate(
-    const std::filesystem::path &provider, const std::filesystem::path &input, const std::filesystem::path &destination,
-    const std::string &extension);
+int generate(const std::filesystem::path &provider, const std::filesystem::path &input,
+    const std::filesystem::path &destination, const std::string &extension);
 
 }   // namespace amc::compilation
 

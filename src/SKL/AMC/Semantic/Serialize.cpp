@@ -29,19 +29,19 @@ std::string id_hex(Hash128 value) { return fmt::format("{:016x}{:016x}", value.h
 
 const char *type_kind_name(SemanticTypeKind kind) {
     switch (kind) {
-        case SemanticTypeKind::builtin:          return "builtin";
-        case SemanticTypeKind::pointer:          return "pointer";
-        case SemanticTypeKind::lvalue_reference: return "lvalue_reference";
-        case SemanticTypeKind::rvalue_reference: return "rvalue_reference";
-        case SemanticTypeKind::array:            return "array";
-        case SemanticTypeKind::record:           return "record";
-        case SemanticTypeKind::enumeration:      return "enumeration";
-        case SemanticTypeKind::function:         return "function";
-        case SemanticTypeKind::member_pointer:   return "member_pointer";
+        case SemanticTypeKind::builtin:            return "builtin";
+        case SemanticTypeKind::pointer:            return "pointer";
+        case SemanticTypeKind::lvalue_reference:   return "lvalue_reference";
+        case SemanticTypeKind::rvalue_reference:   return "rvalue_reference";
+        case SemanticTypeKind::array:              return "array";
+        case SemanticTypeKind::record:             return "record";
+        case SemanticTypeKind::enumeration:        return "enumeration";
+        case SemanticTypeKind::function:           return "function";
+        case SemanticTypeKind::member_pointer:     return "member_pointer";
         case SemanticTypeKind::template_parameter: return "template_parameter";
-        case SemanticTypeKind::template_instance: return "template_instance";
-        case SemanticTypeKind::dependent:        return "dependent";
-        case SemanticTypeKind::unknown:          return "unknown";
+        case SemanticTypeKind::template_instance:  return "template_instance";
+        case SemanticTypeKind::dependent:          return "dependent";
+        case SemanticTypeKind::unknown:            return "unknown";
     }
     return "unknown";
 }
@@ -79,9 +79,9 @@ const char *argument_kind_name(TemplateArgumentKind kind) {
 const char *origin_name(InstantiationOrigin origin) {
     switch (origin) {
         case InstantiationOrigin::implicit_compiler: return "implicit_compiler";
-        case InstantiationOrigin::explicit_source:    return "explicit_source";
-        case InstantiationOrigin::amc_requested:      return "amc_requested";
-        case InstantiationOrigin::config_requested:   return "config_requested";
+        case InstantiationOrigin::explicit_source:   return "explicit_source";
+        case InstantiationOrigin::amc_requested:     return "amc_requested";
+        case InstantiationOrigin::config_requested:  return "config_requested";
     }
     return "implicit_compiler";
 }

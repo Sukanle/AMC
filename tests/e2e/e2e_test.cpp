@@ -459,8 +459,8 @@ void test_error_contract_validation(TestResult &r) {
         AMC_CHECK(r, loaded.errors[0].value_parameter, uint32_t(2), "error contract value parameter round-trip");
         AMC_CHECK(r, loaded.errors[0].domain, uint64_t(0x1003000000000001ULL), "error contract domain round-trip");
         AMC_CHECK(r, loaded.errors[0].condition, int32_t(29), "error contract condition round-trip");
-        AMC_TEST(r, loaded.errors[0].error_set == amc::error_set_identity("DemoErrors"),
-            "error set reference round-trip");
+        AMC_TEST(
+            r, loaded.errors[0].error_set == amc::error_set_identity("DemoErrors"), "error set reference round-trip");
         AMC_CHECK(r, loaded.error_sets.size(), size_t(1), "error set round-trip count");
         AMC_CHECK(r, loaded.error_codes.size(), size_t(1), "error code round-trip count");
         if (!loaded.error_sets.empty() && !loaded.error_codes.empty()) {

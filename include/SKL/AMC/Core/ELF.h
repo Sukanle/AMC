@@ -53,7 +53,7 @@ enum class BinaryFormat {
     unknown,
     elf,
     macho,
-    pe
+    pe,
 };
 
 BinaryFormat detect_binary_format(const uint8_t *data, size_t size) noexcept;

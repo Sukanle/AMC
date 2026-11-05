@@ -27,9 +27,7 @@ const char *add<const char *>(const char *a, const char *b) {
 }
 
 template<typename T>
-concept Numeric = requires(T value) {
-    value + value;
-};
+concept Numeric = requires(T value) { value + value; };
 
 template<Numeric T>
 T multiply(T a, T b) {

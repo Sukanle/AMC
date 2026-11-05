@@ -773,7 +773,7 @@ std::string primitive_rust_type(uint32_t primitive_abi) {
 
 llvm::SmallString<256> executable_directory() {
 #if defined(_WIN32)
-    llvm::SmallVector<char, 4096> buffer(4096, 0);
+    llvm::SmallVector<char, 4'096> buffer(4'096, 0);
     const DWORD length = GetModuleFileNameA(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
     if (length > 0 && length < buffer.size()) {
         llvm::SmallString<256> path(llvm::StringRef(buffer.data(), length));
@@ -783,7 +783,7 @@ llvm::SmallString<256> executable_directory() {
 #elif defined(__APPLE__)
     uint32_t size = 0;
     _NSGetExecutablePath(nullptr, &size);
-    llvm::SmallVector<char, 4096> buffer(size, 0);
+    llvm::SmallVector<char, 4'096> buffer(size, 0);
     if (_NSGetExecutablePath(buffer.data(), &size) == 0) {
         llvm::SmallString<256> path(llvm::StringRef(buffer.data()));
         llvm::SmallString<256> canonical;
@@ -795,7 +795,7 @@ llvm::SmallString<256> executable_directory() {
         return path;
     }
 #else
-    llvm::SmallVector<char, 4096> buffer(4096, 0);
+    llvm::SmallVector<char, 4'096> buffer(4'096, 0);
     const ssize_t length = readlink("/proc/self/exe", buffer.data(), buffer.size() - 1);
     if (length > 0) {
         llvm::SmallString<256> path(llvm::StringRef(buffer.data(), static_cast<size_t>(length)));
@@ -827,11 +827,10 @@ std::string read_codein_text(llvm::StringRef relative) {
         candidates.push_back(std::move(beside));
     }
     for (const auto &candidate : candidates) {
-        if (auto buffer = llvm::MemoryBuffer::getFile(candidate))
-            return (*buffer)->getBuffer().str();
+        if (auto buffer = llvm::MemoryBuffer::getFile(candidate)) return (*buffer)->getBuffer().str();
     }
-    throw std::runtime_error("cannot read CodeIn asset: " + relative.str() + " (searched "
-                             + candidates.front().str().str() + ")");
+    throw std::runtime_error(
+        "cannot read CodeIn asset: " + relative.str() + " (searched " + candidates.front().str().str() + ")");
 }
 
 std::string generate_projection(const amc::AbiModule &module) {

@@ -47,9 +47,8 @@ constexpr uint32_t kMapOperationEntrySize = 40;
 constexpr uint32_t kSourceEntrySize = 32;     // type_id(16) + file_offset(4) + line(4) + column(4) + reserved(4)
 constexpr uint32_t kOwnedEntrySize = 52;      // type_id(16) + create(16) + destroy(16) + flags(4)
 constexpr uint32_t kContractEntrySize = 32;   // target(4) + target_index(4) + mode(4) + flags(4) + release(16)
-constexpr uint32_t kErrorEntrySize =
-    56;   // function(4) + status_source(4) + status_param(4) + success(8) + value(4) + flags(4) + domain(8) +
-          // condition(4) + error_set(16)
+constexpr uint32_t kErrorEntrySize = 56;   // function(4) + status_source(4) + status_param(4) + success(8) + value(4) +
+                                           // flags(4) + domain(8) + condition(4) + error_set(16)
 constexpr uint32_t kErrorSetEntrySize =
     48;   // id(16) + name_off(4) + name_len(4) + domain(8) + condition(4) + flags(4) + code_begin(4) + code_count(4)
 constexpr uint32_t kErrorCodeEntrySize =
@@ -345,8 +344,8 @@ std::vector<Symbol> effective_symbols(const AbiModule &module) {
         // the human-readable prefix and append a short signature key so tools
         // and generated manifests have a unique symbol per ABI entry.
         if (function_name_counts[function.name] > 1)
-            symbol += fmt::format("#{:08x}{:04x}", function.signature.lo,
-                static_cast<uint32_t>(function.signature.hi & 0xffff));
+            symbol += fmt::format(
+                "#{:08x}{:04x}", function.signature.lo, static_cast<uint32_t>(function.signature.hi & 0xffff));
         result.push_back({std::move(symbol), SymbolKind::function, i});
     }
     return result;
@@ -753,8 +752,7 @@ bool validate(const AbiModule &module, std::string &error) {
             error = "duplicate error set";
             return false;
         }
-        if (set.code_begin > module.error_codes.size()
-            || set.code_count > module.error_codes.size() - set.code_begin) {
+        if (set.code_begin > module.error_codes.size() || set.code_count > module.error_codes.size() - set.code_begin) {
             error = "error set code range is out of range";
             return false;
         }
@@ -2438,7 +2436,8 @@ bool read_abix(const std::string &path, AbiModule &module, std::string &error) {
             || !read_u64(bytes, error_offset, record.domain, error)
             || !read_u32(bytes, error_offset, condition, error)
             || !read_hash(bytes, error_offset, record.error_set, error)
-            || record.domain == 0 || status > static_cast<uint32_t>(StatusSource::return_field)) {
+            || record.domain == 0
+            || status > static_cast<uint32_t>(StatusSource::return_field)) {
             error = "invalid error contract record";
             return false;
         }

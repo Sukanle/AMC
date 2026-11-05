@@ -24,12 +24,13 @@ namespace amc::pass {
 namespace {
 
 std::string normalize_name(std::string name) {
-    while (name.size() >= 2 && name[0] == ':' && name[1] == ':') name.erase(0, 2);
+    while (name.size() >= 2 && name[0] == ':' && name[1] == ':')
+        name.erase(0, 2);
     return name;
 }
 
-void report(diagnostics::DiagnosticList &diagnostics, const LoweringOptions &options, std::string code,
-    std::string message) {
+void report(
+    diagnostics::DiagnosticList &diagnostics, const LoweringOptions &options, std::string code, std::string message) {
     if (options.strict)
         diagnostics::add_error(diagnostics, std::move(code), "lowering", std::move(message));
     else
@@ -157,8 +158,7 @@ bool lower(const ir::Module &module, ir::LoweringResult &result, diagnostics::Di
         if (const auto found = lowered_function_index.find(ownership.function); found != lowered_function_index.end())
             lowered.abi = result.functions[found->second].abi;
         else
-            report(diagnostics, options, "lowering_ownership_unresolved",
-                "ownership contract has no lowered function");
+            report(diagnostics, options, "lowering_ownership_unresolved", "ownership contract has no lowered function");
         result.ownership.push_back(std::move(lowered));
     }
 

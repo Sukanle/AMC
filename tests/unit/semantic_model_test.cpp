@@ -33,15 +33,21 @@ void check(bool condition, const char *message) {
 }
 
 amc::semantic::SemanticTypeId type_id(uint64_t value) {
-    return amc::semantic::SemanticTypeId{amc::Hash128{value, 0}};
+    return amc::semantic::SemanticTypeId{
+        amc::Hash128{value, 0}
+    };
 }
 
 amc::semantic::TemplateDeclId template_id(uint64_t value) {
-    return amc::semantic::TemplateDeclId{amc::Hash128{value, 0}};
+    return amc::semantic::TemplateDeclId{
+        amc::Hash128{value, 0}
+    };
 }
 
 amc::semantic::TemplateInstanceId instance_id(uint64_t value) {
-    return amc::semantic::TemplateInstanceId{amc::Hash128{value, 0}};
+    return amc::semantic::TemplateInstanceId{
+        amc::Hash128{value, 0}
+    };
 }
 
 void test_type_identity() {
@@ -57,12 +63,12 @@ void test_type_identity() {
     check(base == same, "type identity is deterministic");
     check(base.valid(), "type identity is non-zero");
 
-    const auto const_type =
-        semantic_type_identity(SemanticTypeKind::record, "demo::Foo", const_qualified, ValueCategory::value, {}, {}, {}, 1);
+    const auto const_type = semantic_type_identity(
+        SemanticTypeKind::record, "demo::Foo", const_qualified, ValueCategory::value, {}, {}, {}, 1);
     check(base != const_type, "top-level const changes the semantic type identity");
 
-    const auto reference =
-        semantic_type_identity(SemanticTypeKind::lvalue_reference, "demo::Foo&", plain, ValueCategory::lvalue, {}, {}, {}, 1);
+    const auto reference = semantic_type_identity(
+        SemanticTypeKind::lvalue_reference, "demo::Foo&", plain, ValueCategory::lvalue, {}, {}, {}, 1);
     check(base != reference, "reference kind changes the semantic type identity");
 
     const auto renamed =
@@ -89,34 +95,34 @@ void test_function_identity() {
     Qualifiers const_member;
     const_member.is_const = true;
 
-    const auto set_int = semantic_function_identity(SemanticFunctionKind::member_function, owner, "set",
-        {int_type}, plain, ValueCategory::value, {}, 1);
-    const auto set_int_again = semantic_function_identity(SemanticFunctionKind::member_function, owner, "set",
-        {int_type}, plain, ValueCategory::value, {}, 1);
+    const auto set_int = semantic_function_identity(
+        SemanticFunctionKind::member_function, owner, "set", {int_type}, plain, ValueCategory::value, {}, 1);
+    const auto set_int_again = semantic_function_identity(
+        SemanticFunctionKind::member_function, owner, "set", {int_type}, plain, ValueCategory::value, {}, 1);
     check(set_int == set_int_again, "function identity is deterministic");
 
-    const auto set_float = semantic_function_identity(SemanticFunctionKind::member_function, owner, "set",
-        {float_type}, plain, ValueCategory::value, {}, 1);
+    const auto set_float = semantic_function_identity(
+        SemanticFunctionKind::member_function, owner, "set", {float_type}, plain, ValueCategory::value, {}, 1);
     check(set_int != set_float, "overload parameter types change the semantic function identity");
 
-    const auto set_int_const = semantic_function_identity(SemanticFunctionKind::member_function, owner, "set",
-        {int_type}, const_member, ValueCategory::value, {}, 1);
+    const auto set_int_const = semantic_function_identity(
+        SemanticFunctionKind::member_function, owner, "set", {int_type}, const_member, ValueCategory::value, {}, 1);
     check(set_int != set_int_const, "cv-qualifier changes the semantic function identity");
 
-    const auto set_int_rvalue = semantic_function_identity(SemanticFunctionKind::member_function, owner, "set",
-        {int_type}, plain, ValueCategory::xvalue, {}, 1);
+    const auto set_int_rvalue = semantic_function_identity(
+        SemanticFunctionKind::member_function, owner, "set", {int_type}, plain, ValueCategory::xvalue, {}, 1);
     check(set_int != set_int_rvalue, "ref-qualifier changes the semantic function identity");
 
     const auto set_int_instance = semantic_function_identity(SemanticFunctionKind::member_function, owner, "set",
         {int_type}, plain, ValueCategory::value, instance_id(9), 1);
     check(set_int != set_int_instance, "template instance changes the semantic function identity");
 
-    const auto other_owner = semantic_function_identity(SemanticFunctionKind::member_function, type_id(4), "set",
-        {int_type}, plain, ValueCategory::value, {}, 1);
+    const auto other_owner = semantic_function_identity(
+        SemanticFunctionKind::member_function, type_id(4), "set", {int_type}, plain, ValueCategory::value, {}, 1);
     check(set_int != other_owner, "owner changes the semantic function identity");
 
-    const auto free_set = semantic_function_identity(SemanticFunctionKind::free_function, {}, "set", {int_type},
-        plain, ValueCategory::value, {}, 1);
+    const auto free_set = semantic_function_identity(
+        SemanticFunctionKind::free_function, {}, "set", {int_type}, plain, ValueCategory::value, {}, 1);
     check(set_int != free_set, "function kind changes the semantic function identity");
 }
 

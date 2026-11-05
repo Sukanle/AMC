@@ -263,8 +263,7 @@ bool fixed_width_int(const std::string &spelling, uint32_t &size, bool &is_signe
 class Extractor : public clang::RecursiveASTVisitor<Extractor> {
 public:
     Extractor(clang::ASTContext &c, const std::set<std::string> &wanted, amc::AbiModule &m,
-        const std::vector<amc::lang::AdaptDecl> &a, std::vector<NativeAdapt> &out,
-        amc::semantic::SemanticModule &s)
+        const std::vector<amc::lang::AdaptDecl> &a, std::vector<NativeAdapt> &out, amc::semantic::SemanticModule &s)
         : ctx(c)
         , wanted(wanted)
         , module(m)
@@ -322,17 +321,20 @@ public:
         if (!d->isCompleteDefinition()) return true;
         clang::ClassTemplateDecl *declaration = d->getSpecializedTemplate();
         if (declaration == nullptr) return true;
-        if (!selected(d) && !selected(declaration) && !has_selected_member(declaration->getTemplatedDecl())) return true;
+        if (!selected(d) && !selected(declaration) && !has_selected_member(declaration->getTemplatedDecl()))
+            return true;
         record_template_instance(declaration, d->getTemplateArgs().asArray(), d->getSpecializationKind(), d);
         return true;
     }
     bool VisitFunctionDecl(clang::FunctionDecl *d) {
         if (amc::lang::cancellation_requested()) return false;
         const clang::FunctionTemplateSpecializationInfo *info = d->getTemplateSpecializationInfo();
-        if (info != nullptr && info->TemplateArguments != nullptr && info->getTemplate() != nullptr
+        if (info != nullptr
+            && info->TemplateArguments != nullptr
+            && info->getTemplate() != nullptr
             && (selected(d) || selected(info->getTemplate()))) {
-            record_template_instance(info->getTemplate(), info->TemplateArguments->asArray(),
-                d->getTemplateSpecializationKind(), d);
+            record_template_instance(
+                info->getTemplate(), info->TemplateArguments->asArray(), d->getTemplateSpecializationKind(), d);
         }
         return true;
     }
@@ -426,8 +428,11 @@ private:
         else if (type->isRValueReferenceType())
             category = amc::semantic::ValueCategory::xvalue;
         const std::string spelling = canonical.getAsString();
-        const std::string key = spelling + (qualifiers.is_const ? "|c" : "") + (qualifiers.is_volatile ? "|v" : "")
-                              + (qualifiers.is_restrict ? "|r" : "") + "|"
+        const std::string key = spelling
+                              + (qualifiers.is_const ? "|c" : "")
+                              + (qualifiers.is_volatile ? "|v" : "")
+                              + (qualifiers.is_restrict ? "|r" : "")
+                              + "|"
                               + std::to_string(static_cast<uint32_t>(category));
         const auto found = semantic_type_ids.find(key);
         if (found != semantic_type_ids.end()) return found->second;
@@ -439,8 +444,8 @@ private:
             element = semantic_type_id(array->getElementType());
 
         const amc::semantic::SemanticTypeKind kind = semantic_type_kind(type);
-        const auto id = amc::semantic::semantic_type_identity(kind, spelling, qualifiers, category, {}, element, {},
-            amc::semantic::semantic_rules_version);
+        const auto id = amc::semantic::semantic_type_identity(
+            kind, spelling, qualifiers, category, {}, element, {}, amc::semantic::semantic_rules_version);
         semantic_type_ids.emplace(key, id);
         if (semantic_type_records.insert(id).second) {
             amc::semantic::SemanticType record;
@@ -460,7 +465,7 @@ private:
             case clang::TSK_ExplicitInstantiationDeclaration:
             case clang::TSK_ExplicitInstantiationDefinition: return amc::semantic::InstantiationOrigin::explicit_source;
             case clang::TSK_ImplicitInstantiation: return amc::semantic::InstantiationOrigin::implicit_compiler;
-            default: return amc::semantic::InstantiationOrigin::implicit_compiler;
+            default:                               return amc::semantic::InstantiationOrigin::implicit_compiler;
         }
     }
 
@@ -514,9 +519,7 @@ private:
                 out.canonical = amc::hash_text(key, 0x5041434bULL);
                 break;
             }
-            default:
-                out.kind = amc::semantic::TemplateArgumentKind::other;
-                break;
+            default: out.kind = amc::semantic::TemplateArgumentKind::other; break;
         }
         return out;
     }
@@ -554,7 +557,8 @@ private:
                 } else if (auto *non_type = llvm::dyn_cast<clang::NonTypeTemplateParmDecl>(parameter)) {
                     out.kind = amc::semantic::TemplateParameterKind::non_type;
                     if (non_type->hasDefaultArgument())
-                        out.default_argument = source_hash(non_type->getDefaultArgument().getSourceRange(), 0x44454641ULL);
+                        out.default_argument =
+                            source_hash(non_type->getDefaultArgument().getSourceRange(), 0x44454641ULL);
                 } else if (auto *template_parameter = llvm::dyn_cast<clang::TemplateTemplateParmDecl>(parameter)) {
                     out.kind = amc::semantic::TemplateParameterKind::template_template;
                     if (template_parameter->hasDefaultArgument())
@@ -611,9 +615,9 @@ private:
 
         if (instantiated != nullptr) {
             if (auto *specialization = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(instantiated)) {
-                record.result = amc::semantic::semantic_type_identity(amc::semantic::SemanticTypeKind::template_instance,
-                    specialization->getQualifiedNameAsString(), {}, amc::semantic::ValueCategory::value, {}, {}, instance,
-                    amc::semantic::semantic_rules_version)
+                record.result = amc::semantic::semantic_type_identity(
+                    amc::semantic::SemanticTypeKind::template_instance, specialization->getQualifiedNameAsString(), {},
+                    amc::semantic::ValueCategory::value, {}, {}, instance, amc::semantic::semantic_rules_version)
                                     .value;
             } else if (auto *function = llvm::dyn_cast<clang::FunctionDecl>(instantiated)) {
                 amc::semantic::SemanticFunctionKind function_kind = amc::semantic::SemanticFunctionKind::free_function;
@@ -885,9 +889,8 @@ private:
             x.type_id = add_type(base.getType());
             x.flags = amc::field_base | access_flags(base.getAccessSpecifier());
             if (const auto *base_record = base.getType()->getAsCXXRecordDecl()) {
-                const clang::CharUnits offset = base.isVirtual()
-                    ? l.getVBaseClassOffset(base_record)
-                    : l.getBaseClassOffset(base_record);
+                const clang::CharUnits offset =
+                    base.isVirtual() ? l.getVBaseClassOffset(base_record) : l.getBaseClassOffset(base_record);
                 x.offset = static_cast<uint32_t>(offset.getQuantity());
             }
             module.fields.push_back(std::move(x));
@@ -1220,8 +1223,7 @@ private:
 // directory, then relative to any `-I` directory declared in the import flags,
 // and only fall back to the declared string. This keeps generated thunks free
 // of machine-specific absolute prefixes while still resolving at compile time.
-std::string include_spelling(
-    const std::string &file, llvm::StringRef base, const std::vector<std::string> &flags) {
+std::string include_spelling(const std::string &file, llvm::StringRef base, const std::vector<std::string> &flags) {
     llvm::SmallString<256> declared(file);
     if (llvm::sys::path::is_relative(declared)) return file;   // already relative to the config dir
     const auto under = [&](llvm::StringRef root) -> std::string {
@@ -1235,7 +1237,8 @@ std::string include_spelling(
         llvm::StringRef declared_ref(declared_abs);
         if (!declared_ref.starts_with(root_ref)) return {};
         llvm::StringRef rel = declared_ref.drop_front(root_ref.size());
-        while (!rel.empty() && llvm::sys::path::is_separator(rel.front())) rel = rel.drop_front();
+        while (!rel.empty() && llvm::sys::path::is_separator(rel.front()))
+            rel = rel.drop_front();
         if (rel.empty() || rel.starts_with("..")) return {};
         std::string result = rel.str();
         for (char &c : result)
@@ -1563,106 +1566,114 @@ bool expose_thunks(amc::AbiModule &module, const amc::lang::Config &config, std:
             }
             const auto overload_suffix = [&](const amc::Function &function) {
                 if (matches.size() <= 1) return std::string{};
-                return fmt::format("_{:08x}{:04x}", function.signature.lo,
-                    static_cast<uint32_t>(function.signature.hi & 0xffff));
+                return fmt::format(
+                    "_{:08x}{:04x}", function.signature.lo, static_cast<uint32_t>(function.signature.hi & 0xffff));
             };
             for (const auto &candidate : matches) {
-            const amc::Function *found = &candidate;
-            if (!representable(found->return_type)) {
-                error = "[[expose]] "
-                      + expose.type
-                      + "::"
-                      + method
-                      + " return type needs a contract: "
-                      + type_name(found->return_type);
-                return false;
-            }
-            for (const auto &parameter : found->parameters) {
-                NativeAdapt *adapt = find_adapt(parameter.type_id);
-                if (adapt != nullptr) {
-                    // A declared native↔ABIX-STD adaptation: the thunk takes the
-                    // boundary type and marshals it. Record the boundary contract
-                    // and the adaptation as a needs_adapter lowering, once.
-                    if (adapt->boundary_type == amc::Hash128{}) {
-                        adapt->boundary_type = ensure_boundary(*adapt);
-                        record_contract(adapt->boundary_type);
-                        amc::LoweringResult lowering;
-                        lowering.type_id = adapt->native_type;
-                        lowering.contract_type = adapt->boundary_type;
-                        const bool string_view = adapt->kind == static_cast<uint32_t>(NativeKind::string)
-                                              || adapt->kind == static_cast<uint32_t>(NativeKind::string_view);
-                        lowering.kind = static_cast<uint32_t>(
-                            string_view ? amc::LoweringKind::string_view : amc::LoweringKind::sequence_view);
-                        lowering.status = static_cast<uint32_t>(amc::LoweringStatus::needs_adapter);
-                        lowering.reason = static_cast<uint32_t>(amc::LoweringReason::layout);
-                        module.lowerings.push_back(lowering);
-                    }
-                    continue;
-                }
-                if (!representable(parameter.type_id)) {
+                const amc::Function *found = &candidate;
+                if (!representable(found->return_type)) {
                     error = "[[expose]] "
                           + expose.type
                           + "::"
                           + method
-                          + " parameter type needs a contract: "
-                          + type_name(parameter.type_id);
+                          + " return type needs a contract: "
+                          + type_name(found->return_type);
                     return false;
                 }
-            }
-            const bool returns_void = found->return_type == void_id;
-            std::string return_spelling = returns_void ? "void" : cpp_spelling(type_name(found->return_type));
-            std::string params = cpp_type + "* self";
-            std::string args;
-            std::vector<std::pair<std::string, amc::Hash128>> signature = {
-                {"self", self_id}
-            };
-            for (size_t i = 0; i < found->parameters.size(); ++i) {
-                const auto &parameter = found->parameters[i];
-                const std::string name = parameter.name.empty() ? "arg" + std::to_string(i) : parameter.name;
-                const NativeAdapt *adapt = find_adapt(parameter.type_id);
-                const amc::Hash128 param_type = adapt != nullptr ? adapt->boundary_type : parameter.type_id;
-                params += ", " + cpp_spelling(type_name(param_type)) + " " + name;
-                if (i != 0) args += ", ";
-                args += adapt != nullptr ? adapt_expression(*adapt, name) : name;
-                signature.emplace_back(name, param_type);
-            }
-            const std::string suffix = overload_suffix(*found);
-            source += "extern \"C\" " + return_spelling + " abix_" + symbol_type + "_" + method + suffix + "("
-                    + params + ") {\n";
-            source +=
-                std::string("    ") + (returns_void ? "" : "return ") + "self->" + method + "(" + args + ");\n}\n";
-            const std::string symbol = "abix_" + symbol_type + "_" + method + suffix;
-            // Capture the method facts before registering the thunk: `register_thunk`
-            // pushes onto `module.functions`, which may reallocate the vector and
-            // invalidate `found`. Reading through `found` afterwards would be a
-            // use-after-free, so copy what the contract recording needs first.
-            const amc::Hash128 return_type_id = found->return_type;
-            std::vector<amc::Hash128> parameter_type_ids;
-            parameter_type_ids.reserve(found->parameters.size());
-            for (const auto &parameter : found->parameters)
-                parameter_type_ids.push_back(parameter.type_id);
-            // Record the ABIX-STD contracts of the boundary types in this
-            // signature (span -> SequenceView, str -> StringView, result).
-            const amc::LoweringResult return_contract = record_contract(return_type_id);
-            for (const amc::Hash128 parameter_type_id : parameter_type_ids)
-                record_contract(parameter_type_id);
-            const amc::Hash128 thunk_signature = register_thunk(symbol, return_type_id, signature);
-            const uint32_t thunk_index = static_cast<uint32_t>(module.functions.size() - 1);
-            exposed_methods.push_back({symbol, thunk_signature});
-            // A `abix_result_*` return binds to the error boundary: the status and
-            // value are fields of the returned record, so a consumer can turn the
-            // C aggregate into a typed Result without inspecting a bare integer.
-            if (type_name(return_type_id).rfind("abix_result_", 0) == 0
-                && return_contract.status != static_cast<uint32_t>(amc::LoweringStatus::unsupported)) {
-                amc::ErrorContract contract;
-                contract.function_index = thunk_index;
-                contract.status_source = amc::StatusSource::return_field;
-                contract.status_parameter = return_contract.pointer_field;
-                contract.value_parameter = return_contract.length_field;
-                contract.success_value = 0;
-                contract.domain = amc::amc_error_domain;
-                module.errors.push_back(contract);
-            }
+                for (const auto &parameter : found->parameters) {
+                    NativeAdapt *adapt = find_adapt(parameter.type_id);
+                    if (adapt != nullptr) {
+                        // A declared native↔ABIX-STD adaptation: the thunk takes the
+                        // boundary type and marshals it. Record the boundary contract
+                        // and the adaptation as a needs_adapter lowering, once.
+                        if (adapt->boundary_type == amc::Hash128{}) {
+                            adapt->boundary_type = ensure_boundary(*adapt);
+                            record_contract(adapt->boundary_type);
+                            amc::LoweringResult lowering;
+                            lowering.type_id = adapt->native_type;
+                            lowering.contract_type = adapt->boundary_type;
+                            const bool string_view = adapt->kind == static_cast<uint32_t>(NativeKind::string)
+                                                  || adapt->kind == static_cast<uint32_t>(NativeKind::string_view);
+                            lowering.kind = static_cast<uint32_t>(
+                                string_view ? amc::LoweringKind::string_view : amc::LoweringKind::sequence_view);
+                            lowering.status = static_cast<uint32_t>(amc::LoweringStatus::needs_adapter);
+                            lowering.reason = static_cast<uint32_t>(amc::LoweringReason::layout);
+                            module.lowerings.push_back(lowering);
+                        }
+                        continue;
+                    }
+                    if (!representable(parameter.type_id)) {
+                        error = "[[expose]] "
+                              + expose.type
+                              + "::"
+                              + method
+                              + " parameter type needs a contract: "
+                              + type_name(parameter.type_id);
+                        return false;
+                    }
+                }
+                const bool returns_void = found->return_type == void_id;
+                std::string return_spelling = returns_void ? "void" : cpp_spelling(type_name(found->return_type));
+                std::string params = cpp_type + "* self";
+                std::string args;
+                std::vector<std::pair<std::string, amc::Hash128>> signature = {
+                    {"self", self_id}
+                };
+                for (size_t i = 0; i < found->parameters.size(); ++i) {
+                    const auto &parameter = found->parameters[i];
+                    const std::string name = parameter.name.empty() ? "arg" + std::to_string(i) : parameter.name;
+                    const NativeAdapt *adapt = find_adapt(parameter.type_id);
+                    const amc::Hash128 param_type = adapt != nullptr ? adapt->boundary_type : parameter.type_id;
+                    params += ", " + cpp_spelling(type_name(param_type)) + " " + name;
+                    if (i != 0) args += ", ";
+                    args += adapt != nullptr ? adapt_expression(*adapt, name) : name;
+                    signature.emplace_back(name, param_type);
+                }
+                const std::string suffix = overload_suffix(*found);
+                source += "extern \"C\" "
+                        + return_spelling
+                        + " abix_"
+                        + symbol_type
+                        + "_"
+                        + method
+                        + suffix
+                        + "("
+                        + params
+                        + ") {\n";
+                source +=
+                    std::string("    ") + (returns_void ? "" : "return ") + "self->" + method + "(" + args + ");\n}\n";
+                const std::string symbol = "abix_" + symbol_type + "_" + method + suffix;
+                // Capture the method facts before registering the thunk: `register_thunk`
+                // pushes onto `module.functions`, which may reallocate the vector and
+                // invalidate `found`. Reading through `found` afterwards would be a
+                // use-after-free, so copy what the contract recording needs first.
+                const amc::Hash128 return_type_id = found->return_type;
+                std::vector<amc::Hash128> parameter_type_ids;
+                parameter_type_ids.reserve(found->parameters.size());
+                for (const auto &parameter : found->parameters)
+                    parameter_type_ids.push_back(parameter.type_id);
+                // Record the ABIX-STD contracts of the boundary types in this
+                // signature (span -> SequenceView, str -> StringView, result).
+                const amc::LoweringResult return_contract = record_contract(return_type_id);
+                for (const amc::Hash128 parameter_type_id : parameter_type_ids)
+                    record_contract(parameter_type_id);
+                const amc::Hash128 thunk_signature = register_thunk(symbol, return_type_id, signature);
+                const uint32_t thunk_index = static_cast<uint32_t>(module.functions.size() - 1);
+                exposed_methods.push_back({symbol, thunk_signature});
+                // A `abix_result_*` return binds to the error boundary: the status and
+                // value are fields of the returned record, so a consumer can turn the
+                // C aggregate into a typed Result without inspecting a bare integer.
+                if (type_name(return_type_id).rfind("abix_result_", 0) == 0
+                    && return_contract.status != static_cast<uint32_t>(amc::LoweringStatus::unsupported)) {
+                    amc::ErrorContract contract;
+                    contract.function_index = thunk_index;
+                    contract.status_source = amc::StatusSource::return_field;
+                    contract.status_parameter = return_contract.pointer_field;
+                    contract.value_parameter = return_contract.length_field;
+                    contract.success_value = 0;
+                    contract.domain = amc::amc_error_domain;
+                    module.errors.push_back(contract);
+                }
             }
         }
         source += "\n";

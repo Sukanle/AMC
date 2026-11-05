@@ -106,7 +106,11 @@ struct Qualifiers {
     }
 };
 
-enum class ValueCategory : uint32_t { value, lvalue, xvalue };
+enum class ValueCategory : uint32_t {
+    value,
+    lvalue,
+    xvalue
+};
 
 struct SemanticType {
     SemanticTypeId id{};
@@ -120,16 +124,25 @@ struct SemanticType {
     uint32_t flags = 0;
 };
 
-enum class TemplateKind : uint32_t { function, class_, alias, variable };
+enum class TemplateKind : uint32_t {
+    function,
+    class_,
+    alias,
+    variable
+};
 
-enum class TemplateParameterKind : uint32_t { type, non_type, template_template };
+enum class TemplateParameterKind : uint32_t {
+    type,
+    non_type,
+    template_template
+};
 
 struct TemplateParameter {
     TemplateParameterKind kind = TemplateParameterKind::type;
     uint32_t index = 0;
     std::string name;
-    Hash128 default_argument{};   // zero when absent
-    Hash128 constraint{};         // normalized constraint key, zero when absent
+    Hash128 default_argument{};      // zero when absent
+    Hash128 constraint{};            // normalized constraint key, zero when absent
     std::string constraint_source;   // source text for diagnostics
 };
 
@@ -150,7 +163,13 @@ enum class InstantiationOrigin : uint32_t {
     config_requested     // [[instantiate]]
 };
 
-enum class TemplateArgumentKind : uint32_t { type, integral, template_, pack, other };
+enum class TemplateArgumentKind : uint32_t {
+    type,
+    integral,
+    template_,
+    pack,
+    other
+};
 
 struct TemplateArgument {
     TemplateArgumentKind kind = TemplateArgumentKind::type;
@@ -253,11 +272,23 @@ enum class OwnershipKind : uint32_t {
     transferred
 };
 
-enum class LifetimeKind : uint32_t { unknown, static_, caller, owner, scope };
+enum class LifetimeKind : uint32_t {
+    unknown,
+    static_,
+    caller,
+    owner,
+    scope
+};
 
-enum class Mutability : uint32_t { immutable, mutable_ };
+enum class Mutability : uint32_t {
+    immutable,
+    mutable_
+};
 
-enum class InteractionKind : uint32_t { parameter, return_value };
+enum class InteractionKind : uint32_t {
+    parameter,
+    return_value
+};
 
 struct SemanticOwnership {
     SemanticFunctionId function{};

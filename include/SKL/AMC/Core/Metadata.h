@@ -47,15 +47,15 @@ namespace amc {
 using BuildID = Hash128;
 using MetadataID = Hash128;
 
-constexpr uint32_t metadata_magic = 0x58494241u;   // "ABIX" in little-endian byte order
+constexpr uint32_t metadata_magic = 0X58494241U;   // "ABIX" in little-endian byte order
 constexpr uint16_t metadata_version_major = 1;
 constexpr uint16_t metadata_version_minor = 0;
 constexpr size_t metadata_manifest_size = 128;
 
 enum class MetadataFlag : uint32_t {
     none = 0,
-    has_names = 1u << 0,
-    has_hash_index = 1u << 1,
+    has_names = 1U << 0,
+    has_hash_index = 1U << 1,
 };
 
 constexpr uint32_t metadata_flag_value(MetadataFlag flag) { return static_cast<uint32_t>(flag); }
@@ -162,10 +162,10 @@ struct MetadataErrorRecord {
     int64_t success_value;
     uint32_t flags;
     uint32_t reserved;
-    uint64_t domain;             // v2 error identity domain
-    int32_t condition;           // EPCD GenericCondition
+    uint64_t domain;     // v2 error identity domain
+    int32_t condition;   // EPCD GenericCondition
     uint32_t reserved2;
-    Hash128 error_set;           // optional error-set identity (zero = none)
+    Hash128 error_set;   // optional error-set identity (zero = none)
 };
 
 // Target platform identity, carried as an extension so runtime verification can
@@ -298,9 +298,9 @@ constexpr uint32_t metadata_extension_interface_parameter = 11;
 constexpr uint32_t metadata_extension_layout_encoding = 12;
 
 // Semantics of an accessor adapter, as a contract flag (not a layout fact).
-constexpr uint32_t metadata_adapter_borrowed = 1u << 0;   // view over live data
-constexpr uint32_t metadata_adapter_owned = 1u << 1;      // receiver releases
-constexpr uint32_t metadata_adapter_copy = 1u << 2;       // independent data
+constexpr uint32_t metadata_adapter_borrowed = 1;   // view over live data
+constexpr uint32_t metadata_adapter_owned = 2;      // receiver releases
+constexpr uint32_t metadata_adapter_copy = 4;       // independent data
 
 struct MetadataExtensionHeader {
     uint32_t version;
@@ -496,7 +496,7 @@ bool read_layout_encoding(const std::vector<uint8_t> &region, uint32_t &version,
 enum class TargetVerificationStatus : uint32_t {
     compatible = 0,
     incompatible = 1,
-    unverifiable = 2
+    unverifiable = 2,
 };
 struct TargetExpectation {
     uint32_t arch = 0;

@@ -250,7 +250,8 @@ void compare_contracts(const AbiModule &contract, const AbiModule &implementatio
                             "condition {} -> {}",
                     status_source_name(before.status_source), status_source_name(after.status_source),
                     before.success_value, after.success_value, before.value_parameter, after.value_parameter,
-                    before.domain, after.domain, generic_condition_name(static_cast<GenericCondition>(before.condition)),
+                    before.domain, after.domain,
+                    generic_condition_name(static_cast<GenericCondition>(before.condition)),
                     generic_condition_name(static_cast<GenericCondition>(after.condition))));
         }
     }

@@ -22,7 +22,7 @@ namespace {
 
 // Domain separators keep the four identity families independent even when
 // their canonical keys happen to share bytes.
-constexpr uint64_t semantic_type_domain = 0x53454d5459504531ULL;     // "SEMTYPE1"
+constexpr uint64_t semantic_type_domain = 0x53454d5459504531ULL;       // "SEMTYPE1"
 constexpr uint64_t semantic_function_domain = 0x53454d46554e4331ULL;   // "SEMFUNC1"
 constexpr uint64_t template_decl_domain = 0x54504c4445434c31ULL;       // "TPLDECL1"
 constexpr uint64_t template_instance_domain = 0x54504c494e535431ULL;   // "TPLINST1"
@@ -49,25 +49,17 @@ void append_hash(std::string &out, Hash128 value) {
     append_u64(out, value.hi);
 }
 
-void append_type_id(std::string &out, SemanticTypeId value) {
-    append_hash(out, value.value);
-}
+void append_type_id(std::string &out, SemanticTypeId value) { append_hash(out, value.value); }
 
-void append_function_id(std::string &out, SemanticFunctionId value) {
-    append_hash(out, value.value);
-}
+void append_function_id(std::string &out, SemanticFunctionId value) { append_hash(out, value.value); }
 
-void append_template_decl_id(std::string &out, TemplateDeclId value) {
-    append_hash(out, value.value);
-}
+void append_template_decl_id(std::string &out, TemplateDeclId value) { append_hash(out, value.value); }
 
-void append_template_instance_id(std::string &out, TemplateInstanceId value) {
-    append_hash(out, value.value);
-}
+void append_template_instance_id(std::string &out, TemplateInstanceId value) { append_hash(out, value.value); }
 
 void append_qualifiers(std::string &out, const Qualifiers &qualifiers) {
-    append_u32(out,
-        (qualifiers.is_const ? 1u : 0u) | (qualifiers.is_volatile ? 2u : 0u) | (qualifiers.is_restrict ? 4u : 0u));
+    append_u32(
+        out, (qualifiers.is_const ? 1u : 0u) | (qualifiers.is_volatile ? 2u : 0u) | (qualifiers.is_restrict ? 4u : 0u));
 }
 
 }   // namespace

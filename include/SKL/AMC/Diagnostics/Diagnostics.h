@@ -19,17 +19,21 @@
 #include <stdint.h>
 
 #include <string>
-#include <string_view>
 #include <vector>
+#include <algorithm>
 
 namespace amc::diagnostics {
 
-enum class Severity : uint32_t { note, warning, error };
+enum class Severity : uint32_t {
+    note,
+    warning,
+    error,
+};
 
 struct Diagnostic {
     Severity severity = Severity::error;
-    std::string code;      // stable machine-readable code
-    std::string stage;     // frontend / pass / backend / compilation
+    std::string code;    // stable machine-readable code
+    std::string stage;   // frontend / pass / backend / compilation
     std::string message;
     std::string file;
     uint32_t line = 0;
@@ -39,16 +43,13 @@ struct Diagnostic {
 using DiagnosticList = std::vector<Diagnostic>;
 
 inline bool has_errors(const DiagnosticList &diagnostics) {
-    for (const Diagnostic &diagnostic : diagnostics)
-        if (diagnostic.severity == Severity::error) return true;
-    return false;
+    return std::any_of(
+        diagnostics.begin(), diagnostics.end(), [](const Diagnostic &e) { return e.severity == Severity::error; });
 }
 
 inline size_t error_count(const DiagnosticList &diagnostics) {
-    size_t count = 0;
-    for (const Diagnostic &diagnostic : diagnostics)
-        if (diagnostic.severity == Severity::error) ++count;
-    return count;
+    return static_cast<size_t>(std::count_if(
+        diagnostics.begin(), diagnostics.end(), [](const Diagnostic &d) { return d.severity == Severity::error; }));
 }
 
 inline void add_error(DiagnosticList &diagnostics, std::string code, std::string stage, std::string message) {

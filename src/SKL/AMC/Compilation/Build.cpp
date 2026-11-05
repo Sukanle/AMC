@@ -710,8 +710,7 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
                             frontend_ran = false;
                         }
                     const fs::path cached_semantic = fs::path(cached.directory) / "frontend.abix.semantic";
-                    if (fs::exists(cached_semantic)
-                        && !copy_file(cached_semantic, semantic_temporary, error))
+                    if (fs::exists(cached_semantic) && !copy_file(cached_semantic, semantic_temporary, error))
                         return fail(amc::ErrorCategory::io, "cache", error, config_path.string());
                 }
             }
@@ -991,12 +990,14 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
                     std::string content(
                         (std::istreambuf_iterator<char>(cached_output)), std::istreambuf_iterator<char>());
                     std::string store_error;
-                    std::vector<std::pair<std::string, std::string>> artifacts{{"frontend.abix", content}};
+                    std::vector<std::pair<std::string, std::string>> artifacts{
+                        {"frontend.abix", content}
+                    };
                     std::ifstream cached_semantic(semantic_temporary, std::ios::binary);
                     if (cached_semantic) {
-                        artifacts.push_back({"frontend.abix.semantic",
-                            std::string((std::istreambuf_iterator<char>(cached_semantic)),
-                                std::istreambuf_iterator<char>())});
+                        artifacts.push_back(
+                            {"frontend.abix.semantic", std::string((std::istreambuf_iterator<char>(cached_semantic)),
+                                                           std::istreambuf_iterator<char>())});
                     }
                     (void)cache.store(cache_inputs, artifacts, dependencies, store_error);
                 }

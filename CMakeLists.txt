@@ -58,8 +58,6 @@ set(AMC_ABIX_FETCHED OFF)
 if(NOT ABIX_FOUND)
     set(AMC_ABIX_FETCHED ON)
 
-    message(STATUS "ABIX 0.3 package not found; fetching ABIX into ${AMC_DEPENDENCIES_DIR}")
-
     find_package(Git QUIET)
     if(NOT GIT_EXECUTABLE)
         message(FATAL_ERROR "git is required to fetch ABIX")
@@ -73,18 +71,33 @@ if(NOT ABIX_FOUND)
     set(MICS_INSTALL OFF)
     set(MICS_BUILD_TESTS OFF)
 
-    # Populate ABIX without its submodules and without adding it yet: its
-    # .gitmodules uses SSH URLs, which fail on machines without GitHub SSH
-    # credentials. The rewritten submodules are initialized below, then ABIX
-    # is added as a subproject.
-    FetchContent_Declare(
-        ABIX
-        GIT_REPOSITORY https://github.com/Sukanle/ABIX.git
-        GIT_TAG ${AMC_ABIX_REF}
-        GIT_SUBMODULES ""
-        GIT_PROGRESS TRUE
-        SOURCE_DIR ${AMC_DEPENDENCIES_DIR}/ABIX SOURCE_SUBDIR amc-deferred-subproject)
-    FetchContent_MakeAvailable(ABIX)
+    # A checkout already created by a previous configure is reused directly:
+    # FetchContent would otherwise still run its update step and print a
+    # "fetching" status on every configure. Delete dependencies/ABIX or pass a
+    # new AMC_ABIX_REF/clean build directory when a real refresh is needed.
+    if(EXISTS "${AMC_DEPENDENCIES_DIR}/ABIX/CMakeLists.txt")
+        message(
+            STATUS
+                "ABIX 0.3 package not found; using existing checkout at ${AMC_DEPENDENCIES_DIR}/ABIX (delete it to refetch)"
+        )
+        set(abix_SOURCE_DIR "${AMC_DEPENDENCIES_DIR}/ABIX")
+        set(abix_BINARY_DIR "${CMAKE_BINARY_DIR}/abix")
+    else()
+        message(STATUS "ABIX 0.3 package not found; fetching ABIX into ${AMC_DEPENDENCIES_DIR}")
+
+        # Populate ABIX without its submodules and without adding it yet: its
+        # .gitmodules uses SSH URLs, which fail on machines without GitHub SSH
+        # credentials. The rewritten submodules are initialized below, then
+        # ABIX is added as a subproject.
+        FetchContent_Declare(
+            ABIX
+            GIT_REPOSITORY https://github.com/Sukanle/ABIX.git
+            GIT_TAG ${AMC_ABIX_REF}
+            GIT_SUBMODULES ""
+            GIT_PROGRESS TRUE
+            SOURCE_DIR ${AMC_DEPENDENCIES_DIR}/ABIX SOURCE_SUBDIR amc-deferred-subproject)
+        FetchContent_MakeAvailable(ABIX)
+    endif()
 
     # Rewrite every SSH submodule URL in .gitmodules to HTTPS in the local
     # repository config before initializing the submodules.
