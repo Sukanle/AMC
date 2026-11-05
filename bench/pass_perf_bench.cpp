@@ -98,7 +98,7 @@ BENCHMARK_DEFINE_F(PassFixture, SemanticVerify)(benchmark::State &state) {
         auto module = make_module(count);
         diagnostics.clear();
         state.ResumeTiming();
-        const bool ok = amc::pass::run_default_pipeline(module, diagnostics, options);
+        bool ok = amc::pass::run_default_pipeline(module, diagnostics, options);
         benchmark::DoNotOptimize(module);
         benchmark::DoNotOptimize(ok);
     }
@@ -118,7 +118,7 @@ BENCHMARK_DEFINE_F(PassFixture, AbiVerify)(benchmark::State &state) {
         auto module = make_module(count);
         diagnostics.clear();
         state.ResumeTiming();
-        const bool ok = amc::pass::run_default_pipeline(module, diagnostics, options);
+        bool ok = amc::pass::run_default_pipeline(module, diagnostics, options);
         benchmark::DoNotOptimize(module);
         benchmark::DoNotOptimize(ok);
     }
@@ -138,7 +138,7 @@ BENCHMARK_DEFINE_F(PassFixture, Lowering)(benchmark::State &state) {
         auto module = make_module(count);
         diagnostics.clear();
         state.ResumeTiming();
-        const bool ok = amc::pass::run_default_pipeline(module, diagnostics, options);
+        bool ok = amc::pass::run_default_pipeline(module, diagnostics, options);
         benchmark::DoNotOptimize(module);
         benchmark::DoNotOptimize(ok);
     }
@@ -157,7 +157,7 @@ BENCHMARK_DEFINE_F(PassFixture, LoweringVerify)(benchmark::State &state) {
         auto module = make_module(count);
         diagnostics.clear();
         state.ResumeTiming();
-        const bool ok = amc::pass::run_default_pipeline(module, diagnostics, options);
+        bool ok = amc::pass::run_default_pipeline(module, diagnostics, options);
         benchmark::DoNotOptimize(module);
         benchmark::DoNotOptimize(ok);
     }
@@ -172,7 +172,7 @@ BENCHMARK_DEFINE_F(PassFixture, FullPipeline)(benchmark::State &state) {
         auto module = make_module(count);
         diagnostics.clear();
         state.ResumeTiming();
-        const bool ok = amc::pass::run_default_pipeline(module, diagnostics);
+        bool ok = amc::pass::run_default_pipeline(module, diagnostics);
         benchmark::DoNotOptimize(module);
         benchmark::DoNotOptimize(ok);
     }
@@ -188,7 +188,7 @@ BENCHMARK_DEFINE_F(PassFixture, Compatibility)(benchmark::State &state) {
     for (auto _ : state) {
         result = {};
         error.clear();
-        const bool ok = amc::ir::compare_contracts(module.abi, other.abi, result, error);
+        bool ok = amc::ir::compare_contracts(module.abi, other.abi, result, error);
         benchmark::DoNotOptimize(result);
         benchmark::DoNotOptimize(ok);
     }

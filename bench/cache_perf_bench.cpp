@@ -149,7 +149,7 @@ BENCHMARK_DEFINE_F(CacheStoreFixture, StoreCold)(benchmark::State &state) {
                 {"module.lowering", "lowering-" + std::to_string(i)},
             };
             error.clear();
-            const bool ok = cache->store(make_inputs(i), artifacts, error);
+            bool ok = cache->store(make_inputs(i), artifacts, error);
             benchmark::DoNotOptimize(ok);
         }
     }
@@ -160,7 +160,7 @@ BENCHMARK_REGISTER_F(CacheStoreFixture, StoreCold)->Arg(200)->Arg(1'000);
 BENCHMARK_DEFINE_F(CacheReadFixture, LookupHit)(benchmark::State &state) {
     for (auto _ : state) {
         for (size_t i = 0; i < count; ++i) {
-            const auto result = cache->lookup(make_inputs(i));
+            auto result = cache->lookup(make_inputs(i));
             benchmark::DoNotOptimize(result);
         }
     }
@@ -171,7 +171,7 @@ BENCHMARK_REGISTER_F(CacheReadFixture, LookupHit)->Arg(200)->Arg(1'000);
 BENCHMARK_DEFINE_F(CacheReadFixture, LookupMiss)(benchmark::State &state) {
     for (auto _ : state) {
         for (size_t i = 0; i < count; ++i) {
-            const auto result = cache->lookup(make_inputs(i, "source-v2"));
+            auto result = cache->lookup(make_inputs(i, "source-v2"));
             benchmark::DoNotOptimize(result);
         }
     }
@@ -181,7 +181,7 @@ BENCHMARK_REGISTER_F(CacheReadFixture, LookupMiss)->Arg(200)->Arg(1'000);
 
 BENCHMARK_DEFINE_F(CacheReadFixture, DependencyChanged)(benchmark::State &state) {
     for (auto _ : state) {
-        const auto result = cache->lookup(dependency_inputs);
+        auto result = cache->lookup(dependency_inputs);
         benchmark::DoNotOptimize(result);
     }
     state.SetItemsProcessed(state.iterations());
@@ -199,7 +199,7 @@ BENCHMARK_DEFINE_F(CacheReadFixture, LookupConcurrent)(benchmark::State &state) 
         for (size_t thread = 0; thread < kThreads; ++thread) {
             readers.emplace_back([&, thread] {
                 for (size_t i = thread; i < count; i += kThreads) {
-                    const auto result = cache->lookup(make_inputs(i));
+                    auto result = cache->lookup(make_inputs(i));
                     benchmark::DoNotOptimize(result);
                 }
             });
@@ -215,7 +215,7 @@ BENCHMARK_DEFINE_F(CacheReadFixture, VerifyAll)(benchmark::State &state) {
     std::vector<std::string> failures;
     for (auto _ : state) {
         failures.clear();
-        const size_t checked = cache->verify_all(failures);
+        size_t checked = cache->verify_all(failures);
         benchmark::DoNotOptimize(checked);
         benchmark::DoNotOptimize(failures);
     }

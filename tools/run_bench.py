@@ -268,8 +268,8 @@ def summarize(path: Path) -> list[tuple[str, int, float, float]]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run AMC Google Benchmark baselines")
     parser.add_argument("filters", nargs="*", help="benchmark name filters (regex, forwarded to Google Benchmark)")
-    parser.add_argument("--bin", default="build/bin", help="directory containing the benchmark executables")
-    parser.add_argument("--out", default="bench/results", help="directory for per-executable JSON output")
+    parser.add_argument("--bin", default="build/Release/bin", help="directory containing the benchmark executables")
+    parser.add_argument("--out", default="build/bench", help="directory for per-executable JSON output")
     parser.add_argument("--repetitions", type=int, default=5, help="Google Benchmark repetitions")
     parser.add_argument("--min-time", default="", help="optional bound per benchmark, e.g. 0.2s")
     parser.add_argument(

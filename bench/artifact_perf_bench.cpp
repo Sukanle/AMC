@@ -215,7 +215,7 @@ BENCHMARK_DEFINE_F(ArtifactFixture, WriteAbix)(benchmark::State &state) {
     std::string error;
     for (auto _ : state) {
         error.clear();
-        const bool ok = amc::write_abix(module, artifact.string(), error);
+        bool ok = amc::write_abix(module, artifact.string(), error);
         benchmark::DoNotOptimize(ok);
     }
     state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(count));
@@ -228,7 +228,7 @@ BENCHMARK_DEFINE_F(ArtifactFixture, ReadAbix)(benchmark::State &state) {
     for (auto _ : state) {
         decoded = {};
         error.clear();
-        const bool ok = amc::read_abix(artifact.string(), decoded, error);
+        bool ok = amc::read_abix(artifact.string(), decoded, error);
         benchmark::DoNotOptimize(decoded);
         benchmark::DoNotOptimize(ok);
     }
@@ -241,7 +241,7 @@ BENCHMARK_DEFINE_F(ArtifactFixture, LoadArtifact)(benchmark::State &state) {
     for (auto _ : state) {
         amc::ir::Module loaded;
         error.clear();
-        const bool ok = amc::ir::load_artifact(artifact.string(), loaded, error);
+        bool ok = amc::ir::load_artifact(artifact.string(), loaded, error);
         benchmark::DoNotOptimize(loaded);
         benchmark::DoNotOptimize(ok);
     }
@@ -256,7 +256,7 @@ BENCHMARK_DEFINE_F(ArtifactFixture, BuildMetadata)(benchmark::State &state) {
     for (auto _ : state) {
         std::vector<uint8_t> output;
         error.clear();
-        const bool ok = amc::build_metadata_region(module, options, output, error);
+        bool ok = amc::build_metadata_region(module, options, output, error);
         benchmark::DoNotOptimize(output);
         benchmark::DoNotOptimize(ok);
     }
@@ -268,7 +268,7 @@ BENCHMARK_DEFINE_F(ArtifactFixture, VerifyMetadata)(benchmark::State &state) {
     std::string error;
     for (auto _ : state) {
         error.clear();
-        const bool ok = amc::verify_metadata_region(region, error);
+        bool ok = amc::verify_metadata_region(region, error);
         benchmark::DoNotOptimize(ok);
     }
     state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(count));
@@ -281,7 +281,7 @@ BENCHMARK_DEFINE_F(ArtifactFixture, ModuleFromRegion)(benchmark::State &state) {
     for (auto _ : state) {
         decoded = {};
         error.clear();
-        const bool ok = amc::module_from_region(region, decoded, error);
+        bool ok = amc::module_from_region(region, decoded, error);
         benchmark::DoNotOptimize(decoded);
         benchmark::DoNotOptimize(ok);
     }
@@ -294,7 +294,7 @@ BENCHMARK_DEFINE_F(ArtifactFixture, Materialize)(benchmark::State &state) {
     for (auto _ : state) {
         amc::MaterializedModule materialized;
         error.clear();
-        const bool ok = materialized.build(module, error);
+        bool ok = materialized.build(module, error);
         benchmark::DoNotOptimize(materialized);
         benchmark::DoNotOptimize(ok);
     }
@@ -307,7 +307,7 @@ BENCHMARK_DEFINE_F(ArtifactFixture, MaterializeRegion)(benchmark::State &state) 
     for (auto _ : state) {
         amc::MaterializedModule materialized;
         error.clear();
-        const bool ok = materialized.build_from_region(region, error);
+        bool ok = materialized.build_from_region(region, error);
         benchmark::DoNotOptimize(materialized);
         benchmark::DoNotOptimize(ok);
     }
