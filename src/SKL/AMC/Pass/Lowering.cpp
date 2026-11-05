@@ -17,18 +17,15 @@
 
 #include <map>
 #include <string>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
+#include <llvm/ADT/DenseMap.h>
+#include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/StringMap.h>
+
 namespace amc::pass {
 namespace {
-
-struct Hash128Hash {
-    size_t operator()(Hash128 value) const noexcept {
-        return static_cast<size_t>(value.lo ^ (value.hi * 0x9e3779b97f4a7c15ULL));
-    }
-};
 
 std::string normalize_name(std::string name) {
     while (name.size() >= 2 && name[0] == ':' && name[1] == ':')
@@ -51,20 +48,20 @@ bool lower(const ir::Module &module, ir::LoweringResult &result, diagnostics::Di
     result = {};
     result.rules_version = 1;
 
-    std::map<std::string, std::pair<const Type *, uint32_t>> abi_types;
+    using HashKey = std::pair<uint64_t, uint64_t>;
+    llvm::StringMap<std::pair<const Type *, uint32_t>> abi_types;
     for (uint32_t i = 0; i < module.abi.types.size(); ++i)
-        abi_types.emplace(normalize_name(module.abi.types[i].name), std::make_pair(&module.abi.types[i], i));
+        abi_types.try_emplace(normalize_name(module.abi.types[i].name), std::make_pair(&module.abi.types[i], i));
 
-    std::map<std::string, std::vector<std::pair<const Function *, uint32_t>>> abi_functions;
-    std::unordered_map<Hash128, uint32_t, Hash128Hash> abi_type_by_id;
-    std::unordered_map<Hash128, std::vector<uint32_t>, Hash128Hash> abi_function_by_signature;
-    abi_type_by_id.reserve(module.abi.types.size());
-    abi_function_by_signature.reserve(module.abi.functions.size());
+    llvm::StringMap<llvm::SmallVector<std::pair<const Function *, uint32_t>, 1>> abi_functions;
+    llvm::DenseMap<HashKey, uint32_t> abi_type_by_id;
+    llvm::DenseMap<HashKey, llvm::SmallVector<uint32_t, 1>> abi_function_by_signature;
     for (uint32_t i = 0; i < module.abi.types.size(); ++i)
-        abi_type_by_id.emplace(module.abi.types[i].id, i);
+        abi_type_by_id.try_emplace({module.abi.types[i].id.lo, module.abi.types[i].id.hi}, i);
     for (uint32_t i = 0; i < module.abi.functions.size(); ++i) {
         abi_functions[normalize_name(module.abi.functions[i].name)].emplace_back(&module.abi.functions[i], i);
-        abi_function_by_signature[module.abi.functions[i].signature].push_back(i);
+        abi_function_by_signature[{module.abi.functions[i].signature.lo, module.abi.functions[i].signature.hi}]
+            .push_back(i);
     }
 
     std::map<semantic::SemanticTypeId, const semantic::SemanticRecord *> records;
@@ -83,7 +80,7 @@ bool lower(const ir::Module &module, ir::LoweringResult &result, diagnostics::Di
         const Type *abi_type = nullptr;
         uint32_t abi_index = UINT32_MAX;
         if (type.abi_type.lo != 0 || type.abi_type.hi != 0) {
-            const auto found = abi_type_by_id.find(type.abi_type);
+            const auto found = abi_type_by_id.find({type.abi_type.lo, type.abi_type.hi});
             if (found != abi_type_by_id.end()) {
                 abi_index = found->second;
                 abi_type = &module.abi.types[abi_index];
@@ -151,12 +148,12 @@ bool lower(const ir::Module &module, ir::LoweringResult &result, diagnostics::Di
         // semantic sidecars written before the direct link existed.
         std::vector<std::pair<const Function *, uint32_t>> matching;
         if (function.abi_signature.lo != 0 || function.abi_signature.hi != 0) {
-            const auto found = abi_function_by_signature.find(function.abi_signature);
+            const auto found = abi_function_by_signature.find({function.abi_signature.lo, function.abi_signature.hi});
             if (found != abi_function_by_signature.end())
                 for (const uint32_t index : found->second)
                     matching.emplace_back(&module.abi.functions[index], index);
         } else {
-            std::vector<std::pair<const Function *, uint32_t>> candidates;
+            llvm::SmallVector<std::pair<const Function *, uint32_t>, 1> candidates;
             const auto qualified = abi_functions.find(normalize_name(function.qualified_name));
             if (qualified != abi_functions.end()) candidates = qualified->second;
             if (candidates.empty()) {
