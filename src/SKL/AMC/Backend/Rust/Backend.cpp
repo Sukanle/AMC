@@ -609,6 +609,7 @@ void emit_error_sets(Output &o, const Projector &p) {
         o.print("#[derive(Clone, Copy, PartialEq, Eq, Debug)]\n");
         o.print("pub struct {}(pub i32);\n", type);
         o.print("impl {} {{\n", type);
+        o.print("    pub const DOMAIN: u64 = 0x{:x};\n", static_cast<unsigned long long>(set.domain));
         for (uint32_t i = 0; i < set.code_count; ++i) {
             const auto &code = p.m.error_codes[set.code_begin + i];
             o.print("    pub const {}: Self = Self({});\n", rust_const_ident(code.name), code.value);

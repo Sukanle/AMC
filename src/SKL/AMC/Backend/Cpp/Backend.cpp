@@ -683,6 +683,8 @@ int backend(const char *input, const char *output) {
         o.print("    int value = 0;\n");
         o.print("    constexpr {}() = default;\n", name);
         o.print("    constexpr explicit {}(int raw) : value(raw) {{}}\n", name);
+        o.print(
+            "    static constexpr unsigned long long domain = 0x{:x};\n", static_cast<unsigned long long>(set.domain));
         for (uint32_t i = 0; i < set.code_count; ++i) {
             const auto &code = m.error_codes[set.code_begin + i];
             o.print("    static constexpr int {} = {};\n", cpp_name(code.name), code.value);
