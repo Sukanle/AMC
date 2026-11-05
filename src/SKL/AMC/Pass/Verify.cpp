@@ -16,6 +16,7 @@
 #include "SKL/AMC/Pass/Verify.h"
 
 #include "SKL/AMC/Core/Core.h"
+#include "SKL/AMC/IR/LoweringJson.h"
 
 namespace amc::pass {
 
@@ -24,6 +25,20 @@ bool verify_abi(ir::Module &module, Context &context, diagnostics::DiagnosticLis
     std::string error;
     if (amc::validate(module.abi, error)) return true;
     diagnostics::add_error(diagnostics, "abi_invalid", "pass", error);
+    return false;
+}
+
+bool verify_lowering(ir::Module &module, Context &context, diagnostics::DiagnosticList &diagnostics) {
+    (void)context;
+    if (module.lowering.types.empty()
+        && module.lowering.functions.empty()
+        && module.lowering.ownership.empty()
+        && module.lowering.exposed.empty())
+        return true;
+    amc::AbiModule checked = module.abi;
+    std::string error;
+    if (amc::ir::apply_lowering_contracts(module.lowering, checked, error)) return true;
+    diagnostics::add_error(diagnostics, "lowering_invalid", "pass", error);
     return false;
 }
 

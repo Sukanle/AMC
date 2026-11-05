@@ -216,9 +216,10 @@ CTest 同时运行 `--contracts-only` 和 `--strict`：
 
 - `IR/Artifact` 把 `.abix` + 可选 `.semantic` / `.lowering` 加载为一个
   `ir::Module`；backend 统一使用该边界，不再重复 sidecar 路径
-- `Pass/Verify` 负责 ABI 校验，`Pass/Compatibility` 包装契约漂移，
-  `Pass/Pipeline` 组合 ABI 校验与 lowering
-- `Compilation/Build` 运行标准 Pass pipeline，`amc verify` 使用 compatibility pass
+- `Pass/Verify` 负责 ABI 校验和 lowering 引用校验，`Pass/Compatibility` 包装契约漂移
+  和类型映射报告，`Pass/Pipeline` 组合 ABI 校验 + lowering + lowering 校验
+- `Compilation/Build` 运行标准 Pass pipeline，`amc verify` 使用 compatibility pass，
+  `amc diff` / `amc compatibility` 使用 type-mapping pass
 - A3 剩余工作是把 `Core/Verify` 的其余策略和未来的类型映射检查完全收敛到 Pass API
 
 ## A1 进度

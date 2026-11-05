@@ -25,6 +25,10 @@ namespace amc::pass {
 // A3: ABI validation is a pass, not a frontend/backend responsibility.
 bool verify_abi(ir::Module &module, Context &context, diagnostics::DiagnosticList &diagnostics);
 
+// A3: lowering references must resolve against the ABI view. This is the same
+// consistency rule the backends apply, moved ahead of projection/emission.
+bool verify_lowering(ir::Module &module, Context &context, diagnostics::DiagnosticList &diagnostics);
+
 }   // namespace amc::pass
 
 #endif   // AMC_PASS_VERIFY_H

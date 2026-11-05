@@ -25,6 +25,7 @@ Pipeline make_default_pipeline() {
     pipeline.passes.push_back({"abi-verify", verify_abi});
     pipeline.passes.push_back({"lowering",
         [](ir::Module &module, Context &, diagnostics::DiagnosticList &out) { return lower_pass(module, out); }});
+    pipeline.passes.push_back({"lowering-verify", verify_lowering});
     return pipeline;
 }
 

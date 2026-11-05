@@ -25,6 +25,7 @@
 #include "SKL/AMC/Core/Query.h"
 #include "SKL/AMC/Core/Symbol.h"
 #include "SKL/AMC/Core/Verify.h"
+#include "SKL/AMC/Pass/Compatibility.h"
 #include "SKL/AMC/Util/Error.h"
 
 #include <filesystem>
@@ -52,8 +53,13 @@ int cmd_diff(char **args, int arg_count) {
             return fail(read_error_category(error), "read_abix", error, args[2]);
         if (!amc::load_module_source(args[3], target, error))
             return fail(read_error_category(error), "read_abix", error, args[3]);
-        if (!amc::build_compatibility(source, target, report, error))
-            return fail(amc::ErrorCategory::compatibility, "build_compatibility", error);
+        amc::pass::Context context;
+        context.strict = false;
+        amc::diagnostics::DiagnosticList diagnostics;
+        if (!amc::pass::build_compatibility_report(source, target, report, context, diagnostics)) {
+            const std::string message = diagnostics.empty() ? error : diagnostics.front().message;
+            return fail(amc::ErrorCategory::compatibility, "build_compatibility", message);
+        }
         bool incompatible = false;
         for (const auto &record : report.compatibility) {
             fmt::print("{} {}:{} -> {}:{}", amc::compatibility_name(record.kind), record.source_type.lo,

@@ -15,6 +15,8 @@
  */
 #include "SKL/AMC/Pass/Compatibility.h"
 
+#include "SKL/AMC/Core/Adapter.h"
+
 #include <fmt/format.h>
 
 namespace amc::pass {
@@ -34,6 +36,17 @@ bool compare_modules(const AbiModule &contract, const AbiModule &implementation,
             diagnostics::add_error(diagnostics, "compatibility_drift", "pass", message);
         else
             diagnostics::add_warning(diagnostics, "compatibility_drift", "pass", message);
+    }
+    return true;
+}
+
+bool build_compatibility_report(const AbiModule &source, const AbiModule &target, AbiModule &report, Context &context,
+    diagnostics::DiagnosticList &diagnostics) {
+    (void)context;
+    std::string error;
+    if (!amc::build_compatibility(source, target, report, error)) {
+        diagnostics::add_error(diagnostics, "compatibility_failed", "pass", error);
+        return false;
     }
     return true;
 }

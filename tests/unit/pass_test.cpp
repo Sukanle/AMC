@@ -89,6 +89,40 @@ void test_compatibility_pass() {
     check(amc::diagnostics::has_errors(strict), "strict drift becomes an error");
 }
 
+void test_verify_lowering_pass() {
+    amc::ir::Module module;
+    module.abi = module_with_layout(8, 8);
+    module.abi.types[0].layout_hash = amc::hash_text("layout", 0x4c41594fULL);
+
+    amc::ir::LoweredType lowered;
+    lowered.name = "demo::Widget";
+    lowered.abi = module.abi.types[0].id;
+    lowered.abi_index = 0;
+    lowered.status = amc::ir::LoweringStatus::lowered;
+    module.lowering.types.push_back(lowered);
+
+    amc::pass::Context context;
+    amc::diagnostics::DiagnosticList diagnostics;
+    check(amc::pass::verify_lowering(module, context, diagnostics), "verify_lowering accepts resolved references");
+
+    module.lowering.types[0].abi = id("missing");
+    amc::diagnostics::DiagnosticList invalid;
+    check(!amc::pass::verify_lowering(module, context, invalid), "verify_lowering rejects missing ABI references");
+    check(amc::diagnostics::has_errors(invalid), "missing lowering reference emits an error");
+}
+
+void test_compatibility_mapping_pass() {
+    auto source = module_with_layout(8, 8);
+    auto target = module_with_layout(8, 8);
+    source.types[0].layout_hash = amc::hash_text("layout", 0x4c41594fULL);
+    target.types[0].layout_hash = source.types[0].layout_hash;
+    amc::AbiModule report;
+    amc::pass::Context context;
+    amc::diagnostics::DiagnosticList diagnostics;
+    check(amc::pass::build_compatibility_report(source, target, report, context, diagnostics),
+        "compatibility mapping report is produced");
+}
+
 void test_artifact_loader() {
     const std::string path = "amc-pass-test.abix";
     auto contract = module_with_layout(8, 8);
@@ -115,6 +149,8 @@ void test_default_pipeline() {
 int main() {
     test_verify_abi_pass();
     test_compatibility_pass();
+    test_verify_lowering_pass();
+    test_compatibility_mapping_pass();
     test_artifact_loader();
     test_default_pipeline();
 
