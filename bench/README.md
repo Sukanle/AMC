@@ -30,6 +30,19 @@ performance targets are skipped with a CMake status message.
 
 ## Run
 
+Recommended runner (one process per executable, JSON + Markdown summary):
+
+```bash
+python tools/run_bench.py --bin build/bin --out bench/results --repetitions 5
+python tools/run_bench.py --list
+python tools/run_bench.py FullPipeline --exe amc-pass-perf-bench
+python tools/run_bench.py --pin off
+```
+
+`tools/run_bench.py` forwards benchmark-name regexes to Google Benchmark,
+normalises `ns`/`us`/`ms`/`s` to nanoseconds, and writes one JSON file per
+executable under `--out`.
+
 Short CTest smoke:
 
 ```bash
