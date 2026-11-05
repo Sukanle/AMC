@@ -18,6 +18,8 @@ env:
   CTEST_OUTPUT_ON_FAILURE: "1"
   # Released ABIX v0.3.0 branch/tag; its runtime-only package is version 0.3.
   ABIX_REF: v0.3.0
+  # EPCD currently publishes only the main branch (no release tags).
+  EPCD_REF: main
   # Minimum supported LLVM/Clang release. CI builds against the minimum while
   # CMake accepts any newer LLVM/Clang installed by the user.
   LLVM_VERSION: "22"
@@ -107,6 +109,7 @@ jobs:
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DAMC_ABIX_REF="$ABIX_REF" \
+            -DAMC_EPCD_REF="$EPCD_REF" \
             -DCMAKE_PREFIX_PATH="$LLVM_PREFIX;$RUNNER_TEMP/fmt;$RUNNER_TEMP/tomlplusplus;$RUNNER_TEMP/benchmark" \
             -DAMC_BUILD_BENCHMARKS=ON
           cmake --build build --parallel 2
@@ -190,6 +193,7 @@ jobs:
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DAMC_ABIX_REF="$ABIX_REF" \
+            -DAMC_EPCD_REF="$EPCD_REF" \
             -DAMC_BUILD_BENCHMARKS=ON \
             -DCMAKE_PREFIX_PATH="$PREFIXES"
           cmake --build build --parallel 2
@@ -281,6 +285,7 @@ jobs:
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DAMC_ABIX_REF="$ABIX_REF" \
+            -DAMC_EPCD_REF="$EPCD_REF" \
             -DAMC_BUILD_BENCHMARKS=ON \
             -DCMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH"
           cmake --build build --parallel 2

@@ -147,8 +147,17 @@ endif()
 # (ErrorCode / static domains / conditions); Interface is used for registration
 # when the installed or fetched EPCD provides it.
 set(AMC_EPCD_REF
-    "v0.1.0-baseline"
+    "main"
     CACHE STRING "EPCD git revision used when FetchContent downloads EPCD")
+# Older AMC revisions pinned a local-only tag that was never pushed to the
+# public EPCD repository. Migrate that cache entry in place so an existing
+# build directory does not keep failing on the missing ref.
+if(AMC_EPCD_REF STREQUAL "v0.1.0-baseline")
+    message(STATUS "AMC_EPCD_REF legacy tag v0.1.0-baseline -> main (EPCD has no such remote tag)")
+    set(AMC_EPCD_REF
+        "main"
+        CACHE STRING "EPCD git revision used when FetchContent downloads EPCD" FORCE)
+endif()
 find_package(EPCD 0.1 CONFIG QUIET COMPONENTS Core)
 if(NOT EPCD_FOUND)
     find_package(Git QUIET)
