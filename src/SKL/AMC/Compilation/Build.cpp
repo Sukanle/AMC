@@ -646,6 +646,14 @@ amc::ir::LoweringResult project_lowering(const amc::ir::LoweringResult &lowering
         if (functions.count({function.abi.lo, function.abi.hi}) != 0) result.functions.push_back(function);
     for (const auto &contract : lowering.ownership)
         if (functions.count({contract.abi.lo, contract.abi.hi}) != 0) result.ownership.push_back(contract);
+    for (const auto &record : lowering.exposed) {
+        if (types.count({record.abi.lo, record.abi.hi}) == 0) continue;
+        ir::LoweredExposedType projected_exposed = record;
+        projected_exposed.methods.clear();
+        for (const auto &method : record.methods)
+            if (functions.count({method.abi.lo, method.abi.hi}) != 0) projected_exposed.methods.push_back(method);
+        result.exposed.push_back(std::move(projected_exposed));
+    }
     for (const auto &instance : lowering.templates)
         if (types.count({instance.abi_type.lo, instance.abi_type.hi}) != 0
             || functions.count({instance.abi_function.lo, instance.abi_function.hi}) != 0

@@ -159,8 +159,8 @@ def main() -> int:
             print("  [FAIL] " + message + ((" :: " + detail) if detail else ""))
         return ok
 
-    def run(args, env=None):
-        return subprocess.run(args, capture_output=True, text=True, env=env)
+    def run(args, env=None, cwd=None):
+        return subprocess.run(args, capture_output=True, text=True, env=env, cwd=cwd)
 
     work = os.environ.get("AMC_INTEROP_WORK_DIR") or tempfile.mkdtemp(prefix="amc-expose.")
     fixture = os.path.join(SCRIPT_DIR, "expose")
@@ -202,6 +202,22 @@ def main() -> int:
     generated = open(os.path.join(gen, "amc_generated.rs"), encoding="utf-8").read()
     check("pub struct Counter([u8; 4])" in generated, "the class projects as an opaque handle")
     check("pub struct OwnedCounter" in generated, "an owner wrapper was generated")
+    check("pub fn get(&mut self)" in generated and "pub fn add(&mut self" in generated,
+          "the owner wrapper exposes typed methods from the lowering contract")
+
+    # The explicit exposed-handle contract is written next to the artifact.
+    lowering_path = abix + ".lowering"
+    if os.path.isfile(lowering_path):
+        import json
+        lowering = json.load(open(lowering_path, encoding="utf-8"))
+        exposed = lowering.get("exposed", [])
+        method_names = {method.get("name") for record in exposed for method in record.get("methods", [])}
+        if exposed and exposed[0].get("create") and {"get", "add"} <= method_names:
+            check(True, "the lowering sidecar records the exposed handle and its methods")
+        else:
+            check(False, "the lowering sidecar records the exposed handle and its methods", str(exposed))
+    else:
+        check(False, "the lowering sidecar records the exposed handle and its methods", "missing " + lowering_path)
 
     # 4. Compile and run the Rust consumer (create / get / add / destroy).
     consumer = os.path.join(work, exe_name("rust_consumer"))
@@ -213,6 +229,64 @@ def main() -> int:
     r = run([consumer], env=env)
     check(r.returncode == 0 and "expose counter" in r.stdout,
           "Rust created, called and destroyed the C++ object", (r.stdout + r.stderr)[-400:])
+
+    # 4b. The C++ projection consumes the same exposed-handle contract.
+    cpp_gen = os.path.join(work, "gen_cpp")
+    os.makedirs(cpp_gen, exist_ok=True)
+    r = run([amc, "generate", abix, "-l", "cpp", "-o", cpp_gen])
+    if check(r.returncode == 0, "amc generate -l cpp", (r.stdout + r.stderr)[-400:]):
+        cpp_header = open(os.path.join(cpp_gen, "amc_generated.hpp"), encoding="utf-8").read()
+        check("class CounterHandle" in cpp_header and "static CounterHandle create" in cpp_header,
+              "the C++ projection emits an RAII handle and factory")
+        cpp_src = os.path.join(work, "cpp_handle_consumer.cpp")
+        open(cpp_src, "w", encoding="utf-8").write(
+            '#include "counter.hpp"\n'
+            '#include "gen_cpp/amc_generated.hpp"\n'
+            'int main() {\n'
+            '    auto counter = amc_generated::CounterHandle::create(40);\n'
+            '    if (!counter || counter.get() != 40) return 1;\n'
+            '    counter.add(2);\n'
+            '    return counter.get() == 42 ? 0 : 2;\n'
+            '}\n')
+        cpp_bin = os.path.join(work, exe_name("cpp_handle_consumer"))
+        cpp_link = ["-L" + work, "-lcounter"]
+        if not IS_WINDOWS:
+            cpp_link.append("-Wl,-rpath," + work)
+        r = run([cxx, "-std=c++17", cpp_src, "-I" + work, *include_flags(source_root), *cpp_link,
+                 "-o", cpp_bin])
+        if check(r.returncode == 0, "the C++ handle consumer compiles", r.stderr[-400:]):
+            r = run([cpp_bin], env=runtime_env(work))
+            check(r.returncode == 0, "the C++ handle consumer ran through the generated wrapper",
+                  (r.stdout + r.stderr)[-400:])
+
+    # 4c. The Zig projection consumes the same contract. Runtime execution is
+    # checked by the language toolchain when available; the generated wrapper
+    # must at least compile against the module.
+    zig = shutil.which("zig")
+    if zig and not IS_WINDOWS and not IS_MACOS:
+        zig_gen = os.path.join(work, "gen_zig")
+        os.makedirs(zig_gen, exist_ok=True)
+        r = run([amc, "generate", abix, "-l", "zig", "-o", zig_gen])
+        if check(r.returncode == 0, "amc generate -l zig", (r.stdout + r.stderr)[-400:]):
+            zig_header = open(os.path.join(zig_gen, "amc_generated.zig"), encoding="utf-8").read()
+            check("pub const CounterHandle" in zig_header and "bytes: [4]u8" in zig_header,
+                  "the Zig projection emits an opaque handle and RAII wrapper")
+            zig_src = os.path.join(work, "zig_handle_consumer.zig")
+            open(zig_src, "w", encoding="utf-8").write(
+                'const abi = @import("gen_zig/amc_generated.zig");\n'
+                'pub fn main() !void {\n'
+                '    var counter = abi.CounterHandle.create(40) orelse return error.CreateFailed;\n'
+                '    if (counter.get() != 40) return error.BadValue;\n'
+                '    counter.add(2);\n'
+                '    if (counter.get() != 42) return error.BadValue;\n'
+                '    counter.deinit();\n'
+                '}\n')
+            zig_bin = os.path.join(work, exe_name("zig_handle_consumer"))
+            r = run([zig, "build-exe", "zig_handle_consumer.zig", "-L.", "-lcounter",
+                     "-rpath", work, "-femit-bin=" + zig_bin], cwd=work)
+            check(r.returncode == 0, "the Zig handle consumer compiles", (r.stdout + r.stderr)[-400:])
+    else:
+        print("  [SKIP] Zig handle consumer (zig not available or unsupported platform)")
 
     # 5/8/9: discovery through the fixed entry, binding once, and a module lease
     # that keeps the module loaded while the object is alive.

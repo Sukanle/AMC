@@ -216,6 +216,72 @@ bool lower(const ir::Module &module, ir::LoweringResult &result, diagnostics::Di
         result.ownership.push_back(std::move(lowered));
     }
 
+    for (const auto &exposed : module.semantic.exposed) {
+        ir::LoweredExposedType lowered;
+        lowered.semantic = exposed.type;
+        lowered.name = exposed.qualified_name;
+        lowered.symbol = exposed.symbol;
+        lowered.has_constructor = exposed.has_constructor;
+        lowered.opaque = exposed.opaque;
+
+        const Type *abi_type = nullptr;
+        if (exposed.abi_type.lo != 0 || exposed.abi_type.hi != 0)
+            for (const auto &type : module.abi.types)
+                if (type.id == exposed.abi_type) {
+                    abi_type = &type;
+                    break;
+                }
+        if (abi_type == nullptr)
+            if (const auto found = abi_types.find(normalize_name(exposed.qualified_name)); found != abi_types.end())
+                abi_type = found->second.first;
+
+        if (abi_type == nullptr) {
+            lowered.status = ir::LoweringStatus::rejected;
+            lowered.reason = ir::LoweringReason::missing_abi_type;
+            report(diagnostics, options, "lowering_exposed_missing_type",
+                "no ABI type for exposed capability: " + exposed.qualified_name);
+            result.exposed.push_back(std::move(lowered));
+            continue;
+        }
+
+        lowered.abi = abi_type->id;
+        lowered.status = ir::LoweringStatus::lowered;
+        lowered.reason = ir::LoweringReason::ok;
+
+        const auto find_function = [&](Hash128 signature) -> const Function * {
+            if (signature.lo == 0 && signature.hi == 0) return nullptr;
+            for (const auto &function : module.abi.functions)
+                if (function.signature == signature) return &function;
+            return nullptr;
+        };
+        if (const Function *create = find_function(exposed.create); create != nullptr)
+            lowered.create = create->signature;
+        else if (exposed.has_constructor) {
+            lowered.status = ir::LoweringStatus::rejected;
+            lowered.reason = ir::LoweringReason::missing_abi_function;
+            report(diagnostics, options, "lowering_exposed_missing_constructor",
+                "exposed capability has no create thunk: " + exposed.qualified_name);
+        }
+        if (const Function *destroy = find_function(exposed.destroy); destroy != nullptr)
+            lowered.destroy = destroy->signature;
+
+        for (const auto &method : exposed.methods) {
+            if (find_function(method.abi_signature) == nullptr) {
+                lowered.status = ir::LoweringStatus::rejected;
+                lowered.reason = ir::LoweringReason::missing_abi_function;
+                report(diagnostics, options, "lowering_exposed_missing_method",
+                    "exposed capability has no thunk for method: " + exposed.qualified_name + "::" + method.name);
+                continue;
+            }
+            ir::LoweredExposedMethod lowered_method;
+            lowered_method.name = method.name;
+            lowered_method.symbol = method.symbol;
+            lowered_method.abi = method.abi_signature;
+            lowered.methods.push_back(std::move(lowered_method));
+        }
+        result.exposed.push_back(std::move(lowered));
+    }
+
     for (const auto &instance : module.semantic.instances) {
         ir::LoweredTemplateInstance lowered;
         lowered.instance = instance.id;

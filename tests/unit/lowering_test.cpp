@@ -274,6 +274,87 @@ void test_sync_from_abi_creates_direct_links() {
     check(result.types.size() == 3 && !result.has_rejections(), "synchronized types lower without rejections");
 }
 
+void test_lowering_exposed_contract() {
+    amc::AbiModule module;
+    amc::Type widget;
+    widget.name = "demo::Widget";
+    widget.kind = amc::TypeKind::record;
+    widget.id = id("demo::Widget");
+    widget.size = 4;
+    widget.align = 4;
+    amc::Type widget_ptr;
+    widget_ptr.name = "demo::Widget*";
+    widget_ptr.kind = amc::TypeKind::pointer;
+    widget_ptr.id = id("demo::Widget*");
+    widget_ptr.size = 8;
+    widget_ptr.align = 8;
+    amc::Type int_type;
+    int_type.name = "int";
+    int_type.kind = amc::TypeKind::primitive;
+    int_type.id = id("int");
+    int_type.size = 4;
+    int_type.align = 4;
+    amc::Type void_type;
+    void_type.name = "void";
+    void_type.kind = amc::TypeKind::primitive;
+    void_type.id = id("void");
+    module.types = {widget, widget_ptr, int_type, void_type};
+
+    amc::Function create;
+    create.name = "abix_Widget_create";
+    create.return_type = widget_ptr.id;
+    create.parameters.push_back({"value", int_type.id, 0});
+    create.signature = amc::signature_hash(create);
+    amc::Function destroy;
+    destroy.name = "abix_Widget_destroy";
+    destroy.return_type = void_type.id;
+    destroy.parameters.push_back({"self", widget_ptr.id, 0});
+    destroy.signature = amc::signature_hash(destroy);
+    amc::Function get;
+    get.name = "abix_Widget_get";
+    get.return_type = int_type.id;
+    get.parameters.push_back({"self", widget_ptr.id, 0});
+    get.signature = amc::signature_hash(get);
+    module.functions = {create, destroy, get};
+
+    amc::semantic::ExposedType exposed;
+    exposed.abi_type = widget.id;
+    exposed.qualified_name = "demo::Widget";
+    exposed.symbol = "Widget";
+    exposed.create = create.signature;
+    exposed.destroy = destroy.signature;
+    exposed.has_constructor = true;
+    amc::semantic::ExposedMethod method;
+    method.name = "get";
+    method.symbol = "abix_Widget_get";
+    method.abi_signature = get.signature;
+    exposed.methods.push_back(method);
+
+    amc::ir::Module ir;
+    ir.abi = module;
+    ir.semantic.exposed.push_back(exposed);
+    amc::ir::LoweringResult result;
+    amc::diagnostics::DiagnosticList diagnostics;
+    check(amc::pass::lower(ir, result, diagnostics), "exposed lowering succeeds");
+    check(result.exposed.size() == 1 && result.exposed[0].status == amc::ir::LoweringStatus::lowered,
+        "exposed type links to its ABI type and thunks");
+    check(result.exposed[0].create == create.signature && result.exposed[0].destroy == destroy.signature,
+        "exposed create/destroy signatures are preserved");
+    check(result.exposed[0].methods.size() == 1 && result.exposed[0].methods[0].abi == get.signature,
+        "exposed method links to its ABI signature");
+
+    const std::string path = "amc-lowering-exposed-test.json";
+    std::string error;
+    check(amc::ir::write_lowering_json(result, path, error), "exposed lowering JSON is written");
+    amc::ir::LoweringResult decoded;
+    check(amc::ir::read_lowering_json(path, decoded, error), "exposed lowering JSON is read back");
+    check(decoded.exposed.size() == 1
+              && decoded.exposed[0].methods.size() == 1
+              && decoded.exposed[0].methods[0].abi == get.signature,
+        "exposed lowering round-trip preserves the method contract");
+    std::remove(path.c_str());
+}
+
 void test_lowering_json_roundtrip() {
     amc::ir::Module module;
     amc::Type int_type;
@@ -310,6 +391,7 @@ int main() {
     test_lowering_links_types_functions_and_templates();
     test_lowering_reports_missing_and_ambiguous_entities();
     test_sync_from_abi_creates_direct_links();
+    test_lowering_exposed_contract();
     test_lowering_json_roundtrip();
 
     if (failures != 0) {

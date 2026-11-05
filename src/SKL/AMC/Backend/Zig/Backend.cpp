@@ -207,6 +207,29 @@ public:
         return (is_const ? "[*c]const " : "[*c]") + base;
     }
 
+    const amc::ir::LoweredExposedType *exposed_for(amc::Hash128 type_id) const {
+        if (lowering == nullptr) return nullptr;
+        for (const auto &record : lowering->exposed)
+            if (record.abi == type_id && record.status == amc::ir::LoweringStatus::lowered) return &record;
+        return nullptr;
+    }
+
+    const std::vector<amc::ir::LoweredExposedType> &exposed_types() const {
+        static const std::vector<amc::ir::LoweredExposedType> empty;
+        return lowering != nullptr ? lowering->exposed : empty;
+    }
+
+    const amc::Function *function_by_signature(amc::Hash128 signature) const {
+        if (signature.lo == 0 && signature.hi == 0) return nullptr;
+        if (lowering != nullptr)
+            for (const auto &function : lowering->functions)
+                if (function.abi == signature && function.abi_index < m.functions.size())
+                    return &m.functions[function.abi_index];
+        for (const auto &function : m.functions)
+            if (function.signature == signature) return &function;
+        return nullptr;
+    }
+
     const amc::AbiModule &m;
 
 private:
@@ -302,7 +325,12 @@ void emit_opaque(Output &o, const Projector &p, const amc::Type &type) {
 
 void emit_type(Output &o, const Projector &p, const amc::Type &type) {
     switch (type.kind) {
-        case amc::TypeKind::record:      emit_record(o, p, type); break;
+        case amc::TypeKind::record:
+            if ((type.flags & amc::type_opaque) != 0)
+                emit_opaque(o, p, type);
+            else
+                emit_record(o, p, type);
+            break;
         case amc::TypeKind::enumeration: emit_enumeration(o, p, type); break;
         case amc::TypeKind::alias:       emit_alias(o, p, type); break;
         case amc::TypeKind::pointer:
@@ -342,6 +370,82 @@ void emit_functions(Output &o, const Projector &p) {
     }
 }
 
+void emit_exposed_handles(Output &o, const Projector &p) {
+    const auto &records = p.exposed_types();
+    if (records.empty()) return;
+    o.print("\n// Exposed-handle wrappers: create/destroy and typed method thunks.\n");
+    for (const auto &record : records) {
+        if (record.status != amc::ir::LoweringStatus::lowered) continue;
+        const amc::Function *create = p.function_by_signature(record.create);
+        const amc::Function *destroy = p.function_by_signature(record.destroy);
+        const std::string handle = p.decl_name(record.abi) + "Handle";
+        std::string self_type = "?*anyopaque";
+        if (create != nullptr)
+            self_type = p.field_type(create->return_type);
+        else if (destroy != nullptr && !destroy->parameters.empty())
+            self_type = p.field_type(destroy->parameters[0].type_id);
+        else
+            for (const auto &method : record.methods) {
+                const amc::Function *function = p.function_by_signature(method.abi);
+                if (function != nullptr && !function->parameters.empty()) {
+                    self_type = p.field_type(function->parameters[0].type_id);
+                    break;
+                }
+            }
+        o.print("pub const {} = struct {{\n", handle);
+        o.print("    ptr: {},\n", self_type);
+
+        if (create != nullptr) {
+            std::string params, args;
+            for (size_t i = 0; i < create->parameters.size(); ++i) {
+                const auto &parameter = create->parameters[i];
+                const std::string name = parameter.name.empty() ? fmt::format("arg{}", i) : zig_ident(parameter.name);
+                params += fmt::format("{}{}: {}", i == 0 ? "" : ", ", name, p.field_type(parameter.type_id));
+                args += fmt::format("{}{}", i == 0 ? "" : ", ", name);
+            }
+            o.print("    pub fn create({}) ?{} {{\n", params, handle);
+            o.print("        const raw = {}({});\n", zig_ident(create->name), args);
+            o.print("        if (raw == null) return null;\n");
+            o.print("        return .{{ .ptr = raw }};\n");
+            o.print("    }}\n");
+        }
+        if (destroy != nullptr) {
+            o.print("    pub fn deinit(self: *{}) void {{\n", handle);
+            o.print("        if (self.ptr != null) {{\n");
+            o.print("            {}(self.ptr);\n", zig_ident(destroy->name));
+            o.print("            self.ptr = null;\n");
+            o.print("        }}\n");
+            o.print("    }}\n");
+        }
+        for (const auto &method : record.methods) {
+            const amc::Function *function = p.function_by_signature(method.abi);
+            if (function == nullptr || function->parameters.empty()) continue;
+            const std::string name = zig_ident(method.name);
+            if (name == "create" || name == "deinit") continue;
+            std::string params, args;
+            for (size_t i = 1; i < function->parameters.size(); ++i) {
+                const auto &parameter = function->parameters[i];
+                const std::string parameter_name =
+                    parameter.name.empty() ? fmt::format("arg{}", i - 1) : zig_ident(parameter.name);
+                params += fmt::format(", {}: {}", parameter_name, p.field_type(parameter.type_id));
+                args += fmt::format(", {}", parameter_name);
+            }
+            const int return_index = p.index_of(function->return_type);
+            const bool returns_void = return_index >= 0
+                                   && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::primitive
+                                   && (p.m.types[static_cast<size_t>(return_index)].primitive_abi & 0xffu)
+                                          == static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
+            if (returns_void)
+                o.print("    pub fn {}(self: *{}{}) void {{ {}(self.ptr{}); }}\n", name, handle, params,
+                    zig_ident(function->name), args);
+            else
+                o.print("    pub fn {}(self: *{}{}) {} {{ return {}(self.ptr{}); }}\n", name, handle, params,
+                    p.field_type(function->return_type), zig_ident(function->name), args);
+        }
+        o.print("}};\n");
+    }
+}
+
 void emit_layout_checks(Output &o, const Projector &p) {
     bool any = false;
     for (const auto &type : p.m.types) {
@@ -355,6 +459,7 @@ void emit_layout_checks(Output &o, const Projector &p) {
         o.print("    if (@sizeOf({}) != {}) @compileError(\"{} size mismatch\");\n", name, type.size, type.name);
         o.print("    if (@alignOf({}) != {}) @compileError(\"{} align mismatch\");\n", name,
             type.align == 0 ? 1 : type.align, type.name);
+        if ((type.flags & amc::type_opaque) != 0) continue;
         for (uint32_t i = 0; i < type.field_count; ++i) {
             const auto &field = p.m.fields[type.field_begin + i];
             if (field.name.empty() || (field.flags & amc::field_base) != 0) continue;
@@ -453,6 +558,7 @@ std::string generate_projection(const amc::AbiModule &module, const amc::ir::Low
         emit_type(o, projector, type);
     }
     emit_functions(o, projector);
+    emit_exposed_handles(o, projector);
     emit_layout_checks(o, projector);
     std::string error;
     if (!emit_metadata_region(o, module, error)) fmt::print(stderr, "{}\n", error);

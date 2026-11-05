@@ -303,6 +303,30 @@ struct SemanticOwnership {
     std::string invalidation;       // source/contract note
 };
 
+// One method of an automatically exposed type. `abi_signature` is the direct
+// link to the generated thunk; the backend never has to parse the thunk name to
+// recover the method contract.
+struct ExposedMethod {
+    std::string name;
+    std::string symbol;
+    Hash128 abi_signature{};
+};
+
+// An `[[expose]]` capability contract: an opaque handle with a constructor /
+// destructor policy and a list of callable thunks. It is recorded by the
+// frontend and lowered into `ir::LoweredExposedType` for backend projections.
+struct ExposedType {
+    SemanticTypeId type{};
+    Hash128 abi_type{};   // direct ABI TypeID link
+    std::string qualified_name;
+    std::string symbol;
+    Hash128 create{};    // ABI create thunk signature, zero when absent
+    Hash128 destroy{};   // ABI destroy thunk signature, zero when absent
+    bool has_constructor = false;
+    bool opaque = true;
+    std::vector<ExposedMethod> methods;
+};
+
 struct SemanticModule {
     std::string package_name;
     std::string package_version;
@@ -313,6 +337,7 @@ struct SemanticModule {
     std::vector<TemplateDecl> templates;
     std::vector<TemplateInstance> instances;
     std::vector<SemanticOwnership> ownership;
+    std::vector<ExposedType> exposed;
 };
 
 }   // namespace amc::semantic

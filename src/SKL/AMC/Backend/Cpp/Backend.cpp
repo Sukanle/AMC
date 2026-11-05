@@ -554,6 +554,117 @@ int backend(const char *input, const char *output) {
             "}};\n");
     }
 
+    // Exposed-handle wrappers: a move-only RAII class around the create/destroy
+    // thunks plus typed method calls. The method list and signatures come from
+    // the lowering contract, never from parsing the thunk names.
+    for (const auto &record : lowering.exposed) {
+        if (record.status != amc::ir::LoweringStatus::lowered) continue;
+        const auto find_function = [&](amc::Hash128 signature) -> const amc::Function * {
+            if (signature.lo == 0 && signature.hi == 0) return nullptr;
+            for (const auto &function : m.functions)
+                if (function.signature == signature) return &function;
+            return nullptr;
+        };
+        const amc::Function *create = find_function(record.create);
+        const amc::Function *destroy = find_function(record.destroy);
+        if (create == nullptr && destroy == nullptr && record.methods.empty()) continue;
+        const std::string handle = cpp_name(record.name) + "Handle";
+        std::string self_type = "void*";
+        if (create != nullptr)
+            self_type = cpp_type_of(m, create->return_type);
+        else if (destroy != nullptr && !destroy->parameters.empty())
+            self_type = cpp_type_of(m, destroy->parameters[0].type_id);
+        else
+            for (const auto &method : record.methods) {
+                const amc::Function *function = find_function(method.abi);
+                if (function != nullptr && !function->parameters.empty()) {
+                    self_type = cpp_type_of(m, function->parameters[0].type_id);
+                    break;
+                }
+            }
+        const auto emit_decl = [&](const amc::Function *function) {
+            if (function == nullptr) return;
+            std::string params;
+            for (size_t i = 0; i < function->parameters.size(); ++i) {
+                const auto &parameter = function->parameters[i];
+                if (i != 0) params += ", ";
+                params += cpp_type_of(m, parameter.type_id);
+            }
+            o.print("{} {}({});\n", cpp_type_of(m, function->return_type), function->name, params);
+        };
+        o.print("\nextern \"C\" {{\n");
+        emit_decl(create);
+        emit_decl(destroy);
+        for (const auto &method : record.methods)
+            emit_decl(find_function(method.abi));
+        o.print("}}\n");
+        o.print("\n// RAII handle for the exposed `{}` capability.\n", record.name);
+        o.print("class {} {{\npublic:\n", handle);
+        o.print("    {}() = default;\n", handle);
+        o.print("    explicit {}({} ptr) : ptr_(ptr) {{}}\n", handle, self_type);
+        o.print("    {}(const {} &) = delete;\n", handle, handle);
+        o.print("    {} &operator=(const {} &) = delete;\n", handle, handle);
+        o.print("    {}({} &&other) noexcept : ptr_(other.ptr_) {{ other.ptr_ = nullptr; }}\n", handle, handle);
+        o.print("    {} &operator=({} &&other) noexcept {{\n", handle, handle);
+        o.print("        if (this != &other) {{ reset(); ptr_ = other.ptr_; other.ptr_ = nullptr; }}\n");
+        o.print("        return *this;\n    }}\n");
+        o.print("    ~{}() {{ reset(); }}\n", handle);
+        if (destroy != nullptr) {
+            o.print("    void reset() {{\n");
+            o.print("        if (ptr_ != nullptr) {{ {}(ptr_); ptr_ = nullptr; }}\n", destroy->name);
+            o.print("    }}\n");
+        } else {
+            o.print("    void reset() {{ ptr_ = nullptr; }}\n");
+        }
+        o.print("    {} native_handle() const {{ return ptr_; }}\n", self_type);
+        o.print("    explicit operator bool() const {{ return ptr_ != nullptr; }}\n");
+        if (create != nullptr) {
+            std::string params, args;
+            for (size_t i = 0; i < create->parameters.size(); ++i) {
+                const auto &parameter = create->parameters[i];
+                const std::string name = parameter.name.empty() ? fmt::format("arg{}", i) : cpp_name(parameter.name);
+                if (i != 0) {
+                    params += ", ";
+                    args += ", ";
+                }
+                params += cpp_type_of(m, parameter.type_id) + " " + name;
+                args += name;
+            }
+            o.print("    static {} create({}) {{ return {}({}({})); }}\n", handle, params, handle, create->name, args);
+        }
+        for (const auto &method : record.methods) {
+            const amc::Function *function = find_function(method.abi);
+            if (function == nullptr || function->parameters.empty()) continue;
+            const std::string name = cpp_name(method.name);
+            if (name == "create" || name == "reset" || name == "native_handle") continue;
+            const int return_index = [&] {
+                for (size_t i = 0; i < m.types.size(); ++i)
+                    if (m.types[i].id == function->return_type) return static_cast<int>(i);
+                return -1;
+            }();
+            const bool returns_void = return_index >= 0
+                                   && m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::primitive
+                                   && (m.types[static_cast<size_t>(return_index)].primitive_abi & 0xffu)
+                                          == static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
+            std::string params, args;
+            for (size_t i = 1; i < function->parameters.size(); ++i) {
+                const auto &parameter = function->parameters[i];
+                const std::string parameter_name =
+                    parameter.name.empty() ? fmt::format("arg{}", i - 1) : cpp_name(parameter.name);
+                if (i != 1) params += ", ";
+                params += cpp_type_of(m, parameter.type_id) + " " + parameter_name;
+                args += (i == 1 ? "" : ", ") + parameter_name;
+            }
+            if (returns_void)
+                o.print("    void {}({}) const {{ {}(ptr_{}); }}\n", name, params, function->name,
+                    args.empty() ? "" : ", " + args);
+            else
+                o.print("    {} {}({}) const {{ return {}(ptr_{}); }}\n", cpp_type_of(m, function->return_type), name,
+                    params, function->name, args.empty() ? "" : ", " + args);
+        }
+        o.print("private:\n    {} ptr_ = nullptr;\n}};\n", self_type);
+    }
+
     o.print(
         "}}  // namespace amc_generated\n"
         "#ifdef AMC_GENERATED_DECLARE_NATIVE_TYPE_TRAITS\n"

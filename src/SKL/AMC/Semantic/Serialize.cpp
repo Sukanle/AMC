@@ -419,6 +419,30 @@ bool write_semantic_json(const SemanticModule &module, const std::string &path, 
         value.set("source", source_json(declaration.source));
         templates.push_back(std::move(value));
     }
+    Json exposed = Json::array();
+    for (const auto &record : module.exposed) {
+        Json value = Json::object();
+        if (record.type.valid()) value.set("type", id_hex(record.type.value));
+        if (record.abi_type.lo != 0 || record.abi_type.hi != 0) value.set("abi_type", id_hex(record.abi_type));
+        value.set("name", record.qualified_name);
+        value.set("symbol", record.symbol);
+        value.set("constructor", record.has_constructor);
+        value.set("opaque", record.opaque);
+        if (record.create.lo != 0 || record.create.hi != 0) value.set("create", id_hex(record.create));
+        if (record.destroy.lo != 0 || record.destroy.hi != 0) value.set("destroy", id_hex(record.destroy));
+        Json methods = Json::array();
+        for (const auto &method : record.methods) {
+            Json item = Json::object();
+            item.set("name", method.name);
+            item.set("symbol", method.symbol);
+            item.set("signature", id_hex(method.abi_signature));
+            methods.push_back(std::move(item));
+        }
+        value.set("methods", std::move(methods));
+        exposed.push_back(std::move(value));
+    }
+    root.set("exposed", std::move(exposed));
+
     root.set("templates", std::move(templates));
 
     Json instances = Json::array();
@@ -588,6 +612,30 @@ bool read_semantic_json(const std::string &path, SemanticModule &module, std::st
             contract.release = SemanticFunctionId{hash_field(value, "release")};
             contract.invalidation = string_field(value, "invalidation");
             module.ownership.push_back(std::move(contract));
+        }
+    }
+
+    if (const Json *exposed = field(root, "exposed"); exposed != nullptr && exposed->is_array()) {
+        for (const auto &value : exposed->items()) {
+            ExposedType record;
+            record.type = SemanticTypeId{hash_field(value, "type")};
+            record.abi_type = hash_field(value, "abi_type");
+            record.qualified_name = string_field(value, "name");
+            record.symbol = string_field(value, "symbol");
+            record.has_constructor = bool_field(value, "constructor");
+            record.opaque = bool_field(value, "opaque");
+            record.create = hash_field(value, "create");
+            record.destroy = hash_field(value, "destroy");
+            if (const Json *methods = field(value, "methods"); methods != nullptr && methods->is_array()) {
+                for (const auto &item : methods->items()) {
+                    ExposedMethod method;
+                    method.name = string_field(item, "name");
+                    method.symbol = string_field(item, "symbol");
+                    method.abi_signature = hash_field(item, "signature");
+                    record.methods.push_back(std::move(method));
+                }
+            }
+            module.exposed.push_back(std::move(record));
         }
     }
 

@@ -134,6 +134,19 @@ CTest 同时运行 `--contracts-only` 和 `--strict`：
 - Backend 加载可选的 lowering sidecar，消费 lowered type/function 索引和所有权契约，
   不再按名称重新推导
 
+## M5 进度
+
+- `[[expose]]` 记录显式的 `semantic::ExposedType` / `ExposedMethod` 契约
+  （handle 类型、create/destroy thunk、方法 thunk 签名），semantic sidecar 可读写
+- `Pass/Lowering` 把 exposed 契约 lowering 成 `LoweredExposedType`，随
+  `<artifact>.lowering` 传给每个 backend
+- Rust 从 lowering 契约投影带类型方法的 `Owned<T>` wrapper
+- C++ 投影 move-only RAII `<Type>Handle`，包含工厂、类型化方法和 thunk 的 C linkage 声明
+- Zig 投影 `<Type>Handle`（create/deinit/类型化方法），并对 `type_opaque` 记录输出
+  opaque blob，不再泄露私有字段
+- `tests/interop/expose_test.py` 用同一 exposed 契约运行 Rust、C++ 消费者并编译 Zig
+  消费者；thunk 名称全部通过签名解析，不解析符号拼写
+
 ## 当前 → 目标映射
 
 | 当前 | 目标 |

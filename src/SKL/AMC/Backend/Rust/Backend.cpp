@@ -297,6 +297,13 @@ public:
 
     const amc::AbiModule &m;
 
+    const amc::ir::LoweredExposedType *exposed_for(amc::Hash128 type_id) const {
+        if (lowering == nullptr) return nullptr;
+        for (const auto &record : lowering->exposed)
+            if (record.abi == type_id && record.status == amc::ir::LoweringStatus::lowered) return &record;
+        return nullptr;
+    }
+
     const amc::Function *function_by_signature(amc::Hash128 signature) const {
         if (signature.lo == 0 && signature.hi == 0) return nullptr;
         if (lowering != nullptr)
@@ -526,6 +533,42 @@ void emit_owned(Output &o, const Projector &p) {
         o.print("    pub fn as_ref(&self) -> &{} {{ unsafe {{ &*self.ptr }} }}\n", type_name);
         o.print(
             "    pub fn into_raw(self) -> *mut {} {{ let ptr = self.ptr; core::mem::forget(self); ptr }}\n", type_name);
+        // Method wrappers come from the explicit exposed-handle contract. The
+        // thunk names are never parsed here: each method already points at an
+        // ABI signature.
+        if (const auto *exposed = p.exposed_for(record.type_id)) {
+            for (const auto &method : exposed->methods) {
+                const amc::Function *function = p.function_by_signature(method.abi);
+                if (function == nullptr || function->parameters.empty()) continue;
+                const std::string method_name = rust_field_ident(method.name);
+                if (method_name == "create"
+                    || method_name == "destroy"
+                    || method_name == "from_raw"
+                    || method_name == "as_ptr"
+                    || method_name == "as_ref"
+                    || method_name == "into_raw")
+                    continue;
+                std::string params, args;
+                for (size_t i = 1; i < function->parameters.size(); ++i) {
+                    const auto &parameter = function->parameters[i];
+                    const std::string parameter_name =
+                        parameter.name.empty() ? fmt::format("arg{}", i - 1) : rust_field_ident(parameter.name);
+                    params += fmt::format(", {}: {}", parameter_name, p.field_type(parameter.type_id));
+                    args += fmt::format(", {}", parameter_name);
+                }
+                const int return_index = p.index_of(function->return_type);
+                const bool returns_void = return_index >= 0
+                                       && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::primitive
+                                       && (p.m.types[static_cast<size_t>(return_index)].primitive_abi & 0xffu)
+                                              == static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
+                if (returns_void)
+                    o.print("    pub fn {}(&mut self{}) {{ unsafe {{ {}(self.ptr{}); }} }}\n", method_name, params,
+                        rust_ident(function->name), args);
+                else
+                    o.print("    pub fn {}(&mut self{}) -> {} {{ unsafe {{ {}(self.ptr{}) }} }}\n", method_name, params,
+                        p.field_type(function->return_type), rust_ident(function->name), args);
+            }
+        }
         o.print("}}\n");
         o.print("impl Drop for {} {{\n    fn drop(&mut self) {{\n", wrapper);
         o.print("        if !self.ptr.is_null() {{ unsafe {{ {}(self.ptr); }} }}\n", rust_ident(destroy->name));

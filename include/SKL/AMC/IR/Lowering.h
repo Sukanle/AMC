@@ -106,6 +106,29 @@ struct LoweredOwnership {
     bool matched_abi_contract = false;
 };
 
+struct LoweredExposedMethod {
+    std::string name;
+    std::string symbol;
+    AbiFunctionId abi{};
+};
+
+// Lowered `[[expose]]` capability: the opaque handle type, its create/destroy
+// entry points and the thunk methods a consumer language can wrap. The method
+// list is explicit; a backend never recovers it from the thunk spelling.
+struct LoweredExposedType {
+    semantic::SemanticTypeId semantic{};
+    AbiTypeId abi{};
+    std::string name;
+    std::string symbol;
+    LoweringStatus status = LoweringStatus::rejected;
+    LoweringReason reason = LoweringReason::missing_abi_type;
+    AbiFunctionId create{};
+    AbiFunctionId destroy{};
+    bool has_constructor = false;
+    bool opaque = true;
+    std::vector<LoweredExposedMethod> methods;
+};
+
 struct LoweredTemplateInstance {
     semantic::TemplateInstanceId instance{};
     Hash128 result{};
@@ -119,6 +142,7 @@ struct LoweringResult {
     std::vector<LoweredType> types;
     std::vector<LoweredFunction> functions;
     std::vector<LoweredOwnership> ownership;
+    std::vector<LoweredExposedType> exposed;
     std::vector<LoweredTemplateInstance> templates;
     uint32_t rules_version = 1;
 
@@ -127,6 +151,8 @@ struct LoweringResult {
             if (type.status == LoweringStatus::rejected) return true;
         for (const auto &function : functions)
             if (function.status == LoweringStatus::rejected) return true;
+        for (const auto &exposed : exposed)
+            if (exposed.status == LoweringStatus::rejected) return true;
         for (const auto &instance : templates)
             if (instance.status == LoweringStatus::rejected) return true;
         return false;

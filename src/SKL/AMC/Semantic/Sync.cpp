@@ -104,6 +104,17 @@ void synchronize_from_abi(const AbiModule &module, SemanticModule &semantic) {
         type_ids.by_name.emplace(type.name, id);
     }
 
+    // An exposed handle already carries a direct ABI type link from the
+    // frontend; complete its semantic identity so lowering has both views.
+    for (auto &exposed : semantic.exposed) {
+        if (!exposed.type.valid() && (exposed.abi_type.lo != 0 || exposed.abi_type.hi != 0))
+            exposed.type = type_ids.find(exposed.abi_type);
+        if (!exposed.type.valid()) {
+            const auto named = type_ids.by_name.find(exposed.qualified_name);
+            if (named != type_ids.by_name.end()) exposed.type = named->second;
+        }
+    }
+
     // Records and their inheritance/field layout are ABI facts already extracted
     // by the frontend; mirror them so lowering can attach each field to an
     // AbiTypeId without looking the name up again.

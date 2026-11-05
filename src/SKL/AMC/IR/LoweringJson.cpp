@@ -262,6 +262,32 @@ bool write_lowering_json(const LoweringResult &result, const std::string &path, 
     }
     root.set("ownership", std::move(ownership));
 
+    Json exposed = Json::array();
+    for (const auto &record : result.exposed) {
+        Json value = Json::object();
+        value.set("semantic", hash_json(record.semantic.value));
+        value.set("abi", hash_json(record.abi));
+        value.set("name", record.name);
+        value.set("symbol", record.symbol);
+        value.set("status", status_name(record.status));
+        value.set("reason", reason_name(record.reason));
+        value.set("create", hash_json(record.create));
+        value.set("destroy", hash_json(record.destroy));
+        value.set("constructor", record.has_constructor);
+        value.set("opaque", record.opaque);
+        Json methods = Json::array();
+        for (const auto &method : record.methods) {
+            Json item = Json::object();
+            item.set("name", method.name);
+            item.set("symbol", method.symbol);
+            item.set("abi", hash_json(method.abi));
+            methods.push_back(std::move(item));
+        }
+        value.set("methods", std::move(methods));
+        exposed.push_back(std::move(value));
+    }
+    root.set("exposed", std::move(exposed));
+
     Json templates = Json::array();
     for (const auto &instance : result.templates) {
         Json value = Json::object();
@@ -397,6 +423,32 @@ bool read_lowering_json(const std::string &path, LoweringResult &result, std::st
         }
     }
 
+    if (const Json *exposed = field(root, "exposed"); exposed != nullptr && exposed->is_array()) {
+        for (const auto &value : exposed->items()) {
+            LoweredExposedType record;
+            record.semantic = semantic::SemanticTypeId{hash_field(value, "semantic")};
+            record.abi = hash_field(value, "abi");
+            record.name = string_field(value, "name");
+            record.symbol = string_field(value, "symbol");
+            record.status = parse_status(string_field(value, "status"));
+            record.reason = parse_reason(string_field(value, "reason"));
+            record.create = hash_field(value, "create");
+            record.destroy = hash_field(value, "destroy");
+            record.has_constructor = bool_field(value, "constructor");
+            record.opaque = bool_field(value, "opaque");
+            if (const Json *methods = field(value, "methods"); methods != nullptr && methods->is_array()) {
+                for (const auto &item : methods->items()) {
+                    LoweredExposedMethod method;
+                    method.name = string_field(item, "name");
+                    method.symbol = string_field(item, "symbol");
+                    method.abi = hash_field(item, "abi");
+                    record.methods.push_back(std::move(method));
+                }
+            }
+            result.exposed.push_back(std::move(record));
+        }
+    }
+
     if (const Json *templates = field(root, "templates"); templates != nullptr && templates->is_array()) {
         for (const auto &value : templates->items()) {
             LoweredTemplateInstance instance;
@@ -425,7 +477,7 @@ bool load_lowering_sidecar(const std::string &artifact_path, LoweringResult &res
 }
 
 void apply_lowering_contracts(const LoweringResult &result, AbiModule &module) {
-    if (result.types.empty() && result.functions.empty() && result.ownership.empty()) return;
+    if (result.types.empty() && result.functions.empty() && result.ownership.empty() && result.exposed.empty()) return;
 
     std::unordered_map<uint64_t, std::unordered_set<uint64_t>> type_ids;
     for (const auto &type : module.types)
@@ -461,6 +513,23 @@ void apply_lowering_contracts(const LoweringResult &result, AbiModule &module) {
     };
 
     std::set<std::pair<uint64_t, uint64_t>> owned_types;
+    // An exposed handle is a create/destroy pair even when no explicit
+    // `[[owned]]` record was written by the frontend.
+    for (const auto &record : result.exposed) {
+        if (record.status != LoweringStatus::lowered
+            || !has_type(record.abi)
+            || !has_function(record.create)
+            || !has_function(record.destroy))
+            continue;
+        if (!owned_types.emplace(record.abi.lo, record.abi.hi).second) continue;
+        bool existing = false;
+        for (const auto &owned : module.owned)
+            if (owned.type_id == record.abi) {
+                existing = true;
+                break;
+            }
+        if (!existing) module.owned.push_back({record.abi, record.create, record.destroy, 0});
+    }
     for (const auto &contract : result.ownership) {
         if (!has_function(contract.abi)) continue;
         const int slot = function_slot(contract.abi);

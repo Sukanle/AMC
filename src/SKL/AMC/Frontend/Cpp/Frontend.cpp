@@ -1255,7 +1255,7 @@ std::string include_spelling(const std::string &file, llvm::StringRef base, cons
 }
 
 bool expose_thunks(amc::AbiModule &module, const amc::lang::Config &config, std::vector<NativeAdapt> &adaptations,
-    llvm::StringRef base, std::string &error) {
+    llvm::StringRef base, amc::semantic::SemanticModule &semantic, std::string &error) {
     if (config.exposed.empty()) return true;
     if (config.thunks_output.empty()) {
         error = "[[expose]] requires a [thunks] output path";
@@ -1477,6 +1477,12 @@ bool expose_thunks(amc::AbiModule &module, const amc::lang::Config &config, std:
         const amc::Hash128 type_id = record->id;
         const std::string cpp_type = record->name;
         const std::string symbol_type = symbol_of(record->name);
+        amc::semantic::ExposedType exposed_contract;
+        exposed_contract.abi_type = type_id;
+        exposed_contract.qualified_name = cpp_type;
+        exposed_contract.symbol = symbol_type;
+        exposed_contract.has_constructor = expose.has_constructor;
+        exposed_contract.opaque = expose.opaque;
         if (expose.opaque) record->flags |= amc::type_opaque;
         const std::vector<amc::Hash128> bases = collect_bases(type_id);
         // A base subobject is part of the exposed opaque handle: project it as an
@@ -1542,6 +1548,8 @@ bool expose_thunks(amc::AbiModule &module, const amc::lang::Config &config, std:
                     {"self", self_id}
             });
         }
+        exposed_contract.create = create_sig;
+        exposed_contract.destroy = destroy_sig;
         if (!(create_sig == amc::Hash128{}) && !(destroy_sig == amc::Hash128{}))
             module.owned.push_back({type_id, create_sig, destroy_sig, 0});
 
@@ -1661,6 +1669,11 @@ bool expose_thunks(amc::AbiModule &module, const amc::lang::Config &config, std:
                 const amc::Hash128 thunk_signature = register_thunk(symbol, return_type_id, signature);
                 const uint32_t thunk_index = static_cast<uint32_t>(module.functions.size() - 1);
                 exposed_methods.push_back({symbol, thunk_signature});
+                amc::semantic::ExposedMethod exposed_method;
+                exposed_method.name = method;
+                exposed_method.symbol = symbol;
+                exposed_method.abi_signature = thunk_signature;
+                exposed_contract.methods.push_back(std::move(exposed_method));
                 // A `abix_result_*` return binds to the error boundary: the status and
                 // value are fields of the returned record, so a consumer can turn the
                 // C aggregate into a typed Result without inspecting a bare integer.
@@ -1677,6 +1690,10 @@ bool expose_thunks(amc::AbiModule &module, const amc::lang::Config &config, std:
                 }
             }
         }
+        if (!(exposed_contract.create == amc::Hash128{})
+            || !(exposed_contract.destroy == amc::Hash128{})
+            || !exposed_contract.methods.empty())
+            semantic.exposed.push_back(std::move(exposed_contract));
         source += "\n";
 
         // One interface per exposed type: each method binds its thunk by a
@@ -1889,7 +1906,7 @@ int run_frontend(const char *config_path, const char *output_path) {
         return EXIT_FAILURE;
     }
     if (amc::lang::cancellation_requested()) return amc::lang::kCapabilityCancelled;
-    if (!expose_thunks(module, c, adaptations, base, e)) {
+    if (!expose_thunks(module, c, adaptations, base, semantic, e)) {
         fmt::print(stderr, "{}\n", e);
         return EXIT_FAILURE;
     }

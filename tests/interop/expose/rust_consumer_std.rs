@@ -7,11 +7,11 @@ use abi::*;
 
 fn main() {
     unsafe {
-        let metrics = OwnedMetrics::create().expect("create");
+        let mut metrics = OwnedMetrics::create().expect("create");
 
         let data = [1i32, 2, 3, 4];
         let span = abix_span_i32 { data: data.as_ptr(), len: data.len() as u64 };
-        assert_eq!(abix_Metrics_sum(metrics.as_ptr(), span), 10, "sequence view");
+        assert_eq!(metrics.sum(span), 10, "sequence view through the handle wrapper");
 
         let text = b"hello";
         let s = abix_str_utf8 {
@@ -19,11 +19,11 @@ fn main() {
             len: text.len() as u64,
             encoding: 0,
         };
-        assert_eq!(abix_Metrics_text_length(metrics.as_ptr(), s), 5, "string view");
+        assert_eq!(metrics.text_length(s), 5, "string view through the handle wrapper");
 
-        let ok = abix_Metrics_divide(metrics.as_ptr(), 10, 2);
+        let ok = metrics.divide(10, 2);
         assert_eq!((ok.status, ok.value), (0, 5), "result ok");
-        let err = abix_Metrics_divide(metrics.as_ptr(), 10, 0);
+        let err = metrics.divide(10, 0);
         assert_eq!(err.status, 1, "result error");
 
         // The `[[error]]` semantics of an `abix_result_*` return are bound

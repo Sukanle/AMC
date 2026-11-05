@@ -153,6 +153,23 @@ and `amc-boundary-edges`.
 - backends load the optional lowering sidecar and consume lowered type/function
   indexes and ownership contracts instead of re-deriving them by name
 
+## M5 Progress
+
+- `[[expose]]` records an explicit `semantic::ExposedType` / `ExposedMethod`
+  contract (handle type, create/destroy thunk, method thunk signatures); the
+  semantic sidecar reader/writer round-trips it
+- `Pass/Lowering` lowers the exposed contract into `LoweredExposedType`, and
+  `<artifact>.lowering` carries it to every backend
+- Rust projects `Owned<T>` with typed method wrappers from the lowered contract
+- C++ projects a move-only RAII `<Type>Handle` with a factory, typed methods and
+  a C-linkage declaration block for the thunks
+- Zig projects a `<Type>Handle` with `create` / `deinit` / typed methods and now
+  emits an opaque blob for `type_opaque` records instead of leaking private
+  fields
+- `tests/interop/expose_test.py` drives the same exposed contract through Rust
+  and C++ runtime consumers, and compiles the Zig consumer; all thunk names are
+  resolved from signatures, never parsed
+
 ## Current → Target Mapping
 
 | Current | Target |
