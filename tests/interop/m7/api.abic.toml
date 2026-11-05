@@ -1,0 +1,76 @@
+[package]
+name = "m7_demo"
+version = "1.0"
+
+[[import]]
+language = "cpp"
+flags = ["-std=c++17"]
+files = ["api.hpp"]
+symbols = [
+    "L3Session",
+    "l3_session_create",
+    "l3_session_destroy",
+    "l3_session_subscribe",
+    "l3_session_emit",
+    "l3_session_div",
+    "l3_session_get",
+    "l3_session_set",
+]
+
+# L3 explicit ownership: the library owns the handle and is the only releaser.
+[[owned]]
+type = "L3Session"
+create = "l3_session_create"
+destroy = "l3_session_destroy"
+
+[[contract]]
+function = "l3_session_create"
+returns = "owned"
+release = "l3_session_destroy"
+
+[[contract]]
+function = "l3_session_destroy"
+params = ["owned"]
+
+# L3 explicit error semantics: a named error set with an unknown-code case.
+[[error-set]]
+name = "M7Errors"
+domain = "0x1003000000000001"
+
+[[error-set.code]]
+name = "div_zero"
+value = 1
+condition = "invalid_argument"
+
+[[error-set.code]]
+name = "unknown"
+value = 99
+condition = "unknown"
+
+[[error]]
+function = "l3_session_div"
+domain = "0x1003000000000001"
+error_set = "M7Errors"
+success = 0
+value = 3
+
+# L3 capability: a handle-shaped interface over the same native object.
+[[interface]]
+name = "L3SessionOps"
+version = 1
+methods = ["l3_session_get", "l3_session_set"]
+
+[[implements]]
+interface = "L3SessionOps"
+type = "L3Session"
+methods = ["l3_session_get", "l3_session_set"]
+
+[[export]]
+output = "m7.abix"
+
+[target]
+arch = 1
+os = 1
+abi = 1
+pointer_bits = 64
+endianness = "little"

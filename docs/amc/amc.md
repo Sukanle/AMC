@@ -281,6 +281,11 @@ The optional `domain` / `value` fields carry the stable EPCD identity of the
 AMC error category. Older consumers can ignore them; `code` / `category` /
 `stage` / `message` remain stable.
 
+## L3 adaptation
+
+See [l3-adaptation.md](l3-adaptation.md) for explicit ownership, callbacks,
+named errors and handle-shaped interface examples.
+
 ## Capability discovery
 
 See [capability-discovery.md](capability-discovery.md) for what AMC can prove

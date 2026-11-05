@@ -197,6 +197,9 @@ and `amc-boundary-edges`.
 - the interop suite binds the same handle-shaped interface through C++, Rust
   and Zig against the same native library and rejects stale version/signature
   contracts
+- the registry consumer covers module lease / begin_unload / wait_for_idle
+  lifecycle, and `tests/interop/m7/` is an independent same-library/same-contract
+  L3 fixture with target and stale-lowering rejection
 - generation rejects a lowering sidecar that references a TypeID or signature
   absent from the artifact, instead of projecting stale data
 - `tests/interop/expose_test.py` drives the same exposed contract and typed

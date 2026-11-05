@@ -105,6 +105,35 @@ int main(int argc, char **argv) {
         fprintf(stderr, "unload failed\n");
         return 1;
     }
+
+    // Lifecycle contract: a live lease defers unload, and the module only
+    // becomes idle after the lease is released.
+    ModuleControl lifecycle;
+    lifecycle.name = "lifecycle";
+    if (!activate_module(lifecycle)) {
+        fprintf(stderr, "activate failed\n");
+        return 1;
+    }
+    auto lease = acquire_lease(lifecycle);
+    if (!lease.valid()) {
+        fprintf(stderr, "lease failed\n");
+        return 1;
+    }
+    if (!begin_unload(lifecycle)) {
+        fprintf(stderr, "begin_unload failed\n");
+        return 1;
+    }
+    if (wait_for_idle(lifecycle)) {
+        fprintf(stderr, "idle with live lease\n");
+        return 1;
+    }
+    lease.release();
+    if (!wait_for_idle(lifecycle)) {
+        fprintf(stderr, "never idle\n");
+        return 1;
+    }
+    mark_unloaded(lifecycle);
+
     printf("expose registry: OK\n");
     return 0;
 }

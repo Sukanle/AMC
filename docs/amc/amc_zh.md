@@ -195,6 +195,11 @@ amc validate missing.abix --error-format json
 可选的 `domain` / `value` 字段携带 AMC 错误类别的稳定 EPCD 身份；旧消费者可以忽略，
 `code` / `category` / `stage` / `message` 保持稳定。
 
+## L3 适配
+
+显式所有权、回调、命名错误和 handle-shaped interface 示例见
+[l3-adaptation.md](l3-adaptation.md)。
+
 ## 能力发现
 
 AMC 能从源码证明哪些能力、从已编译模块能发现哪些信息，以及过期 lowering
