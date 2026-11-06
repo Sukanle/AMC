@@ -33,7 +33,19 @@ namespace {
 
 namespace fs = std::filesystem;
 
-constexpr const char *kManifestName = "manifest.json";
+constexpr const char *kEntrySuffix = ".entry";
+// One entry is a single file:
+//
+//   magic "AMCACHv2" | u32 format | u32 flags | u32 manifest_size |
+//   u32 artifact_count | u64 artifact_size[count] | manifest | payload...
+//
+// The manifest stays the line-oriented format it always was; the size table sits
+// in front of it so a lookup can read the header and manifest without touching
+// the payload. Integers are little-endian on disk.
+constexpr const char *kEntryMagic = "AMCACHv2";
+constexpr uint32_t kEntryFormatVersion = 2;
+constexpr uint64_t kEntryHeaderSize = 8 + 4 + 4 + 4 + 4;
+constexpr uint32_t kEntryMaxArtifacts = 4096;
 constexpr const char *kManifestSchema = "abix.instantiation-cache/1";
 constexpr uint64_t kRequestDomain = 0x494e5354ULL;    // "INST"
 constexpr uint64_t kTemplateDomain = 0x54454d50ULL;   // "TEMP"
@@ -109,19 +121,34 @@ bool read_file(const fs::path &path, std::string &out) {
     return input.good() || input.eof();
 }
 
-bool write_file(const fs::path &path, const std::string &content, std::string &error) {
-    std::ofstream output(path, std::ios::binary | std::ios::trunc);
-    if (!output) {
-        error = "cannot write: " + path.string();
-        return false;
-    }
-    output.write(content.data(), static_cast<std::streamsize>(content.size()));
-    output.flush();
-    if (!output) {
-        error = "cannot write: " + path.string();
-        return false;
-    }
-    return true;
+void put_u32(std::string &out, uint32_t value) {
+    for (unsigned shift = 0; shift < 32; shift += 8)
+        out.push_back(static_cast<char>((value >> shift) & 0xff));
+}
+
+void put_u64(std::string &out, uint64_t value) {
+    for (unsigned shift = 0; shift < 64; shift += 8)
+        out.push_back(static_cast<char>((value >> shift) & 0xff));
+}
+
+uint32_t get_u32(const char *data) {
+    uint32_t value = 0;
+    for (unsigned shift = 0; shift < 32; shift += 8)
+        value |= static_cast<uint32_t>(static_cast<unsigned char>(data[shift / 8])) << shift;
+    return value;
+}
+
+uint64_t get_u64(const char *data) {
+    uint64_t value = 0;
+    for (unsigned shift = 0; shift < 64; shift += 8)
+        value |= static_cast<uint64_t>(static_cast<unsigned char>(data[shift / 8])) << shift;
+    return value;
+}
+
+bool add_overflows(uint64_t a, uint64_t b, uint64_t &out) {
+    if (a > UINT64_MAX - b) return true;
+    out = a + b;
+    return false;
 }
 
 uint64_t next_sequence() {
@@ -321,34 +348,123 @@ bool same_dependencies(const std::vector<CacheDependency> &a, const std::vector<
     return true;
 }
 
-bool load_manifest(const fs::path &entry, Manifest &manifest, std::string &error) {
-    std::string text;
-    if (!read_file(entry / kManifestName, text)) {
-        error = "manifest is missing";
-        return false;
-    }
-    return manifest_parse(text, manifest, error);
-}
+// A committed entry as read from disk: the manifest plus the payload layout.
+// The payload is never read here, so a lookup touches the header and manifest
+// only.
+struct EntryFile {
+    Manifest manifest;
+    std::vector<uint64_t> sizes;
+    uint64_t payload_offset = 0;
+};
 
-// Verify one committed entry against its manifest: schema/protocol versions and
-// every artifact digest. Returns false with a reason on any mismatch.
-bool verify_entry_records(const fs::path &entry, const Manifest &manifest, std::string &error) {
-    if (manifest.schema_version != instantiation_schema_version) {
-        error = "artifact schema version mismatch";
+bool read_entry_file(const fs::path &file, EntryFile &out, std::string &error) {
+    std::ifstream input(file, std::ios::binary);
+    if (!input) {
+        error = "cache entry is missing";
         return false;
     }
-    if (manifest.protocol_version != instantiation_protocol_version) {
-        error = "instantiation protocol version mismatch";
+    char header[kEntryHeaderSize];
+    if (!input.read(header, static_cast<std::streamsize>(kEntryHeaderSize))) {
+        error = "cache entry is truncated";
         return false;
     }
-    for (const auto &artifact : manifest.artifacts) {
-        std::string content;
-        if (!read_file(entry / artifact.name, content)) {
-            error = "artifact is missing: " + artifact.name;
+    if (memcmp(header, kEntryMagic, 8) != 0) {
+        error = "cache entry magic is unknown";
+        return false;
+    }
+    const uint32_t format = get_u32(header + 8);
+    const uint32_t manifest_size = get_u32(header + 16);
+    const uint32_t artifact_count = get_u32(header + 20);
+    if (format != kEntryFormatVersion) {
+        error = "cache entry format is unsupported";
+        return false;
+    }
+    if (manifest_size == 0 || artifact_count > kEntryMaxArtifacts) {
+        error = "cache entry header is malformed";
+        return false;
+    }
+    const uint64_t table_size = 8ull * artifact_count;
+    uint64_t body_size = 0;
+    if (add_overflows(table_size, manifest_size, body_size)) {
+        error = "cache entry header is malformed";
+        return false;
+    }
+    std::string body(static_cast<size_t>(body_size), '\0');
+    if (!input.read(body.data(), static_cast<std::streamsize>(body_size))) {
+        error = "cache entry is truncated";
+        return false;
+    }
+
+    std::vector<uint64_t> sizes(artifact_count, 0);
+    uint64_t total = 0;
+    if (add_overflows(kEntryHeaderSize, body_size, total)) {
+        error = "cache entry header is malformed";
+        return false;
+    }
+    const uint64_t payload_offset = total;
+    for (uint32_t i = 0; i < artifact_count; ++i) {
+        sizes[i] = get_u64(body.data() + 8ull * i);
+        if (add_overflows(total, sizes[i], total)) {
+            error = "cache entry header is malformed";
             return false;
         }
-        if (!(digest_bytes(content.data(), content.size(), digest_domain_artifact) == artifact.digest)) {
-            error = "artifact digest mismatch: " + artifact.name;
+    }
+
+    Manifest manifest;
+    if (!manifest_parse(body.substr(static_cast<size_t>(table_size)), manifest, error)) return false;
+    if (manifest.artifacts.size() != artifact_count) {
+        error = "cache entry manifest does not match its size table";
+        return false;
+    }
+    std::error_code ec;
+    const auto file_size = fs::file_size(file, ec);
+    if (ec || static_cast<uint64_t>(file_size) != total) {
+        error = "cache entry size does not match its header";
+        return false;
+    }
+    out.manifest = std::move(manifest);
+    out.sizes = std::move(sizes);
+    out.payload_offset = payload_offset;
+    return true;
+}
+
+uint64_t artifact_offset(const EntryFile &entry, size_t index) {
+    uint64_t offset = entry.payload_offset;
+    for (size_t i = 0; i < index; ++i)
+        offset += entry.sizes[i];
+    return offset;
+}
+
+bool read_entry_payload(
+    const fs::path &file, const EntryFile &entry, size_t index, std::string &out, std::string &error) {
+    if (index >= entry.sizes.size()) {
+        error = "cache entry artifact index is out of range";
+        return false;
+    }
+    std::ifstream input(file, std::ios::binary);
+    if (!input) {
+        error = "cache entry is missing";
+        return false;
+    }
+    input.seekg(static_cast<std::streamoff>(artifact_offset(entry, index)));
+    const size_t size = static_cast<size_t>(entry.sizes[index]);
+    out.assign(size, '\0');
+    if (size != 0 && !input.read(out.data(), static_cast<std::streamsize>(size))) {
+        error = "cache entry is truncated";
+        return false;
+    }
+    return true;
+}
+
+// Verify one committed entry: every artifact payload hashes to the digest its
+// manifest recorded.
+bool verify_entry_payload(const fs::path &file, const EntryFile &entry, std::string &error) {
+    for (size_t i = 0; i < entry.manifest.artifacts.size(); ++i) {
+        std::string content;
+        if (!read_entry_payload(file, entry, i, content, error)) return false;
+        if (!(digest_bytes(content.data(), content.size(), digest_domain_artifact)
+                == entry.manifest.artifacts[i].digest)) {
+            error = "artifact digest mismatch: " + entry.manifest.artifacts[i].name;
             return false;
         }
     }
@@ -414,8 +530,8 @@ const char *cache_status_name(CacheStatus status) {
 InstantiationCache::InstantiationCache(std::string root)
     : _root(std::move(root)) {}
 
-std::string InstantiationCache::entry_directory(const Hash128 &build_key) const {
-    return (fs::path(_root) / hash_hex_plain(build_key)).string();
+std::string InstantiationCache::entry_file(const Hash128 &build_key) const {
+    return (fs::path(_root) / (hash_hex_plain(build_key) + kEntrySuffix)).string();
 }
 
 bool InstantiationCache::store(const InstantiationBuildInputs &inputs,
@@ -444,31 +560,55 @@ bool InstantiationCache::store(const InstantiationBuildInputs &inputs,
     manifest.build_options = inputs.build_options;
     manifest.dependencies = dependencies;
 
+    uint64_t payload_size = 0;
+    for (const auto &artifact : artifacts) {
+        CacheArtifact record;
+        record.name = artifact.first;
+        record.digest = digest_bytes(artifact.second.data(), artifact.second.size(), digest_domain_artifact);
+        manifest.artifacts.push_back(std::move(record));
+        if (add_overflows(payload_size, artifact.second.size(), payload_size)) {
+            error = "cache payload is too large";
+            return false;
+        }
+    }
+    const std::string manifest_body = manifest_text(manifest);
+    if (manifest_body.size() > UINT32_MAX) {
+        error = "cache manifest is too large";
+        return false;
+    }
+
     std::error_code ec;
     fs::create_directories(_root, ec);
     if (ec) {
         error = "cannot create cache root: " + ec.message();
         return false;
     }
-    const fs::path entry = entry_directory(manifest.build_key);
+    const fs::path entry = entry_file(manifest.build_key);
 
-    // A concurrent writer may already have committed a valid entry. Trust it and
-    // become a no-op; a corrupt entry is replaced below.
-    if (fs::exists(entry, ec)) {
-        Manifest existing;
-        // Only a no-op when the entry is valid AND records the same dependency
-        // closure. The key is project-level (it does not include file
-        // contents), so a source change produces the same key but a different
-        // closure, which must replace the stale entry rather than be ignored.
-        if (load_manifest(entry, existing, error)
-            && verify_entry_records(entry, existing, error)
-            && existing.build_key == manifest.build_key
-            && same_dependencies(existing.dependencies, manifest.dependencies))
-            return true;
-        fs::remove_all(entry, ec);
-    }
+    // Only a no-op when the committed entry is intact AND records the same
+    // dependency closure. The key is project-level (it does not include file
+    // contents), so a source change produces the same key but a different
+    // closure, which must replace the stale entry rather than be ignored.
+    const auto equivalent = [&](const fs::path &path) {
+        EntryFile existing;
+        std::string ignored;
+        return read_entry_file(path, existing, ignored)
+            && existing.manifest.build_key == manifest.build_key
+            && same_dependencies(existing.manifest.dependencies, manifest.dependencies)
+            && verify_entry_payload(path, existing, ignored);
+    };
+    if (fs::exists(entry, ec) && equivalent(entry)) return true;
 
-    // Write to a unique temporary directory, then commit with a rename.
+    std::string blob(kEntryMagic, kEntryMagic + 8);
+    put_u32(blob, kEntryFormatVersion);
+    put_u32(blob, 0);
+    put_u32(blob, static_cast<uint32_t>(manifest_body.size()));
+    put_u32(blob, static_cast<uint32_t>(artifacts.size()));
+    for (const auto &artifact : artifacts)
+        put_u64(blob, artifact.second.size());
+    blob += manifest_body;
+
+    // Write the whole entry to a unique temporary file, then commit by rename.
     const std::string suffix = hash_hex_plain(manifest.build_key)
                              + "-"
                              + std::to_string(amc::support::process_id())
@@ -477,47 +617,52 @@ bool InstantiationCache::store(const InstantiationBuildInputs &inputs,
                              + "-"
                              + std::to_string(next_sequence());
     const fs::path temporary = fs::path(_root) / (".tmp-" + suffix);
-    fs::remove_all(temporary, ec);
-    fs::create_directories(temporary, ec);
-    if (ec) {
-        error = "cannot create cache entry: " + ec.message();
-        return false;
-    }
-    for (const auto &artifact : artifacts) {
-        CacheArtifact record;
-        record.name = artifact.first;
-        record.digest = digest_bytes(artifact.second.data(), artifact.second.size(), digest_domain_artifact);
-        if (!write_file(temporary / record.name, artifact.second, error)) {
-            fs::remove_all(temporary, ec);
+    {
+        std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
+        if (!output) {
+            error = "cannot write cache entry: " + temporary.string();
             return false;
         }
-        manifest.artifacts.push_back(std::move(record));
+        output.write(blob.data(), static_cast<std::streamsize>(blob.size()));
+        for (const auto &artifact : artifacts)
+            output.write(artifact.second.data(), static_cast<std::streamsize>(artifact.second.size()));
+        output.close();
+        if (!output) {
+            fs::remove(temporary, ec);
+            error = "cannot write cache entry: " + temporary.string();
+            return false;
+        }
     }
-    const std::string manifest_body = manifest_text(manifest);
-    if (!write_file(temporary / kManifestName, manifest_body, error)) {
-        fs::remove_all(temporary, ec);
+    // The bytes were hashed from memory and the write reported success, so only
+    // the on-disk size is checked before publishing. verify()/lookup() still
+    // re-hash whatever they read back.
+    const uint64_t expected_size = blob.size() + payload_size;
+    const auto written = fs::file_size(temporary, ec);
+    if (ec || static_cast<uint64_t>(written) != expected_size) {
+        fs::remove(temporary, ec);
+        error = "cannot write cache entry: " + temporary.string();
         return false;
     }
-    // Verify before publishing: a failed write never becomes visible.
-    if (!verify_entry_records(temporary, manifest, error)) {
-        fs::remove_all(temporary, ec);
-        return false;
+
+    if (fs::exists(entry, ec)) {
+        // Another writer may have committed a valid entry in the meantime.
+        if (equivalent(entry)) {
+            fs::remove(temporary, ec);
+            return true;
+        }
+        fs::remove(entry, ec);
     }
     fs::rename(temporary, entry, ec);
     if (ec) {
-        // Another writer may have won the race between the check and the rename.
-        Manifest winner;
-        if (load_manifest(entry, winner, error)
-            && verify_entry_records(entry, winner, error)
-            && winner.build_key == manifest.build_key
-            && same_dependencies(winner.dependencies, manifest.dependencies)) {
-            fs::remove_all(temporary, ec);
+        // Another writer may have won between the check and the rename.
+        if (equivalent(entry)) {
+            fs::remove(temporary, ec);
             return true;
         }
-        fs::remove_all(entry, ec);
+        fs::remove(entry, ec);
         fs::rename(temporary, entry, ec);
         if (ec) {
-            fs::remove_all(temporary, ec);
+            fs::remove(temporary, ec);
             error = "cannot commit cache entry: " + ec.message();
             return false;
         }
@@ -528,25 +673,25 @@ bool InstantiationCache::store(const InstantiationBuildInputs &inputs,
 CacheLookup InstantiationCache::lookup(const InstantiationBuildInputs &inputs, const LookupOptions options) const {
     CacheLookup result;
     result.build_key = instantiation_build_key(inputs);
-    result.directory = entry_directory(result.build_key);
-    const fs::path entry = result.directory;
+    result.entry = entry_file(result.build_key);
+    const fs::path entry = result.entry;
     std::error_code ec;
     if (!fs::exists(entry, ec)) {
         result.status = CacheStatus::miss;
         result.reason = cache_reason_not_found;
     } else {
-        Manifest manifest;
+        EntryFile file;
         std::string error;
-        if (!load_manifest(entry, manifest, error)) {
+        if (!read_entry_file(entry, file, error)) {
             result.status = CacheStatus::invalid_manifest;
             result.reason = cache_reason_invalid_manifest;
-        } else if (manifest.schema_version != instantiation_schema_version
-                   || manifest.protocol_version != instantiation_protocol_version) {
+        } else if (file.manifest.schema_version != instantiation_schema_version
+                   || file.manifest.protocol_version != instantiation_protocol_version) {
             result.status = CacheStatus::schema_mismatch;
-            result.reason = manifest.schema_version != instantiation_schema_version
+            result.reason = file.manifest.schema_version != instantiation_schema_version
                               ? cache_reason_schema_version_changed
                               : cache_reason_protocol_version_changed;
-        } else if (!verify_entry_records(entry, manifest, error)) {
+        } else if (options.verify_artifacts && !verify_entry_payload(entry, file, error)) {
             result.status = CacheStatus::corrupted;
             result.reason = cache_reason_corrupted_artifact;
         } else {
@@ -554,7 +699,7 @@ CacheLookup InstantiationCache::lookup(const InstantiationBuildInputs &inputs, c
             // hashes the same. This is what makes header changes invalidate
             // without the cache key having to list them.
             bool dependencies_ok = true;
-            for (const auto &dependency : manifest.dependencies)
+            for (const auto &dependency : file.manifest.dependencies)
                 if (!dependency_intact(dependency)) {
                     dependencies_ok = false;
                     break;
@@ -566,8 +711,8 @@ CacheLookup InstantiationCache::lookup(const InstantiationBuildInputs &inputs, c
             }
             result.status = CacheStatus::hit;
             result.reason = cache_reason_hit;
-            result.artifacts = manifest.artifacts;
-            result.dependencies = manifest.dependencies;
+            result.artifacts = file.manifest.artifacts;
+            result.dependencies = file.manifest.dependencies;
             return result;
         }
     }
@@ -581,27 +726,26 @@ CacheLookup InstantiationCache::lookup(const InstantiationBuildInputs &inputs, c
     // report why they rebuilt.
     const Hash128 desired_template = instantiation_template_signature(inputs.request);
     const Hash128 desired_request = instantiation_request_id(inputs.request);
-    for (const auto &directory : fs::directory_iterator(fs::path(_root), ec)) {
-        if (!directory.is_directory(ec)) continue;
-        const std::string name = directory.path().filename().string();
-        if (name.rfind(".tmp-", 0) == 0) continue;
-        Manifest other;
+    for (const auto &item : fs::directory_iterator(fs::path(_root), ec)) {
+        if (!item.is_regular_file(ec)) continue;
+        if (item.path().extension() != kEntrySuffix) continue;
+        EntryFile other;
         std::string ignored;
-        if (!load_manifest(directory.path(), other, ignored)) continue;
-        if (!(other.template_signature == desired_template)) continue;
-        if (!(other.request_id == desired_request)) {
+        if (!read_entry_file(item.path(), other, ignored)) continue;
+        if (!(other.manifest.template_signature == desired_template)) continue;
+        if (!(other.manifest.request_id == desired_request)) {
             result.reason = cache_reason_target_changed;
             break;
         }
-        if (other.protocol_version != inputs.protocol_version) {
+        if (other.manifest.protocol_version != inputs.protocol_version) {
             result.reason = cache_reason_protocol_version_changed;
-        } else if (other.schema_version != inputs.schema_version) {
+        } else if (other.manifest.schema_version != inputs.schema_version) {
             result.reason = cache_reason_schema_version_changed;
-        } else if (!(other.source_digest == inputs.source_digest)) {
+        } else if (!(other.manifest.source_digest == inputs.source_digest)) {
             result.reason = cache_reason_source_digest_changed;
-        } else if (!(other.toolchain == inputs.toolchain)) {
+        } else if (!(other.manifest.toolchain == inputs.toolchain)) {
             result.reason = cache_reason_toolchain_changed;
-        } else if (!(other.build_options == inputs.build_options)) {
+        } else if (!(other.manifest.build_options == inputs.build_options)) {
             result.reason = cache_reason_build_options_changed;
         } else {
             continue;
@@ -611,27 +755,50 @@ CacheLookup InstantiationCache::lookup(const InstantiationBuildInputs &inputs, c
     return result;
 }
 
+bool InstantiationCache::read_artifact(
+    const CacheLookup &lookup, const std::string &name, std::string &out, std::string &error) const {
+    error.clear();
+    EntryFile file;
+    if (!read_entry_file(fs::path(lookup.entry), file, error)) return false;
+    for (size_t i = 0; i < file.manifest.artifacts.size(); ++i) {
+        if (file.manifest.artifacts[i].name != name) continue;
+        if (!read_entry_payload(fs::path(lookup.entry), file, i, out, error)) return false;
+        if (!(digest_bytes(out.data(), out.size(), digest_domain_artifact) == file.manifest.artifacts[i].digest)) {
+            error = "artifact digest mismatch: " + name;
+            return false;
+        }
+        return true;
+    }
+    error = "artifact is not cached: " + name;
+    return false;
+}
+
 bool InstantiationCache::verify(const Hash128 &build_key, std::string &error) const {
-    Manifest manifest;
-    const fs::path entry = entry_directory(build_key);
-    if (!load_manifest(entry, manifest, error)) return false;
-    return verify_entry_records(entry, manifest, error);
+    const fs::path entry = entry_file(build_key);
+    EntryFile file;
+    if (!read_entry_file(entry, file, error)) return false;
+    if (file.manifest.schema_version != instantiation_schema_version) {
+        error = "artifact schema version mismatch";
+        return false;
+    }
+    if (file.manifest.protocol_version != instantiation_protocol_version) {
+        error = "instantiation protocol version mismatch";
+        return false;
+    }
+    return verify_entry_payload(entry, file, error);
 }
 
 size_t InstantiationCache::verify_all(std::vector<std::string> &failures) const {
     std::error_code ec;
     size_t checked = 0;
-    for (const auto &directory : fs::directory_iterator(fs::path(_root), ec)) {
-        if (!directory.is_directory(ec)) continue;
-        const std::string name = directory.path().filename().string();
-        if (name.rfind(".tmp-", 0) == 0) continue;
-        if (!fs::exists(directory.path() / kManifestName, ec)) continue;
+    for (const auto &item : fs::directory_iterator(fs::path(_root), ec)) {
+        if (!item.is_regular_file(ec)) continue;
+        if (item.path().extension() != kEntrySuffix) continue;
         ++checked;
-        Manifest manifest;
+        EntryFile file;
         std::string error;
-        if (!load_manifest(directory.path(), manifest, error)
-            || !verify_entry_records(directory.path(), manifest, error))
-            failures.push_back(name + ": " + error);
+        if (!read_entry_file(item.path(), file, error) || !verify_entry_payload(item.path(), file, error))
+            failures.push_back(item.path().filename().string() + ": " + error);
     }
     return checked;
 }
@@ -639,11 +806,9 @@ size_t InstantiationCache::verify_all(std::vector<std::string> &failures) const 
 size_t InstantiationCache::entries() const {
     std::error_code ec;
     size_t count = 0;
-    for (const auto &directory : fs::directory_iterator(fs::path(_root), ec)) {
-        if (!directory.is_directory(ec)) continue;
-        const std::string name = directory.path().filename().string();
-        if (name.rfind(".tmp-", 0) == 0) continue;
-        if (fs::exists(directory.path() / kManifestName, ec)) ++count;
+    for (const auto &item : fs::directory_iterator(fs::path(_root), ec)) {
+        if (!item.is_regular_file(ec)) continue;
+        if (item.path().extension() == kEntrySuffix) ++count;
     }
     return count;
 }
@@ -651,8 +816,17 @@ size_t InstantiationCache::entries() const {
 size_t InstantiationCache::clear() const {
     std::error_code ec;
     std::vector<fs::path> remove;
-    for (const auto &directory : fs::directory_iterator(fs::path(_root), ec)) {
-        if (directory.is_directory(ec)) remove.push_back(directory.path());
+    // Only the top level is walked: shard directories are removed whole, so a
+    // recursive iterator would be invalidated while it is being deleted.
+    for (const auto &item : fs::directory_iterator(fs::path(_root), ec)) {
+        if (item.is_directory(ec)) {
+            // Entries used to be directories; remove leftovers too.
+            remove.push_back(item.path());
+            continue;
+        }
+        const std::string name = item.path().filename().string();
+        if (item.path().extension() == kEntrySuffix || name.rfind(".tmp-", 0) == 0)
+            remove.push_back(item.path());
     }
     for (const auto &path : remove)
         fs::remove_all(path, ec);

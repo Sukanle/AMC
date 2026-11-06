@@ -135,6 +135,51 @@ public:
     std::unique_ptr<amc::InstantiationCache> cache;
 };
 
+// Hits that carry a dependency closure, like a real build: the frontend's
+// include closure is recorded per entry and would be re-hashed on every lookup
+// unless the process already resolved the same file.
+constexpr int kDependencyFiles = 8;
+
+class CacheDependencyFixture : public benchmark::Fixture {
+public:
+    void SetUp(const ::benchmark::State &state) override {
+        count = static_cast<size_t>(state.range(0));
+        root = make_root("amc-cache-deps");
+        fs::remove_all(root);
+        fs::create_directories(root / "deps");
+        cache = std::make_unique<amc::InstantiationCache>(root.string());
+
+        for (int i = 0; i < kDependencyFiles; ++i) {
+            // Real include closures are headers, not three-byte files: make the
+            // fixture large enough that read+hash is the cost being avoided.
+            std::string body = "// dependency " + std::to_string(i) + "\n";
+            body.append(32 * 1024, 'x');
+            const fs::path path = root / "deps" / ("dep" + std::to_string(i) + ".hpp");
+            if (!write_text(path, body)) throw std::runtime_error("cannot write dependency");
+            dependencies.push_back({path.string(), amc::digest_text(body, amc::digest_domain_dependency)});
+        }
+
+        std::string error;
+        for (size_t i = 0; i < count; ++i) {
+            const std::vector<std::pair<std::string, std::string>> artifacts = {
+                {"module.abix", "artifact-deps-" + std::to_string(i)},
+            };
+            if (!cache->store(make_inputs(i), artifacts, dependencies, error))
+                throw std::runtime_error("cache store: " + error);
+        }
+    }
+
+    void TearDown(const ::benchmark::State &) override {
+        std::error_code error;
+        fs::remove_all(root, error);
+    }
+
+    size_t count = 0;
+    fs::path root;
+    std::vector<amc::CacheDependency> dependencies;
+    std::unique_ptr<amc::InstantiationCache> cache;
+};
+
 }   // namespace
 
 BENCHMARK_DEFINE_F(CacheStoreFixture, StoreCold)(benchmark::State &state) {
@@ -167,6 +212,28 @@ BENCHMARK_DEFINE_F(CacheReadFixture, LookupHit)(benchmark::State &state) {
     state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(count));
 }
 BENCHMARK_REGISTER_F(CacheReadFixture, LookupHit)->Arg(200)->Arg(1'000);
+
+BENCHMARK_DEFINE_F(CacheReadFixture, LookupHitShallow)(benchmark::State &state) {
+    for (auto _ : state) {
+        for (size_t i = 0; i < count; ++i) {
+            auto result = cache->lookup(make_inputs(i), amc::LookupOptions{false, false});
+            benchmark::DoNotOptimize(result);
+        }
+    }
+    state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(count));
+}
+BENCHMARK_REGISTER_F(CacheReadFixture, LookupHitShallow)->Arg(200)->Arg(1'000);
+
+BENCHMARK_DEFINE_F(CacheDependencyFixture, LookupHitWithDeps)(benchmark::State &state) {
+    for (auto _ : state) {
+        for (size_t i = 0; i < count; ++i) {
+            auto result = cache->lookup(make_inputs(i), amc::LookupOptions{false, false});
+            benchmark::DoNotOptimize(result);
+        }
+    }
+    state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(count));
+}
+BENCHMARK_REGISTER_F(CacheDependencyFixture, LookupHitWithDeps)->Arg(200)->Arg(1'000);
 
 BENCHMARK_DEFINE_F(CacheReadFixture, LookupMiss)(benchmark::State &state) {
     for (auto _ : state) {

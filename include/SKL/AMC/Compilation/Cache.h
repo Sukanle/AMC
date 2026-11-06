@@ -139,22 +139,27 @@ struct LookupOptions {
     // Precise miss reasons require scanning same-template entries. Keep the
     // default lookup on the fast path; CLI/diagnostic callers can opt in.
     bool diagnose = false;
+    // Re-hash every artifact payload while looking up. Callers that immediately
+    // read the payload can turn this off and let read_artifact() verify the
+    // bytes it returns, so a hit costs one pass over the data instead of two.
+    bool verify_artifacts = true;
 };
 
 struct CacheLookup {
     CacheStatus status = CacheStatus::miss;
     std::string reason;   // e.g. "source_digest_changed"
     Hash128 build_key{};
-    std::string directory;                       // entry directory (may not exist on miss)
+    std::string entry;                           // entry file (may not exist on miss)
     std::vector<CacheArtifact> artifacts;        // populated on a verified hit
     std::vector<CacheDependency> dependencies;   // populated on a verified hit
 };
 
 // A content-addressed, immutable instantiation cache rooted at one directory.
-// Entries are written to a unique temporary directory, verified, then committed
-// by rename, so a failed or partial write never becomes a visible entry. A
-// lookup verifies the manifest and every artifact digest, so a corrupted entry
-// is reported rather than trusted.
+// One entry is a single self-describing file committed by rename, so a failed or
+// partial write never becomes a visible entry and a hit costs one file open
+// instead of a directory walk. A lookup verifies the manifest and, unless the
+// caller disables it, every artifact digest, so a corrupted entry is reported
+// rather than trusted.
 class InstantiationCache {
 public:
     explicit InstantiationCache(std::string root);
@@ -174,11 +179,17 @@ public:
         const std::vector<std::pair<std::string, std::string>> &artifacts,
         const std::vector<CacheDependency> &dependencies, std::string &error);
 
-    // Look up the entry for `inputs`, verifying the manifest, artifacts and
-    // every recorded dependency. On a miss the `reason` explains which input
-    // differs from any same-template entry, so incremental builds can report
-    // why they rebuilt.
+    // Look up the entry for `inputs`, verifying the manifest and every recorded
+    // dependency. Artifact payloads are verified unless `verify_artifacts` is
+    // off. On a miss the `reason` explains which input differs from any
+    // same-template entry, so incremental builds can report why they rebuilt.
     CacheLookup lookup(const InstantiationBuildInputs &inputs, LookupOptions options = {}) const;
+
+    // Read one artifact of a hit into `out`, checking the recorded digest of the
+    // bytes that were actually read. Works whether or not the lookup verified
+    // the payload, so callers that consume the bytes pay for one pass.
+    bool read_artifact(const CacheLookup &lookup, const std::string &name, std::string &out,
+        std::string &error) const;
 
     // Verify a committed entry (manifest schema/versions + artifact digests).
     bool verify(const Hash128 &build_key, std::string &error) const;
@@ -187,14 +198,14 @@ public:
     // entry and returns the number of entries checked.
     size_t verify_all(std::vector<std::string> &failures) const;
 
-    // Number of committed entries (directories with a valid manifest). A
-    // malformed entry counts as present so it can be reported and repaired.
+    // Number of committed entries. A malformed entry counts as present so it
+    // can be reported and repaired.
     size_t entries() const;
 
     // Remove every committed entry, returning the number removed.
     size_t clear() const;
 
-    std::string entry_directory(const Hash128 &build_key) const;
+    std::string entry_file(const Hash128 &build_key) const;
 
 private:
     std::string _root;

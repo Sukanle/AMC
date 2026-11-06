@@ -88,6 +88,34 @@ void cleanup_dir(const std::filesystem::path &root) {
     std::filesystem::remove_all(root, ec);
 }
 
+bool read_binary(const std::filesystem::path &path, std::string &out) {
+    std::ifstream input(path, std::ios::binary);
+    if (!input) return false;
+    input.seekg(0, std::ios::end);
+    const auto size = input.tellg();
+    input.seekg(0, std::ios::beg);
+    if (size < 0) return false;
+    out.assign(static_cast<size_t>(size), '\0');
+    return out.empty() || static_cast<bool>(input.read(out.data(), static_cast<std::streamsize>(out.size())));
+}
+
+bool write_binary(const std::filesystem::path &path, const std::string &data) {
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    if (!output) return false;
+    output.write(data.data(), static_cast<std::streamsize>(data.size()));
+    return static_cast<bool>(output);
+}
+
+// A cache entry is a fixed header, a size table, then the manifest and payload;
+// the manifest offset is all a test needs to corrupt a specific region.
+size_t cache_entry_manifest_offset(const std::string &blob) {
+    if (blob.size() < 24) return blob.size();
+    uint32_t count = 0;
+    for (unsigned shift = 0; shift < 32; shift += 8)
+        count |= static_cast<uint32_t>(static_cast<unsigned char>(blob[20 + shift / 8])) << shift;
+    return 24 + 8ull * count;
+}
+
 }   // namespace
 
 int main() {
@@ -1864,10 +1892,12 @@ int main() {
             "schema change invalidates with schema_version_changed");
 
         // A corrupted artifact is rejected, then repaired by the next store.
-        const auto entry = std::filesystem::path(hit.directory);
+        const auto entry = std::filesystem::path(hit.entry);
         {
-            std::ofstream corrupt(entry / "module.abix", std::ios::binary | std::ios::trunc);
-            corrupt << "TAMPERED";
+            std::string blob;
+            check(read_binary(entry, blob) && blob.size() > 1, "a committed entry is a single readable file");
+            blob.back() = static_cast<char>(blob.back() ^ 0x01);
+            check(write_binary(entry, blob), "a committed entry can be tampered with");
         }
         check(cache.lookup(base).status == amc::CacheStatus::corrupted
                   && cache.lookup(base).reason == std::string(amc::cache_reason_corrupted_artifact),
@@ -1878,8 +1908,14 @@ int main() {
 
         // A malformed manifest is reported rather than trusted.
         {
-            std::ofstream corrupt(entry / "manifest.json", std::ios::binary | std::ios::trunc);
-            corrupt << "{ not json";
+            std::string blob;
+            const bool readable = read_binary(entry, blob);
+            const size_t manifest_offset = cache_entry_manifest_offset(blob);
+            check(readable && manifest_offset + 10 <= blob.size(), "a committed entry has a manifest region");
+            if (manifest_offset + 10 <= blob.size()) {
+                blob.replace(manifest_offset, 10, "{ not json");
+                check(write_binary(entry, blob), "a committed entry manifest can be tampered with");
+            }
         }
         check(cache.lookup(base).status == amc::CacheStatus::invalid_manifest, "a malformed manifest is reported");
         check(cache.store(base, artifacts, error), "re-store replaces a malformed manifest");

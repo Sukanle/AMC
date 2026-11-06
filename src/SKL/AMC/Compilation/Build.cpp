@@ -699,6 +699,16 @@ bool copy_file(const fs::path &from, const fs::path &to, std::string &error) {
     return static_cast<bool>(output);
 }
 
+bool write_bytes(const fs::path &to, const std::string &bytes, std::string &error) {
+    std::ofstream output(to, std::ios::binary | std::ios::trunc);
+    if (!output) {
+        error = "cannot write frontend artifact: " + to.string();
+        return false;
+    }
+    output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    return static_cast<bool>(output);
+}
+
 }   // namespace
 
 int build_command(char **args, int arg_count, const fs::path &provider) {
@@ -845,17 +855,31 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
                                                                   + ":"
                                                                   + std::to_string(key_endianness),
                     amc::digest_domain_options);
-                const auto cached = cache.lookup(cache_inputs);
+                // The payload is read (and digest-checked) once on the way out of
+                // the cache, so the lookup itself skips re-hashing the entry. A
+                // payload that fails that check means the entry is damaged: fall
+                // back to running the frontend again instead of failing the build.
+                const auto cached = cache.lookup(cache_inputs, amc::LookupOptions{false, false});
                 if (cached.status == amc::CacheStatus::hit) {
+                    std::string bytes;
+                    bool reusable = false;
                     for (const auto &artifact : cached.artifacts)
                         if (artifact.name == "frontend.abix") {
-                            if (!copy_file(fs::path(cached.directory) / artifact.name, temporary, error))
+                            if (!cache.read_artifact(cached, artifact.name, bytes, error)) break;
+                            if (!write_bytes(temporary, bytes, error))
                                 return fail(amc::ErrorCategory::io, "cache", error, config_path.string());
-                            frontend_ran = false;
+                            reusable = true;
                         }
-                    const fs::path cached_semantic = fs::path(cached.directory) / "frontend.abix.semantic";
-                    if (fs::exists(cached_semantic) && !copy_file(cached_semantic, semantic_temporary, error))
-                        return fail(amc::ErrorCategory::io, "cache", error, config_path.string());
+                    if (reusable) {
+                        frontend_ran = false;
+                        for (const auto &artifact : cached.artifacts)
+                            if (artifact.name == "frontend.abix.semantic") {
+                                if (!cache.read_artifact(cached, artifact.name, bytes, error)) break;
+                                if (!write_bytes(semantic_temporary, bytes, error))
+                                    return fail(amc::ErrorCategory::io, "cache", error, config_path.string());
+                            }
+                    }
+                    error.clear();
                 }
             }
             if (frontend_ran) {
