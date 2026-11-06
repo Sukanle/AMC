@@ -122,9 +122,11 @@ The Rust file still needs to link the native library; the projection provides `#
 
 - The frontend is not a full `rustc` AST: only `#[repr(C)]` / `extern "C"` surfaces are extracted; generics, traits, lifetimes and bit-fields stay inside the module.
 - `repr(C)` layout is validated against a generated rustc probe in the provider conformance test (`amc-rust-layout-probe-test`); the probe currently covers the Host target only.
-- `repr(C, packed)` is layout-validated, but packed backend emission is not complete yet.
+- `repr(C, packed)` / `repr(C, packed(N))` and `repr(C)` unions are layout-validated, but their backend emission is not complete yet.
+- `repr(transparent)` currently requires exactly one field; extra zero-sized fields are not modelled in v0.3.2.
 - The recorded ABI is target-specific; compile the Rust consumer for the same target and C ABI as the provider.
 - `isize` / `c_long` may share an ABI type with `i32` / `i64`; source-spelling retention is still a known limitation.
 - Panics and exceptions must not cross the boundary; the error boundary contract is the supported path.
 - The generated file is ordinary Rust and can be wrapped in a safe crate API.
 - `amc-rust` links LLVM Support but not Clang AST; its frontend computes the layout itself.
+- v0.4.0 will move Rust semantic discovery to an independent rustc helper; the adapter contract is [amc.rust.semantic/1](../architecture/rust-adapter.md).

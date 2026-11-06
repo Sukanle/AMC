@@ -1,0 +1,56 @@
+{
+  "schema": "amc.rust.semantic/1",
+  "producer": {
+    "kind": "rustc-helper",
+    "version": "0.1.0",
+    "rustc": "1.99.1"
+  },
+  "target": {
+    "triple": "x86_64-unknown-linux-gnu",
+    "arch": "x86_64",
+    "os": "linux",
+    "abi": "gnu",
+    "pointer_bits": 64,
+    "endianness": "little",
+    "c_long_bits": 64
+  },
+  "crate": {
+    "name": "demo",
+    "edition": "2021",
+    "features": ["std"]
+  },
+  "types": [
+    {
+      "id": "rust:demo::DemoRect",
+      "name": "DemoRect",
+      "kind": "record",
+      "repr": ["C"],
+      "size": 24,
+      "align": 8,
+      "fields": [
+        { "name": "origin", "offset": 0, "type": "rust:demo::DemoPoint" },
+        { "name": "width", "offset": 8, "type": "rust:f64" },
+        { "name": "height", "offset": 16, "type": "rust:f64" }
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "name": "demo_area",
+      "symbol": "demo_area",
+      "abi": "C",
+      "visibility": "public",
+      "return_type": "rust:f64",
+      "parameters": [
+        { "name": "rect", "type": "rust:*const demo::DemoRect", "mode": "borrowed" }
+      ]
+    }
+  ],
+  "generics": [],
+  "traits": [],
+  "errors": [],
+  "provenance": {
+    "source": "src/lib.rs",
+    "rustc": "1.99.1"
+  }
+}

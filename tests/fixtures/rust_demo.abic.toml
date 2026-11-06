@@ -12,6 +12,7 @@ symbols = [
     "RustBuffer",
     "RustIntPtrs",
     "RustArray",
+    "RustTransparent",
     "RustHandle",
     "RustSmallColor",
     "RustAligned",

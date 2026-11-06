@@ -41,6 +41,11 @@ pub struct RustArray {
     pub values: [u16; 3],
 }
 
+#[repr(transparent)]
+pub struct RustTransparent {
+    pub code: u32,
+}
+
 pub type RustHandle = *mut RustPoint;
 
 #[repr(u8)]

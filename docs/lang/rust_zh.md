@@ -121,9 +121,11 @@ Rust 文件仍需要链接原生库；当启用 `abix_link` 选项时，投影�
 
 - 前端不是完整的 `rustc` AST：只提取 `#[repr(C)]` / `extern "C"` 表面；泛型、trait、生命周期与位域留在模块内部。
 - `repr(C)` 布局通过 provider conformance 测试中的 rustc probe 验证（`amc-rust-layout-probe-test`）；probe 目前只覆盖 Host target。
-- `repr(C, packed)` 只完成布局验证，packed backend emission 尚未完整实现。
+- `repr(C, packed)` / `repr(C, packed(N))` 和 `repr(C)` union 只完成布局验证，backend emission 尚未完整实现。
+- `repr(transparent)` 目前要求恰好一个字段；额外的零大小字段尚未建模。
 - 记录的 ABI 是 target 相关的；Rust 消费方必须按与 provider 相同的 target 与 C ABI 编译。
 - `isize` / `c_long` 可能与 `i32` / `i64` 共享 ABI type；源拼写保留仍是已知限制。
 - panic 与异常不得穿越边界；错误边界契约是受支持的路径。
 - 生成文件是普通 Rust，可以在外层再封装成安全的 crate API。
 - `amc-rust` 链接 LLVM Support 但不使用 Clang AST；它的前端自行计算布局。
+- v0.4.0 会将 Rust 语义发现迁移到独立 rustc helper；adapter 契约见 [amc.rust.semantic/1](../architecture/rust-adapter_zh.md)。

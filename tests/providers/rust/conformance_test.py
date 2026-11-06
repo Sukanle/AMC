@@ -47,6 +47,8 @@ def make_case(source_root: str) -> ProviderCase:
              ["unsigned", "offset=8"]),
             ("RustArray", "RustArray uses C field alignment", ["size=8", "align=2"]),
             ("RustArray", "RustArray::values offset = 2", ["values", "offset=2"]),
+            ("RustTransparent", "repr(transparent) matches its field", ["size=4", "align=4"]),
+            ("RustTransparent", "RustTransparent::code offset = 0", ["code", "offset=0"]),
             ("RustHandle", "RustHandle is a target-sized alias", ["size=8", "align=8"]),
             ("RustSmallColor", "repr(u8) enum is one byte", ["size=1", "align=1"]),
             ("RustAligned", "repr(C, align(16)) overrides the alignment",

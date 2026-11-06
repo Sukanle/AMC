@@ -200,12 +200,14 @@ struct RawItem {
     enum class Kind {
         Record,
         Enum,
-        Alias
+        Alias,
+        Union
     } kind = Kind::Record;
     std::string name;
     std::vector<RawField> fields;
     uint32_t align_override = 0;
-    bool packed = false;
+    uint32_t packed_align = 0;
+    bool transparent = false;
     uint32_t enum_size = 4;
 };
 
@@ -218,7 +220,8 @@ struct RawFunction {
 
 struct Attrs {
     bool repr_c = false;
-    bool packed = false;
+    uint32_t packed_align = 0;
+    bool transparent = false;
     uint32_t align = 0;
     uint32_t int_size = 0;
 };
@@ -342,7 +345,17 @@ private:
             if (!inner.empty() && inner[0] == "repr") {
                 attrs.repr_c = true;
                 for (size_t i = 0; i < inner.size(); ++i) {
-                    if (inner[i] == "packed") attrs.packed = true;
+                    if (inner[i] == "transparent") attrs.transparent = true;
+                    if (inner[i] == "packed") {
+                        attrs.packed_align = 1;
+                        if (i + 2 < inner.size() && inner[i + 1] == "(") {
+                            try {
+                                attrs.packed_align = static_cast<uint32_t>(std::stoul(inner[i + 2]));
+                            } catch (...) {
+                                attrs.packed_align = 1;
+                            }
+                        }
+                    }
                     if (inner[i] == "align" && i + 2 < inner.size()) {
                         try {
                             attrs.align = static_cast<uint32_t>(std::stoul(inner[i + 2]));
@@ -381,6 +394,10 @@ private:
             parse_struct(attrs);
             return;
         }
+        if (accept("union")) {
+            parse_union(attrs);
+            return;
+        }
         if (accept("enum")) {
             parse_enum(attrs);
             return;
@@ -414,7 +431,8 @@ private:
         item.kind = RawItem::Kind::Record;
         item.name = peek().text;
         item.align_override = attrs.align;
-        item.packed = attrs.packed;
+        item.packed_align = attrs.packed_align;
+        item.transparent = attrs.transparent;
         // Only `#[repr(...)]` types have a defined ABI; a default-layout Rust
         // struct must never be recorded (its field order/offsets are unstable).
         const bool accepted = attrs.repr_c;
@@ -457,6 +475,40 @@ private:
             accept(",");
         }
         expect("}", "to close struct body");
+        if (accepted) items_.push_back(std::move(item));
+    }
+
+    void parse_union(const Attrs &attrs) {
+        if (!check_kind(Tok::Ident)) {
+            fail("union name expected");
+            return;
+        }
+        RawItem item;
+        item.kind = RawItem::Kind::Union;
+        item.name = peek().text;
+        item.align_override = attrs.align;
+        item.packed_align = attrs.packed_align;
+        const bool accepted = attrs.repr_c;
+        advance();
+        parse_generics_if_any();
+        if (!expect("{", "to open union body")) return;
+        while (!at_end() && !check("}")) {
+            parse_attributes();
+            skip_visibility();
+            if (check("}")) break;
+            if (!check_kind(Tok::Ident)) {
+                advance();
+                continue;
+            }
+            RawField field;
+            field.name = peek().text;
+            advance();
+            if (!expect(":", "after union field name")) return;
+            field.type = collect_type({",", "}"});
+            item.fields.push_back(std::move(field));
+            accept(",");
+        }
+        expect("}", "to close union body");
         if (accepted) items_.push_back(std::move(item));
     }
 
@@ -855,6 +907,9 @@ private:
         if (item.kind == RawItem::Kind::Alias) {
             return finish_alias(item);
         }
+        if (item.kind == RawItem::Kind::Union) {
+            return finish_union(item);
+        }
         if (item.kind == RawItem::Kind::Enum) {
             amc::Type type;
             type.name = item.name;
@@ -868,6 +923,42 @@ private:
             return index;
         }
         return finish_record(item);
+    }
+
+    int finish_union(const RawItem &item) {
+        amc::Type type;
+        type.name = item.name;
+        type.kind = amc::TypeKind::record;
+        type.id = amc::hash_text(item.name, kTypeDomain);
+        const int index = static_cast<int>(module_.types.size());
+        type.field_begin = static_cast<uint32_t>(module_.fields.size());
+        module_.types.push_back(type);
+
+        uint32_t size = 0;
+        uint32_t align = 1;
+        for (const auto &raw : item.fields) {
+            const Resolved field_type = resolve_type(raw.type);
+            if (!ok()) return -1;
+            amc::Field field;
+            field.owner_type = type.id;
+            field.name = raw.name.empty() ? fmt::format("field{}", module_.fields.size()) : raw.name;
+            field.type_id = field_type.id;
+            field.offset = 0;
+            module_.fields.push_back(std::move(field));
+            size = std::max(size, field_type.size);
+            align = std::max(align, field_type.align == 0 ? 1 : field_type.align);
+        }
+        if (item.packed_align != 0) align = std::min(align, item.packed_align);
+        if (item.align_override != 0) align = std::max(align, item.align_override);
+        if (size == 0) size = 1;
+        auto &record = module_.types[static_cast<size_t>(index)];
+        record.field_count = static_cast<uint32_t>(module_.fields.size()) - record.field_begin;
+        record.size = round_up(size, align);
+        record.align = align == 0 ? 1 : align;
+        std::vector<amc::Field> layout(module_.fields.begin() + record.field_begin, module_.fields.end());
+        record.layout_hash = amc::canonical_layout_hash(module_, record, layout);
+        resolved_[item.name] = index;
+        return index;
     }
 
     int finish_alias(const RawItem &item) {
@@ -898,12 +989,18 @@ private:
         type.field_begin = static_cast<uint32_t>(module_.fields.size());
         module_.types.push_back(type);
 
+        if (item.transparent && item.fields.size() != 1) {
+            set_error("repr(transparent) requires exactly one field: " + item.name);
+            return -1;
+        }
         uint32_t offset = 0;
         uint32_t align = 1;
         for (const auto &raw : item.fields) {
             const Resolved field_type = resolve_type(raw.type);
             if (!ok()) return -1;
-            const uint32_t field_align = item.packed ? 1 : (field_type.align == 0 ? 1 : field_type.align);
+            const uint32_t natural_align = field_type.align == 0 ? 1 : field_type.align;
+            const uint32_t field_align =
+                item.packed_align != 0 ? std::min(item.packed_align, natural_align) : natural_align;
             offset = round_up(offset, field_align);
             amc::Field field;
             field.owner_type = type.id;
@@ -914,10 +1011,8 @@ private:
             align = std::max(align, field_align);
             module_.fields.push_back(std::move(field));
         }
-        if (item.packed)
-            align = 1;
-        else if (item.align_override != 0)
-            align = std::max(align, item.align_override);
+        if (item.packed_align != 0) align = std::min(align, item.packed_align);
+        if (item.align_override != 0) align = std::max(align, item.align_override);
         const uint32_t size = round_up(offset, align);
         auto &record = module_.types[static_cast<size_t>(index)];
         record.field_count = static_cast<uint32_t>(module_.fields.size()) - record.field_begin;

@@ -29,6 +29,7 @@ CASES = {
     "RustBuffer": ["data", "len"],
     "RustIntPtrs": ["signed", "unsigned"],
     "RustArray": ["tag", "values"],
+    "RustTransparent": ["code"],
     "RustHandle": [],
     "RustSmallColor": [],
     "RustAligned": ["value"],
@@ -36,6 +37,11 @@ CASES = {
 
 PACKED_CASES = {
     "RustPacked": ["kind", "value"],
+}
+
+ADVANCED_CASES = {
+    "RustPacked2": ["kind", "value"],
+    "RustUnion": [],
 }
 
 
@@ -291,6 +297,58 @@ def main() -> int:
             print(f"  [FAIL] {failures} packed layout mismatch(es)")
             return 1
         print("  [PASS] packed layout matches rustc probe")
+
+        # packed(N) and unions are layout-only too: the backends do not emit
+        # them yet, so they stay out of the projection conformance path.
+        try:
+            advanced_config = fixture_dir / "rust_advanced.abic.toml"
+            advanced_source = fixture_dir / "rust_advanced.rs"
+            advanced_artifact = build_artifact(amc, advanced_config, work / "advanced-build",
+                                               "rust_advanced.abix")
+            advanced_probe_source = work / "probe_advanced.rs"
+            advanced_probe_exe = work / exe_name("probe_advanced")
+            write_probe(advanced_source, advanced_probe_source, ADVANCED_CASES)
+            advanced_compile = run([rustc, "--edition", "2021", str(advanced_probe_source),
+                                    "-o", str(advanced_probe_exe)])
+            if advanced_compile.returncode != 0:
+                raise RuntimeError(f"rustc advanced probe failed: {advanced_compile.stderr.strip()}")
+            advanced_run = run([str(advanced_probe_exe)])
+            if advanced_run.returncode != 0:
+                raise RuntimeError(f"advanced probe execution failed: {advanced_run.stderr.strip()}")
+            advanced_expected = parse_probe(advanced_run.stdout)
+            for type_name, fields in ADVANCED_CASES.items():
+                layout = query_layout(amc, advanced_artifact, type_name)
+                rust = advanced_expected.get(type_name, {})
+                checks = [
+                    (f"{type_name} size", layout.get("size"), rust.get("size")),
+                    (f"{type_name} align", layout.get("align"), rust.get("align")),
+                ]
+                for field in fields:
+                    amc_fields = {item["name"]: item["offset"] for item in layout.get("fields", [])}
+                    checks.append((f"{type_name}.{field} offset", amc_fields.get(field),
+                                   rust.get(f"offset:{field}")))
+                for description, actual, expected_value in checks:
+                    if actual != expected_value:
+                        fail(f"{description}: amc={actual} rustc={expected_value}")
+                        failures += 1
+                    else:
+                        pass_(f"{description} matches rustc ({actual})")
+            union = query_layout(amc, advanced_artifact, "RustUnion")
+            union_fields = {item["name"]: item["offset"] for item in union.get("fields", [])}
+            for field in ("word", "wide"):
+                if union_fields.get(field) != 0:
+                    fail(f"RustUnion.{field} offset: amc={union_fields.get(field)} expected=0")
+                    failures += 1
+                else:
+                    pass_(f"RustUnion.{field} offset = 0")
+        except RuntimeError as error:
+            print(f"  [FAIL] advanced repr layout check: {error}", file=sys.stderr)
+            return 1
+
+        if failures:
+            print(f"  [FAIL] {failures} advanced repr mismatch(es)")
+            return 1
+        print("  [PASS] advanced repr layout matches rustc probe")
         return 0
 
 
