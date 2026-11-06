@@ -106,6 +106,8 @@ def main() -> int:
             [rustc, "--edition", "2021", "--crate-type", "cdylib", "-O", source, "-o", library],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         check(result.returncode == 0 and os.path.isfile(library),
               "test-only Rust panic provider compiled",
@@ -127,6 +129,8 @@ def main() -> int:
                 [sys.executable, os.path.abspath(__file__), "--child", library],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=30,
             )
             check(child.returncode != 0,

@@ -97,7 +97,8 @@ class ProviderConformance:
         self.pass_(message) if condition else self.fail(message)
 
     def run(self, args) -> "subprocess.CompletedProcess[str]":
-        return subprocess.run(args, capture_output=True, text=True)
+        return subprocess.run(args, capture_output=True, text=True, encoding="utf-8",
+                              errors="replace")
 
     # -- steps -------------------------------------------------------------
 
@@ -120,7 +121,8 @@ class ProviderConformance:
             '{"schema":"abix.plugin/1","id":3,"type":"DONE"}\n'
         )
         described = subprocess.run([provider, "--ipc"], input=ipc_input,
-                                   capture_output=True, text=True)
+                                   capture_output=True, text=True,
+                                   encoding="utf-8", errors="replace")
         self.check(
             described.returncode == 0
             and '"type":"DESCRIBE_RESULT"' in described.stdout
@@ -143,7 +145,8 @@ class ProviderConformance:
             '{"schema":"abix.plugin/1","id":3,"type":"DONE"}\n'
         )
         result = subprocess.run([provider, "--ipc"], input=ipc_input,
-                                capture_output=True, text=True)
+                                capture_output=True, text=True,
+                                encoding="utf-8", errors="replace")
         self.check(result.returncode == 0
                    and '"type":"EVENT"' in result.stdout
                    and '"type":"RESULT"' in result.stdout

@@ -69,7 +69,8 @@ def main() -> None:
         if args.abix_include_dirs:
             include_dirs = [p for p in args.abix_include_dirs.split(os.pathsep) if p]
             cmake_cmd.append("-DABIX_INCLUDE_DIRS=" + ";".join(include_dirs))
-        subprocess.run(cmake_cmd, check=True, capture_output=True, text=True)
+        subprocess.run(cmake_cmd, check=True, capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
 
         # Step 2: cmake build
         print("  [INFO] Building CMake target...")
@@ -78,6 +79,8 @@ def main() -> None:
             check=True,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
 
         # Step 3: verify artifacts

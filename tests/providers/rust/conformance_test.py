@@ -22,7 +22,7 @@ def rust_compile(tool: str, projection: str, out_dir: str) -> subprocess.Complet
     return subprocess.run(
         [tool, "--edition", "2021", "--crate-type=lib", "--emit=metadata",
          "--out-dir", out_dir, projection],
-        capture_output=True, text=True,
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
 
 

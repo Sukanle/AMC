@@ -10,7 +10,8 @@ import tempfile
 
 
 def run(command, **kwargs):
-    result = subprocess.run(command, capture_output=True, text=True, **kwargs)
+    result = subprocess.run(command, capture_output=True, text=True,
+                            encoding="utf-8", errors="replace", **kwargs)
     if result.returncode != 0:
         print("command failed:", " ".join(command), file=sys.stderr)
         if result.stdout:

@@ -99,7 +99,8 @@ def main() -> int:
     failed = 0
 
     def run(args, **kwargs):
-        return subprocess.run(args, capture_output=True, text=True, **kwargs)
+        return subprocess.run(args, capture_output=True, text=True, encoding="utf-8",
+                              errors="replace", **kwargs)
 
     def check(ok, message, detail=""):
         nonlocal passed, failed

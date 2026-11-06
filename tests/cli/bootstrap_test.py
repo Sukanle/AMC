@@ -35,7 +35,8 @@ def run_cmd(
     cmd: list[str], cwd: Path | None = None, check: bool = True
 ) -> subprocess.CompletedProcess[str]:
     print(f"  \033[90m{' '.join(cmd)}\033[0m")
-    result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+    result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True,
+                            encoding="utf-8", errors="replace")
     if check and result.returncode != 0:
         raise SystemExit(
             f"Command failed (exit code {result.returncode}): {' '.join(cmd)}\n"

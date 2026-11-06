@@ -160,7 +160,8 @@ def main() -> int:
         return ok
 
     def run(args, env=None, cwd=None):
-        return subprocess.run(args, capture_output=True, text=True, env=env, cwd=cwd)
+        return subprocess.run(args, capture_output=True, text=True, encoding="utf-8",
+                              errors="replace", env=env, cwd=cwd)
 
     work = os.environ.get("AMC_INTEROP_WORK_DIR") or tempfile.mkdtemp(prefix="amc-expose.")
     fixture = os.path.join(SCRIPT_DIR, "expose")
@@ -190,7 +191,8 @@ def main() -> int:
         nm_args = ["nm", "-gU", module]
     else:
         nm_args = ["nm", "-D", module]
-    check("abix_module_query_v1" in subprocess.run(nm_args, capture_output=True, text=True).stdout,
+    check("abix_module_query_v1" in subprocess.run(
+        nm_args, capture_output=True, text=True, encoding="utf-8", errors="replace").stdout,
           "the module exports the fixed discovery entry")
 
     # 3. Project the capabilities to Rust.

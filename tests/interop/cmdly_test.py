@@ -143,7 +143,8 @@ def main() -> int:
         return ok
 
     def run(args, env=None):
-        return subprocess.run(args, capture_output=True, text=True, env=env)
+        return subprocess.run(args, capture_output=True, text=True, encoding="utf-8",
+                              errors="replace", env=env)
 
     work = os.environ.get("AMC_INTEROP_WORK_DIR") or tempfile.mkdtemp(prefix="amc-cmdly.")
     fixture = os.path.join(SCRIPT_DIR, "cmdly")

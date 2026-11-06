@@ -42,6 +42,23 @@ def module_path(work, base):
     return os.path.join(work, "lib" + base + ".so")
 
 
+def import_lib(work, base):
+    """Import library emitted next to the Windows shared module `base`."""
+    return os.path.join(work, "lib" + base + ".dll.a")
+
+
+def module_flags(work, base):
+    """Extra linker flags used to build the shared module `base`.
+
+    A MinGW DLL exports every global symbol by default, but GNU ld (used by
+    clang++) cannot link against a DLL directly, so Windows builds also emit the
+    `lib<base>.dll.a` import library that both rustc and ld consume.
+    """
+    if sys.platform == "win32":
+        return ["-Wl,--export-all-symbols", "-Wl,--out-implib," + import_lib(work, base)]
+    return []
+
+
 def rust_link(work, base):
     args = ["-L", "native=" + work, "-l", "dylib=" + base]
     if sys.platform != "win32":
@@ -88,7 +105,15 @@ def main():
         return ok
 
     def run(args, **kwargs):
-        return subprocess.run(args, capture_output=True, text=True, **kwargs)
+        return subprocess.run(args, capture_output=True, text=True, encoding="utf-8",
+                              errors="replace", **kwargs)
+
+    def output(r):
+        # A decoding failure in the reader thread leaves stdout/stderr as None.
+        return (r.stdout or "") + (r.stderr or "")
+
+    def failure_detail(r):
+        return (r.stderr or "")[-400:]
 
     try:
         fixture = os.path.dirname(os.path.abspath(__file__))
@@ -102,13 +127,14 @@ def main():
             "M7_MODULE_PATH", lib.replace("\\", "/"))
         open(zig_src_path, "w", encoding="utf-8").write(zig_text)
         r = run([cxx, "-std=c++17", "-shared", "-fPIC", "-O2", os.path.join(work, "api.cpp"),
-                 "-o", lib])
-        check(r.returncode == 0, "native M7 library built", r.stderr[-400:])
+                 "-o", lib] + module_flags(work, "m7"))
+        check(r.returncode == 0, "native M7 library built", failure_detail(r))
         bridge = module_path(work, "m7bridge")
         bridge_link = [] if sys.platform != "linux" else ["-ldl"]
         r = run([cxx, "-std=c++17", "-shared", "-fPIC", "-O2", os.path.join(work, "lease_bridge.cpp"),
-                 "-I", work, *include_flags(str(source_root)), "-o", bridge, *bridge_link])
-        check(r.returncode == 0, "ABIX lease bridge built", r.stderr[-400:])
+                 "-I", work, *include_flags(str(source_root)), "-o", bridge, *bridge_link,
+                 *module_flags(work, "m7bridge")])
+        check(r.returncode == 0, "ABIX lease bridge built", failure_detail(r))
 
         config = os.path.join(work, "api.abic.toml")
         text = open(config, encoding="utf-8").read().replace(
@@ -117,7 +143,7 @@ def main():
         out = os.path.join(work, "abix")
         r = run([amc, "build", "-c", config, "-B", out])
         artifact = os.path.join(out, "m7.abix")
-        check(r.returncode == 0 and os.path.isfile(artifact), "M7 artifact built", (r.stdout + r.stderr)[-400:])
+        check(r.returncode == 0 and os.path.isfile(artifact), "M7 artifact built", output(r)[-400:])
 
         # Cross-artifact version compatibility: the same contract at interface
         # version 2 must be reported as interface drift by `amc verify`.
@@ -130,30 +156,30 @@ def main():
         r = run([amc, "build", "-c", v2_config, "-B", v2_out])
         v2_artifact = os.path.join(v2_out, "m7_v2.abix")
         if check(r.returncode == 0 and os.path.isfile(v2_artifact),
-                 "M7 v2 artifact built", (r.stdout + r.stderr)[-400:]):
+                 "M7 v2 artifact built", output(r)[-400:]):
             r = run([amc, "verify", artifact, v2_artifact])
-            text = r.stdout + r.stderr
+            text = output(r)
             check(r.returncode != 0 and "interface_changed" in text,
                   "M7 cross-artifact interface version drift is rejected", text[-400:])
         r = run([amc, "verify", artifact, artifact])
-        check(r.returncode == 0 and "consistent" in (r.stdout + r.stderr),
-              "M7 same-artifact verification is consistent", (r.stdout + r.stderr)[-400:])
+        check(r.returncode == 0 and "consistent" in output(r),
+              "M7 same-artifact verification is consistent", output(r)[-400:])
 
         gen_rust = os.path.join(work, "gen")
         r = run([amc, "generate", artifact, "-l", "rust", "-o", gen_rust])
-        check(r.returncode == 0, "M7 Rust projection generated", (r.stdout + r.stderr)[-400:])
+        check(r.returncode == 0, "M7 Rust projection generated", output(r)[-400:])
         rust_src = os.path.join(work, "rust_consumer.rs")
         rust_bin = os.path.join(work, exe("rust_consumer"))
         r = run([rustc, "--edition", "2021", rust_src, "-o", rust_bin]
                 + rust_link(work, "m7") + ["-L", "native=" + work, "-l", "dylib=m7bridge"])
-        if check(r.returncode == 0, "M7 Rust consumer compiled", r.stderr[-400:]):
+        if check(r.returncode == 0, "M7 Rust consumer compiled", failure_detail(r)):
             r = run([rust_bin, lib], env=env_for(work))
-            check(r.returncode == 0 and "m7 rust: OK" in r.stdout,
-                  "M7 Rust consumer ran", (r.stdout + r.stderr)[-400:])
+            check(r.returncode == 0 and "m7 rust: OK" in output(r),
+                  "M7 Rust consumer ran", output(r)[-400:])
 
         gen_cpp = os.path.join(work, "gen_cpp")
         r = run([amc, "generate", artifact, "-l", "cpp", "-o", gen_cpp])
-        if check(r.returncode == 0, "M7 C++ projection generated", (r.stdout + r.stderr)[-400:]):
+        if check(r.returncode == 0, "M7 C++ projection generated", output(r)[-400:]):
             # Compile-time layout mismatch: the generated ABI check must reject
             # a native header whose layout differs from the artifact.
             bad_src = os.path.join(work, "layout_mismatch.cpp")
@@ -163,38 +189,38 @@ def main():
                 'int main() { return 0; }\n')
             r = run([cxx, "-std=c++17", "-fsyntax-only", bad_src, "-I", work,
                      "-I", gen_cpp, *include_flags(str(source_root))])
-            text = r.stdout + r.stderr
+            text = output(r)
             check(r.returncode != 0 and ("size mismatch" in text or "offset mismatch" in text),
                   "M7 compile-time layout mismatch is rejected", text[-400:])
 
         cpp_bin = os.path.join(work, exe("cpp_consumer"))
-        link = []
+        link = ["-L", work, "-l", "m7"]
         if sys.platform != "win32":
-            link += ["-L", work, "-l", "m7", "-Wl,-rpath," + work]
+            link.append("-Wl,-rpath," + work)
         r = run([cxx, "-std=c++17", "-O2", os.path.join(work, "cpp_consumer.cpp"),
                  "-I", work, "-I", gen_cpp, *include_flags(str(source_root)), *link, "-o", cpp_bin])
-        if check(r.returncode == 0, "M7 C++ consumer compiled", r.stderr[-400:]):
+        if check(r.returncode == 0, "M7 C++ consumer compiled", failure_detail(r)):
             r = run([cpp_bin], env=env_for(work))
-            check(r.returncode == 0 and "m7 cpp: OK" in r.stdout,
-                  "M7 C++ consumer ran", (r.stdout + r.stderr)[-400:])
+            check(r.returncode == 0 and "m7 cpp: OK" in output(r),
+                  "M7 C++ consumer ran", output(r)[-400:])
 
         if zig:
             gen_zig = os.path.join(work, "gen_zig")
             r = run([amc, "generate", artifact, "-l", "zig", "-o", gen_zig])
-            check(r.returncode == 0, "M7 Zig projection generated", (r.stdout + r.stderr)[-400:])
+            check(r.returncode == 0, "M7 Zig projection generated", output(r)[-400:])
             zig_bin = os.path.join(work, exe("zig_consumer"))
             r = run([zig, "build-exe", "zig_consumer.zig", "-lc", "-L", work, "-lm7", "-lm7bridge",
                      "-rpath", work, "-femit-bin=" + zig_bin], cwd=work)
-            if check(r.returncode == 0, "M7 Zig consumer compiled", r.stderr[-400:]):
+            if check(r.returncode == 0, "M7 Zig consumer compiled", failure_detail(r)):
                 r = run([zig_bin, lib], env=env_for(work))
-                check(r.returncode == 0 and "m7 zig: OK" in (r.stdout + r.stderr),
-                      "M7 Zig consumer ran", (r.stdout + r.stderr)[-400:])
+                check(r.returncode == 0 and "m7 zig: OK" in output(r),
+                      "M7 Zig consumer ran", output(r)[-400:])
         else:
             print("  [SKIP] Zig consumer (zig not available)")
 
         # Negative: target mismatch must be rejected by the artifact check.
         r = run([amc, "target", artifact, "--expect", "arch=2"])
-        check(r.returncode != 0, "M7 target mismatch is rejected", (r.stdout + r.stderr)[-400:])
+        check(r.returncode != 0, "M7 target mismatch is rejected", output(r)[-400:])
 
         # Negative: a lowering sidecar from another build must not be projected.
         stale_abix = os.path.join(work, "stale.abix")
@@ -206,8 +232,8 @@ def main():
                 data["types"][0]["abi"] = "0" * 32
                 Path(str(stale_abix) + ".lowering").write_text(json.dumps(data), encoding="utf-8")
                 r = run([amc, "generate", stale_abix, "-l", "rust", "-o", os.path.join(work, "stale_gen")])
-                check(r.returncode != 0 and "lowering sidecar references" in (r.stdout + r.stderr),
-                      "M7 stale lowering is rejected", (r.stdout + r.stderr)[-400:])
+                check(r.returncode != 0 and "lowering sidecar references" in output(r),
+                      "M7 stale lowering is rejected", output(r)[-400:])
             else:
                 print("  [SKIP] stale lowering (artifact has no lowered types)")
 
