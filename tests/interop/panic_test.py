@@ -17,6 +17,7 @@ provider-side contract that the Rust projection relies on.
 import ctypes
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -36,8 +37,29 @@ def lib_name(base: str) -> str:
     return "lib" + base + ".so"
 
 
+def install_abort_handler() -> None:
+    """Turn the expected SIGABRT into a plain exit status.
+
+    The negative control must abort, and it still does: `abort()` raises
+    SIGABRT before the process goes away. macOS reports every uncaught SIGABRT
+    through ReportCrash, which pops a "Python quit unexpectedly" dialog and
+    litters ~/Library/Logs/DiagnosticReports on every test run. Handling the
+    signal and leaving through `_exit()` keeps the abort observable through the
+    exit status without asking the OS crash reporter to file a report. If the
+    provider ever returns normally instead of aborting, `RETURNED` is printed
+    and the parent still fails the test.
+    """
+    if os.name == "nt":
+        return
+    libc = ctypes.CDLL(None)
+    libc.signal.argtypes = [ctypes.c_int, ctypes.c_void_p]
+    libc.signal.restype = ctypes.c_void_p
+    libc.signal(signal.SIGABRT, ctypes.cast(libc._exit, ctypes.c_void_p))
+
+
 def child_call(path: str) -> int:
     """Call the uncaught-panic entry in a fresh process."""
+    install_abort_handler()
     lib = ctypes.CDLL(path)
     fn = lib.abix_panic_now
     fn.argtypes = []
