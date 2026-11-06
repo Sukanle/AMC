@@ -6,7 +6,7 @@
 
 本节记录 AMC 的性能基线、扩展性和回归门槛。它是优化计划的证据，不是宣传页：下面所有数字都来自 Release 构建、固定 P-core 集合和 Google Benchmark JSON。
 
-> 基线快照：**2026-11-06**，C++ 前端/后端拆分、共享 CodeIn/Codegen 与 OPT-4/OPT-6/OPT-7 性能工作之后。 Windows 对照与 cache 优化后的数据见「跨平台对照」。
+> 基线快照：Linux cache 复测为 **2026-11-07**；Pass/Artifact/Query/Multifile 与 Windows 跨平台数据为 **2026-11-06**。代码包含 C++ 前端/后端拆分、共享 CodeIn/Codegen、OPT-4/OPT-6/OPT-7 和单文件 cache 重构。
 
 ## 测什么
 
@@ -22,12 +22,12 @@
 
 ## 方法
 
-- Release 构建，Google Benchmark，`--benchmark_repetitions=3`，`--benchmark_min_time=0.2s`。
+- Release 构建，Google Benchmark，`--benchmark_min_time=0.2s`；原始 Pass/Artifact/Query 表格使用 3 次重复，cache 复测与 Windows 对照使用 5 次。
 - CPU 亲和性限制在 P-core 集合（`tools/run_bench.py --pin p`）。
 - 使用 **wall time**（`real_time`）。多线程/多进程场景不使用 `cpu_time`，因为它只统计调用线程。
 - 输入由 fixture 确定性生成；page cache 是热的，测的是 AMC 而不是冷磁盘 I/O。
 - `ctest -L perf` 运行每个套件的 0.05s 短冒烟版本。
-- pass/query/artifact 表格是时点快照；绝对值会随编译器、CPU 和 governor 漂移。
+- 2026-11-07 的 Linux 复测中 Pass、Artifact、Query、Multifile 均在 ±3% 内，因此这些表格保留 2026-11-06 数据；只有 Cache 更新。绝对值仍会随编译器、CPU 和 governor 漂移。
 
 复现：
 
@@ -93,20 +93,42 @@ full load         91.4 ms
 
 ## Cache
 
-200 / 1000 条目：
+200 / 1000 条目，P-core，mean wall time。这是单文件 entry 重构和 POSIX `stat`
+快速路径之后的 Linux 复测（2026-11-07）；重构前数据见[优化历史](#优化历史)。
 
 | Benchmark         |      200 |      1000 | 5x 输入 |
 | ----------------- | -------: | --------: | ------: |
-| StoreCold         | 2.964 ms | 15.306 ms |   5.16x |
-| LookupHit         | 1.141 ms |  6.029 ms |   5.28x |
-| LookupMiss        | 0.282 ms |  1.415 ms |   5.02x |
-| LookupConcurrent  | 0.406 ms |  1.977 ms |   4.87x |
-| VerifyAll         | 1.029 ms |  5.459 ms |   5.31x |
-| DependencyChanged |   5.4 µs |    5.4 µs |   1.00x |
+| StoreCold         | 1.668 ms |  8.444 ms |   5.06x |
+| LookupHit         | 1.044 ms |  5.407 ms |   5.18x |
+| LookupHitShallow  | 0.723 ms |  3.796 ms |   5.25x |
+| LookupMiss        | 0.290 ms |  1.437 ms |   4.96x |
+| LookupConcurrent  | 0.371 ms |  1.795 ms |   4.84x |
+| VerifyAll         | 0.845 ms |  4.381 ms |   5.18x |
+| DependencyChanged |   5.1 µs |    5.1 µs |   1.00x |
 
-`LookupMissDiagnose/200` 单独统计：200 条目时 **55.8 ms**。它会扫描 manifest 来解释 miss 原因，这是旧行为，只在调用方显式要求诊断时启用。默认 miss 路径在 1000 条目时约 1.4 ms，返回 `not_found`。
+新增 cache 用例：
 
-cache 写入是进程安全的：entry 先写入进程唯一临时目录，再用 rename 提交；并发写入最终只保留一个 entry。
+| Benchmark                  |      200 |      1000 |
+| -------------------------- | -------: | --------: |
+| LookupHitWithDeps（8 依赖） | 2.595 ms | 23.735 ms |
+| LookupHitLarge / 8（1 MiB） |        — |  6.515 ms |
+
+1000 条目时单条目成本：`StoreCold` 8.4 µs、`LookupHit` 5.4 µs、
+shallow hit 3.8 µs、miss 1.4 µs。
+
+重构内容：per-key 目录改为单个版本化 entry 文件；发布时不再读回 payload；
+lookup 直接打开 entry；64 KiB 以上 payload 使用 mmap。POSIX 上增加 `stat`
+快速路径，在构造 `ifstream` 前判断 entry 是否存在；Windows 保留直接打开，
+因为 `CreateFile` 元数据操作更贵。
+
+相对重构前基线：`StoreCold` 快 45%，`VerifyAll` 快 20%，`LookupHit` 快 10%。
+`LookupMiss/1000` 为 1.437 ms，重构前为 1.415 ms（+1.5%，约 0.02 µs/lookup）。
+POSIX 快速路径补回了直接打开带来的 +15% 回归，代价是命中路径约 +4%
+（5.407 ms vs 直接打开的 5.178 ms，但仍低于重构前的 6.029 ms）。
+`LookupMissDiagnose/200` 为 52.9 ms，仍是独立的诊断路径，会扫描 manifest。
+
+cache 写入是进程安全的：entry 先写入进程唯一临时文件，再用 rename 提交；
+并发写入最终只保留一个 entry。
 
 ## Query 与 context
 
@@ -222,20 +244,27 @@ AMC **不内嵌进程池**。与 Ninja 启动多个 `clang` 一样，多文件�
 
 ### Cache（ms，200 / 1000 条目）
 
-Windows 侧包含单文件 entry、跳过发布时读回、按需校验和 64 KiB 以上映射这几项优化：
+CachyOS 列是单文件 entry 重构和 POSIX `stat` 快速路径之后的 2026-11-07 复测。
+Windows 列包含同一套单文件 entry、直接打开、按需校验和 64 KiB 以上 mmap；
+POSIX `stat` 快速路径不适用于 Windows。
 
-| Benchmark                |        CachyOS | Windows（优化后） |          倍数 |
-| ------------------------ | -------------: | ----------------: | ------------: |
-| StoreCold                | 2.964 / 15.306 |  49.340 / 250.868 | 16.6x / 16.4x |
-| LookupHit                |  1.141 / 6.029 |    9.405 / 48.017 |   8.2x / 8.0x |
-| LookupHitShallow         |             -- |    4.435 / 22.798 |   3.9x / 3.8x |
-| LookupMiss               |  0.282 / 1.415 |     1.676 / 8.833 |   5.9x / 6.2x |
-| LookupConcurrent         |  0.406 / 1.977 |    3.597 / 17.267 |   8.9x / 8.7x |
-| VerifyAll                |  1.029 / 5.459 |    9.979 / 51.538 |   9.7x / 9.4x |
-| DependencyChanged        |         5.4 µs |             48 µs |          8.9x |
-| LookupMissDiagnose / 200 |        55.8 ms |            506 ms |          9.1x |
+| Benchmark | CachyOS | Windows（优化后） | 倍数 |
+| --- | ---: | ---: | ---: |
+| StoreCold | 1.668 / 8.444 | 49.340 / 250.868 | 29.6x / 29.7x |
+| LookupHit | 1.044 / 5.407 | 9.405 / 48.017 | 9.0x / 8.9x |
+| LookupHitShallow | 0.723 / 3.796 | 4.435 / 22.798 | 6.1x / 6.0x |
+| LookupMiss | 0.290 / 1.437 | 1.676 / 8.833 | 5.8x / 6.1x |
+| LookupConcurrent | 0.371 / 1.795 | 3.597 / 17.267 | 9.7x / 9.6x |
+| VerifyAll | 0.845 / 4.381 | 9.979 / 51.538 | 11.8x / 11.8x |
+| DependencyChanged | 5.1 µs | 48 µs | 9.3x |
+| LookupMissDiagnose / 200 | 52.86 ms | 506 ms | 9.6x |
+| LookupHitLarge / 8 | 6.515 ms | 8.565 ms | 1.31x |
 
-> 浅命中（`verify_artifacts=false`）在 CachyOS 上没有单独测量，倍数按 `LookupHit` 的 Linux 基线计算。
+`LookupHitWithDeps` 不放进表格：Windows 正常条件下 1000 条目约 52 ms，但同一
+二进制曾出现 645 ms 的离群 run。依赖读取成本受宿主文件系统状态影响很大。
+
+重构后 CachyOS/Windows 倍数变大，是因为 Linux 侧变快；Windows 的残余成本是
+NTFS 元数据操作，不是算法差异。
 
 ### Query 与多文件
 
@@ -246,7 +275,7 @@ Windows 侧包含单文件 entry、跳过发布时读回、按需校验和 64 Ki
 ### 读法
 
 - **没有平台相关的复杂度回归**：所有 4x / 2x / 5x 增长斜率与 CachyOS 基本重合，上文门槛在 Windows 上同样满足。
-- 常数因子分三档：`VerifyMetadata`、`Materialize` 和精确查询约 1.0x；大多数 pass、顺序 artifact I/O 和 JSON 渲染为 1.2–1.6x；cache 为 8–16x。
+- 常数因子分三档：`VerifyMetadata`、`Materialize` 和精确查询约 1.0x；大多数 pass、顺序 artifact I/O 和 JSON 渲染为 1.2–1.6x；cache 为 5–30x（`StoreCold` 最宽，Linux 已降到 8.4 µs/entry）。
 - 精确查询在 Windows 更快，说明差距不在代码生成质量，而在**分配器 + 文件系统**； cache 的残余成本是 NTFS 元数据操作。
 - Windows 上 cache 优化前后的单 entry 成本：`StoreCold` 533 → 251 µs，`LookupHit` 96 → 48 µs，浅命中 23 µs。
 
@@ -268,10 +297,21 @@ Windows 侧包含单文件 entry、跳过发布时读回、按需校验和 64 Ki
 | Query FunctionExact / 5k          |         370.96 µs |  12.6 µs |
 | LoadAbiOnly / 5k                  |   91.4 ms（full） |  16.5 ms |
 | ContextJsonStream / 20k           | 46.7 ms（string） |  44.7 ms |
+| Cache StoreCold / 1000（Linux）   |         15.306 ms |  8.444 ms |
+| Cache LookupHit / 1000（Linux）   |          6.029 ms |  5.407 ms |
+| Cache VerifyAll / 1000（Linux）   |          5.459 ms |  4.381 ms |
+| Cache LookupHitShallow / 1000（Linux） |             — |  3.796 ms |
+| Cache LookupMiss / 1000（Linux）  |          1.415 ms |  1.437 ms |
 | Cache StoreCold / 1000（Windows） |          533.1 ms | 250.9 ms |
 | Cache LookupHit / 1000（Windows） |           96.1 ms |  48.0 ms |
 
-主要收益来自移除二次扫描，其次是按需加载 sidecar。并行化被刻意放在最后。
+主要收益来自移除二次扫描、按需加载 sidecar，以及把 per-key cache 目录改为单个
+entry 文件。并行化被刻意放在最后。
+
+Linux 的 `LookupMiss/1000` 在直接打开 entry 后曾从 1.415 ms 变为稳定的 1.627 ms 均值
+（+15%）。POSIX 专用 `stat` 快速路径把它补回到 1.437 ms（+1.5%）。`LookupHit/1000`
+为 5.407 ms，比直接打开慢约 4%，但仍比重构前的 6.029 ms 快 10%。
+`LookupMissDiagnose` 仍是独立的扫描诊断路径。
 
 ## 回归门槛
 
@@ -281,7 +321,7 @@ Windows 侧包含单文件 entry、跳过发布时读回、按需校验和 64 Ki
 - Pass 4x 输入增长 ≤ 6x；
 - FullPipeline 4x 增长 ≤ 8x；
 - Compatibility 4x 增长 ≤ 8x；
-- Cache miss 5x 增长 ≤ 8x；
+- Cache miss 5x 增长 ≤ 8x；POSIX `stat` 快速路径把 1000 条目 miss 控制在 +1.5%（1.437 ms vs 1.415 ms），hit 仍比重构前快 10%；
 - Artifact load 和 query 渲染保持接近线性；
 - `tools/run_bench.py` 无新增失败；
 - 外部多进程吞吐不退化；
@@ -292,7 +332,7 @@ Windows 侧包含单文件 entry、跳过发布时读回、按需校验和 64 Ki
 
 - 这些是本地 P-core 测量，不保证跨机器一致。
 - governor、SMT、后台负载和内存带宽会影响绝对值。
-- Windows 与 Linux 的绝对值受分配器和文件系统影响；cache 的 8–16x 差距是 NTFS 元数据成本，不是算法差异，详见「跨平台对照」。
+- Windows 与 Linux 的绝对值受分配器和文件系统影响；cache 的 5–30x 差距是 NTFS 元数据成本，不是算法差异，详见「跨平台对照」。
 - `LookupMissDiagnose` 故意昂贵；除非需要精确原因，否则使用默认 miss 路径。
 - 多线程 benchmark 必须看 `real_time`；`cpu_time` 会低估。
 - fixture 是合成负载；真实项目的 include 树、模板实例化和 I/O 可能不同。

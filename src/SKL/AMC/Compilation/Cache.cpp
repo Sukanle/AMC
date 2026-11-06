@@ -48,11 +48,11 @@ constexpr const char *kStatsName = "stats";
 constexpr const char *kEntryMagic = "AMCACHv2";
 constexpr uint32_t kEntryFormatVersion = 2;
 constexpr uint64_t kEntryHeaderSize = 8 + 4 + 4 + 4 + 4;
-constexpr uint32_t kEntryMaxArtifacts = 4096;
+constexpr uint32_t kEntryMaxArtifacts = 4'096;
 // Entries larger than this are mapped instead of read into a temporary buffer.
 // Mapping a small entry costs more than reading it (the mapping code stats the
 // file and faults a page), but it avoids a full copy once the payload is large.
-constexpr uint64_t kMapThreshold = 64 * 1024;
+constexpr uint64_t kMapThreshold = 64 * 1'024;
 constexpr const char *kManifestSchema = "abix.instantiation-cache/1";
 constexpr uint64_t kRequestDomain = 0x494e5354ULL;    // "INST"
 constexpr uint64_t kTemplateDomain = 0x54454d50ULL;   // "TEMP"
@@ -373,8 +373,7 @@ CacheCounters read_counters(const fs::path &root) {
     size_t begin = 0;
     while (begin < text.size()) {
         const size_t end = text.find('\n', begin);
-        const std::string line =
-            text.substr(begin, end == std::string::npos ? std::string::npos : end - begin);
+        const std::string line = text.substr(begin, end == std::string::npos ? std::string::npos : end - begin);
         const size_t space = line.find(' ');
         if (space != std::string::npos) {
             const std::string key = line.substr(0, space);
@@ -393,9 +392,15 @@ CacheCounters read_counters(const fs::path &root) {
 }
 
 void write_counters(const fs::path &root, const CacheCounters &counters) {
-    const std::string text = "hits " + std::to_string(counters.hits) + "\n"
-                           + "misses " + std::to_string(counters.misses) + "\n"
-                           + "stores " + std::to_string(counters.stores) + "\n";
+    const std::string text = "hits "
+                           + std::to_string(counters.hits)
+                           + "\n"
+                           + "misses "
+                           + std::to_string(counters.misses)
+                           + "\n"
+                           + "stores "
+                           + std::to_string(counters.stores)
+                           + "\n";
     std::error_code ec;
     fs::create_directories(root, ec);
     if (ec) return;
@@ -806,47 +811,55 @@ CacheLookup InstantiationCache::lookup(const InstantiationBuildInputs &inputs, c
     result.entry = entry_file(result.build_key);
     const fs::path entry = result.entry;
     std::error_code ec;
-    // Open the entry directly instead of stat'ing it first: on Windows the
-    // failed existence check alone costs about as much as the whole read of a
-    // small entry, and a missing file simply fails to open.
-    EntryFile file;
-    std::string error;
-    const EntryRead read = read_entry_file(entry, file, error);
-    if (read == EntryRead::missing) {
+#if !defined(_WIN32)
+    // POSIX: a missing entry is cheaper to detect with stat() than by
+    // constructing an ifstream. Windows keeps the direct-open path because
+    // CreateFile-based metadata operations are much more expensive there.
+    if (!fs::exists(entry, ec)) {
         result.status = CacheStatus::miss;
         result.reason = cache_reason_not_found;
-    } else if (read == EntryRead::malformed) {
-        result.status = CacheStatus::invalid_manifest;
-        result.reason = cache_reason_invalid_manifest;
-    } else if (file.manifest.schema_version != instantiation_schema_version
-               || file.manifest.protocol_version != instantiation_protocol_version) {
-        result.status = CacheStatus::schema_mismatch;
-        result.reason = file.manifest.schema_version != instantiation_schema_version
-                          ? cache_reason_schema_version_changed
-                          : cache_reason_protocol_version_changed;
-    } else if (options.verify_artifacts && !verify_entry_payload(entry, file, error)) {
-        result.status = CacheStatus::corrupted;
-        result.reason = cache_reason_corrupted_artifact;
-    } else {
-        // The entry is only reusable while every recorded dependency still
-        // hashes the same. This is what makes header changes invalidate
-        // without the cache key having to list them.
-        bool dependencies_ok = true;
-        for (const auto &dependency : file.manifest.dependencies)
-            if (!dependency_intact(dependency)) {
-                dependencies_ok = false;
-                break;
-            }
-        if (!dependencies_ok) {
+    } else
+#endif
+    {
+        EntryFile file;
+        std::string error;
+        const EntryRead read = read_entry_file(entry, file, error);
+        if (read == EntryRead::missing) {
             result.status = CacheStatus::miss;
-            result.reason = cache_reason_dependency_changed;
+            result.reason = cache_reason_not_found;
+        } else if (read == EntryRead::malformed) {
+            result.status = CacheStatus::invalid_manifest;
+            result.reason = cache_reason_invalid_manifest;
+        } else if (file.manifest.schema_version != instantiation_schema_version
+                   || file.manifest.protocol_version != instantiation_protocol_version) {
+            result.status = CacheStatus::schema_mismatch;
+            result.reason = file.manifest.schema_version != instantiation_schema_version
+                              ? cache_reason_schema_version_changed
+                              : cache_reason_protocol_version_changed;
+        } else if (options.verify_artifacts && !verify_entry_payload(entry, file, error)) {
+            result.status = CacheStatus::corrupted;
+            result.reason = cache_reason_corrupted_artifact;
+        } else {
+            // The entry is only reusable while every recorded dependency still
+            // hashes the same. This is what makes header changes invalidate
+            // without the cache key having to list them.
+            bool dependencies_ok = true;
+            for (const auto &dependency : file.manifest.dependencies)
+                if (!dependency_intact(dependency)) {
+                    dependencies_ok = false;
+                    break;
+                }
+            if (!dependencies_ok) {
+                result.status = CacheStatus::miss;
+                result.reason = cache_reason_dependency_changed;
+                return result;
+            }
+            result.status = CacheStatus::hit;
+            result.reason = cache_reason_hit;
+            result.artifacts = file.manifest.artifacts;
+            result.dependencies = file.manifest.dependencies;
             return result;
         }
-        result.status = CacheStatus::hit;
-        result.reason = cache_reason_hit;
-        result.artifacts = file.manifest.artifacts;
-        result.dependencies = file.manifest.dependencies;
-        return result;
     }
     // Fast path: only the "entry not found" case needs the diagnostic scan.
     // Invalid manifests, corrupted entries, schema drift and dependency changes
@@ -958,8 +971,7 @@ size_t InstantiationCache::clear() const {
             continue;
         }
         const std::string name = item.path().filename().string();
-        if (item.path().extension() == kEntrySuffix || name.rfind(".tmp-", 0) == 0)
-            remove.push_back(item.path());
+        if (item.path().extension() == kEntrySuffix || name.rfind(".tmp-", 0) == 0) remove.push_back(item.path());
     }
     for (const auto &path : remove)
         fs::remove_all(path, ec);

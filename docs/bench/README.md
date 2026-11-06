@@ -6,7 +6,7 @@
 
 This section records AMC's performance baselines, scaling behaviour and regression gates. It is evidence for the optimization plan, not a marketing page: every number below comes from a Release build, a pinned P-core set and Google Benchmark JSON.
 
-> Baseline snapshot: **2026-11-06**, after the C++ frontend/backend split, shared CodeIn/Codegen helpers and the OPT-4/OPT-6/OPT-7 performance work. The Windows comparison and the post-optimization cache numbers are in "Cross-platform: Windows and CachyOS" below.
+> Baseline snapshot: **2026-11-07** for the Linux cache retest; pass/artifact/query/multifile and Windows cross-platform data are from **2026-11-06**. The tree includes the C++ frontend/backend split, shared CodeIn/Codegen helpers, OPT-4/OPT-6/OPT-7 and the single-file cache rework.
 
 ## What is measured
 
@@ -22,12 +22,12 @@ This section records AMC's performance baselines, scaling behaviour and regressi
 
 ## Method
 
-- Release build, Google Benchmark, `--benchmark_repetitions=3`, `--benchmark_min_time=0.2s`.
+- Release build, Google Benchmark, `--benchmark_min_time=0.2s`; the original pass/artifact/query tables use 3 repetitions, the cache retest and Windows comparison use 5.
 - CPU affinity restricted to the P-core set (`tools/run_bench.py --pin p`).
 - Values are **wall time** (`real_time`). `cpu_time` is not used for multi-threaded or multi-process cases because it only counts the calling thread.
 - Inputs are generated deterministically by each fixture. Page cache is warm; this measures AMC, not cold disk I/O.
 - `ctest -L perf` runs a short 0.05s smoke version of every suite.
-- The pass/query/artifact tables are a point-in-time snapshot; absolute values will drift with compiler, CPU and governor.
+- The 2026-11-07 Linux retest kept Pass, Artifact, Query and Multifile within ±3%, so those tables keep the 2026-11-06 values; only Cache is updated. Absolute values still drift with compiler, CPU and governor.
 
 Reproduce:
 
@@ -93,20 +93,47 @@ full load         91.4 ms
 
 ## Cache
 
-200 / 1000 entries:
+200 / 1000 entries, P-core, mean wall time. This is the Linux retest after the
+single-file entry rework and the POSIX `stat` fast path (2026-11-07);
+pre-rework numbers are in [Optimization history](#optimization-history).
 
 | Benchmark         |      200 |      1000 | 5x input |
 | ----------------- | -------: | --------: | -------: |
-| StoreCold         | 2.964 ms | 15.306 ms |    5.16x |
-| LookupHit         | 1.141 ms |  6.029 ms |    5.28x |
-| LookupMiss        | 0.282 ms |  1.415 ms |    5.02x |
-| LookupConcurrent  | 0.406 ms |  1.977 ms |    4.87x |
-| VerifyAll         | 1.029 ms |  5.459 ms |    5.31x |
-| DependencyChanged |   5.4 µs |    5.4 µs |    1.00x |
+| StoreCold         | 1.668 ms |  8.444 ms |    5.06x |
+| LookupHit         | 1.044 ms |  5.407 ms |    5.18x |
+| LookupHitShallow  | 0.723 ms |  3.796 ms |    5.25x |
+| LookupMiss        | 0.290 ms |  1.437 ms |    4.96x |
+| LookupConcurrent  | 0.371 ms |  1.795 ms |    4.84x |
+| VerifyAll         | 0.845 ms |  4.381 ms |    5.18x |
+| DependencyChanged |   5.1 µs |    5.1 µs |    1.00x |
 
-`LookupMissDiagnose/200` is intentionally separate: **55.8 ms** at 200 entries. It scans manifests to explain the miss, which is the old behaviour and is only enabled when a caller asks for diagnosis. The default miss path is `not_found` in ~1.4 ms at 1000 entries.
+New cache cases:
 
-Cache writes are process-safe: entries are staged in a process-unique temporary directory and committed with rename; concurrent writers converge on one entry.
+| Benchmark                  |      200 |    1000 |
+| -------------------------- | -------: | ------: |
+| LookupHitWithDeps (8 deps) | 2.595 ms | 23.735 ms |
+| LookupHitLarge / 8 (1 MiB) |        — |  6.515 ms |
+
+Per-entry cost at 1000 entries: `StoreCold` 8.4 µs, `LookupHit` 5.4 µs,
+shallow hit 3.8 µs, miss 1.4 µs.
+
+The rework replaced the per-key directory with a single versioned entry file,
+stopped re-reading payloads during publish, opens the entry directly instead of
+doing a separate existence check, and maps payloads above 64 KiB. A POSIX-only
+`stat` fast path detects a missing entry before constructing an `ifstream`;
+Windows keeps direct open because `CreateFile`-based metadata is much more
+expensive there.
+
+Compared with the pre-rework baseline, `StoreCold` is 45% faster, `VerifyAll`
+20% faster and `LookupHit` 10% faster. `LookupMiss/1000` is 1.437 ms versus
+1.415 ms (+1.5%, about 0.02 µs per lookup); the POSIX fast path recovered the
++15% regression that direct open introduced, at the cost of about 4% on the hit
+path (5.407 ms versus 5.178 ms with direct open, still below the 6.029 ms
+pre-rework hit). `LookupMissDiagnose/200` is 52.9 ms and remains a separate
+diagnostic path that scans manifests.
+
+Cache writes are process-safe: entries are staged in a process-unique temporary
+file and committed with rename; concurrent writers converge on one entry.
 
 ## Query and context
 
@@ -222,21 +249,29 @@ The same machine and the same Release build, measured on Windows (MinGW/UCRT64 c
 
 ### Cache (ms, 200 / 1000 entries)
 
-The Windows column includes the single-file entry, the removed publish-time re-read, on-demand verification and mapping above 64 KiB:
+The CachyOS column is the 2026-11-07 retest after the single-file entry rework
+and the POSIX `stat` fast path. The Windows column includes the same single-file
+entry, direct open, on-demand verification and mapping above 64 KiB; the POSIX
+`stat` fast path does not apply there.
 
-| Benchmark                |        CachyOS | Windows (optimized) |         Ratio |
-| ------------------------ | -------------: | ------------------: | ------------: |
-| StoreCold                | 2.964 / 15.306 |    49.340 / 250.868 | 16.6x / 16.4x |
-| LookupHit                |  1.141 / 6.029 |      9.405 / 48.017 |   8.2x / 8.0x |
-| LookupHitShallow         |             -- |      4.435 / 22.798 |   3.9x / 3.8x |
-| LookupMiss               |  0.282 / 1.415 |       1.676 / 8.833 |   5.9x / 6.2x |
-| LookupConcurrent         |  0.406 / 1.977 |      3.597 / 17.267 |   8.9x / 8.7x |
-| VerifyAll                |  1.029 / 5.459 |      9.979 / 51.538 |   9.7x / 9.4x |
-| DependencyChanged        |         5.4 µs |               48 µs |          8.9x |
-| LookupMissDiagnose / 200 |        55.8 ms |              506 ms |          9.1x |
+| Benchmark | CachyOS | Windows (optimized) | Ratio |
+| --- | ---: | ---: | ---: |
+| StoreCold | 1.668 / 8.444 | 49.340 / 250.868 | 29.6x / 29.7x |
+| LookupHit | 1.044 / 5.407 | 9.405 / 48.017 | 9.0x / 8.9x |
+| LookupHitShallow | 0.723 / 3.796 | 4.435 / 22.798 | 6.1x / 6.0x |
+| LookupMiss | 0.290 / 1.437 | 1.676 / 8.833 | 5.8x / 6.1x |
+| LookupConcurrent | 0.371 / 1.795 | 3.597 / 17.267 | 9.7x / 9.6x |
+| VerifyAll | 0.845 / 4.381 | 9.979 / 51.538 | 11.8x / 11.8x |
+| DependencyChanged | 5.1 µs | 48 µs | 9.3x |
+| LookupMissDiagnose / 200 | 52.86 ms | 506 ms | 9.6x |
+| LookupHitLarge / 8 | 6.515 ms | 8.565 ms | 1.31x |
 
-> Shallow hits (`verify_artifacts=false`) are not measured separately on CachyOS;
-> the ratio uses the Linux `LookupHit` baseline.
+`LookupHitWithDeps` is intentionally not in the table: Windows measured ~52 ms
+for 1000 entries under normal conditions, but the same binary saw 645 ms in one
+outlier run. Dependency reads follow the host filesystem state.
+
+The CachyOS/Windows ratio grows after the rework because Linux got much faster;
+the residual Windows cost is NTFS metadata, not an algorithmic difference.
 
 ### Query and multi-file
 
@@ -247,7 +282,7 @@ The Windows column includes the single-file entry, the removed publish-time re-r
 ### Reading the numbers
 
 - **No platform-specific complexity regression**: every 4x / 2x / 5x growth curve matches CachyOS, and the gates above hold on Windows as well.
-- The constant factors form three bands: `VerifyMetadata`, `Materialize` and exact queries at about 1.0x; most passes, sequential artifact I/O and JSON rendering at 1.2–1.6x; the cache at 8–16x.
+- The constant factors form three bands: `VerifyMetadata`, `Materialize` and exact queries at about 1.0x; most passes, sequential artifact I/O and JSON rendering at 1.2–1.6x; the cache at 5–30x (widest for `StoreCold`, where Linux dropped to 8.4 µs/entry).
 - Exact queries being faster on Windows shows the gap is not code generation but **allocator plus filesystem**; the cache residue is NTFS metadata.
 - Per-entry cache cost on Windows before/after the optimization: `StoreCold` 533 → 251 µs, `LookupHit` 96 → 48 µs, shallow hit 23 µs.
 
@@ -269,10 +304,17 @@ The Windows column includes the single-file entry, the removed publish-time re-r
 | Query FunctionExact / 5k         |        370.96 µs |  12.6 µs |
 | LoadAbiOnly / 5k                 |   91.4 ms (full) |  16.5 ms |
 | ContextJsonStream / 20k          | 46.7 ms (string) |  44.7 ms |
+| Cache StoreCold / 1000 (Linux)   |         15.306 ms |  8.444 ms |
+| Cache LookupHit / 1000 (Linux)   |          6.029 ms |  5.407 ms |
+| Cache VerifyAll / 1000 (Linux)   |          5.459 ms |  4.381 ms |
+| Cache LookupHitShallow / 1000 (Linux) |             — |  3.796 ms |
+| Cache LookupMiss / 1000 (Linux)  |          1.415 ms |  1.437 ms |
 | Cache StoreCold / 1000 (Windows) |         533.1 ms | 250.9 ms |
 | Cache LookupHit / 1000 (Windows) |          96.1 ms |  48.0 ms |
 
-The large wins came from removing quadratic scans, then from loading only the sidecars a caller needs. Parallelism was deliberately the last step.
+The large wins came from removing quadratic scans, then from loading only the sidecars a caller needs, and finally from replacing the per-key cache directory with a single entry file. Parallelism was deliberately the last step.
+
+`LookupMiss/1000` on Linux briefly moved from 1.415 ms to a stable 1.627 ms mean (+15%) after direct open. The POSIX-only `stat` fast path brought it back to 1.437 ms (+1.5%). `LookupHit/1000` is 5.407 ms, about 4% slower than direct open but still 10% faster than pre-rework. `LookupMissDiagnose` remains a separate scan path.
 
 ## Regression gates
 
@@ -282,7 +324,7 @@ A performance change is accepted only when:
 - Pass 4x input growth stays ≤ 6x;
 - FullPipeline 4x growth stays ≤ 8x;
 - Compatibility 4x growth stays ≤ 8x;
-- Cache miss 5x growth stays ≤ 8x;
+- Cache miss 5x growth stays ≤ 8x; the POSIX `stat` fast path keeps 1000-entry miss at +1.5% (1.437 ms vs 1.415 ms), while hit remains 10% faster than pre-rework;
 - Artifact load and query rendering stay near linear;
 - no new failures in `tools/run_bench.py`;
 - external multi-process throughput does not regress;
@@ -293,7 +335,7 @@ A performance change is accepted only when:
 
 - These are local P-core measurements, not a cross-machine guarantee.
 - Governor, SMT, background load and memory bandwidth affect absolute numbers.
-- Windows and Linux absolutes depend on the allocator and filesystem; the cache's 8–16x gap is NTFS metadata cost, not an algorithmic difference. See "Cross-platform: Windows and CachyOS".
+- Windows and Linux absolutes depend on the allocator and filesystem; the cache's 5–30x gap is NTFS metadata cost, not an algorithmic difference. See "Cross-platform: Windows and CachyOS".
 - `LookupMissDiagnose` is intentionally expensive; use the default miss path unless a precise reason is required.
 - Multi-threaded benchmarks must be read with `real_time`; `cpu_time` under-reports them.
 - The benchmark fixtures are synthetic; real projects may have different include trees, template instantiation costs and I/O patterns.
