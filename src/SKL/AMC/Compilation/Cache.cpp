@@ -36,6 +36,7 @@ namespace {
 namespace fs = std::filesystem;
 
 constexpr const char *kEntrySuffix = ".entry";
+constexpr const char *kStatsName = "stats";
 // One entry is a single file:
 //
 //   magic "AMCACHv2" | u32 format | u32 flags | u32 manifest_size |
@@ -345,6 +346,73 @@ bool dependency_intact(const CacheDependency &dependency) {
     std::string content;
     if (!read_file(fs::path(dependency.path), content)) return false;
     return digest_bytes(content.data(), content.size(), digest_domain_dependency) == dependency.digest;
+}
+
+// Persisted usage counters. The file is a few short lines so it can be appended
+// to without a parser; updates are read-modify-write and therefore approximate
+// when several builds share one cache.
+struct CacheCounters {
+    uint64_t hits = 0;
+    uint64_t misses = 0;
+    uint64_t stores = 0;
+};
+
+uint64_t parse_counter(const std::string &text) {
+    uint64_t value = 0;
+    for (const char c : text) {
+        if (c < '0' || c > '9') return 0;
+        value = value * 10 + static_cast<uint64_t>(c - '0');
+    }
+    return value;
+}
+
+CacheCounters read_counters(const fs::path &root) {
+    CacheCounters counters;
+    std::string text;
+    if (!read_file(root / kStatsName, text)) return counters;
+    size_t begin = 0;
+    while (begin < text.size()) {
+        const size_t end = text.find('\n', begin);
+        const std::string line =
+            text.substr(begin, end == std::string::npos ? std::string::npos : end - begin);
+        const size_t space = line.find(' ');
+        if (space != std::string::npos) {
+            const std::string key = line.substr(0, space);
+            const uint64_t value = parse_counter(line.substr(space + 1));
+            if (key == "hits")
+                counters.hits = value;
+            else if (key == "misses")
+                counters.misses = value;
+            else if (key == "stores")
+                counters.stores = value;
+        }
+        if (end == std::string::npos) break;
+        begin = end + 1;
+    }
+    return counters;
+}
+
+void write_counters(const fs::path &root, const CacheCounters &counters) {
+    const std::string text = "hits " + std::to_string(counters.hits) + "\n"
+                           + "misses " + std::to_string(counters.misses) + "\n"
+                           + "stores " + std::to_string(counters.stores) + "\n";
+    std::error_code ec;
+    fs::create_directories(root, ec);
+    if (ec) return;
+    const fs::path path = root / kStatsName;
+    const fs::path temporary = root / ".stats.tmp";
+    {
+        std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
+        if (!output) return;
+        output.write(text.data(), static_cast<std::streamsize>(text.size()));
+        if (!output) {
+            fs::remove(temporary, ec);
+            return;
+        }
+    }
+    fs::remove(path, ec);
+    fs::rename(temporary, path, ec);
+    if (ec) fs::remove(temporary, ec);
 }
 
 bool same_dependencies(const std::vector<CacheDependency> &a, const std::vector<CacheDependency> &b) {
@@ -896,6 +964,91 @@ size_t InstantiationCache::clear() const {
     for (const auto &path : remove)
         fs::remove_all(path, ec);
     return remove.size();
+}
+
+void InstantiationCache::record_lookup(CacheStatus status) const {
+    CacheCounters counters = read_counters(fs::path(_root));
+    if (status == CacheStatus::hit)
+        ++counters.hits;
+    else
+        ++counters.misses;
+    write_counters(fs::path(_root), counters);
+}
+
+void InstantiationCache::record_store() const {
+    CacheCounters counters = read_counters(fs::path(_root));
+    ++counters.stores;
+    write_counters(fs::path(_root), counters);
+}
+
+CacheStats InstantiationCache::stats() const {
+    CacheStats result;
+    std::error_code ec;
+    const auto now = fs::file_time_type::clock::now();
+    bool first = true;
+    for (const auto &item : fs::directory_iterator(fs::path(_root), ec)) {
+        if (!item.is_regular_file(ec)) continue;
+        if (item.path().extension() != kEntrySuffix) continue;
+        ++result.entries;
+        const auto bytes = fs::file_size(item.path(), ec);
+        if (!ec) result.bytes += bytes;
+        const auto mtime = fs::last_write_time(item.path(), ec);
+        if (ec) continue;
+        const auto age = std::chrono::duration_cast<std::chrono::seconds>(now - mtime).count();
+        const uint64_t seconds = age < 0 ? 0 : static_cast<uint64_t>(age);
+        if (first) {
+            result.oldest_age_seconds = seconds;
+            result.newest_age_seconds = seconds;
+            first = false;
+        } else {
+            if (seconds > result.oldest_age_seconds) result.oldest_age_seconds = seconds;
+            if (seconds < result.newest_age_seconds) result.newest_age_seconds = seconds;
+        }
+    }
+    const CacheCounters counters = read_counters(fs::path(_root));
+    result.hits = counters.hits;
+    result.misses = counters.misses;
+    result.stores = counters.stores;
+    return result;
+}
+
+PruneResult InstantiationCache::prune(const PruneOptions &options, bool dry_run) const {
+    struct Item {
+        fs::path path;
+        uint64_t bytes = 0;
+        fs::file_time_type mtime{};
+    };
+    PruneResult result;
+    std::error_code ec;
+    std::vector<Item> items;
+    uint64_t total = 0;
+    for (const auto &entry : fs::directory_iterator(fs::path(_root), ec)) {
+        if (!entry.is_regular_file(ec)) continue;
+        if (entry.path().extension() != kEntrySuffix) continue;
+        const auto bytes = fs::file_size(entry.path(), ec);
+        if (ec) continue;
+        const auto mtime = fs::last_write_time(entry.path(), ec);
+        if (ec) continue;
+        items.push_back({entry.path(), static_cast<uint64_t>(bytes), mtime});
+        total += static_cast<uint64_t>(bytes);
+    }
+    std::sort(items.begin(), items.end(), [](const Item &a, const Item &b) { return a.mtime < b.mtime; });
+
+    const auto now = fs::file_time_type::clock::now();
+    for (const auto &item : items) {
+        bool remove = false;
+        if (options.max_age_seconds != 0) {
+            const auto age = std::chrono::duration_cast<std::chrono::seconds>(now - item.mtime).count();
+            if (age >= 0 && static_cast<uint64_t>(age) > options.max_age_seconds) remove = true;
+        }
+        if (!remove && options.max_bytes != 0 && total > options.max_bytes) remove = true;
+        if (!remove) continue;
+        if (!dry_run) fs::remove(item.path, ec);
+        total -= item.bytes;
+        ++result.removed;
+        result.freed_bytes += item.bytes;
+    }
+    return result;
 }
 
 }   // namespace amc

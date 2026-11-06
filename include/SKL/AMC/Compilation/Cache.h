@@ -154,6 +154,29 @@ struct CacheLookup {
     std::vector<CacheDependency> dependencies;   // populated on a verified hit
 };
 
+// Usage counters persisted next to the entries. They are approximate under
+// concurrent writers (counter updates are read-modify-write) which is enough to
+// answer "is this cache worth keeping".
+struct CacheStats {
+    uint64_t entries = 0;               // committed entry files
+    uint64_t bytes = 0;                 // total size of those files
+    uint64_t hits = 0;                  // recorded lookups that reused an entry
+    uint64_t misses = 0;                // recorded lookups that rebuilt
+    uint64_t stores = 0;                // recorded entries written
+    uint64_t oldest_age_seconds = 0;    // age of the least recently used entry
+    uint64_t newest_age_seconds = 0;    // age of the most recently used entry
+};
+
+struct PruneOptions {
+    uint64_t max_bytes = 0;         // 0 = no byte budget
+    uint64_t max_age_seconds = 0;   // 0 = no age limit
+};
+
+struct PruneResult {
+    uint64_t removed = 0;
+    uint64_t freed_bytes = 0;
+};
+
 // A content-addressed, immutable instantiation cache rooted at one directory.
 // One entry is a single self-describing file committed by rename, so a failed or
 // partial write never becomes a visible entry and a hit costs one file open
@@ -204,6 +227,21 @@ public:
 
     // Remove every committed entry, returning the number removed.
     size_t clear() const;
+
+    // Record one lookup outcome / one stored entry so `stats` can report a hit
+    // rate. Persisted counters are approximate under concurrent writers and are
+    // silently ignored when the stats file cannot be written.
+    void record_lookup(CacheStatus status) const;
+    void record_store() const;
+
+    // Entries, bytes and the recorded hit/miss/store counters. Walking the
+    // entries costs one directory scan; callers that only need counters can
+    // ignore the fields they do not use.
+    CacheStats stats() const;
+
+    // Remove entries to satisfy a byte budget and/or an age limit, least
+    // recently used first. `dry_run` reports what would be removed.
+    PruneResult prune(const PruneOptions &options, bool dry_run = false) const;
 
     std::string entry_file(const Hash128 &build_key) const;
 

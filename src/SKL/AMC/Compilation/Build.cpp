@@ -860,6 +860,7 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
                 // payload that fails that check means the entry is damaged: fall
                 // back to running the frontend again instead of failing the build.
                 const auto cached = cache.lookup(cache_inputs, amc::LookupOptions{false, false});
+                cache.record_lookup(cached.status);
                 if (cached.status == amc::CacheStatus::hit) {
                     std::string bytes;
                     bool reusable = false;
@@ -1201,7 +1202,8 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
                             {"frontend.abix.semantic", std::string((std::istreambuf_iterator<char>(cached_semantic)),
                                                            std::istreambuf_iterator<char>())});
                     }
-                    (void)cache.store(cache_inputs, artifacts, dependencies, store_error);
+                    if (cache.store(cache_inputs, artifacts, dependencies, store_error))
+                        cache.record_store();
                 }
             }
             fs::remove(temporary, ec);
