@@ -40,8 +40,6 @@
 #include <tuple>
 #include <vector>
 
-#define NOMINMAX
-
 #if !defined(_WIN32)
 #  include <sys/wait.h>
 #  include <unistd.h>
