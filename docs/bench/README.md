@@ -6,7 +6,7 @@
 
 This section records AMC's performance baselines, scaling behaviour and regression gates. It is evidence for the optimization plan, not a marketing page: every number below comes from a Release build, a pinned P-core set and Google Benchmark JSON.
 
-> Baseline snapshot: **2026-11-06**, after the C++ frontend/backend split, shared CodeIn/Codegen helpers and the OPT-4/OPT-6/OPT-7 performance work.
+> Baseline snapshot: **2026-11-06**, after the C++ frontend/backend split, shared CodeIn/Codegen helpers and the OPT-4/OPT-6/OPT-7 performance work. The Windows comparison and the post-optimization cache numbers are in "Cross-platform: Windows and CachyOS" below.
 
 ## What is measured
 
@@ -189,17 +189,88 @@ Every process uses a process-unique frontend/verify temporary path. Concurrent w
 
 This is useful evidence that read-only loading has no shared-state hazard, but it is **not** the product model. The product model is external processes.
 
+## Cross-platform: Windows and CachyOS
+
+The same machine and the same Release build, measured on Windows (MinGW/UCRT64 clang) and CachyOS. The Windows side used `--pin p`, real-time protection off, the high-performance power plan, `--benchmark_repetitions=5`, `--benchmark_min_time=0.2s`, and was launched from pwsh so shell environment variables stay out of the picture.
+
+### Pass (ms, 5k / 20k)
+
+| Benchmark      |        CachyOS |        Windows |         Ratio |
+| -------------- | -------------: | -------------: | ------------: |
+| SemanticVerify |  0.724 / 3.158 |  1.048 / 4.863 | 1.45x / 1.54x |
+| AbiVerify      |  1.260 / 5.581 |  2.157 / 9.612 | 1.71x / 1.72x |
+| Lowering       | 1.995 / 10.080 | 2.617 / 13.903 | 1.31x / 1.38x |
+| LoweringVerify | 2.869 / 13.296 | 3.869 / 20.338 | 1.35x / 1.53x |
+| FullPipeline   | 4.698 / 21.150 | 6.978 / 31.394 | 1.49x / 1.48x |
+| Compatibility  | 3.576 / 15.518 | 3.961 / 17.379 | 1.11x / 1.12x |
+
+### Artifact (ms, 5k / 10k)
+
+| Benchmark         |          CachyOS |           Windows |         Ratio |
+| ----------------- | ---------------: | ----------------: | ------------: |
+| WriteAbix         |  20.229 / 42.486 |   25.778 / 57.089 | 1.27x / 1.34x |
+| ReadAbix          |  17.021 / 38.404 |   21.592 / 49.257 | 1.27x / 1.28x |
+| LoadAbiOnly       |  16.507 / 37.401 |   21.780 / 49.282 | 1.32x / 1.32x |
+| LoadWithSemantic  | 61.275 / 133.081 |  76.694 / 171.786 | 1.25x / 1.29x |
+| LoadWithLowering  | 55.130 / 108.595 |  76.768 / 170.008 | 1.39x / 1.57x |
+| LoadArtifact      | 91.358 / 197.657 | 143.004 / 295.432 | 1.57x / 1.49x |
+| BuildMetadata     |    1.566 / 3.198 |     2.424 / 4.890 | 1.55x / 1.53x |
+| VerifyMetadata    |    1.036 / 2.063 |     1.045 / 2.087 | 1.01x / 1.01x |
+| ModuleFromRegion  |    0.764 / 1.561 |     0.801 / 1.780 | 1.05x / 1.14x |
+| Materialize       |    0.089 / 0.177 |     0.092 / 0.188 | 1.03x / 1.06x |
+| MaterializeRegion |    0.853 / 1.725 |     0.907 / 1.993 | 1.06x / 1.16x |
+
+### Cache (ms, 200 / 1000 entries)
+
+The Windows column includes the single-file entry, the removed publish-time re-read, on-demand verification and mapping above 64 KiB:
+
+| Benchmark                |        CachyOS | Windows (optimized) |         Ratio |
+| ------------------------ | -------------: | ------------------: | ------------: |
+| StoreCold                | 2.964 / 15.306 |    49.340 / 250.868 | 16.6x / 16.4x |
+| LookupHit                |  1.141 / 6.029 |      9.405 / 48.017 |   8.2x / 8.0x |
+| LookupHitShallow         |             -- |      4.435 / 22.798 |   3.9x / 3.8x |
+| LookupMiss               |  0.282 / 1.415 |       1.676 / 8.833 |   5.9x / 6.2x |
+| LookupConcurrent         |  0.406 / 1.977 |      3.597 / 17.267 |   8.9x / 8.7x |
+| VerifyAll                |  1.029 / 5.459 |      9.979 / 51.538 |   9.7x / 9.4x |
+| DependencyChanged        |         5.4 µs |               48 µs |          8.9x |
+| LookupMissDiagnose / 200 |        55.8 ms |              506 ms |          9.1x |
+
+> Shallow hits (`verify_artifacts=false`) are not measured separately on CachyOS;
+> the ratio uses the Linux `LookupHit` baseline.
+
+### Query and multi-file
+
+- Exact queries are actually faster on Windows: `TypeExact` 0.95x / 0.85x, `TypeSubstring` 0.77x / 0.77x, `FunctionExact` 0.90x / 0.93x (5k / 20k).
+- Rendering and context are 1.1–1.3x slower: `TypesJson` 1.32x / 1.33x, `ContextJson` 1.26x / 1.26x.
+- Multi-file runs are 1.17–1.22x slower sequentially; the thread pool is faster on Windows at 8 / 16 files (parallel speedup 6.40x vs 4.44x, 6.88x vs 5.79x).
+
+### Reading the numbers
+
+- **No platform-specific complexity regression**: every 4x / 2x / 5x growth curve matches CachyOS, and the gates above hold on Windows as well.
+- The constant factors form three bands: `VerifyMetadata`, `Materialize` and exact queries at about 1.0x; most passes, sequential artifact I/O and JSON rendering at 1.2–1.6x; the cache at 8–16x.
+- Exact queries being faster on Windows shows the gap is not code generation but **allocator plus filesystem**; the cache residue is NTFS metadata.
+- Per-entry cache cost on Windows before/after the optimization: `StoreCold` 533 → 251 µs, `LookupHit` 96 → 48 µs, shallow hit 23 µs.
+
+### Measurement caveats
+
+- `sd` in the tables is within-run noise; cross-run absolutes drift by 0.5–1.4x, so prefer same-run comparisons.
+- `AbiVerify` once reported 17.8 ms on Windows (stable within that run); three reruns gave 9.7–10.6 ms, so that sample is excluded.
+- Dependency reads follow the host filesystem: the same binary measured `LookupHitWithDeps/1000` at 52 ms → 645 ms → 52 ms within one day.
+- The Windows numbers come from a single run and are a reference, not a replacement for the CachyOS baseline.
+
 ## Optimization history
 
-| Change                   |           Before |    After |
-| ------------------------ | ---------------: | -------: |
-| Lowering / 20k           |         552.7 ms |  10.1 ms |
-| FullPipeline / 20k       |         525.7 ms |  21.2 ms |
-| Compatibility / 20k      |         455.4 ms |  15.5 ms |
-| Cache LookupMiss / 1000  |          1.454 s | 1.415 ms |
-| Query FunctionExact / 5k |        370.96 µs |  12.6 µs |
-| LoadAbiOnly / 5k         |   91.4 ms (full) |  16.5 ms |
-| ContextJsonStream / 20k  | 46.7 ms (string) |  44.7 ms |
+| Change                           |           Before |    After |
+| -------------------------------- | ---------------: | -------: |
+| Lowering / 20k                   |         552.7 ms |  10.1 ms |
+| FullPipeline / 20k               |         525.7 ms |  21.2 ms |
+| Compatibility / 20k              |         455.4 ms |  15.5 ms |
+| Cache LookupMiss / 1000          |          1.454 s | 1.415 ms |
+| Query FunctionExact / 5k         |        370.96 µs |  12.6 µs |
+| LoadAbiOnly / 5k                 |   91.4 ms (full) |  16.5 ms |
+| ContextJsonStream / 20k          | 46.7 ms (string) |  44.7 ms |
+| Cache StoreCold / 1000 (Windows) |         533.1 ms | 250.9 ms |
+| Cache LookupHit / 1000 (Windows) |          96.1 ms |  48.0 ms |
 
 The large wins came from removing quadratic scans, then from loading only the sidecars a caller needs. Parallelism was deliberately the last step.
 
@@ -215,12 +286,14 @@ A performance change is accepted only when:
 - Artifact load and query rendering stay near linear;
 - no new failures in `tools/run_bench.py`;
 - external multi-process throughput does not regress;
-- shared-cache concurrent builds keep identical output digests.
+- shared-cache concurrent builds keep identical output digests;
+- Windows meets the same growth gates (see "Cross-platform: Windows and CachyOS").
 
 ## Caveats
 
 - These are local P-core measurements, not a cross-machine guarantee.
 - Governor, SMT, background load and memory bandwidth affect absolute numbers.
+- Windows and Linux absolutes depend on the allocator and filesystem; the cache's 8–16x gap is NTFS metadata cost, not an algorithmic difference. See "Cross-platform: Windows and CachyOS".
 - `LookupMissDiagnose` is intentionally expensive; use the default miss path unless a precise reason is required.
 - Multi-threaded benchmarks must be read with `real_time`; `cpu_time` under-reports them.
 - The benchmark fixtures are synthetic; real projects may have different include trees, template instantiation costs and I/O patterns.
