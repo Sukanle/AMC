@@ -127,90 +127,96 @@ jobs:
           grep -qx rust languages.txt
           grep -qx zig languages.txt
 
-  macos:
-    name: macOS (Apple Silicon)
-    runs-on: macos-latest
-    timeout-minutes: 60
-    steps:
-      - name: Checkout AMC
-        uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          brew install cmake ninja llvm@${LLVM_VERSION} catch2 lua@5.4
-
-      - name: Build pinned fmt
-        run: |
-          curl -fsSL -o fmt.tar.gz "https://github.com/fmtlib/fmt/archive/refs/tags/${FMT_VERSION}.tar.gz"
-          tar xzf fmt.tar.gz
-          cmake -S "fmt-${FMT_VERSION}" -B fmt-build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-            -DFMT_TEST=OFF -DFMT_DOC=OFF \
-            -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/fmt"
-          cmake --build fmt-build --target install --parallel 2
-
-      - name: Build pinned toml++
-        run: |
-          curl -fsSL -o tomlplusplus.tar.gz "https://github.com/marzer/tomlplusplus/archive/refs/tags/v${TOMLPLUSPLUS_VERSION}.tar.gz"
-          tar xzf tomlplusplus.tar.gz
-          cmake -S "tomlplusplus-${TOMLPLUSPLUS_VERSION}" -B tomlplusplus-build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DTOMLPLUSPLUS_BUILD_TESTS=OFF -DTOMLPLUSPLUS_BUILD_EXAMPLES=OFF \
-            -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/tomlplusplus"
-          cmake --build tomlplusplus-build --target install --parallel 2
-
-      - name: Build pinned Google Benchmark
-        run: |
-          curl -fsSL -o benchmark.tar.gz "https://github.com/google/benchmark/archive/refs/tags/v${BENCHMARK_VERSION}.tar.gz"
-          tar xzf benchmark.tar.gz
-          cmake -S "benchmark-${BENCHMARK_VERSION}" -B benchmark-build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBENCHMARK_ENABLE_TESTING=OFF -DBENCHMARK_ENABLE_GTEST_TESTS=OFF \
-            -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/benchmark"
-          cmake --build benchmark-build --target install --parallel 2
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Setup Zig
-        uses: mlugg/setup-zig@v2
-        with:
-          version: ${{ env.ZIG_VERSION }}
-
-      - name: Cache FetchContent dependencies
-        uses: actions/cache@v4
-        with:
-          path: dependencies
-          key: ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ hashFiles('CMakeLists.txt', 'cmake/Dependencies.cmake') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-
-
-      - name: Configure and build AMC
-        run: |
-          PREFIXES="$(brew --prefix llvm@${LLVM_VERSION});$RUNNER_TEMP/fmt;$RUNNER_TEMP/tomlplusplus;$RUNNER_TEMP/benchmark;$(brew --prefix catch2);$(brew --prefix lua@5.4)"
-          export PKG_CONFIG_PATH="$(brew --prefix lua@5.4)/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DAMC_ABIX_REF="$ABIX_REF" \
-            -DAMC_EPCD_REF="$EPCD_REF" \
-            -DAMC_BUILD_BENCHMARKS=ON \
-            -DCMAKE_PREFIX_PATH="$PREFIXES"
-          cmake --build build --parallel 2
-
-      - name: Test
-        run: |
-          export PKG_CONFIG_PATH="$(brew --prefix lua@5.4)/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
-          ctest --test-dir build -N -L perf | grep -q amc-artifact-perf-bench
-          ctest --test-dir build --output-on-failure --timeout 180
-
-      - name: Install and smoke
-        run: |
-          cmake --install build --prefix "$RUNNER_TEMP/amc-install"
-          "$RUNNER_TEMP/amc-install/bin/amc" --list-languages | tee languages.txt
-          grep -qx cpp languages.txt
-          grep -qx rust languages.txt
-          grep -qx zig languages.txt
+  # macOS 构建已改为自托管 runner，这里停用 GitHub 托管的 macOS job。
+  # 需要恢复 GitHub 托管构建时，取消下面整段注释即可。
+  #
+  # macOS builds now run on a self-hosted runner, so the GitHub-hosted job is
+  # disabled. Uncomment the block below to re-enable GitHub-hosted builds.
+  #
+  # macos:
+  #   name: macOS (Apple Silicon)
+  #   runs-on: macos-latest
+  #   timeout-minutes: 60
+  #   steps:
+  #     - name: Checkout AMC
+  #       uses: actions/checkout@v4
+  #
+  #     - name: Install dependencies
+  #       run: |
+  #         brew install cmake ninja llvm@${LLVM_VERSION} catch2 lua@5.4
+  #
+  #     - name: Build pinned fmt
+  #       run: |
+  #         curl -fsSL -o fmt.tar.gz "https://github.com/fmtlib/fmt/archive/refs/tags/${FMT_VERSION}.tar.gz"
+  #         tar xzf fmt.tar.gz
+  #         cmake -S "fmt-${FMT_VERSION}" -B fmt-build -G Ninja \
+  #           -DCMAKE_BUILD_TYPE=Release \
+  #           -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+  #           -DFMT_TEST=OFF -DFMT_DOC=OFF \
+  #           -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/fmt"
+  #         cmake --build fmt-build --target install --parallel 2
+  #
+  #     - name: Build pinned toml++
+  #       run: |
+  #         curl -fsSL -o tomlplusplus.tar.gz "https://github.com/marzer/tomlplusplus/archive/refs/tags/v${TOMLPLUSPLUS_VERSION}.tar.gz"
+  #         tar xzf tomlplusplus.tar.gz
+  #         cmake -S "tomlplusplus-${TOMLPLUSPLUS_VERSION}" -B tomlplusplus-build -G Ninja \
+  #           -DCMAKE_BUILD_TYPE=Release \
+  #           -DTOMLPLUSPLUS_BUILD_TESTS=OFF -DTOMLPLUSPLUS_BUILD_EXAMPLES=OFF \
+  #           -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/tomlplusplus"
+  #         cmake --build tomlplusplus-build --target install --parallel 2
+  #
+  #     - name: Build pinned Google Benchmark
+  #       run: |
+  #         curl -fsSL -o benchmark.tar.gz "https://github.com/google/benchmark/archive/refs/tags/v${BENCHMARK_VERSION}.tar.gz"
+  #         tar xzf benchmark.tar.gz
+  #         cmake -S "benchmark-${BENCHMARK_VERSION}" -B benchmark-build -G Ninja \
+  #           -DCMAKE_BUILD_TYPE=Release \
+  #           -DBENCHMARK_ENABLE_TESTING=OFF -DBENCHMARK_ENABLE_GTEST_TESTS=OFF \
+  #           -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/benchmark"
+  #         cmake --build benchmark-build --target install --parallel 2
+  #
+  #     - name: Setup Rust
+  #       uses: dtolnay/rust-toolchain@stable
+  #
+  #     - name: Setup Zig
+  #       uses: mlugg/setup-zig@v2
+  #       with:
+  #         version: ${{ env.ZIG_VERSION }}
+  #
+  #     - name: Cache FetchContent dependencies
+  #       uses: actions/cache@v4
+  #       with:
+  #         path: dependencies
+  #         key: ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ hashFiles('CMakeLists.txt', 'cmake/Dependencies.cmake') }}
+  #         restore-keys: |
+  #           ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-
+  #
+  #     - name: Configure and build AMC
+  #       run: |
+  #         PREFIXES="$(brew --prefix llvm@${LLVM_VERSION});$RUNNER_TEMP/fmt;$RUNNER_TEMP/tomlplusplus;$RUNNER_TEMP/benchmark;$(brew --prefix catch2);$(brew --prefix lua@5.4)"
+  #         export PKG_CONFIG_PATH="$(brew --prefix lua@5.4)/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+  #         cmake -S . -B build -G Ninja \
+  #           -DCMAKE_BUILD_TYPE=Release \
+  #           -DAMC_ABIX_REF="$ABIX_REF" \
+  #           -DAMC_EPCD_REF="$EPCD_REF" \
+  #           -DAMC_BUILD_BENCHMARKS=ON \
+  #           -DCMAKE_PREFIX_PATH="$PREFIXES"
+  #         cmake --build build --parallel 2
+  #
+  #     - name: Test
+  #       run: |
+  #         export PKG_CONFIG_PATH="$(brew --prefix lua@5.4)/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+  #         ctest --test-dir build -N -L perf | grep -q amc-artifact-perf-bench
+  #         ctest --test-dir build --output-on-failure --timeout 180
+  #
+  #     - name: Install and smoke
+  #       run: |
+  #         cmake --install build --prefix "$RUNNER_TEMP/amc-install"
+  #         "$RUNNER_TEMP/amc-install/bin/amc" --list-languages | tee languages.txt
+  #         grep -qx cpp languages.txt
+  #         grep -qx rust languages.txt
+  #         grep -qx zig languages.txt
 
   windows:
     name: Windows (MSYS2 UCRT64)
