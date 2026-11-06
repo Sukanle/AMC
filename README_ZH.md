@@ -15,6 +15,7 @@ AMC 是接口编译器与代码生成工具链。这是一个独立的 AMC 代�
 - [MCP 工具目录](docs/ai/MCP_zh.md)
 - [二进制元数据检查](docs/architecture/elf-inspection_zh.md)
 - [基准测试与性能分析](docs/bench/README_ZH.md)
+- [变更记录](CHANGELOG_ZH.md)
 
 ## 测试与分析
 

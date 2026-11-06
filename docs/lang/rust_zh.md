@@ -35,9 +35,20 @@ language = "rust"
 files = ["src/lib.rs"]
 symbols = ["DemoVec2", "demo_add"]
 
+# 必需：Rust 布局与 target 绑定。`c_long_bits` 可选，默认跟随 pointer 宽度；
+# Windows x64 target 应显式设置为 32。
+[target]
+arch = 1
+os = 1
+abi = 1
+pointer_bits = 64
+endianness = "little"
+
 [[export]]
 output = "demo.abix"
 ```
+
+缺少 `[target] pointer_bits` 时，Rust 前端会明确失败，而不是默认使用 64 位 Host 布局。
 
 前端刻意是一个初步提取器：它理解跨越 FFI 边界的那部分 Rust —— `#[repr(C)]` struct/enum 与 `extern "C"` 函数 —— 并计算与 C++ 前端从 Clang 得到的相同布局。泛型、trait、生命周期与位域不在范围内；不支持的构造会被忽略，而不是猜测。
 
@@ -109,7 +120,10 @@ Rust 文件仍需要链接原生库；当启用 `abix_link` 选项时，投影�
 ## 限制与说明
 
 - 前端不是完整的 `rustc` AST：只提取 `#[repr(C)]` / `extern "C"` 表面；泛型、trait、生命周期与位域留在模块内部。
+- `repr(C)` 布局通过 provider conformance 测试中的 rustc probe 验证（`amc-rust-layout-probe-test`）；probe 目前只覆盖 Host target。
+- `repr(C, packed)` 只完成布局验证，packed backend emission 尚未完整实现。
 - 记录的 ABI 是 target 相关的；Rust 消费方必须按与 provider 相同的 target 与 C ABI 编译。
+- `isize` / `c_long` 可能与 `i32` / `i64` 共享 ABI type；源拼写保留仍是已知限制。
 - panic 与异常不得穿越边界；错误边界契约是受支持的路径。
 - 生成文件是普通 Rust，可以在外层再封装成安全的 crate API。
 - `amc-rust` 链接 LLVM Support 但不使用 Clang AST；它的前端自行计算布局。

@@ -14,6 +14,7 @@ AMC is an interface compiler and code-generation toolchain. This is the standalo
 - [MCP tool catalogue](docs/ai/MCP.md)
 - [Binary metadata inspection](docs/architecture/elf-inspection.md)
 - [Benchmarks and performance analysis](docs/bench/README.md)
+- [Changelog](CHANGELOG.md)
 
 ## Tests and analysis
 

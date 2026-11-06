@@ -29,6 +29,26 @@ pub struct RustBuffer {
     pub len: usize,
 }
 
+#[repr(C)]
+pub struct RustIntPtrs {
+    pub signed: isize,
+    pub unsigned: usize,
+}
+
+#[repr(C)]
+pub struct RustArray {
+    pub tag: u8,
+    pub values: [u16; 3],
+}
+
+pub type RustHandle = *mut RustPoint;
+
+#[repr(u8)]
+pub enum RustSmallColor {
+    Red = 1,
+    Green = 2,
+}
+
 #[repr(C, align(16))]
 pub struct RustAligned {
     pub value: u32,
@@ -44,3 +64,6 @@ extern "C" {
 pub extern "C" fn rust_buffer_len(buffer: *const RustBuffer) -> usize {
     0
 }
+
+#[no_mangle]
+pub extern "C" fn rust_touch() {}

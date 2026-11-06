@@ -10,12 +10,24 @@ symbols = [
     "RustRect",
     "RustColor",
     "RustBuffer",
+    "RustIntPtrs",
+    "RustArray",
+    "RustHandle",
+    "RustSmallColor",
     "RustAligned",
     "rust_make_rect",
     "rust_rect_area",
     "rust_shade",
     "rust_buffer_len",
+    "rust_touch",
 ]
+
+[target]
+arch = 1
+os = 1
+abi = 1
+pointer_bits = 64
+endianness = "little"
 
 [[export]]
 output = "rust_demo.abix"

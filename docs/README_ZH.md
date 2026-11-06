@@ -33,7 +33,7 @@ AMC 把原生 ABI 作为契约，而不是让 C 头文件成为唯一事实来�
 
 ## 当前状态
 
-v0.3.0 边界上，核心架构已经就位：
+v0.3.1 边界上，核心架构已经就位：
 
 | 领域 | 状态 |
 | --- | --- |
@@ -41,6 +41,7 @@ v0.3.0 边界上，核心架构已经就位：
 | 模板声明 / 实例化 / `.semantic` | 完成 |
 | ABI lowering 与 `.lowering` | 完成 |
 | C++ / Rust / Zig 投影 | 完成 |
+| Rust FFI surface | target-aware；probe 验证 `repr(C)` / array / alias / enum / packed 布局 |
 | typed `Result`、命名错误集、exposed handle | 完成 |
 | 接口契约与 proxy 层 | C++ 完成；Rust/Zig typed proxy |
 | 模块边界与物理拆分 | A0–A5 完成；A6 核心完成 |
@@ -48,6 +49,7 @@ v0.3.0 边界上，核心架构已经就位：
 | 多文件并行 | 由外部多个 `amc` 进程完成，产品内无进程池 |
 
 当前 P-core 基线与扩展性分析见[基准测试](bench/README_ZH.md)。
+发布说明见[变更记录](../CHANGELOG_ZH.md)。
 
 ## 仓库结构
 

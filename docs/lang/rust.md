@@ -35,9 +35,21 @@ language = "rust"
 files = ["src/lib.rs"]
 symbols = ["DemoVec2", "demo_add"]
 
+# Required: Rust layout is target-specific. `c_long_bits` is optional and
+# defaults to the pointer width; Windows x64 targets should set it to 32.
+[target]
+arch = 1
+os = 1
+abi = 1
+pointer_bits = 64
+endianness = "little"
+
 [[export]]
 output = "demo.abix"
 ```
+
+Without `[target] pointer_bits`, the Rust frontend fails explicitly instead of
+assuming a 64-bit Host layout.
 
 The frontend is intentionally a preliminary extractor: it understands the subset that crosses an FFI boundary — `#[repr(C)]` structs/enums and `extern "C"` functions — and computes the same layout the C++ frontend gets from Clang. Generics, traits, lifetimes and bit-fields are out of scope; unsupported constructs are ignored rather than guessed.
 
@@ -109,7 +121,10 @@ The Rust file still needs to link the native library; the projection provides `#
 ## Limits and notes
 
 - The frontend is not a full `rustc` AST: only `#[repr(C)]` / `extern "C"` surfaces are extracted; generics, traits, lifetimes and bit-fields stay inside the module.
+- `repr(C)` layout is validated against a generated rustc probe in the provider conformance test (`amc-rust-layout-probe-test`); the probe currently covers the Host target only.
+- `repr(C, packed)` is layout-validated, but packed backend emission is not complete yet.
 - The recorded ABI is target-specific; compile the Rust consumer for the same target and C ABI as the provider.
+- `isize` / `c_long` may share an ABI type with `i32` / `i64`; source-spelling retention is still a known limitation.
 - Panics and exceptions must not cross the boundary; the error boundary contract is the supported path.
 - The generated file is ordinary Rust and can be wrapped in a safe crate API.
 - `amc-rust` links LLVM Support but not Clang AST; its frontend computes the layout itself.

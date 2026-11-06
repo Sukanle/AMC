@@ -1,0 +1,18 @@
+[package]
+name = "rust_packed"
+version = "0.1"
+
+[[import]]
+language = "rust"
+files = ["rust_packed.rs"]
+symbols = ["RustPacked"]
+
+[target]
+arch = 1
+os = 1
+abi = 1
+pointer_bits = 64
+endianness = "little"
+
+[[export]]
+output = "rust_packed.abix"

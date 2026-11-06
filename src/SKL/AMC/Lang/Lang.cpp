@@ -91,6 +91,15 @@ bool config_load(const std::string &path, const std::string &expected_language, 
                 c.symbols.push_back(v.value_or(""));
         if (auto *ex = t["export"].as_array(); ex && !ex->empty())
             if (auto *et = (*ex)[0].as_table()) c.output = (*et)["output"].value_or("");
+        if (auto *target = t["target"].as_table()) {
+            if (auto value = (*target)["arch"].value<int64_t>()) c.arch = static_cast<uint32_t>(*value);
+            if (auto value = (*target)["os"].value<int64_t>()) c.os = static_cast<uint32_t>(*value);
+            if (auto value = (*target)["abi"].value<int64_t>()) c.target_abi = static_cast<uint32_t>(*value);
+            if (auto value = (*target)["pointer_bits"].value<int64_t>()) c.pointer_bits = static_cast<uint32_t>(*value);
+            if (auto value = (*target)["c_long_bits"].value<int64_t>()) c.c_long_bits = static_cast<uint32_t>(*value);
+            const std::string endianness = (*target)["endianness"].value_or(std::string{});
+            if (!endianness.empty()) c.endianness = endianness == "little" ? 1u : (endianness == "big" ? 2u : 0u);
+        }
         if (auto *owned = t["owned"].as_array()) {
             for (auto &&entry : *owned) {
                 auto *table = entry.as_table();

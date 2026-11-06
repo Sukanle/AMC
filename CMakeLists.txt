@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(
     AMC
-    VERSION 0.1.0
+    VERSION 0.3.1
     LANGUAGES C CXX)
 
 # Standalone AMC build. This repository prefers an installed ABIX package and
@@ -684,6 +684,9 @@ if(AMC_BUILD_TESTS AND AMC_PYTHON_EXECUTABLE)
                                            ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
     add_test(NAME amc-rust-test
              COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/providers/rust/conformance_test.py
+                     ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
+    add_test(NAME amc-rust-layout-probe-test
+             COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/providers/rust/layout_probe_test.py
                      ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
     add_test(NAME amc-rust-panic-test COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/interop/panic_test.py
                                               ${CMAKE_BINARY_DIR}/bin)

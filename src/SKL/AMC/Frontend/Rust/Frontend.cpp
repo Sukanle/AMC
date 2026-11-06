@@ -45,6 +45,42 @@ namespace {
 
 constexpr uint64_t kTypeDomain = 0x54595045;   // "TYPE"
 
+// Target facts the Rust layout fallback needs. Probe results are authoritative;
+// these values are the minimum needed when the parser computes a layout without
+// running rustc (Host == Target or cross-target after facts are known).
+struct TargetFacts {
+    uint32_t arch = 0;
+    uint32_t os = 0;
+    uint32_t target_abi = 0;
+    uint32_t pointer_bits = 0;
+    uint32_t endianness = 0;   // 0 unknown, 1 little, 2 big
+    uint32_t pointer_size = 0;
+    uint32_t c_long_size = 0;
+};
+
+bool target_facts_from(const amc::lang::Config &config, TargetFacts &target, std::string &error) {
+    if (config.pointer_bits == 0) {
+        error = "Rust frontend requires [target] pointer_bits";
+        return false;
+    }
+    if (config.pointer_bits != 16 && config.pointer_bits != 32 && config.pointer_bits != 64) {
+        error = "Rust frontend only supports 16/32/64-bit pointers";
+        return false;
+    }
+    target.arch = config.arch;
+    target.os = config.os;
+    target.target_abi = config.target_abi;
+    target.pointer_bits = config.pointer_bits;
+    target.endianness = config.endianness;
+    target.pointer_size = config.pointer_bits / 8;
+    target.c_long_size = config.c_long_bits != 0 ? config.c_long_bits / 8 : target.pointer_size;
+    if (target.c_long_size != 4 && target.c_long_size != 8) {
+        error = "Rust frontend only supports 32/64-bit c_long";
+        return false;
+    }
+    return true;
+}
+
 enum class Tok {
     Ident,
     Number,
@@ -169,6 +205,7 @@ struct RawItem {
     std::string name;
     std::vector<RawField> fields;
     uint32_t align_override = 0;
+    bool packed = false;
     uint32_t enum_size = 4;
 };
 
@@ -376,7 +413,8 @@ private:
         RawItem item;
         item.kind = RawItem::Kind::Record;
         item.name = peek().text;
-        item.align_override = attrs.packed ? 1 : attrs.align;
+        item.align_override = attrs.align;
+        item.packed = attrs.packed;
         // Only `#[repr(...)]` types have a defined ABI; a default-layout Rust
         // struct must never be recorded (its field order/offsets are unstable).
         const bool accepted = attrs.repr_c;
@@ -559,15 +597,21 @@ struct Resolved {
 // Builds ABIX IR from the parsed raw items, computing C layout.
 class Builder {
 public:
-    Builder(std::vector<RawItem> items, std::vector<RawFunction> functions)
+    Builder(std::vector<RawItem> items, std::vector<RawFunction> functions, TargetFacts target)
         : items_(std::move(items))
-        , functions_(std::move(functions)) {
+        , functions_(std::move(functions))
+        , target_(target) {
         for (size_t i = 0; i < items_.size(); ++i)
             by_name_.emplace(items_[i].name, i);
     }
 
     amc::AbiModule build(const std::vector<std::string> &wanted) {
         module_.package_name = "rust";
+        module_.arch = target_.arch;
+        module_.os = target_.os;
+        module_.target_abi = target_.target_abi;
+        module_.pointer_bits = target_.pointer_bits;
+        module_.endianness = target_.endianness;
         for (const auto &name : wanted) {
             if (by_name_.count(name)) {
                 resolve_item(name);
@@ -589,6 +633,7 @@ private:
     std::unordered_map<std::string, int> resolved_;
     std::unordered_map<std::string, int> primitive_ids_;
     amc::AbiModule module_;
+    TargetFacts target_;
     std::string error_;
 
     static uint32_t round_up(uint32_t value, uint32_t align) {
@@ -607,6 +652,17 @@ private:
 
     bool primitive_spec(const std::string &spelling, amc::PrimitiveAbiKind &kind, uint32_t &width,
         amc::FloatFormat &format, bool &signedness, std::string &descriptor) {
+        // Pointer-sized Rust/C spellings follow the target, not the host.
+        if (spelling == "isize" || spelling == "usize" || spelling == "c_long" || spelling == "c_ulong") {
+            const bool is_signed = spelling == "isize" || spelling == "c_long";
+            const bool is_c_long = spelling == "c_long" || spelling == "c_ulong";
+            width = is_c_long ? target_.c_long_size : target_.pointer_size;
+            kind = is_signed ? amc::PrimitiveAbiKind::sint : amc::PrimitiveAbiKind::uint;
+            format = amc::FloatFormat::none;
+            signedness = is_signed;
+            descriptor = fmt::format("prim:{}{}", is_signed ? 'i' : 'u', width * 8);
+            return true;
+        }
         struct Spec {
             amc::PrimitiveAbiKind kind;
             uint32_t width;
@@ -622,13 +678,11 @@ private:
             {        "i32",            {amc::PrimitiveAbiKind::sint, 4, amc::FloatFormat::none, true, "prim:i32"}},
             {        "i64",            {amc::PrimitiveAbiKind::sint, 8, amc::FloatFormat::none, true, "prim:i64"}},
             {       "i128",          {amc::PrimitiveAbiKind::sint, 16, amc::FloatFormat::none, true, "prim:i128"}},
-            {      "isize",            {amc::PrimitiveAbiKind::sint, 8, amc::FloatFormat::none, true, "prim:i64"}},
             {         "u8",            {amc::PrimitiveAbiKind::uint, 1, amc::FloatFormat::none, false, "prim:u8"}},
             {        "u16",           {amc::PrimitiveAbiKind::uint, 2, amc::FloatFormat::none, false, "prim:u16"}},
             {        "u32",           {amc::PrimitiveAbiKind::uint, 4, amc::FloatFormat::none, false, "prim:u32"}},
             {        "u64",           {amc::PrimitiveAbiKind::uint, 8, amc::FloatFormat::none, false, "prim:u64"}},
             {       "u128",         {amc::PrimitiveAbiKind::uint, 16, amc::FloatFormat::none, false, "prim:u128"}},
-            {      "usize",           {amc::PrimitiveAbiKind::uint, 8, amc::FloatFormat::none, false, "prim:u64"}},
             {        "f32", {amc::PrimitiveAbiKind::floating, 4, amc::FloatFormat::ieee32, false, "prim:fieee32"}},
             {        "f64", {amc::PrimitiveAbiKind::floating, 8, amc::FloatFormat::ieee64, false, "prim:fieee64"}},
             {     "c_char",  {amc::PrimitiveAbiKind::char_signed, 1, amc::FloatFormat::none, true, "prim:char_s"}},
@@ -638,8 +692,6 @@ private:
             {   "c_ushort",           {amc::PrimitiveAbiKind::uint, 2, amc::FloatFormat::none, false, "prim:u16"}},
             {      "c_int",            {amc::PrimitiveAbiKind::sint, 4, amc::FloatFormat::none, true, "prim:i32"}},
             {     "c_uint",           {amc::PrimitiveAbiKind::uint, 4, amc::FloatFormat::none, false, "prim:u32"}},
-            {     "c_long",            {amc::PrimitiveAbiKind::sint, 8, amc::FloatFormat::none, true, "prim:i64"}},
-            {    "c_ulong",           {amc::PrimitiveAbiKind::uint, 8, amc::FloatFormat::none, false, "prim:u64"}},
             { "c_longlong",            {amc::PrimitiveAbiKind::sint, 8, amc::FloatFormat::none, true, "prim:i64"}},
             {"c_ulonglong",           {amc::PrimitiveAbiKind::uint, 8, amc::FloatFormat::none, false, "prim:u64"}},
             {    "c_float", {amc::PrimitiveAbiKind::floating, 4, amc::FloatFormat::ieee32, false, "prim:fieee32"}},
@@ -689,7 +741,8 @@ private:
             std::string name;
             for (const auto &token : tokens)
                 name += token;
-            const Resolved pointer = add_aggregate_ref(name, 8, 8, amc::TypeKind::pointer);
+            const Resolved pointer =
+                add_aggregate_ref(name, target_.pointer_size, target_.pointer_size, amc::TypeKind::pointer);
             // Record the pointee so element/contract matching uses ABI identity
             // (TypeID) instead of a spelling. An unresolvable pointee falls back
             // to the spelling without failing the parse.
@@ -850,7 +903,7 @@ private:
         for (const auto &raw : item.fields) {
             const Resolved field_type = resolve_type(raw.type);
             if (!ok()) return -1;
-            const uint32_t field_align = field_type.align == 0 ? 1 : field_type.align;
+            const uint32_t field_align = item.packed ? 1 : (field_type.align == 0 ? 1 : field_type.align);
             offset = round_up(offset, field_align);
             amc::Field field;
             field.owner_type = type.id;
@@ -861,7 +914,10 @@ private:
             align = std::max(align, field_align);
             module_.fields.push_back(std::move(field));
         }
-        if (item.align_override != 0) align = std::max(align, item.align_override);
+        if (item.packed)
+            align = 1;
+        else if (item.align_override != 0)
+            align = std::max(align, item.align_override);
         const uint32_t size = round_up(offset, align);
         auto &record = module_.types[static_cast<size_t>(index)];
         record.field_count = static_cast<uint32_t>(module_.fields.size()) - record.field_begin;
@@ -877,15 +933,18 @@ private:
         const bool void_return =
             raw.return_type.empty()
             || (raw.return_type.size() == 2 && raw.return_type[0] == "(" && raw.return_type[1] == ")");
-        // ABIX cannot represent a zero-sized `void` return, so void-returning
-        // functions are not exported by this preliminary frontend.
-        if (void_return) return;
         amc::Function function;
         function.name = raw.name;
         function.calling_convention = 1;   // C
-        const Resolved result = resolve_type(raw.return_type);
-        if (!ok()) return;
-        function.return_type = result.id;
+        if (void_return) {
+            const int void_index =
+                add_primitive(amc::PrimitiveAbiKind::void_, 0, amc::FloatFormat::none, false, "prim:void", "void");
+            function.return_type = module_.types[static_cast<size_t>(void_index)].id;
+        } else {
+            const Resolved result = resolve_type(raw.return_type);
+            if (!ok()) return;
+            function.return_type = result.id;
+        }
         for (const auto &parameter : raw.parameters) {
             if (parameter.type.empty()) continue;
             if (parameter.type.size() == 2 && parameter.type[0] == "(" && parameter.type[1] == ")") continue;
@@ -914,6 +973,12 @@ int run_frontend(const char *config_path, const char *output_path) {
         return EXIT_FAILURE;
     }
     const llvm::StringRef base = llvm::sys::path::parent_path(config_path_abs);
+
+    TargetFacts target;
+    if (!target_facts_from(config, target, error)) {
+        fmt::print(stderr, "{}\n", error);
+        return EXIT_FAILURE;
+    }
 
     std::vector<RawItem> items;
     std::vector<RawFunction> functions;
@@ -944,7 +1009,7 @@ int run_frontend(const char *config_path, const char *output_path) {
             functions.push_back(std::move(function));
     }
 
-    Builder builder(std::move(items), std::move(functions));
+    Builder builder(std::move(items), std::move(functions), target);
     amc::AbiModule module = builder.build(config.symbols);
     if (amc::lang::cancellation_requested()) return amc::lang::kCapabilityCancelled;
     if (!builder.ok()) {

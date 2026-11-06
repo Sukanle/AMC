@@ -106,6 +106,13 @@ struct Config {
     std::vector<std::string> flags;
     std::vector<std::string> files;
     std::vector<std::string> symbols;
+    // [target] facts shared by target-aware frontends. 0 means unknown.
+    uint32_t arch = 0;
+    uint32_t os = 0;
+    uint32_t target_abi = 0;
+    uint32_t pointer_bits = 0;
+    uint32_t endianness = 0;                       // 0 unknown, 1 little, 2 big
+    uint32_t c_long_bits = 0;                      // optional; 0 derives from the target ABI
     std::vector<OwnedDecl> owned;                  // [[owned]] release-policy declarations
     std::vector<ContractDecl> contracts;           // [[contract]] ownership contracts
     std::vector<ErrorDecl> errors;                 // [[error]] error-boundary contracts
@@ -143,7 +150,7 @@ struct Capability {
 
 // Language-agnostic description of an `amc-<language>` executable.
 struct Provider {
-    Provider(std::string language_, std::vector<Capability> capabilities_, std::string version_ = "0.2.0",
+    Provider(std::string language_, std::vector<Capability> capabilities_, std::string version_ = "0.3.1",
         std::vector<std::string> features_ = {}, uint32_t ir_min_ = 4, uint32_t ir_max_ = 4)
         : language(std::move(language_))
         , capabilities(std::move(capabilities_))

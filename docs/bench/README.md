@@ -6,7 +6,7 @@
 
 This section records AMC's performance baselines, scaling behaviour and regression gates. It is evidence for the optimization plan, not a marketing page: every number below comes from a Release build, a pinned P-core set and Google Benchmark JSON.
 
-> Baseline snapshot: **2026-11-07** for the Linux cache retest; pass/artifact/query/multifile and Windows cross-platform data are from **2026-11-06**. The tree includes the C++ frontend/backend split, shared CodeIn/Codegen helpers, OPT-4/OPT-6/OPT-7 and the single-file cache rework.
+> Baseline snapshot: **v0.3.1 / 2026-11-07**. The tree includes the C++ frontend/backend split, shared CodeIn/Codegen helpers, OPT-4/OPT-6/OPT-7, the single-file cache rework and the target-aware Rust FFI surface.
 
 ## What is measured
 
