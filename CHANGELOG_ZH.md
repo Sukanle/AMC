@@ -1,5 +1,38 @@
 # 变更记录
 
+## v0.3.2 — 2026-11-07
+
+### 新增
+
+- 冻结 `amc.rust.semantic/1` adapter 契约，供未来 rustc helper 使用；覆盖
+  target、crate、types、fields、functions 和参数 ownership。
+- `amc-rust-semantic-schema-test`：验证 sample document、未知可选字段和
+  required 字段失败。
+- Rust 布局支持 `#[repr(transparent)]`、`#[repr(C, packed(N))]` 和
+  `#[repr(C)]` union。
+- rustc probe 覆盖 transparent、packed(N) 和 union 布局。
+
+### 变更
+
+- v0.3.x 的 Rust 工作明确为 v0.4.0 rustc frontend 的过渡适配；完整
+  trait/generic/macro/Cargo 语义延后。
+- Rust parser 对 `repr(transparent)` 做单字段布局校验。
+
+### 已知限制
+
+- advanced repr 只完成布局验证；C++/Rust/Zig backend 的 packed/union
+  emission 尚未完整实现。
+- `repr(transparent)` 尚未建模额外的零大小字段。
+- cross-target probe、显式 `[[rust.expose]]` wrapper 交接和
+  error/ownership contract 交接仍属于后续 v0.3.x。
+
+### 验证
+
+- CTest：29/29 passed。
+- `boundary --strict`：passed。
+- `amc-rust-layout-probe-test`：passed。
+- `amc-rust-semantic-schema-test`：passed。
+
 ## v0.3.1 — 2026-11-07
 
 ### 新增

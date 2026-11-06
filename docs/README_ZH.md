@@ -33,7 +33,7 @@ AMC 把原生 ABI 作为契约，而不是让 C 头文件成为唯一事实来�
 
 ## 当前状态
 
-v0.3.1 边界上，核心架构已经就位：
+v0.3.2 边界上，核心架构已经就位：
 
 | 领域 | 状态 |
 | --- | --- |
@@ -41,7 +41,8 @@ v0.3.1 边界上，核心架构已经就位：
 | 模板声明 / 实例化 / `.semantic` | 完成 |
 | ABI lowering 与 `.lowering` | 完成 |
 | C++ / Rust / Zig 投影 | 完成 |
-| Rust FFI surface | target-aware；probe 验证 `repr(C)` / array / alias / enum / packed 布局 |
+| Rust FFI surface | target-aware；probe 验证 `repr(C)` / array / alias / enum / packed / transparent / union 布局 |
+| Rust adapter | `amc.rust.semantic/1` 已冻结；rustc helper 延后到 v0.4.0 |
 | typed `Result`、命名错误集、exposed handle | 完成 |
 | 接口契约与 proxy 层 | C++ 完成；Rust/Zig typed proxy |
 | 模块边界与物理拆分 | A0–A5 完成；A6 核心完成 |

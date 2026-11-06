@@ -6,7 +6,7 @@
 
 本节记录 AMC 的性能基线、扩展性和回归门槛。它是优化计划的证据，不是宣传页：下面所有数字都来自 Release 构建、固定 P-core 集合和 Google Benchmark JSON。
 
-> 基线快照：**v0.3.1 / 2026-11-07**。代码包含 C++ 前端/后端拆分、共享 CodeIn/Codegen、OPT-4/OPT-6/OPT-7、单文件 cache 重构和 target-aware Rust FFI surface。
+> 基线快照：**v0.3.2 / 2026-11-07**。代码包含 C++ 前端/后端拆分、共享 CodeIn/Codegen、OPT-4/OPT-6/OPT-7、单文件 cache 重构和 target-aware Rust FFI surface。
 
 ## 测什么
 

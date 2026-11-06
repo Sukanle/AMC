@@ -1,5 +1,38 @@
 # Changelog
 
+## v0.3.2 — 2026-11-07
+
+### Added
+
+- Frozen `amc.rust.semantic/1` adapter contract for the future rustc helper,
+  including target, crate, types, fields, functions and parameter ownership.
+- `amc-rust-semantic-schema-test`: validates the sample document, unknown
+  optional fields and required-field failures.
+- Rust layout support for `#[repr(transparent)]`, `#[repr(C, packed(N))]` and
+  `#[repr(C)]` unions.
+- rustc probe coverage for transparent, packed(N) and union layout.
+
+### Changed
+
+- v0.3.x Rust work is now explicitly a transition adapter for the v0.4.0 rustc
+  frontend; full trait/generic/macro/Cargo semantics are deferred.
+- Rust parser validates `repr(transparent)` as a single-field layout.
+
+### Known limitations
+
+- advanced repr forms are layout-validated only; C++/Rust/Zig backend emission
+  for packed and union is not complete.
+- `repr(transparent)` does not yet model extra zero-sized fields.
+- cross-target probe, explicit `[[rust.expose]]` wrapper handoff and
+  error/ownership contract handoff remain later v0.3.x work.
+
+### Validation
+
+- CTest: 29/29 passed.
+- `boundary --strict`: passed.
+- `amc-rust-layout-probe-test`: passed.
+- `amc-rust-semantic-schema-test`: passed.
+
 ## v0.3.1 — 2026-11-07
 
 ### Added

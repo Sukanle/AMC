@@ -24,7 +24,7 @@ int main(int argc, char **argv) {
           {"frontend", amc::lang::rust::run_frontend},
           {"backend", amc::lang::rust::run_backend},
           },
-        "0.3.1",
+        "0.3.2",
         {"ownership", "error", "target"},
     };
     return amc::lang::run_provider(argc, argv, provider);

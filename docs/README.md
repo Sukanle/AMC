@@ -33,7 +33,7 @@ The stable wire formats are `.abix`, `.semantic` and `.lowering`. They contain p
 
 ## Current status
 
-At the v0.3.1 boundary the core architecture is in place:
+At the v0.3.2 boundary the core architecture is in place:
 
 | Area | Status |
 | --- | --- |
@@ -41,7 +41,8 @@ At the v0.3.1 boundary the core architecture is in place:
 | Template declarations / instances / `.semantic` | complete |
 | ABI lowering and `.lowering` | complete |
 | C++ / Rust / Zig projections | complete |
-| Rust FFI surface | target-aware; probe-validated `repr(C)` / array / alias / enum / packed layout |
+| Rust FFI surface | target-aware; probe-validated `repr(C)` / array / alias / enum / packed / transparent / union layout |
+| Rust adapter | `amc.rust.semantic/1` frozen; rustc helper deferred to v0.4.0 |
 | Typed `Result`, named error sets, exposed handles | complete |
 | Interface contracts and proxy layer | C++ complete; Rust/Zig typed proxies |
 | Module boundaries and physical split | A0–A5 complete; A6 core complete |

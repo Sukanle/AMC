@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(
     AMC
-    VERSION 0.3.1
+    VERSION 0.3.2
     LANGUAGES C CXX)
 
 # Standalone AMC build. This repository prefers an installed ABIX package and
