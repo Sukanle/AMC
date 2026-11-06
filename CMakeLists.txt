@@ -230,9 +230,16 @@ endif()
 # `target_link_libraries(<target> ... amc-llvm)`; the target carries include
 # paths, LLVM compile definitions and the shared/static LLVM link choice.
 add_library(amc-llvm INTERFACE)
-target_include_directories(amc-llvm SYSTEM INTERFACE ${LLVM_INCLUDE_DIRS} ${CLANG_INCLUDE_DIRS})
+add_library(AMC::llvm ALIAS amc-llvm)
+# The include paths come from the LLVM package found by this build. They are
+# kept in BUILD_INTERFACE so the installed package resolves LLVM from the
+# consumer's own installation (see AMCConfig.cmake.in) instead of embedding
+# this machine's prefix.
+target_include_directories(
+    amc-llvm SYSTEM INTERFACE $<BUILD_INTERFACE:${LLVM_INCLUDE_DIRS}> $<BUILD_INTERFACE:${CLANG_INCLUDE_DIRS}>)
 target_compile_options(amc-llvm INTERFACE ${AMC_LLVM_DEFINITIONS})
 target_link_libraries(amc-llvm INTERFACE ${AMC_LLVM_LINK_LIBRARIES})
+set_target_properties(amc-llvm PROPERTIES EXPORT_NAME llvm)
 
 # Use Clang through clang-cpp instead of find_package(Clang). Some packagers
 # (notably MSYS2) export Clang target files that reference static archives they
@@ -352,7 +359,10 @@ add_library(
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Artifact/Metadata.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Artifact/Materialize.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Query/Context.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Query/Query.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Query/Compatibility.cpp)
-target_link_libraries(libabix-metadata PUBLIC libabix-abi amc-platform)
+# The query/context public headers expose llvm::raw_ostream, so the artifact
+# library needs LLVM's include paths (and LLVM Support at link time) both for
+# its own translation units and for anything that consumes AMC::metadata.
+target_link_libraries(libabix-metadata PUBLIC libabix-abi amc-platform amc-llvm)
 set_target_properties(
     libabix-metadata
     PROPERTIES EXPORT_NAME metadata
@@ -607,7 +617,7 @@ if(AMC_INSTALL)
             EXPORT AMCTargets
             RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
         install(
-            TARGETS libabix-format libabix-abi libabix-metadata libabix-tools amc-platform
+            TARGETS libabix-format libabix-abi libabix-metadata libabix-tools amc-platform amc-llvm
             EXPORT AMCTargets
             ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
             LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

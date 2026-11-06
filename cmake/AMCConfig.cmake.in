@@ -10,7 +10,21 @@ find_dependency(ABIX 0.3 CONFIG COMPONENTS runtime)
 find_dependency(EPCD 0.1 CONFIG COMPONENTS Core)
 find_dependency(fmt @AMC_FMT_MIN_VERSION@ CONFIG REQUIRED)
 
+# AMC's query/context headers expose llvm::raw_ostream and AMC::metadata links
+# LLVM Support, so consumers need the LLVM package too. Prefer the LLVM used to
+# build AMC when the consumer has not pointed at one explicitly, then take the
+# include paths from the consumer's LLVM so the package stays relocatable.
+if(NOT DEFINED LLVM_DIR AND NOT DEFINED ENV{LLVM_DIR})
+    set(LLVM_DIR
+        "@LLVM_DIR@"
+        CACHE PATH "LLVM CMake package directory")
+endif()
+find_dependency(LLVM CONFIG)
+
 include("${CMAKE_CURRENT_LIST_DIR}/AMCTargets.cmake")
+if(TARGET AMC::llvm AND DEFINED LLVM_INCLUDE_DIRS)
+    set_property(TARGET AMC::llvm APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${LLVM_INCLUDE_DIRS})
+endif()
 include("${CMAKE_CURRENT_LIST_DIR}/AMC.cmake")
 
 set(AMC_VERSION "@PROJECT_VERSION@")
