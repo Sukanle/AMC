@@ -180,6 +180,37 @@ public:
     std::unique_ptr<amc::InstantiationCache> cache;
 };
 
+// Entries with a payload above the mapping threshold exercise the mapped read
+// path: one map, hash the bytes in place.
+class CacheLargeFixture : public benchmark::Fixture {
+public:
+    void SetUp(const ::benchmark::State &state) override {
+        count = static_cast<size_t>(state.range(0));
+        root = make_root("amc-cache-large");
+        fs::remove_all(root);
+        fs::create_directories(root);
+        cache = std::make_unique<amc::InstantiationCache>(root.string());
+        const std::string payload(1 << 20, 'x');
+        std::string error;
+        for (size_t i = 0; i < count; ++i) {
+            const std::vector<std::pair<std::string, std::string>> artifacts = {
+                {"module.abix", payload},
+            };
+            if (!cache->store(make_inputs(i), artifacts, error))
+                throw std::runtime_error("cache store: " + error);
+        }
+    }
+
+    void TearDown(const ::benchmark::State &) override {
+        std::error_code error;
+        fs::remove_all(root, error);
+    }
+
+    size_t count = 0;
+    fs::path root;
+    std::unique_ptr<amc::InstantiationCache> cache;
+};
+
 }   // namespace
 
 BENCHMARK_DEFINE_F(CacheStoreFixture, StoreCold)(benchmark::State &state) {
@@ -234,6 +265,17 @@ BENCHMARK_DEFINE_F(CacheDependencyFixture, LookupHitWithDeps)(benchmark::State &
     state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(count));
 }
 BENCHMARK_REGISTER_F(CacheDependencyFixture, LookupHitWithDeps)->Arg(200)->Arg(1'000);
+
+BENCHMARK_DEFINE_F(CacheLargeFixture, LookupHitLarge)(benchmark::State &state) {
+    for (auto _ : state) {
+        for (size_t i = 0; i < count; ++i) {
+            auto result = cache->lookup(make_inputs(i));
+            benchmark::DoNotOptimize(result);
+        }
+    }
+    state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(count));
+}
+BENCHMARK_REGISTER_F(CacheLargeFixture, LookupHitLarge)->Arg(8);
 
 BENCHMARK_DEFINE_F(CacheReadFixture, LookupMiss)(benchmark::State &state) {
     for (auto _ : state) {

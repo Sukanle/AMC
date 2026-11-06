@@ -401,7 +401,8 @@ add_library(
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Cache.cpp)
 target_include_directories(amc-compilation PUBLIC ${AMC_INCLUDE_DIR})
 target_link_libraries(
-    amc-compilation PUBLIC libabix-format libabix-metadata amc-util amc-pass tomlplusplus::tomlplusplus)
+    amc-compilation PUBLIC libabix-format libabix-metadata amc-util amc-pass tomlplusplus::tomlplusplus
+                          AMC::llvm)
 target_compile_definitions(amc-compilation PRIVATE AMC_DEFAULT_PROVIDERS_FILE="${AMC_SOURCE_DIR}/providers.toml")
 
 add_library(AMC::format ALIAS libabix-format)
