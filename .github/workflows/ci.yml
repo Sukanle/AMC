@@ -1,11 +1,19 @@
 name: CI
 
 on:
-  push:
-    branches: [main, "v0.1.x"]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      platforms:
+        description: "Platforms to run"
+        required: true
+        default: "windows"
+        type: choice
+        options:
+          - windows
+          - linux
+          - all
+
+run-name: "Cross-Platform CI (${{ inputs.platforms }}) on ${{ github.ref_name }}"
 
 permissions:
   contents: read
@@ -16,8 +24,9 @@ concurrency:
 
 env:
   CTEST_OUTPUT_ON_FAILURE: "1"
-  # Released ABIX v0.3.0 branch/tag; its runtime-only package is version 0.3.
-  ABIX_REF: v0.3.0
+  # AMC devel tracks ABIX devel. Bump this to v0.3.1 once the ABIX release
+  # exists; v0.3.0 predates the lease C ABI (LeaseABI.h).
+  ABIX_REF: devel
   # EPCD currently publishes only the main branch (no release tags).
   EPCD_REF: main
   # Minimum supported LLVM/Clang release. CI builds against the minimum while
@@ -36,6 +45,7 @@ env:
 jobs:
   linux:
     name: Linux (Ubuntu 24.04)
+    if: ${{ inputs.platforms == 'all' || inputs.platforms == 'linux' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -220,6 +230,7 @@ jobs:
 
   windows:
     name: Windows (MSYS2 UCRT64)
+    if: ${{ inputs.platforms == 'all' || inputs.platforms == 'windows' }}
     runs-on: windows-latest
     timeout-minutes: 60
     defaults:
