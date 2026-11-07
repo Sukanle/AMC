@@ -238,6 +238,11 @@ void push_native_value(lua_State *state, const void *address, const Field &field
             lua_pushinteger(state, static_cast<lua_Integer>(raw));
             return;
         }
+        // Record/array/opaque fields are materialized by type_index rather than
+        // read as scalars; keep them inaccessible if one reaches this path.
+        case FieldKind::record:
+        case FieldKind::array:
+        case FieldKind::opaque:
         case FieldKind::unknown: lua_pushnil(state); return;
     }
     lua_pushnil(state);
@@ -300,6 +305,11 @@ void store_native_value(lua_State *state, void *address, const Field &field) {
             std::memcpy(address, &raw, field.size);
             return;
         }
+        // Record/array/opaque fields are rejected by type_newindex and
+        // array_newindex before reaching this scalar store path.
+        case FieldKind::record:
+        case FieldKind::array:
+        case FieldKind::opaque:
         case FieldKind::unknown: luaL_error(state, "field '%s' is not writable", field.name); return;
     }
 }
