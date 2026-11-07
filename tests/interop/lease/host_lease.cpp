@@ -1,0 +1,165 @@
+#include "host_lease.hpp"
+
+#include <new>
+#include <utility>
+
+namespace amc::test::lease {
+
+using skl::abix::poly::begin_unload;
+using skl::abix::poly::mark_unloaded;
+using skl::abix::poly::ModuleControl;
+using skl::abix::poly::next_module_instance_id;
+using skl::abix::poly::release_lease;
+using skl::abix::poly::try_acquire_lease;
+
+// The C ABI type is opaque. A registry handle is a pointer to this Host-owned
+// state; callers must never interpret it as anything else.
+struct HostLeaseRegistry::Registry {
+    bool closing = false;
+    bool destroyed = false;
+    uint64_t next_token = 1;
+    std::unordered_map<abix_lease, ModuleControl *> leases;
+    std::mutex mutex;
+};
+
+namespace {
+
+HostLeaseRegistry::Registry *state_of(abix_lease_registry *registry) noexcept {
+    return reinterpret_cast<HostLeaseRegistry::Registry *>(registry);
+}
+
+}   // namespace
+
+HostLeaseRegistry::~HostLeaseRegistry() {
+    std::lock_guard<std::mutex> lock(_registry_mutex);
+    for (Registry *registry : _registries)
+        delete registry;
+    _registries.clear();
+}
+
+abix_lease_api HostLeaseRegistry::make_api() noexcept {
+    abix_lease_api api{};
+    api.abi_version = ABIX_LEASE_API_VERSION;
+    api.struct_size = sizeof(abix_lease_api);
+    api.host_context = this;
+    api.registry_create = &HostLeaseRegistry::registry_create_entry;
+    api.registry_destroy = &HostLeaseRegistry::registry_destroy_entry;
+    api.acquire = &HostLeaseRegistry::acquire_entry;
+    api.release = &HostLeaseRegistry::release_entry;
+    return api;
+}
+
+abix_status HostLeaseRegistry::register_module(ModuleControl &control) {
+    std::lock_guard<std::mutex> lock(_module_mutex);
+    if (control.id == skl::abix::poly::invalid_module_instance) control.id = next_module_instance_id();
+    if (!skl::abix::poly::activate_module(control)) return ABIX_ERROR_INVALID;
+    _modules[control.id] = &control;
+    return ABIX_SUCCESS;
+}
+
+abix_status HostLeaseRegistry::unregister_module(abix_module_instance module) {
+    std::lock_guard<std::mutex> lock(_module_mutex);
+    auto it = _modules.find(module);
+    if (it == _modules.end()) return ABIX_ERROR_NOT_FOUND;
+    ModuleControl &control = *it->second;
+    if (!begin_unload(control)) return ABIX_ERROR_INVALID;
+    if (control.leases.load(std::memory_order_acquire) != 0) return ABIX_ERROR_BUSY;
+    mark_unloaded(control);
+    _modules.erase(it);
+    return ABIX_SUCCESS;
+}
+
+ModuleControl *HostLeaseRegistry::find_module(abix_module_instance module) noexcept {
+    std::lock_guard<std::mutex> lock(_module_mutex);
+    auto it = _modules.find(module);
+    return it == _modules.end() ? nullptr : it->second;
+}
+
+abix_status HostLeaseRegistry::create_registry(abix_lease_registry **out_registry) {
+    if (out_registry == nullptr) return ABIX_ERROR_INVALID;
+    *out_registry = nullptr;
+    auto *registry = new (std::nothrow) Registry();
+    if (registry == nullptr) return ABIX_ERROR_INVALID;
+    {
+        std::lock_guard<std::mutex> lock(_registry_mutex);
+        _registries.push_back(registry);
+    }
+    *out_registry = reinterpret_cast<abix_lease_registry *>(registry);
+    return ABIX_SUCCESS;
+}
+
+abix_status HostLeaseRegistry::destroy_registry(abix_lease_registry *registry) {
+    if (registry == nullptr) return ABIX_ERROR_INVALID;
+    Registry &state = *state_of(registry);
+    std::lock_guard<std::mutex> lock(state.mutex);
+    if (state.destroyed) return ABIX_ERROR_INVALID;
+    state.closing = true;
+    if (!state.leases.empty()) return ABIX_ERROR_BUSY;
+    state.destroyed = true;
+    return ABIX_SUCCESS;
+}
+
+abix_status HostLeaseRegistry::acquire(
+    abix_lease_registry *registry, abix_module_instance module, abix_lease *out_lease) {
+    if (registry == nullptr || out_lease == nullptr) return ABIX_ERROR_INVALID;
+    *out_lease = ABIX_LEASE_INVALID;
+
+    Registry &state = *state_of(registry);
+    std::lock_guard<std::mutex> registry_lock(state.mutex);
+    if (state.destroyed || state.closing) return ABIX_ERROR_UNLOADING;
+
+    ModuleControl *control = nullptr;
+    {
+        // The module-table lock makes "check state + increment lease count" one
+        // decision with respect to unregister_module.
+        std::lock_guard<std::mutex> module_lock(_module_mutex);
+        auto it = _modules.find(module);
+        if (it == _modules.end()) return ABIX_ERROR_NOT_FOUND;
+        control = it->second;
+        if (!try_acquire_lease(*control)) return ABIX_ERROR_UNLOADING;
+    }
+
+    if (state.next_token == 0) {
+        release_lease(*control);
+        return ABIX_ERROR_INVALID;
+    }
+    const abix_lease token = state.next_token;
+    state.next_token = token == UINT64_MAX ? 0 : token + 1;
+    state.leases.emplace(token, control);
+    *out_lease = token;
+    return ABIX_SUCCESS;
+}
+
+void HostLeaseRegistry::release(abix_lease_registry *registry, abix_lease lease) noexcept {
+    if (registry == nullptr || lease == ABIX_LEASE_INVALID) return;
+    Registry &state = *state_of(registry);
+    std::lock_guard<std::mutex> lock(state.mutex);
+    auto it = state.leases.find(lease);
+    if (it == state.leases.end()) return;
+    ModuleControl *control = it->second;
+    state.leases.erase(it);
+    release_lease(*control);
+}
+
+abix_status HostLeaseRegistry::registry_create_entry(void *context, abix_lease_registry **out_registry) {
+    if (context == nullptr) return ABIX_ERROR_INVALID;
+    return static_cast<HostLeaseRegistry *>(context)->create_registry(out_registry);
+}
+
+abix_status HostLeaseRegistry::registry_destroy_entry(void *context, abix_lease_registry *registry) {
+    if (context == nullptr) return ABIX_ERROR_INVALID;
+    return static_cast<HostLeaseRegistry *>(context)->destroy_registry(registry);
+}
+
+abix_status HostLeaseRegistry::acquire_entry(
+    void *context, abix_lease_registry *registry, abix_module_instance module, abix_lease *out_lease) {
+    if (context == nullptr) return ABIX_ERROR_INVALID;
+    return static_cast<HostLeaseRegistry *>(context)->acquire(registry, module, out_lease);
+}
+
+void HostLeaseRegistry::release_entry(void *context, abix_lease_registry *registry, abix_lease lease) noexcept {
+    if (context == nullptr) return;
+    static_cast<HostLeaseRegistry *>(context)->release(registry, lease);
+}
+
+}   // namespace amc::test::lease

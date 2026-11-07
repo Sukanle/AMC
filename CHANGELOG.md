@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — v0.3.3
+
+### Added
+
+- AMC Host implementation of the ABIX cross-language lease C ABI:
+  `abix_lease_registry`, the `abix_lease_api` function table, synchronous
+  module-instance lookup, CLOSING/BUSY states and draining validation.
+- `tests/interop/lease/`: a C++ contract test plus Rust/Zig owned-object
+  wrappers that exercise acquire -> create -> destroy -> release, draining,
+  duplicate release and registry destroy.
+- Zig -> Rust handoff fixture: Zig creates the object and lease, a Rust cdylib
+  adopts them (`destroy -> release`) and Zig performs the final unregister.
+- `amc-lease-interop-test`: builds the provider, Host bridge and C++/Rust/Zig
+  consumers against the same ABIX checkout.
+
 ## v0.3.2 — 2026-11-07
 
 ### Added
