@@ -22,14 +22,14 @@ Consequences:
 
 ## Modules
 
-| Module | Responsibility | Owns |
-| --- | --- | --- |
-| Frontend | Understand a source language and emit IR | language parsing, AST extraction, source semantics |
-| IR | Express language-independent interface semantics | types, identities, ABI mapping, ownership, lifetime, errors, versions, capabilities |
-| Pass | Validate and transform IR | normalization, validation, compatibility, lowering |
-| Backend | Emit target files from validated IR | C++/Rust/Zig/Protobuf/gRPC generators |
-| Compilation | Orchestrate one interface compilation | context, session, pipeline, cache, build options |
-| Interfaces | Expose compilation to users and agents | CLI, MCP, LSP, SDK |
+| Module      | Responsibility                                   | Owns                                                                                |
+| ----------- | ------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| Frontend    | Understand a source language and emit IR         | language parsing, AST extraction, source semantics                                  |
+| IR          | Express language-independent interface semantics | types, identities, ABI mapping, ownership, lifetime, errors, versions, capabilities |
+| Pass        | Validate and transform IR                        | normalization, validation, compatibility, lowering                                  |
+| Backend     | Emit target files from validated IR              | C++/Rust/Zig/Protobuf/gRPC generators                                               |
+| Compilation | Orchestrate one interface compilation            | context, session, pipeline, cache, build options                                    |
+| Interfaces  | Expose compilation to users and agents           | CLI, MCP, LSP, SDK                                                                  |
 
 Support modules: `Artifact`, `Diagnostics`, `Platform`, `Serialization`, `Query`, and `Support`.
 
@@ -37,15 +37,15 @@ Support modules: `Artifact`, `Diagnostics`, `Platform`, `Serialization`, `Query`
 
 The installed public surface is `include/SKL/AMC/<module>/`. Language-specific implementation details live in a parallel private tree so public headers do not leak Clang, backend internals or generated-code helpers:
 
-| Path | Responsibility |
-| --- | --- |
-| `include/SKL/AMC/Private/Backend/Cpp/` | C++ emitter declarations (`Emitters.h`, `CppNames.h`) |
-| `include/SKL/AMC/Private/Frontend/Cpp/` | `Native`, `Extractor`, `ThunkEmitter` declarations |
-| `src/SKL/AMC/Private/Backend/Cpp/` | C++ emitter implementations |
-| `src/SKL/AMC/Private/Frontend/Cpp/` | Clang extractor and thunk implementation |
-| `include/SKL/AMC/Backend/CodeIn.h` | shared runtime CodeIn loader |
-| `include/SKL/AMC/Backend/Codegen.h` | shared identifier/literal helpers |
-| `CodeIn/` | static templates loaded at runtime (`Cpp/Prologue.hpp`, `Rust/MetaData.rs`) |
+| Path                                    | Responsibility                                                              |
+| --------------------------------------- | --------------------------------------------------------------------------- |
+| `include/SKL/AMC/Private/Backend/Cpp/`  | C++ emitter declarations (`Emitters.h`, `CppNames.h`)                       |
+| `include/SKL/AMC/Private/Frontend/Cpp/` | `Native`, `Extractor`, `ThunkEmitter` declarations                          |
+| `src/SKL/AMC/Private/Backend/Cpp/`      | C++ emitter implementations                                                 |
+| `src/SKL/AMC/Private/Frontend/Cpp/`     | Clang extractor and thunk implementation                                    |
+| `include/SKL/AMC/Backend/CodeIn.h`      | shared runtime CodeIn loader                                                |
+| `include/SKL/AMC/Backend/Codegen.h`     | shared identifier/literal helpers                                           |
+| `CodeIn/`                               | static templates loaded at runtime (`Cpp/Prologue.hpp`, `Rust/MetaData.rs`) |
 
 Rules:
 
@@ -104,14 +104,14 @@ Result + Diagnostics
 
 A0 freezes these headers:
 
-| Header | Contract |
-| --- | --- |
-| `include/SKL/AMC/IR/Module.h` | `amc::ir::Module`, schema version |
+| Header                                      | Contract                                   |
+| ------------------------------------------- | ------------------------------------------ |
+| `include/SKL/AMC/IR/Module.h`               | `amc::ir::Module`, schema version          |
 | `include/SKL/AMC/Diagnostics/Diagnostics.h` | `Diagnostic`, `Severity`, `DiagnosticList` |
-| `include/SKL/AMC/Frontend/Frontend.h` | `Request`, `Result`, `Frontend` |
-| `include/SKL/AMC/Pass/Pass.h` | `Context`, `Pass`, `Pipeline` |
-| `include/SKL/AMC/Backend/Backend.h` | `Artifact`, `Request`, `Result`, `Backend` |
-| `include/SKL/AMC/Compilation/Compilation.h` | `Request`, `Result`, `Compiler` |
+| `include/SKL/AMC/Frontend/Frontend.h`       | `Request`, `Result`, `Frontend`            |
+| `include/SKL/AMC/Pass/Pass.h`               | `Context`, `Pass`, `Pipeline`              |
+| `include/SKL/AMC/Backend/Backend.h`         | `Artifact`, `Request`, `Result`, `Backend` |
+| `include/SKL/AMC/Compilation/Compilation.h` | `Request`, `Result`, `Compiler`            |
 
 The A0 `ir::Module` aggregates the existing ABI module and semantic model so the boundary can be frozen before A2 merges their data layout.
 
@@ -192,26 +192,26 @@ CTest runs both `--contracts-only` and `--strict` as `amc-boundary-contracts` an
 
 ## Current → Target Mapping
 
-| Item | Target | Status |
-| --- | --- | --- |
-| `Core/Core.h` (`AbiModule`) | `IR/` ABI view | remaining |
-| `Semantic/*` | `IR/` semantic view | remaining |
-| `Lang/C++/Frontend.cpp` | `Frontend/Cpp/` | moved |
-| `Lang/C++/Backend.cpp` | `Backend/Cpp/` | moved |
-| `Lang/Rust/*` | `Frontend/Rust/` + `Backend/Rust/` | moved |
-| `Lang/Zig/*` | `Backend/Zig/` | moved |
-| `CLI/*` | `Interfaces/CLI/` + `Compilation/` | remaining |
-| `Tool/MCP/*` | `Interfaces/MCP/` | remaining |
-| `Core/Verify.*` | `IR/Verify` (types/policy) + `Pass/Compatibility` (pass) | moved (A5.7) |
-| `Core/Error.*` | `Diagnostics/Error` | moved (A5.1) |
-| `Core/Cache.*` | `Compilation/Cache` | moved (A5.2) |
-| `Core/Metadata.*`, `Core/Materialize.*` | `Artifact/` | moved (A5.3) |
-| `Core/ELF.*`, `Core/Symbol.*` | `Platform/` | moved (A5.4) |
-| `Core/Query.*`, `Core/Context.*` | `Query/` | moved (A5.5) |
-| `Core/Json.*` | `Support/Json` | moved (A5.6) |
-| `Core/Lua.*` | `Backend/Lua/Lua` | moved (A6) |
-| `Core/Condition.*` | `IR/Condition` | moved (A5.8) |
-| `Tool/Dump/*` | `Interfaces/CLI` or `Query/` | remaining |
+| Item                                    | Target                                                   | Status       |
+| --------------------------------------- | -------------------------------------------------------- | ------------ |
+| `Core/Core.h` (`AbiModule`)             | `IR/` ABI view                                           | remaining    |
+| `Semantic/*`                            | `IR/` semantic view                                      | remaining    |
+| `Lang/C++/Frontend.cpp`                 | `Frontend/Cpp/`                                          | moved        |
+| `Lang/C++/Backend.cpp`                  | `Backend/Cpp/`                                           | moved        |
+| `Lang/Rust/*`                           | `Frontend/Rust/` + `Backend/Rust/`                       | moved        |
+| `Lang/Zig/*`                            | `Backend/Zig/`                                           | moved        |
+| `CLI/*`                                 | `Interfaces/CLI/` + `Compilation/`                       | remaining    |
+| `Tool/MCP/*`                            | `Interfaces/MCP/`                                        | remaining    |
+| `Core/Verify.*`                         | `IR/Verify` (types/policy) + `Pass/Compatibility` (pass) | moved (A5.7) |
+| `Core/Error.*`                          | `Diagnostics/Error`                                      | moved (A5.1) |
+| `Core/Cache.*`                          | `Compilation/Cache`                                      | moved (A5.2) |
+| `Core/Metadata.*`, `Core/Materialize.*` | `Artifact/`                                              | moved (A5.3) |
+| `Core/ELF.*`, `Core/Symbol.*`           | `Platform/`                                              | moved (A5.4) |
+| `Core/Query.*`, `Core/Context.*`        | `Query/`                                                 | moved (A5.5) |
+| `Core/Json.*`                           | `Support/Json`                                           | moved (A5.6) |
+| `Core/Lua.*`                            | `Backend/Lua/Lua`                                        | moved (A6)   |
+| `Core/Condition.*`                      | `IR/Condition`                                           | moved (A5.8) |
+| `Tool/Dump/*`                           | `Interfaces/CLI` or `Query/`                             | remaining    |
 
 ## A2/A3 Progress
 

@@ -49,10 +49,10 @@ clang++/g++  →  ELF 或 Mach-O 二进制文件  （metadata + names 节区）
 
 ## 节区布局
 
-| 规范名称（ELF） | Mach-O | 内容 | 可 strip？ |
-|-----------------|--------|------|-----------|
-| `.abix.metadata` | `__DATA,__abix_metadata` | 自描述 Metadata Region：manifest + desc + hash + names（基于偏移，无指针） | 可以，但 `amc metadata --from-elf` 将失败 |
-| `.abix.names` | `__DATA,__abix_names` | `const char*` 指针数组，指向类型/字段/函数名称字符串（字符串本体在 `.rodata`/`__TEXT,__cstring`） | 可以，安全 — 运行时不引用它 |
+| 规范名称（ELF）  | Mach-O                   | 内容                                                                                              | 可 strip？                                |
+| ---------------- | ------------------------ | ------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `.abix.metadata` | `__DATA,__abix_metadata` | 自描述 Metadata Region：manifest + desc + hash + names（基于偏移，无指针）                        | 可以，但 `amc metadata --from-elf` 将失败 |
+| `.abix.names`    | `__DATA,__abix_names`    | `const char*` 指针数组，指向类型/字段/函数名称字符串（字符串本体在 `.rodata`/`__TEXT,__cstring`） | 可以，安全 — 运行时不引用它               |
 
 AMC 在调用处统一接受 ELF 规范拼写，并在内部按检测到的容器格式转换为原生拼写。
 

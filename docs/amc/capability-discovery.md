@@ -18,11 +18,11 @@ An `[[expose]]` declaration asks the C++ frontend to generate C thunks for an op
 
 The generated bindings expose typed values for the same facts:
 
-| Target | Exposed handle | Interface contract |
-| --- | --- | --- |
-| Rust | `Owned<T>` methods from the lowering contract | `capabilities` module with IDs, versions, slots and signatures |
-| C++ | move-only `<Type>Handle` | `k<Name>Interface`, `<Name>Traits`, proxy class |
-| Zig | `<Type>Handle` with `create` / `deinit` / methods | `CapabilityContract` and `CAPABILITIES` |
+| Target | Exposed handle                                    | Interface contract                                             |
+| ------ | ------------------------------------------------- | -------------------------------------------------------------- |
+| Rust   | `Owned<T>` methods from the lowering contract     | `capabilities` module with IDs, versions, slots and signatures |
+| C++    | move-only `<Type>Handle`                          | `k<Name>Interface`, `<Name>Traits`, proxy class                |
+| Zig    | `<Type>Handle` with `create` / `deinit` / methods | `CapabilityContract` and `CAPABILITIES`                        |
 
 ## Only a compiled module is available
 

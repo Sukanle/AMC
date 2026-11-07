@@ -48,8 +48,7 @@ endianness = "little"
 output = "demo.abix"
 ```
 
-Without `[target] pointer_bits`, the Rust frontend fails explicitly instead of
-assuming a 64-bit Host layout.
+Without `[target] pointer_bits`, the Rust frontend fails explicitly instead of assuming a 64-bit Host layout.
 
 The frontend is intentionally a preliminary extractor: it understands the subset that crosses an FFI boundary — `#[repr(C)]` structs/enums and `extern "C"` functions — and computes the same layout the C++ frontend gets from Clang. Generics, traits, lifetimes and bit-fields are out of scope; unsupported constructs are ignored rather than guessed.
 

@@ -24,8 +24,14 @@ if(TARGET amc)
         OUTPUT ${AUE_GENERATED_DIR}/counter_contract.hpp
         COMMAND ${CMAKE_COMMAND} -E make_directory ${AUE_GENERATED_DIR}
         COMMAND $<TARGET_FILE:amc> build -c ${CMAKE_CURRENT_SOURCE_DIR}/Counter.abic.toml -B ${AUE_GENERATED_DIR}/build
-        COMMAND $<TARGET_FILE:amc> generate ${AUE_GENERATED_DIR}/build/build/counter.abix -l lua -o
-                ${AUE_GENERATED_DIR}/counter_contract.hpp
+        COMMAND
+            $<TARGET_FILE:amc>
+            generate
+            ${AUE_GENERATED_DIR}/build/build/counter.abix
+            -l
+            lua
+            -o
+            ${AUE_GENERATED_DIR}/counter_contract.hpp
         DEPENDS ${AUE_CONTRACT_DEPS} ${CMAKE_CURRENT_SOURCE_DIR}/Counter.abic.toml
                 ${CMAKE_CURRENT_SOURCE_DIR}/Counter.api.hpp
         COMMENT "Generating the Aue contract from Counter.abic.toml"
@@ -68,13 +74,15 @@ if(NOT TARGET abix-conformance)
         add_test(NAME aue-conformance COMMAND abix-conformance ${CMAKE_CURRENT_SOURCE_DIR}/Conformance.lua)
         add_test(NAME aue-conformance-edges COMMAND abix-conformance ${CMAKE_CURRENT_SOURCE_DIR}/Edges.lua)
         if(AUE_ENABLE_L2)
-            add_test(NAME aue-conformance-l2 COMMAND abix-conformance ${CMAKE_CURRENT_SOURCE_DIR}/Conformance.lua
-                                                      --requested l2)
+            add_test(
+                NAME aue-conformance-l2 COMMAND abix-conformance ${CMAKE_CURRENT_SOURCE_DIR}/Conformance.lua --requested
+                                                l2)
             set_tests_properties(aue-conformance-l2 PROPERTIES PASS_REGULAR_EXPRESSION "requested=l2 selected=l2")
         else()
             # Requesting L2 must degrade to the compiled-in L1 (downgrade only).
-            add_test(NAME aue-level-downgrade COMMAND abix-conformance ${CMAKE_CURRENT_SOURCE_DIR}/Conformance.lua
-                                                      --requested l2)
+            add_test(
+                NAME aue-level-downgrade COMMAND abix-conformance ${CMAKE_CURRENT_SOURCE_DIR}/Conformance.lua
+                                                 --requested l2)
             set_tests_properties(aue-level-downgrade PROPERTIES PASS_REGULAR_EXPRESSION "requested=l2 selected=l1")
         endif()
     endif()

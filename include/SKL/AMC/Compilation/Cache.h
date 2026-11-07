@@ -158,13 +158,13 @@ struct CacheLookup {
 // concurrent writers (counter updates are read-modify-write) which is enough to
 // answer "is this cache worth keeping".
 struct CacheStats {
-    uint64_t entries = 0;               // committed entry files
-    uint64_t bytes = 0;                 // total size of those files
-    uint64_t hits = 0;                  // recorded lookups that reused an entry
-    uint64_t misses = 0;                // recorded lookups that rebuilt
-    uint64_t stores = 0;                // recorded entries written
-    uint64_t oldest_age_seconds = 0;    // age of the least recently used entry
-    uint64_t newest_age_seconds = 0;    // age of the most recently used entry
+    uint64_t entries = 0;              // committed entry files
+    uint64_t bytes = 0;                // total size of those files
+    uint64_t hits = 0;                 // recorded lookups that reused an entry
+    uint64_t misses = 0;               // recorded lookups that rebuilt
+    uint64_t stores = 0;               // recorded entries written
+    uint64_t oldest_age_seconds = 0;   // age of the least recently used entry
+    uint64_t newest_age_seconds = 0;   // age of the most recently used entry
 };
 
 struct PruneOptions {
@@ -211,8 +211,7 @@ public:
     // Read one artifact of a hit into `out`, checking the recorded digest of the
     // bytes that were actually read. Works whether or not the lookup verified
     // the payload, so callers that consume the bytes pay for one pass.
-    bool read_artifact(const CacheLookup &lookup, const std::string &name, std::string &out,
-        std::string &error) const;
+    bool read_artifact(const CacheLookup &lookup, const std::string &name, std::string &out, std::string &error) const;
 
     // Verify a committed entry (manifest schema/versions + artifact digests).
     bool verify(const Hash128 &build_key, std::string &error) const;

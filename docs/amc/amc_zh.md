@@ -119,9 +119,24 @@ amc verify contract.abix implementation.abix --format diagnostics-json
 `--format diagnostics-json` 输出统一的 `amc.diagnostics/1` schema：
 
 ```json
-{"schema":"amc.diagnostics/1","status":"error","notes":0,"warnings":0,"errors":1,
- "diagnostics":[{"severity":"error","code":"abi_layout_changed","stage":"verify",
-                 "message":"ABI layout_changed for demo::Widget","file":"widget.hpp","line":12,"column":3}]}
+{
+  "schema": "amc.diagnostics/1",
+  "status": "error",
+  "notes": 0,
+  "warnings": 0,
+  "errors": 1,
+  "diagnostics": [
+    {
+      "severity": "error",
+      "code": "abi_layout_changed",
+      "stage": "verify",
+      "message": "ABI layout_changed for demo::Widget",
+      "file": "widget.hpp",
+      "line": 12,
+      "column": 3
+    }
+  ]
+}
 ```
 
 Pass、verify 与 build 诊断共用同一聚合模型；`--error-format json` 仍保持 `abix.error/1` 单错误信封。
@@ -207,10 +222,19 @@ amc validate missing.abix --error-format json
 ```
 
 ```json
-{"schema":"abix.error/1","error":{"code":"AMC-IO","category":"io",
- "domain":"0x1003000000000001","value":3,
- "stage":"read_abix","message":"cannot open input: missing.abix",
- "file":"missing.abix","detail":null}}
+{
+  "schema": "abix.error/1",
+  "error": {
+    "code": "AMC-IO",
+    "category": "io",
+    "domain": "0x1003000000000001",
+    "value": 3,
+    "stage": "read_abix",
+    "message": "cannot open input: missing.abix",
+    "file": "missing.abix",
+    "detail": null
+  }
+}
 ```
 
 命令带 `--format json` 时错误也切到 JSON。
@@ -227,12 +251,12 @@ AMC 能从源码证明哪些能力、从已编译模块能发现哪些信息，�
 
 ## 其他工具
 
-| 工具 | 用途 |
-|------|------|
-| `amc-cpp` | C++ 前端/后端 provider（JSON-lines IPC） |
-| `amc-rust` | Rust 前端/后端 provider（JSON-lines IPC）；链接 LLVM Support 处理文件系统/IO，但不使用 Clang AST |
-| `amc-zig` | Zig 仅后端 provider（JSON-lines IPC）；消费同一份 IR，链接 LLVM Support 处理文件系统/IO |
-| `amc-dump` | `.abix` 原始 dump（text/JSON） |
-| `amc-mcp` | MCP server；可把多个 artifact 索引成 ABI 知识库（见 [MCP_zh.md](../ai/MCP_zh.md)） |
-| `libabix_lldb.so` | 原生 LLDB 命令插件（`abix ...`），直接链接 `libabix-*`（[`tools/lldb_abix.cpp`](https://github.com/Sukanle/AMC/blob/main/tools/lldb_abix.cpp)） |
-| `abix-conformance` | Aue L0/L1 差分运行器（有 Lua 时构建） |
+| 工具               | 用途                                                                                                                                            |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `amc-cpp`          | C++ 前端/后端 provider（JSON-lines IPC）                                                                                                        |
+| `amc-rust`         | Rust 前端/后端 provider（JSON-lines IPC）；链接 LLVM Support 处理文件系统/IO，但不使用 Clang AST                                                |
+| `amc-zig`          | Zig 仅后端 provider（JSON-lines IPC）；消费同一份 IR，链接 LLVM Support 处理文件系统/IO                                                         |
+| `amc-dump`         | `.abix` 原始 dump（text/JSON）                                                                                                                  |
+| `amc-mcp`          | MCP server；可把多个 artifact 索引成 ABI 知识库（见 [MCP_zh.md](../ai/MCP_zh.md)）                                                              |
+| `libabix_lldb.so`  | 原生 LLDB 命令插件（`abix ...`），直接链接 `libabix-*`（[`tools/lldb_abix.cpp`](https://github.com/Sukanle/AMC/blob/main/tools/lldb_abix.cpp)） |
+| `abix-conformance` | Aue L0/L1 差分运行器（有 Lua 时构建）                                                                                                           |

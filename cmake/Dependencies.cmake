@@ -10,12 +10,8 @@
 
 include_guard(GLOBAL)
 
-set(AMC_FMT_MIN_VERSION
-    "11.2.0"
-    CACHE STRING "Minimum supported fmt version")
-set(AMC_TOMLPLUSPLUS_MIN_VERSION
-    "3.4.0"
-    CACHE STRING "Minimum supported toml++ version")
+set(AMC_FMT_MIN_VERSION "11.2.0" CACHE STRING "Minimum supported fmt version")
+set(AMC_TOMLPLUSPLUS_MIN_VERSION "3.4.0" CACHE STRING "Minimum supported toml++ version")
 
 find_package(fmt ${AMC_FMT_MIN_VERSION} CONFIG REQUIRED)
 find_package(tomlplusplus ${AMC_TOMLPLUSPLUS_MIN_VERSION} CONFIG REQUIRED)

@@ -32,11 +32,11 @@ AMC 通过自定义节区嵌入 Metadata Region：ELF 上是 `.abix.metadata`，
 
 这不仅是"不好看"：截断是静默的，而且会**撞名**。在本工具链上编译探测显示链接器会截断规范名：
 
-  ```text
-  # clang++ -shared probe.cpp  （probe 使用 __attribute__((section(".abix.metadata"))))
-  Name: .abix.me (2E 61 62 69 78 2E 6D 65)   # ".abix.me"
-  Name: .abix.na (2E 61 62 69 78 2E 6E 61)   # ".abix.na"
-  ```
+```text
+# clang++ -shared probe.cpp  （probe 使用 __attribute__((section(".abix.metadata"))))
+Name: .abix.me (2E 61 62 69 78 2E 6D 65)   # ".abix.me"
+Name: .abix.na (2E 61 62 69 78 2E 6E 61)   # ".abix.na"
+```
 
 `.abix.metadata` 与 `.abix.meta` 都会截断成 `.abix.me`，被静默合并成同一个节区。
 
@@ -78,10 +78,10 @@ struct AbixPeHeader {              // 24 字节
 
 ## 节区布局与命名
 
-| 规范名（ELF） | PE 节区 | 内容 | 可 strip？ |
-|-----------------|------------|---------|-------------|
-| `.abix.metadata` | `.abix` | `AbixPeHeader` + Metadata Region（无指针） | 否 —— 必需 |
-| `.abix.names` | `.abix.n` | `const char *` 指针数组，指向名字字符串 | 是 —— 运行时不使用 |
+| 规范名（ELF）    | PE 节区   | 内容                                       | 可 strip？         |
+| ---------------- | --------- | ------------------------------------------ | ------------------ |
+| `.abix.metadata` | `.abix`   | `AbixPeHeader` + Metadata Region（无指针） | 否 —— 必需         |
+| `.abix.names`    | `.abix.n` | `const char *` 指针数组，指向名字字符串    | 是 —— 运行时不使用 |
 
 两个名字都 ≤ 8 字节，且关键的是**不共享 `$` 分组约定**（见下一节）。`native_section_name(BinaryFormat::pe, …)` 负责规范名 → PE 的翻译；未知名字原样返回，与 ELF/Mach-O 一致。
 

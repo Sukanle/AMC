@@ -43,13 +43,13 @@ bool parse_size(const std::string &text, uint64_t &out) {
     std::string digits = text;
     const char suffix = digits.back();
     if (suffix == 'k' || suffix == 'K') {
-        multiplier = 1024ull;
+        multiplier = 1'024ull;
         digits.pop_back();
     } else if (suffix == 'm' || suffix == 'M') {
-        multiplier = 1024ull * 1024;
+        multiplier = 1'024ull * 1'024;
         digits.pop_back();
     } else if (suffix == 'g' || suffix == 'G') {
-        multiplier = 1024ull * 1024 * 1024;
+        multiplier = 1'024ull * 1'024 * 1'024;
         digits.pop_back();
     }
     if (digits.empty()) return false;
@@ -86,9 +86,9 @@ std::string human_bytes(uint64_t bytes) {
 
 std::string human_age(uint64_t seconds) {
     if (seconds < 60) return fmt::format("{}s", seconds);
-    if (seconds < 3600) return fmt::format("{}m", seconds / 60);
-    if (seconds < 86400) return fmt::format("{}h", seconds / 3600);
-    return fmt::format("{}d", seconds / 86400);
+    if (seconds < 3'600) return fmt::format("{}m", seconds / 60);
+    if (seconds < 86'400) return fmt::format("{}h", seconds / 3'600);
+    return fmt::format("{}d", seconds / 86'400);
 }
 
 }   // namespace
@@ -181,8 +181,8 @@ int cmd_cache(char **args, int arg_count) {
             fmt::print(
                 "{{\"schema\":\"abix.cache/1\",\"root\":{},\"entries\":{},\"bytes\":{},\"hits\":{},\"misses\":{},"
                 "\"stores\":{},\"hit_rate\":{:.4f},\"oldest_age_seconds\":{},\"newest_age_seconds\":{}}}\n",
-                json_quote(root.string()), stats.entries, stats.bytes, stats.hits, stats.misses, stats.stores,
-                hit_rate, stats.oldest_age_seconds, stats.newest_age_seconds);
+                json_quote(root.string()), stats.entries, stats.bytes, stats.hits, stats.misses, stats.stores, hit_rate,
+                stats.oldest_age_seconds, stats.newest_age_seconds);
         } else {
             fmt::print("cache {}\n", root.string());
             fmt::print("  entries: {}\n", stats.entries);
@@ -190,8 +190,8 @@ int cmd_cache(char **args, int arg_count) {
             if (lookups == 0) {
                 fmt::print("  lookups: none recorded\n");
             } else {
-                fmt::print("  lookups: {} hit, {} miss ({:.1f}% hit rate)\n", stats.hits, stats.misses,
-                    hit_rate * 100.0);
+                fmt::print(
+                    "  lookups: {} hit, {} miss ({:.1f}% hit rate)\n", stats.hits, stats.misses, hit_rate * 100.0);
             }
             if (stats.entries != 0)
                 fmt::print("  age:     newest {}, oldest {}\n", human_age(stats.newest_age_seconds),
@@ -203,7 +203,7 @@ int cmd_cache(char **args, int arg_count) {
     if (command == "prune") {
         amc::PruneOptions options;
         options.max_bytes = max_bytes;
-        options.max_age_seconds = max_age_days * 86400;
+        options.max_age_seconds = max_age_days * 86'400;
         if (options.max_bytes == 0 && options.max_age_seconds == 0)
             return usage_error("prune needs --max-size and/or --max-age");
         const amc::PruneResult result = cache.prune(options, dry_run);

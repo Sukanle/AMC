@@ -35,22 +35,21 @@ The stable wire formats are `.abix`, `.semantic` and `.lowering`. They contain p
 
 At the v0.3.2 boundary the core architecture is in place:
 
-| Area | Status |
-| --- | --- |
-| Semantic model and identities | complete |
-| Template declarations / instances / `.semantic` | complete |
-| ABI lowering and `.lowering` | complete |
-| C++ / Rust / Zig projections | complete |
-| Rust FFI surface | target-aware; probe-validated `repr(C)` / array / alias / enum / packed / transparent / union layout |
-| Rust adapter | `amc.rust.semantic/1` frozen; rustc helper deferred to v0.4.0 |
-| Typed `Result`, named error sets, exposed handles | complete |
-| Interface contracts and proxy layer | C++ complete; Rust/Zig typed proxies |
-| Module boundaries and physical split | A0–A5 complete; A6 core complete |
-| Performance guardrails | pass/artifact/cache/query/multifile suites |
-| Multi-file parallelism | external `amc` processes, no in-product process pool |
+| Area                                              | Status                                                                                               |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Semantic model and identities                     | complete                                                                                             |
+| Template declarations / instances / `.semantic`   | complete                                                                                             |
+| ABI lowering and `.lowering`                      | complete                                                                                             |
+| C++ / Rust / Zig projections                      | complete                                                                                             |
+| Rust FFI surface                                  | target-aware; probe-validated `repr(C)` / array / alias / enum / packed / transparent / union layout |
+| Rust adapter                                      | `amc.rust.semantic/1` frozen; rustc helper deferred to v0.4.0                                        |
+| Typed `Result`, named error sets, exposed handles | complete                                                                                             |
+| Interface contracts and proxy layer               | C++ complete; Rust/Zig typed proxies                                                                 |
+| Module boundaries and physical split              | A0–A5 complete; A6 core complete                                                                     |
+| Performance guardrails                            | pass/artifact/cache/query/multifile suites                                                           |
+| Multi-file parallelism                            | external `amc` processes, no in-product process pool                                                 |
 
-See [Benchmarks](bench/README.md) for the current P-core baseline and scaling analysis.
-Release notes are in [CHANGELOG.md](../CHANGELOG.md).
+See [Benchmarks](bench/README.md) for the current P-core baseline and scaling analysis. Release notes are in [CHANGELOG.md](../CHANGELOG.md).
 
 ## Repository layout
 
@@ -82,41 +81,41 @@ Private implementation headers live under `include/SKL/AMC/Private/` and are onl
 
 ### Getting started
 
-| Document | 中文 | Description |
-| --- | --- | --- |
-| [amc.md](amc/amc.md) | [amc_zh.md](amc/amc_zh.md) | `amc` CLI, commands, diagnostics |
+| Document                | 中文                          | Description                          |
+| ----------------------- | ----------------------------- | ------------------------------------ |
+| [amc.md](amc/amc.md)    | [amc_zh.md](amc/amc_zh.md)    | `amc` CLI, commands, diagnostics     |
 | [abic.md](abic/abic.md) | [abic_zh.md](abic/abic_zh.md) | `.abic.toml` configuration reference |
 
 ### Architecture
 
-| Document | 中文 | Description |
-| --- | --- | --- |
-| [module-boundaries.md](architecture/module-boundaries.md) | [module-boundaries_zh.md](architecture/module-boundaries_zh.md) | module responsibilities, dependency rules, private layout |
-| [Benchmarks](bench/README.md) | [基准测试](bench/README_ZH.md) | suites, current results, scaling and regression gates |
-| [rust-adapter.md](architecture/rust-adapter.md) | [rust-adapter_zh.md](architecture/rust-adapter_zh.md) | `amc.rust.semantic/1` adapter contract for the future rustc helper |
+| Document                                                  | 中文                                                            | Description                                                        |
+| --------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------ |
+| [module-boundaries.md](architecture/module-boundaries.md) | [module-boundaries_zh.md](architecture/module-boundaries_zh.md) | module responsibilities, dependency rules, private layout          |
+| [Benchmarks](bench/README.md)                             | [基准测试](bench/README_ZH.md)                                  | suites, current results, scaling and regression gates              |
+| [rust-adapter.md](architecture/rust-adapter.md)           | [rust-adapter_zh.md](architecture/rust-adapter_zh.md)           | `amc.rust.semantic/1` adapter contract for the future rustc helper |
 
 ### Languages
 
-| Document | 中文 | Description |
-| --- | --- | --- |
-| [lang/README.md](lang/README.md) | [lang/README_ZH.md](lang/README_ZH.md) | the ABIX projection model |
-| [cpp.md](lang/cpp.md) | [cpp_zh.md](lang/cpp_zh.md) | C++ frontend/backend and compile-time checks |
-| [rust.md](lang/rust.md) | [rust_zh.md](lang/rust_zh.md) | Rust provider, `repr(C)`, ownership and `Result` |
-| [zig.md](lang/zig.md) | [zig_zh.md](lang/zig_zh.md) | Zig backend projection and `comptime` checks |
+| Document                         | 中文                                   | Description                                      |
+| -------------------------------- | -------------------------------------- | ------------------------------------------------ |
+| [lang/README.md](lang/README.md) | [lang/README_ZH.md](lang/README_ZH.md) | the ABIX projection model                        |
+| [cpp.md](lang/cpp.md)            | [cpp_zh.md](lang/cpp_zh.md)            | C++ frontend/backend and compile-time checks     |
+| [rust.md](lang/rust.md)          | [rust_zh.md](lang/rust_zh.md)          | Rust provider, `repr(C)`, ownership and `Result` |
+| [zig.md](lang/zig.md)            | [zig_zh.md](lang/zig_zh.md)            | Zig backend projection and `comptime` checks     |
 
 ### AI and agents
 
-| Document | 中文 | Description |
-| --- | --- | --- |
-| [MCP.md](ai/MCP.md) | [MCP_zh.md](ai/MCP_zh.md) | `amc-mcp` server and ABI tools |
+| Document              | 中文                        | Description                                 |
+| --------------------- | --------------------------- | ------------------------------------------- |
+| [MCP.md](ai/MCP.md)   | [MCP_zh.md](ai/MCP_zh.md)   | `amc-mcp` server and ABI tools              |
 | [troi.md](ai/troi.md) | [troi_zh.md](ai/troi_zh.md) | token-efficiency metric for agent workflows |
 
 ### Binary inspection
 
-| Document | 中文 | Description |
-| --- | --- | --- |
+| Document                                            | 中文                                                      | Description                   |
+| --------------------------------------------------- | --------------------------------------------------------- | ----------------------------- |
 | [elf-inspection.md](architecture/elf-inspection.md) | [elf-inspection_zh.md](architecture/elf-inspection_zh.md) | ABIX metadata in ELF / Mach-O |
-| [pe-inspection.md](architecture/pe-inspection.md) | [pe-inspection_zh.md](architecture/pe-inspection_zh.md) | ABIX metadata in Windows PE |
+| [pe-inspection.md](architecture/pe-inspection.md)   | [pe-inspection_zh.md](architecture/pe-inspection_zh.md)   | ABIX metadata in Windows PE   |
 
 ## Build, test and benchmark
 

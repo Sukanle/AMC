@@ -153,7 +153,7 @@ public:
             // Real include closures are headers, not three-byte files: make the
             // fixture large enough that read+hash is the cost being avoided.
             std::string body = "// dependency " + std::to_string(i) + "\n";
-            body.append(32 * 1024, 'x');
+            body.append(32 * 1'024, 'x');
             const fs::path path = root / "deps" / ("dep" + std::to_string(i) + ".hpp");
             if (!write_text(path, body)) throw std::runtime_error("cannot write dependency");
             dependencies.push_back({path.string(), amc::digest_text(body, amc::digest_domain_dependency)});
@@ -196,8 +196,7 @@ public:
             const std::vector<std::pair<std::string, std::string>> artifacts = {
                 {"module.abix", payload},
             };
-            if (!cache->store(make_inputs(i), artifacts, error))
-                throw std::runtime_error("cache store: " + error);
+            if (!cache->store(make_inputs(i), artifacts, error)) throw std::runtime_error("cache store: " + error);
         }
     }
 

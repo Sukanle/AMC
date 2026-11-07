@@ -4,14 +4,14 @@ L3 is the explicit adaptation layer: the producer/library owns semantics that ca
 
 ## Patterns
 
-| L3 concern | Contract |
-| --- | --- |
-| owner handle | `[[owned]]` + `[[contract]]` |
-| borrowed return | `[[contract]]` with `returns = "borrowed"` |
-| callback | ABIX-STD callback type or an explicit function-pointer contract |
-| named errors | `[[error-set]]` + `[[error]]` |
-| handle-shaped interface | `[[interface]]` + `[[implements]]` |
-| native STL parameter | `[[adapt]]` |
+| L3 concern              | Contract                                                        |
+| ----------------------- | --------------------------------------------------------------- |
+| owner handle            | `[[owned]]` + `[[contract]]`                                    |
+| borrowed return         | `[[contract]]` with `returns = "borrowed"`                      |
+| callback                | ABIX-STD callback type or an explicit function-pointer contract |
+| named errors            | `[[error-set]]` + `[[error]]`                                   |
+| handle-shaped interface | `[[interface]]` + `[[implements]]`                              |
+| native STL parameter    | `[[adapt]]`                                                     |
 
 ## Example: M7 fixture
 

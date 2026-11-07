@@ -159,9 +159,24 @@ amc verify contract.abix implementation.abix --format diagnostics-json
 `--format diagnostics-json` emits the shared `amc.diagnostics/1` schema:
 
 ```json
-{"schema":"amc.diagnostics/1","status":"error","notes":0,"warnings":0,"errors":1,
- "diagnostics":[{"severity":"error","code":"abi_layout_changed","stage":"verify",
-                 "message":"ABI layout_changed for demo::Widget","file":"widget.hpp","line":12,"column":3}]}
+{
+  "schema": "amc.diagnostics/1",
+  "status": "error",
+  "notes": 0,
+  "warnings": 0,
+  "errors": 1,
+  "diagnostics": [
+    {
+      "severity": "error",
+      "code": "abi_layout_changed",
+      "stage": "verify",
+      "message": "ABI layout_changed for demo::Widget",
+      "file": "widget.hpp",
+      "line": 12,
+      "column": 3
+    }
+  ]
+}
 ```
 
 Pass, verify and build diagnostics use the same aggregation model; `abix.error/1` remains the single-error envelope selected by `--error-format json`.
@@ -199,7 +214,7 @@ The C++ provider writes `amc_generated.hpp` (the projection) and, next to it, `a
 #include "amc_abi_check.hpp"     // static_asserts sizeof/alignof/offsetof
 ```
 
-Include the check header *after* the native declarations it names. It asserts `sizeof`, `alignof`, per-field `offsetof` **and per-field width** (`sizeof(static_cast<T *>(nullptr)->field)`) for every type whose ABIX name is a valid C++ qualified name, so a mismatch such as an inserted field is reported at the point of inclusion instead of at runtime. The width assertion catches a field whose type changed to another type of a different size without moving the following offsets or the total size — the part of the LayoutHash comparison the offset checks miss. Bit-fields are skipped because `offsetof`/`sizeof` are not defined for them, and types AMC names implicitly (`struct Foo *`, anonymous enums) are skipped.
+Include the check header _after_ the native declarations it names. It asserts `sizeof`, `alignof`, per-field `offsetof` **and per-field width** (`sizeof(static_cast<T *>(nullptr)->field)`) for every type whose ABIX name is a valid C++ qualified name, so a mismatch such as an inserted field is reported at the point of inclusion instead of at runtime. The width assertion catches a field whose type changed to another type of a different size without moving the following offsets or the total size — the part of the LayoutHash comparison the offset checks miss. Bit-fields are skipped because `offsetof`/`sizeof` are not defined for them, and types AMC names implicitly (`struct Foo *`, anonymous enums) are skipped.
 
 The Rust provider (`amc-rust`) writes `amc_generated.rs`: `#[repr(C)]` aggregates, `extern "C"` declarations, associated `ABIX_*` constants and `const _: () = assert!(...)` size/align/offset checks. C-ABI scalars project to their `core::ffi::c_*` aliases (`c_int`, `c_double`, ...) derived from the ABI-normalised primitive identity, rather than to fixed-width spellings, so the alias encodes the target's C ABI. Because the Rust provider reads the language IR directly, `[[import]] language = "rust"` accepts `#[repr(C)]` structs/enums and `extern "C"` functions from `.rs` files without build flags.
 
@@ -292,10 +307,19 @@ amc validate missing.abix --error-format json
 ```
 
 ```json
-{"schema":"abix.error/1","error":{"code":"AMC-IO","category":"io",
- "domain":"0x1003000000000001","value":3,
- "stage":"read_abix","message":"cannot open input: missing.abix",
- "file":"missing.abix","detail":null}}
+{
+  "schema": "abix.error/1",
+  "error": {
+    "code": "AMC-IO",
+    "category": "io",
+    "domain": "0x1003000000000001",
+    "value": 3,
+    "stage": "read_abix",
+    "message": "cannot open input: missing.abix",
+    "file": "missing.abix",
+    "detail": null
+  }
+}
 ```
 
 `--format json` on a command also switches errors to JSON.
@@ -312,12 +336,12 @@ See [capability-discovery.md](capability-discovery.md) for what AMC can prove fr
 
 ## Other tools
 
-| Tool | Purpose |
-|------|---------|
-| `amc-cpp` | C++ frontend/backend provider (JSON-lines IPC) |
-| `amc-rust` | Rust frontend/backend provider (JSON-lines IPC); links LLVM Support for filesystem/IO, but does not use Clang AST |
-| `amc-zig` | Zig backend-only provider (JSON-lines IPC); consumes the same IR and links LLVM Support for filesystem/IO |
-| `amc-dump` | raw `.abix` dump (text / JSON) |
-| `amc-mcp` | MCP server exposing ABIX tools; indexes multiple artifacts as a knowledge base ([MCP.md](../ai/MCP.md)) |
-| `libabix_lldb.so` | native LLDB command plugin (`abix ...`) linked against `libabix-*` ([`tools/lldb_abix.cpp`](https://github.com/Sukanle/AMC/blob/main/tools/lldb_abix.cpp)) |
-| `abix-conformance` | Aue L0/L1 differential runner (when Lua is present) |
+| Tool               | Purpose                                                                                                                                                    |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `amc-cpp`          | C++ frontend/backend provider (JSON-lines IPC)                                                                                                             |
+| `amc-rust`         | Rust frontend/backend provider (JSON-lines IPC); links LLVM Support for filesystem/IO, but does not use Clang AST                                          |
+| `amc-zig`          | Zig backend-only provider (JSON-lines IPC); consumes the same IR and links LLVM Support for filesystem/IO                                                  |
+| `amc-dump`         | raw `.abix` dump (text / JSON)                                                                                                                             |
+| `amc-mcp`          | MCP server exposing ABIX tools; indexes multiple artifacts as a knowledge base ([MCP.md](../ai/MCP.md))                                                    |
+| `libabix_lldb.so`  | native LLDB command plugin (`abix ...`) linked against `libabix-*` ([`tools/lldb_abix.cpp`](https://github.com/Sukanle/AMC/blob/main/tools/lldb_abix.cpp)) |
+| `abix-conformance` | Aue L0/L1 differential runner (when Lua is present)                                                                                                        |

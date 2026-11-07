@@ -93,47 +93,32 @@ full load         91.4 ms
 
 ## Cache
 
-200 / 1000 entries, P-core, mean wall time. This is the Linux retest after the
-single-file entry rework and the POSIX `stat` fast path (2026-11-07);
-pre-rework numbers are in [Optimization history](#optimization-history).
+200 / 1000 entries, P-core, mean wall time. This is the Linux retest after the single-file entry rework and the POSIX `stat` fast path (2026-11-07); pre-rework numbers are in [Optimization history](#optimization-history).
 
-| Benchmark         |      200 |      1000 | 5x input |
-| ----------------- | -------: | --------: | -------: |
-| StoreCold         | 1.668 ms |  8.444 ms |    5.06x |
-| LookupHit         | 1.044 ms |  5.407 ms |    5.18x |
-| LookupHitShallow  | 0.723 ms |  3.796 ms |    5.25x |
-| LookupMiss        | 0.290 ms |  1.437 ms |    4.96x |
-| LookupConcurrent  | 0.371 ms |  1.795 ms |    4.84x |
-| VerifyAll         | 0.845 ms |  4.381 ms |    5.18x |
-| DependencyChanged |   5.1 µs |    5.1 µs |    1.00x |
+| Benchmark         |      200 |     1000 | 5x input |
+| ----------------- | -------: | -------: | -------: |
+| StoreCold         | 1.668 ms | 8.444 ms |    5.06x |
+| LookupHit         | 1.044 ms | 5.407 ms |    5.18x |
+| LookupHitShallow  | 0.723 ms | 3.796 ms |    5.25x |
+| LookupMiss        | 0.290 ms | 1.437 ms |    4.96x |
+| LookupConcurrent  | 0.371 ms | 1.795 ms |    4.84x |
+| VerifyAll         | 0.845 ms | 4.381 ms |    5.18x |
+| DependencyChanged |   5.1 µs |   5.1 µs |    1.00x |
 
 New cache cases:
 
-| Benchmark                  |      200 |    1000 |
-| -------------------------- | -------: | ------: |
+| Benchmark                  |      200 |      1000 |
+| -------------------------- | -------: | --------: |
 | LookupHitWithDeps (8 deps) | 2.595 ms | 23.735 ms |
 | LookupHitLarge / 8 (1 MiB) |        — |  6.515 ms |
 
-Per-entry cost at 1000 entries: `StoreCold` 8.4 µs, `LookupHit` 5.4 µs,
-shallow hit 3.8 µs, miss 1.4 µs.
+Per-entry cost at 1000 entries: `StoreCold` 8.4 µs, `LookupHit` 5.4 µs, shallow hit 3.8 µs, miss 1.4 µs.
 
-The rework replaced the per-key directory with a single versioned entry file,
-stopped re-reading payloads during publish, opens the entry directly instead of
-doing a separate existence check, and maps payloads above 64 KiB. A POSIX-only
-`stat` fast path detects a missing entry before constructing an `ifstream`;
-Windows keeps direct open because `CreateFile`-based metadata is much more
-expensive there.
+The rework replaced the per-key directory with a single versioned entry file, stopped re-reading payloads during publish, opens the entry directly instead of doing a separate existence check, and maps payloads above 64 KiB. A POSIX-only `stat` fast path detects a missing entry before constructing an `ifstream`; Windows keeps direct open because `CreateFile`-based metadata is much more expensive there.
 
-Compared with the pre-rework baseline, `StoreCold` is 45% faster, `VerifyAll`
-20% faster and `LookupHit` 10% faster. `LookupMiss/1000` is 1.437 ms versus
-1.415 ms (+1.5%, about 0.02 µs per lookup); the POSIX fast path recovered the
-+15% regression that direct open introduced, at the cost of about 4% on the hit
-path (5.407 ms versus 5.178 ms with direct open, still below the 6.029 ms
-pre-rework hit). `LookupMissDiagnose/200` is 52.9 ms and remains a separate
-diagnostic path that scans manifests.
+Compared with the pre-rework baseline, `StoreCold` is 45% faster, `VerifyAll` 20% faster and `LookupHit` 10% faster. `LookupMiss/1000` is 1.437 ms versus 1.415 ms (+1.5%, about 0.02 µs per lookup); the POSIX fast path recovered the +15% regression that direct open introduced, at the cost of about 4% on the hit path (5.407 ms versus 5.178 ms with direct open, still below the 6.029 ms pre-rework hit). `LookupMissDiagnose/200` is 52.9 ms and remains a separate diagnostic path that scans manifests.
 
-Cache writes are process-safe: entries are staged in a process-unique temporary
-file and committed with rename; concurrent writers converge on one entry.
+Cache writes are process-safe: entries are staged in a process-unique temporary file and committed with rename; concurrent writers converge on one entry.
 
 ## Query and context
 
@@ -249,29 +234,23 @@ The same machine and the same Release build, measured on Windows (MinGW/UCRT64 c
 
 ### Cache (ms, 200 / 1000 entries)
 
-The CachyOS column is the 2026-11-07 retest after the single-file entry rework
-and the POSIX `stat` fast path. The Windows column includes the same single-file
-entry, direct open, on-demand verification and mapping above 64 KiB; the POSIX
-`stat` fast path does not apply there.
+The CachyOS column is the 2026-11-07 retest after the single-file entry rework and the POSIX `stat` fast path. The Windows column includes the same single-file entry, direct open, on-demand verification and mapping above 64 KiB; the POSIX `stat` fast path does not apply there.
 
-| Benchmark | CachyOS | Windows (optimized) | Ratio |
-| --- | ---: | ---: | ---: |
-| StoreCold | 1.668 / 8.444 | 49.340 / 250.868 | 29.6x / 29.7x |
-| LookupHit | 1.044 / 5.407 | 9.405 / 48.017 | 9.0x / 8.9x |
-| LookupHitShallow | 0.723 / 3.796 | 4.435 / 22.798 | 6.1x / 6.0x |
-| LookupMiss | 0.290 / 1.437 | 1.676 / 8.833 | 5.8x / 6.1x |
-| LookupConcurrent | 0.371 / 1.795 | 3.597 / 17.267 | 9.7x / 9.6x |
-| VerifyAll | 0.845 / 4.381 | 9.979 / 51.538 | 11.8x / 11.8x |
-| DependencyChanged | 5.1 µs | 48 µs | 9.3x |
-| LookupMissDiagnose / 200 | 52.86 ms | 506 ms | 9.6x |
-| LookupHitLarge / 8 | 6.515 ms | 8.565 ms | 1.31x |
+| Benchmark                |       CachyOS | Windows (optimized) |         Ratio |
+| ------------------------ | ------------: | ------------------: | ------------: |
+| StoreCold                | 1.668 / 8.444 |    49.340 / 250.868 | 29.6x / 29.7x |
+| LookupHit                | 1.044 / 5.407 |      9.405 / 48.017 |   9.0x / 8.9x |
+| LookupHitShallow         | 0.723 / 3.796 |      4.435 / 22.798 |   6.1x / 6.0x |
+| LookupMiss               | 0.290 / 1.437 |       1.676 / 8.833 |   5.8x / 6.1x |
+| LookupConcurrent         | 0.371 / 1.795 |      3.597 / 17.267 |   9.7x / 9.6x |
+| VerifyAll                | 0.845 / 4.381 |      9.979 / 51.538 | 11.8x / 11.8x |
+| DependencyChanged        |        5.1 µs |               48 µs |          9.3x |
+| LookupMissDiagnose / 200 |      52.86 ms |              506 ms |          9.6x |
+| LookupHitLarge / 8       |      6.515 ms |            8.565 ms |         1.31x |
 
-`LookupHitWithDeps` is intentionally not in the table: Windows measured ~52 ms
-for 1000 entries under normal conditions, but the same binary saw 645 ms in one
-outlier run. Dependency reads follow the host filesystem state.
+`LookupHitWithDeps` is intentionally not in the table: Windows measured ~52 ms for 1000 entries under normal conditions, but the same binary saw 645 ms in one outlier run. Dependency reads follow the host filesystem state.
 
-The CachyOS/Windows ratio grows after the rework because Linux got much faster;
-the residual Windows cost is NTFS metadata, not an algorithmic difference.
+The CachyOS/Windows ratio grows after the rework because Linux got much faster; the residual Windows cost is NTFS metadata, not an algorithmic difference.
 
 ### Query and multi-file
 
@@ -295,22 +274,22 @@ the residual Windows cost is NTFS metadata, not an algorithmic difference.
 
 ## Optimization history
 
-| Change                           |           Before |    After |
-| -------------------------------- | ---------------: | -------: |
-| Lowering / 20k                   |         552.7 ms |  10.1 ms |
-| FullPipeline / 20k               |         525.7 ms |  21.2 ms |
-| Compatibility / 20k              |         455.4 ms |  15.5 ms |
-| Cache LookupMiss / 1000          |          1.454 s | 1.415 ms |
-| Query FunctionExact / 5k         |        370.96 µs |  12.6 µs |
-| LoadAbiOnly / 5k                 |   91.4 ms (full) |  16.5 ms |
-| ContextJsonStream / 20k          | 46.7 ms (string) |  44.7 ms |
-| Cache StoreCold / 1000 (Linux)   |         15.306 ms |  8.444 ms |
-| Cache LookupHit / 1000 (Linux)   |          6.029 ms |  5.407 ms |
-| Cache VerifyAll / 1000 (Linux)   |          5.459 ms |  4.381 ms |
-| Cache LookupHitShallow / 1000 (Linux) |             — |  3.796 ms |
-| Cache LookupMiss / 1000 (Linux)  |          1.415 ms |  1.437 ms |
-| Cache StoreCold / 1000 (Windows) |         533.1 ms | 250.9 ms |
-| Cache LookupHit / 1000 (Windows) |          96.1 ms |  48.0 ms |
+| Change                                |           Before |    After |
+| ------------------------------------- | ---------------: | -------: |
+| Lowering / 20k                        |         552.7 ms |  10.1 ms |
+| FullPipeline / 20k                    |         525.7 ms |  21.2 ms |
+| Compatibility / 20k                   |         455.4 ms |  15.5 ms |
+| Cache LookupMiss / 1000               |          1.454 s | 1.415 ms |
+| Query FunctionExact / 5k              |        370.96 µs |  12.6 µs |
+| LoadAbiOnly / 5k                      |   91.4 ms (full) |  16.5 ms |
+| ContextJsonStream / 20k               | 46.7 ms (string) |  44.7 ms |
+| Cache StoreCold / 1000 (Linux)        |        15.306 ms | 8.444 ms |
+| Cache LookupHit / 1000 (Linux)        |         6.029 ms | 5.407 ms |
+| Cache VerifyAll / 1000 (Linux)        |         5.459 ms | 4.381 ms |
+| Cache LookupHitShallow / 1000 (Linux) |                — | 3.796 ms |
+| Cache LookupMiss / 1000 (Linux)       |         1.415 ms | 1.437 ms |
+| Cache StoreCold / 1000 (Windows)      |         533.1 ms | 250.9 ms |
+| Cache LookupHit / 1000 (Windows)      |          96.1 ms |  48.0 ms |
 
 The large wins came from removing quadratic scans, then from loading only the sidecars a caller needs, and finally from replacing the per-key cache directory with a single entry file. Parallelism was deliberately the last step.
 

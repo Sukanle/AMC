@@ -1202,8 +1202,7 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
                             {"frontend.abix.semantic", std::string((std::istreambuf_iterator<char>(cached_semantic)),
                                                            std::istreambuf_iterator<char>())});
                     }
-                    if (cache.store(cache_inputs, artifacts, dependencies, store_error))
-                        cache.record_store();
+                    if (cache.store(cache_inputs, artifacts, dependencies, store_error)) cache.record_store();
                 }
             }
             fs::remove(temporary, ec);

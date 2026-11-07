@@ -103,13 +103,13 @@ $$
 Worked example (illustrative, not a measurement):
 
 | Metric (illustrative) | Traditional | AMC + MCP |
-|---|---:|---:|
-| Input tokens | 80k | 15k |
-| Output tokens | 20k | 5k |
-| Tool calls | 43 | 11 |
-| Build iterations | 8 | 3 |
-| Total tokens | 100k | 20k |
-| TROI_token | 1.0x | 5.0x |
+| --------------------- | ----------: | --------: |
+| Input tokens          |         80k |       15k |
+| Output tokens         |         20k |        5k |
+| Tool calls            |          43 |        11 |
+| Build iterations      |           8 |         3 |
+| Total tokens          |        100k |       20k |
+| TROI_token            |        1.0x |      5.0x |
 
 This reads as: "AMC achieved a 5.0x token ROI for this task", or equivalently "AMC reduced agent token consumption by 80%".
 
@@ -158,12 +158,12 @@ TROI is not:
 
 An 80% token reduction does not imply an 80% development-cost reduction. Tokens are one cost dimension; tool calls, latency, builds, and task success move independently. Illustrative divergence for a single task:
 
-| Dimension | Change (illustrative) |
-|---|---:|
-| Tokens | -80% |
-| Tool calls | -60% |
-| Wall-clock time | -20% |
-| Task success rate | +15% |
+| Dimension         | Change (illustrative) |
+| ----------------- | --------------------: |
+| Tokens            |                  -80% |
+| Tool calls        |                  -60% |
+| Wall-clock time   |                  -20% |
+| Task success rate |                  +15% |
 
 ## Status
 
@@ -227,20 +227,20 @@ Build Reduction:   62.5%
 
 Task matrix (proposal):
 
-| Category | Tasks |
-|---|---|
-| Navigation | symbol lookup, type lookup, caller analysis, implementation lookup |
-| ABI | layout query, compatibility check, ABI diff, break explanation |
-| Refactoring | dependency analysis, impact analysis, migration, rename |
+| Category    | Tasks                                                              |
+| ----------- | ------------------------------------------------------------------ |
+| Navigation  | symbol lookup, type lookup, caller analysis, implementation lookup |
+| ABI         | layout query, compatibility check, ABI diff, break explanation     |
+| Refactoring | dependency analysis, impact analysis, migration, rename            |
 
 Comparison ladder (proposal):
 
-| Configuration | Adds |
-|---|---|
-| Baseline Agent | source search, grep, header reading |
-| Agent + clangd | language-server navigation |
-| Agent + AMC | structured ABI queries |
-| Agent + AMC + ABIX | cross-module ABI knowledge base |
+| Configuration      | Adds                                |
+| ------------------ | ----------------------------------- |
+| Baseline Agent     | source search, grep, header reading |
+| Agent + clangd     | language-server navigation          |
+| Agent + AMC        | structured ABI queries              |
+| Agent + AMC + ABIX | cross-module ABI knowledge base     |
 
 ## Relation to SKL/ABIX/AMC positioning
 

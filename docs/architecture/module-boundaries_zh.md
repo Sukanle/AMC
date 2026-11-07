@@ -22,14 +22,14 @@ AMC **不负责**语言实际编译、机器码生成、优化和链接；这些
 
 ## 模块
 
-| 模块 | 职责 | 拥有 |
-| --- | --- | --- |
-| Frontend | 理解源语言并输出 IR | 语言解析、AST 提取、源码语义 |
-| IR | 表达与语言无关的接口语义 | 类型、身份、ABI 映射、所有权、生命周期、错误、版本、能力 |
-| Pass | 验证和转换 IR | 规范化、验证、兼容性、lowering |
-| Backend | 从已验证 IR 生成目标文件 | C++/Rust/Zig/Protobuf/gRPC 生成器 |
-| Compilation | 编排一次接口编译 | Context、Session、Pipeline、Cache、构建选项 |
-| Interfaces | 对外暴露编译能力 | CLI、MCP、LSP、SDK |
+| 模块        | 职责                     | 拥有                                                     |
+| ----------- | ------------------------ | -------------------------------------------------------- |
+| Frontend    | 理解源语言并输出 IR      | 语言解析、AST 提取、源码语义                             |
+| IR          | 表达与语言无关的接口语义 | 类型、身份、ABI 映射、所有权、生命周期、错误、版本、能力 |
+| Pass        | 验证和转换 IR            | 规范化、验证、兼容性、lowering                           |
+| Backend     | 从已验证 IR 生成目标文件 | C++/Rust/Zig/Protobuf/gRPC 生成器                        |
+| Compilation | 编排一次接口编译         | Context、Session、Pipeline、Cache、构建选项              |
+| Interfaces  | 对外暴露编译能力         | CLI、MCP、LSP、SDK                                       |
 
 支撑模块：`Artifact`、`Diagnostics`、`Platform`、`Serialization`、`Query`、`Support`。
 
@@ -37,15 +37,15 @@ AMC **不负责**语言实际编译、机器码生成、优化和链接；这些
 
 安装的公共接口是 `include/SKL/AMC/<module>/`。语言相关实现放在平行的私有目录，避免公共头文件泄漏 Clang、后端内部结构或生成代码辅助：
 
-| 路径 | 职责 |
-| --- | --- |
-| `include/SKL/AMC/Private/Backend/Cpp/` | C++ emitter 声明（`Emitters.h`、`CppNames.h`） |
-| `include/SKL/AMC/Private/Frontend/Cpp/` | `Native`、`Extractor`、`ThunkEmitter` 声明 |
-| `src/SKL/AMC/Private/Backend/Cpp/` | C++ emitter 实现 |
-| `src/SKL/AMC/Private/Frontend/Cpp/` | Clang extractor 与 thunk 实现 |
-| `include/SKL/AMC/Backend/CodeIn.h` | 共享 CodeIn 运行时加载器 |
-| `include/SKL/AMC/Backend/Codegen.h` | 共享标识符/字面量辅助 |
-| `CodeIn/` | 运行时加载的静态模板（`Cpp/Prologue.hpp`、`Rust/MetaData.rs`） |
+| 路径                                    | 职责                                                           |
+| --------------------------------------- | -------------------------------------------------------------- |
+| `include/SKL/AMC/Private/Backend/Cpp/`  | C++ emitter 声明（`Emitters.h`、`CppNames.h`）                 |
+| `include/SKL/AMC/Private/Frontend/Cpp/` | `Native`、`Extractor`、`ThunkEmitter` 声明                     |
+| `src/SKL/AMC/Private/Backend/Cpp/`      | C++ emitter 实现                                               |
+| `src/SKL/AMC/Private/Frontend/Cpp/`     | Clang extractor 与 thunk 实现                                  |
+| `include/SKL/AMC/Backend/CodeIn.h`      | 共享 CodeIn 运行时加载器                                       |
+| `include/SKL/AMC/Backend/Codegen.h`     | 共享标识符/字面量辅助                                          |
+| `CodeIn/`                               | 运行时加载的静态模板（`Cpp/Prologue.hpp`、`Rust/MetaData.rs`） |
 
 规则：
 
@@ -102,14 +102,14 @@ Result + Diagnostics
 
 ## A0 契约头文件
 
-| 头文件 | 契约 |
-| --- | --- |
-| `include/SKL/AMC/IR/Module.h` | `amc::ir::Module`、schema version |
+| 头文件                                      | 契约                                       |
+| ------------------------------------------- | ------------------------------------------ |
+| `include/SKL/AMC/IR/Module.h`               | `amc::ir::Module`、schema version          |
 | `include/SKL/AMC/Diagnostics/Diagnostics.h` | `Diagnostic`、`Severity`、`DiagnosticList` |
-| `include/SKL/AMC/Frontend/Frontend.h` | `Request`、`Result`、`Frontend` |
-| `include/SKL/AMC/Pass/Pass.h` | `Context`、`Pass`、`Pipeline` |
-| `include/SKL/AMC/Backend/Backend.h` | `Artifact`、`Request`、`Result`、`Backend` |
-| `include/SKL/AMC/Compilation/Compilation.h` | `Request`、`Result`、`Compiler` |
+| `include/SKL/AMC/Frontend/Frontend.h`       | `Request`、`Result`、`Frontend`            |
+| `include/SKL/AMC/Pass/Pass.h`               | `Context`、`Pass`、`Pipeline`              |
+| `include/SKL/AMC/Backend/Backend.h`         | `Artifact`、`Request`、`Result`、`Backend` |
+| `include/SKL/AMC/Compilation/Compilation.h` | `Request`、`Result`、`Compiler`            |
 
 A0 的 `ir::Module` 暂时聚合现有 ABI 模块和 Semantic Model，等 A2 再合并数据布局。
 
@@ -190,26 +190,26 @@ CTest 同时运行 `--contracts-only` 和 `--strict`：`amc-boundary-contracts`�
 
 ## 当前 → 目标映射
 
-| 项目 | 目标 | 状态 |
-| --- | --- | --- |
-| `Core/Core.h`（`AbiModule`） | `IR/` ABI view | 未迁移 |
-| `Semantic/*` | `IR/` semantic view | 未迁移 |
-| `Lang/C++/Frontend.cpp` | `Frontend/Cpp/` | 已迁移 |
-| `Lang/C++/Backend.cpp` | `Backend/Cpp/` | 已迁移 |
-| `Lang/Rust/*` | `Frontend/Rust/` + `Backend/Rust/` | 已迁移 |
-| `Lang/Zig/*` | `Backend/Zig/` | 已迁移 |
-| `CLI/*` | `Interfaces/CLI/` + `Compilation/` | 未迁移 |
-| `Tool/MCP/*` | `Interfaces/MCP/` | 未迁移 |
-| `Core/Verify.*` | `IR/Verify`（类型/策略）+ `Pass/Compatibility`（Pass） | 已迁移（A5.7） |
-| `Core/Error.*` | `Diagnostics/Error` | 已迁移（A5.1） |
-| `Core/Cache.*` | `Compilation/Cache` | 已迁移（A5.2） |
-| `Core/Metadata.*`、`Core/Materialize.*` | `Artifact/` | 已迁移（A5.3） |
-| `Core/ELF.*`、`Core/Symbol.*` | `Platform/` | 已迁移（A5.4） |
-| `Core/Query.*`、`Core/Context.*` | `Query/` | 已迁移（A5.5） |
-| `Core/Json.*` | `Support/Json` | 已迁移（A5.6） |
-| `Core/Lua.*` | `Backend/Lua/Lua` | 已迁移（A6） |
-| `Core/Condition.*` | `IR/Condition` | 已迁移（A5.8） |
-| `Tool/Dump/*` | `Interfaces/CLI` 或 `Query/` | 未迁移 |
+| 项目                                    | 目标                                                   | 状态           |
+| --------------------------------------- | ------------------------------------------------------ | -------------- |
+| `Core/Core.h`（`AbiModule`）            | `IR/` ABI view                                         | 未迁移         |
+| `Semantic/*`                            | `IR/` semantic view                                    | 未迁移         |
+| `Lang/C++/Frontend.cpp`                 | `Frontend/Cpp/`                                        | 已迁移         |
+| `Lang/C++/Backend.cpp`                  | `Backend/Cpp/`                                         | 已迁移         |
+| `Lang/Rust/*`                           | `Frontend/Rust/` + `Backend/Rust/`                     | 已迁移         |
+| `Lang/Zig/*`                            | `Backend/Zig/`                                         | 已迁移         |
+| `CLI/*`                                 | `Interfaces/CLI/` + `Compilation/`                     | 未迁移         |
+| `Tool/MCP/*`                            | `Interfaces/MCP/`                                      | 未迁移         |
+| `Core/Verify.*`                         | `IR/Verify`（类型/策略）+ `Pass/Compatibility`（Pass） | 已迁移（A5.7） |
+| `Core/Error.*`                          | `Diagnostics/Error`                                    | 已迁移（A5.1） |
+| `Core/Cache.*`                          | `Compilation/Cache`                                    | 已迁移（A5.2） |
+| `Core/Metadata.*`、`Core/Materialize.*` | `Artifact/`                                            | 已迁移（A5.3） |
+| `Core/ELF.*`、`Core/Symbol.*`           | `Platform/`                                            | 已迁移（A5.4） |
+| `Core/Query.*`、`Core/Context.*`        | `Query/`                                               | 已迁移（A5.5） |
+| `Core/Json.*`                           | `Support/Json`                                         | 已迁移（A5.6） |
+| `Core/Lua.*`                            | `Backend/Lua/Lua`                                      | 已迁移（A6）   |
+| `Core/Condition.*`                      | `IR/Condition`                                         | 已迁移（A5.8） |
+| `Tool/Dump/*`                           | `Interfaces/CLI` 或 `Query/`                           | 未迁移         |
 
 ## A2/A3 进度
 

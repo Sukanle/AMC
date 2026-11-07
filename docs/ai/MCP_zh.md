@@ -60,20 +60,20 @@ MCP 是轻量的 JSON-RPC 传输层；所有查询和验证逻辑都驻留在 AM
 
 `amc-mcp` 在 stdio 上实现 MCP JSON-RPC（newline-delimited），支持 `initialize` / `ping` / `tools/list` / `tools/call`；notification 不产生响应，未知 method 返回 `-32601`，解析失败返回 `-32700`。服务端支持 `2024-11-05` 与 `2025-06-18` 两个 MCP protocol version，并优先采用较新的 `2025-06-18`：`initialize` 时若支持客户端请求的 `protocolVersion` 则原样回显，否则向下协商到所支持的最新优先版本；`serverInfo` 固定返回 `{"name": "amc-mcp", "version": "0.1.0"}`。当前暴露的工具：
 
-| 工具 | 参数 | 说明 |
-|------|------|------|
-| `abix.get_module` | `module?` | package/target/ABIHash/counts |
-| `abix.list_types` | `module?` | 全部类型的 TypeID / LayoutHash / size / align |
-| `abix.get_type` | `name`\|`id`, `layout?`, `module?` | 单个类型；`layout` 附字段偏移 |
-| `abix.list_functions` | `module?` | 全部函数：签名、返回类型、参数个数 |
-| `abix.get_function` | `name`, `module?` | 函数签名、返回类型、参数 |
-| `abix.get_layout` | `name`\|`id`, `module?` | 单个类型的内存布局（size/align/字段偏移） |
-| `abix.resolve_type` | `name`\|`id`, `module?` | 按名/部分 TypeID 解析出匹配类型 |
-| `abix.compare_abi` | `other`, `module?` | 严格 ABI 对比（缺类型/布局变化均算 drift） |
-| `abix.compare_types` | `name`, `other`, `module?` | 跨 artifact 比较单个类型 |
-| `abix.find_compatible` | `name`, `other?`, `module?` | 跨 artifact 判断单个类型是否兼容；省略 `other` 时在整库内比较 |
-| `abix.list_modules` | — | 列出知识库中所有已索引模块 |
-| `abix.search_type` | `name`\|`id` | 跨模块搜索类型，按名分组并标注各模块 ABI 是否一致 |
+| 工具                   | 参数                               | 说明                                                          |
+| ---------------------- | ---------------------------------- | ------------------------------------------------------------- |
+| `abix.get_module`      | `module?`                          | package/target/ABIHash/counts                                 |
+| `abix.list_types`      | `module?`                          | 全部类型的 TypeID / LayoutHash / size / align                 |
+| `abix.get_type`        | `name`\|`id`, `layout?`, `module?` | 单个类型；`layout` 附字段偏移                                 |
+| `abix.list_functions`  | `module?`                          | 全部函数：签名、返回类型、参数个数                            |
+| `abix.get_function`    | `name`, `module?`                  | 函数签名、返回类型、参数                                      |
+| `abix.get_layout`      | `name`\|`id`, `module?`            | 单个类型的内存布局（size/align/字段偏移）                     |
+| `abix.resolve_type`    | `name`\|`id`, `module?`            | 按名/部分 TypeID 解析出匹配类型                               |
+| `abix.compare_abi`     | `other`, `module?`                 | 严格 ABI 对比（缺类型/布局变化均算 drift）                    |
+| `abix.compare_types`   | `name`, `other`, `module?`         | 跨 artifact 比较单个类型                                      |
+| `abix.find_compatible` | `name`, `other?`, `module?`        | 跨 artifact 判断单个类型是否兼容；省略 `other` 时在整库内比较 |
+| `abix.list_modules`    | —                                  | 列出知识库中所有已索引模块                                    |
+| `abix.search_type`     | `name`\|`id`                       | 跨模块搜索类型，按名分组并标注各模块 ABI 是否一致             |
 
 工具复用 AMC 的 query 与 verify 实现，返回 `structuredContent`（结构化 JSON）与 `content[].text`（同一 JSON 的文本形式）， CLI、MCP 与其他消费者因此共享同一实现。运行方式：
 
@@ -124,9 +124,9 @@ amc-mcp --index libfoo.abix --index plugin.so # 等价写法
 
 索引后：
 
-* `abix.list_modules` 列出每个模块的 path / package / ABIHash / counts；
-* `abix.search_type "Foo"` 在每个模块里查找匹配类型，按类型名分组，每个分组标注 `consistent`——该名字的所有出现是否共享同一个 TypeID 与 LayoutHash。这直接回答 "找出所有实现相同 ABI 的类型"；
-* `abix.find_compatible "Foo"`（不带 `other`）以默认模块为源，对整库中其它模块的同名类型逐一判定兼容性并汇总；若没有任何其它已索引模块声明所请求的类型，结果会携带 `reason` 字段说明这一点。
+- `abix.list_modules` 列出每个模块的 path / package / ABIHash / counts；
+- `abix.search_type "Foo"` 在每个模块里查找匹配类型，按类型名分组，每个分组标注 `consistent`——该名字的所有出现是否共享同一个 TypeID 与 LayoutHash。这直接回答 "找出所有实现相同 ABI 的类型"；
+- `abix.find_compatible "Foo"`（不带 `other`）以默认模块为源，对整库中其它模块的同名类型逐一判定兼容性并汇总；若没有任何其它已索引模块声明所请求的类型，结果会携带 `reason` 字段说明这一点。
 
 单模块调用方式不变：只给一个路径时，该模块即默认数据源。
 
@@ -313,6 +313,7 @@ ABI patch:         possible
 ### 生产环境 vs 分析环境的分离
 
 Release：
+
 ```
 program
 ├── code
@@ -320,6 +321,7 @@ program
 ```
 
 Debug / AI / 分析环境：
+
 ```
 program
        │
@@ -373,10 +375,10 @@ BuildID     → Module
 
 "简洁 Runtime Metadata + 独立 Metadata Region + 外部 `.abix`" 同时对应 ABIX 的三个入口：
 
-| 入口 | 消费方式 | 用途 |
-|------|---------|------|
-| **Runtime** | 高速 ABI lookup | 动态绑定、契约校验 |
-| **AMC** | 快速 dump / query / verify / generate | 开发调试、兼容性分析 |
+| 入口               | 消费方式                                 | 用途                   |
+| ------------------ | ---------------------------------------- | ---------------------- |
+| **Runtime**        | 高速 ABI lookup                          | 动态绑定、契约校验     |
+| **AMC**            | 快速 dump / query / verify / generate    | 开发调试、兼容性分析   |
 | **AI Agent / MCP** | 结构化 ABI 查询 / 比较 / 推理 / 自动生成 | 智能代码生成、ABI 推理 |
 
 ABIX Metadata 因此也是 ABIX 生态中的机器可读 ABI Interface，而不仅是 Runtime 为动态绑定附带的描述数据。

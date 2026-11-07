@@ -49,10 +49,10 @@ clang++/g++  →  ELF or Mach-O binary  (metadata + names sections)
 
 ## Section Layout
 
-| Canonical (ELF) | Mach-O | Content | Strippable? |
-|-----------------|--------|---------|-------------|
-| `.abix.metadata` | `__DATA,__abix_metadata` | Self-describing Metadata Region: manifest + desc + hash + names (offset-based, pointer-free) | Yes, but `amc metadata --from-elf` will fail |
-| `.abix.names` | `__DATA,__abix_names` | Array of `const char*` pointers to type/field/function name strings (strings live in `.rodata`/`__TEXT,__cstring`) | Yes, safe — runtime does not reference it |
+| Canonical (ELF)  | Mach-O                   | Content                                                                                                            | Strippable?                                  |
+| ---------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------- |
+| `.abix.metadata` | `__DATA,__abix_metadata` | Self-describing Metadata Region: manifest + desc + hash + names (offset-based, pointer-free)                       | Yes, but `amc metadata --from-elf` will fail |
+| `.abix.names`    | `__DATA,__abix_names`    | Array of `const char*` pointers to type/field/function name strings (strings live in `.rodata`/`__TEXT,__cstring`) | Yes, safe — runtime does not reference it    |
 
 AMC accepts the canonical ELF spelling everywhere and translates it to the native spelling of the container it detects.
 

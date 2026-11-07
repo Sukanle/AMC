@@ -88,15 +88,15 @@ amc generate build/demo/interop_demo.abix -l cpp -o build/demo/gen
 
 provider 按职责拆分，避免 Clang 前端和 emitter 后端重新变成单文件：
 
-| 路径 | 职责 |
-| --- | --- |
-| `include/SKL/AMC/Frontend/Cpp/Cpp.h` | 公共前端入口（`run_frontend`） |
-| `include/SKL/AMC/Backend/Cpp/Cpp.h` | 公共后端入口（`run_backend`） |
-| `include/SKL/AMC/Private/Frontend/Cpp/` | `Native`、`Extractor`、`ThunkEmitter` 声明 |
-| `src/SKL/AMC/Private/Frontend/Cpp/` | Clang visitor 与 thunk 实现 |
-| `include/SKL/AMC/Private/Backend/Cpp/` | emitter 声明 |
-| `src/SKL/AMC/Private/Backend/Cpp/` | projection/interface/handle/error/check emitter |
-| `CodeIn/Cpp/Prologue.hpp` | 运行时加载的生成 prologue |
+| 路径                                    | 职责                                            |
+| --------------------------------------- | ----------------------------------------------- |
+| `include/SKL/AMC/Frontend/Cpp/Cpp.h`    | 公共前端入口（`run_frontend`）                  |
+| `include/SKL/AMC/Backend/Cpp/Cpp.h`     | 公共后端入口（`run_backend`）                   |
+| `include/SKL/AMC/Private/Frontend/Cpp/` | `Native`、`Extractor`、`ThunkEmitter` 声明      |
+| `src/SKL/AMC/Private/Frontend/Cpp/`     | Clang visitor 与 thunk 实现                     |
+| `include/SKL/AMC/Private/Backend/Cpp/`  | emitter 声明                                    |
+| `src/SKL/AMC/Private/Backend/Cpp/`      | projection/interface/handle/error/check emitter |
+| `CodeIn/Cpp/Prologue.hpp`               | 运行时加载的生成 prologue                       |
 
 `Extractor` 是不持有资源的 Clang visitor；`ThunkEmitter` 是不持有资源的操作类。 C++ backend 入口只负责加载 artifact、应用 lowering 并调用 emitter。私有头文件只有在 `-DAMC_INSTALL_PRIVATE_HEADERS=ON` 时才会安装。
 

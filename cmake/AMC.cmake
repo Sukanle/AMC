@@ -68,7 +68,14 @@ function(amc_add_abi)
         get_filename_component(_amc_cpp_dir "${_amc_cpp}" DIRECTORY)
         add_custom_command(
             OUTPUT "${_amc_cpp}"
-            COMMAND "${_amc_command}" generate "${_amc_abix}" -l cpp -o "${_amc_cpp}"
+            COMMAND
+                "${_amc_command}"
+                generate
+                "${_amc_abix}"
+                -l
+                cpp
+                -o
+                "${_amc_cpp}"
             DEPENDS "${_amc_abix}"
             COMMENT "AMC: generating C++ projection ${_amc_cpp}"
             VERBATIM)
@@ -93,7 +100,7 @@ function(amc_add_abi)
         endforeach()
         if(_AMC_MODULE_ROOT)
             foreach(_amc_include_dir "${_AMC_MODULE_ROOT}/include" "${_AMC_MODULE_ROOT}/MICS/include"
-                                     "${_AMC_MODULE_ROOT}/MICS/HLMD")
+                    "${_AMC_MODULE_ROOT}/MICS/HLMD")
                 if(EXISTS "${_amc_include_dir}")
                     list(APPEND _amc_include_dirs "${_amc_include_dir}")
                 endif()

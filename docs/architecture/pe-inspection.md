@@ -28,15 +28,15 @@
 
 AMC embeds the Metadata Region in a custom section. On ELF that section is `.abix.metadata`; on Mach-O it is `__abix_metadata` in `__DATA`. Both are chosen because the canonical ELF spelling is legal there. Windows PE is different in a way that forces a design of its own:
 
-- **PE section names are exactly 8 bytes.** `IMAGE_SECTION_HEADER.Name` is `BYTE Name[8]` and is *not* NUL-terminated when full. The canonical name `.abix.metadata` (14 bytes) does not fit.
+- **PE section names are exactly 8 bytes.** `IMAGE_SECTION_HEADER.Name` is `BYTE Name[8]` and is _not_ NUL-terminated when full. The canonical name `.abix.metadata` (14 bytes) does not fit.
 
 That is not merely cosmetic: truncation is silent, and it can collide. A compile probe on this toolchain shows the linker truncating the canonical names:
 
-  ```text
-  # clang++ -shared probe.cpp  (probe uses __attribute__((section(".abix.metadata"))))
-  Name: .abix.me (2E 61 62 69 78 2E 6D 65)   # ".abix.me"
-  Name: .abix.na (2E 61 62 69 78 2E 6E 61)   # ".abix.na"
-  ```
+```text
+# clang++ -shared probe.cpp  (probe uses __attribute__((section(".abix.metadata"))))
+Name: .abix.me (2E 61 62 69 78 2E 6D 65)   # ".abix.me"
+Name: .abix.na (2E 61 62 69 78 2E 6E 61)   # ".abix.na"
+```
 
 `.abix.metadata` and `.abix.meta` would both truncate to `.abix.me` and silently merge into one section.
 
@@ -44,7 +44,7 @@ That is not merely cosmetic: truncation is silent, and it can collide. A compile
 
 - **A name is not a contract.** A section name is a string the toolchain may truncate, reorder, merge or rewrite.
 
-So ABIX does not identify its payload by section name. It writes a self-describing **private header** and the reader locates the payload by *content* (the `ABIX` magic), using the section name only as a fast path.
+So ABIX does not identify its payload by section name. It writes a self-describing **private header** and the reader locates the payload by _content_ (the `ABIX` magic), using the section name only as a fast path.
 
 ## The ABIX private header
 
@@ -73,16 +73,16 @@ The payload of `.abix` is therefore:
 └── padding             (to 8 B)
 ```
 
-The reader validates `magic`, `header_version` and `header_size`, then treats `region_offset … region_offset + region_size` as an ordinary **Metadata Region** and hands it to the existing, container-agnostic path (`read_metadata_header` / `verify_metadata_region`). No new region format is introduced; the private header only *locates* the region and survives whatever the toolchain did to the section name.
+The reader validates `magic`, `header_version` and `header_size`, then treats `region_offset … region_offset + region_size` as an ordinary **Metadata Region** and hands it to the existing, container-agnostic path (`read_metadata_header` / `verify_metadata_region`). No new region format is introduced; the private header only _locates_ the region and survives whatever the toolchain did to the section name.
 
 The `AbixPeHeader` intentionally carries no pointers or absolute addresses: the Metadata Region is already a self-contained, pointer-free image, and keeping the header pointer-free means the pair can be dumped, hashed and compared byte for byte with the emit-time bytes.
 
 ## Section layout and names
 
-| Canonical (ELF) | PE section | Content | Strippable? |
-|-----------------|------------|---------|-------------|
-| `.abix.metadata` | `.abix` | `AbixPeHeader` + Metadata Region (pointer-free) | No — required |
-| `.abix.names` | `.abix.n` | Array of `const char *` pointers to name strings | Yes — runtime does not use it |
+| Canonical (ELF)  | PE section | Content                                          | Strippable?                   |
+| ---------------- | ---------- | ------------------------------------------------ | ----------------------------- |
+| `.abix.metadata` | `.abix`    | `AbixPeHeader` + Metadata Region (pointer-free)  | No — required                 |
+| `.abix.names`    | `.abix.n`  | Array of `const char *` pointers to name strings | Yes — runtime does not use it |
 
 Both names are ≤ 8 bytes and, crucially, **do not share the `$` grouping convention** (see the next section). `native_section_name(BinaryFormat::pe, …)` performs the canonical → PE translation; unknown names pass through unchanged, as they do for ELF/Mach-O.
 
@@ -105,7 +105,7 @@ COFF/PE gives `name$suffix` a special meaning: the linker **folds the fragments 
 2. **Folding order is fixed by the suffix, not by us.** `.abix$d` sorts before `.abix$m`, so the manifest would not sit first in the merged section.
 3. **The behavior is toolchain-specific.** MSVC folds `$` fragments; MinGW GNU-ld does not fold them by default. The same source would produce a merged `.abix` on MSVC and loose `.abix$*` sections under MinGW.
 
-For names there is a fourth problem: `.abix$n` shares the `.abix` base, so MSVC would fold it *into* `.abix`, and the names could no longer be stripped independently — which the Debug/Release model depends on.
+For names there is a fourth problem: `.abix$n` shares the `.abix` base, so MSVC would fold it _into_ `.abix`, and the names could no longer be stripped independently — which the Debug/Release model depends on.
 
 Hence: **one self-contained `.abix` section** (private header + region), plus a separate, non-`$` `.abix.n` for the strippable names. The `$` fragments are kept here only as a documented rejected alternative.
 
@@ -144,7 +144,7 @@ The region must be emitted into a read-only section and must not participate in 
    - fallback: scan every section's raw bytes for the `AbixPeHeader` magic at the section start and validate `header_version` / `header_size`. The fallback is why the private header exists: it makes the reader independent of the section name.
 7. Copy `[PointerToRawData, +SizeOfRawData)` (clamped to the file length) and validate `AbixPeHeader`; take `region_offset` / `region_size` with bounds checks and hand the region to the shared metadata path.
 
-**Names.** `.abix.n` holds `const char *` pointers, not the strings (they live in `.rdata`). Unlike an ELF section, those pointers are *absolute virtual addresses*, so an offline reader must map them back:
+**Names.** `.abix.n` holds `const char *` pointers, not the strings (they live in `.rdata`). Unlike an ELF section, those pointers are _absolute virtual addresses_, so an offline reader must map them back:
 
 ```text
 pointer (VA) → RVA = VA − ImageBase → file offset via the section table

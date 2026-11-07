@@ -7,6 +7,7 @@
 AMC is an interface compiler and code-generation toolchain. This is the standalone AMC repository.
 
 ## Documentation
+
 - [Documentation index](docs/README.md)
 - [AMC toolchain and CLI](docs/amc/amc.md)
 - [`.abic.toml` configuration](docs/abic/abic.md)

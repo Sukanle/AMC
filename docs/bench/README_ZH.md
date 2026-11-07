@@ -93,42 +93,32 @@ full load         91.4 ms
 
 ## Cache
 
-200 / 1000 条目，P-core，mean wall time。这是单文件 entry 重构和 POSIX `stat`
-快速路径之后的 Linux 复测（2026-11-07）；重构前数据见[优化历史](#优化历史)。
+200 / 1000 条目，P-core，mean wall time。这是单文件 entry 重构和 POSIX `stat` 快速路径之后的 Linux 复测（2026-11-07）；重构前数据见[优化历史](#优化历史)。
 
-| Benchmark         |      200 |      1000 | 5x 输入 |
-| ----------------- | -------: | --------: | ------: |
-| StoreCold         | 1.668 ms |  8.444 ms |   5.06x |
-| LookupHit         | 1.044 ms |  5.407 ms |   5.18x |
-| LookupHitShallow  | 0.723 ms |  3.796 ms |   5.25x |
-| LookupMiss        | 0.290 ms |  1.437 ms |   4.96x |
-| LookupConcurrent  | 0.371 ms |  1.795 ms |   4.84x |
-| VerifyAll         | 0.845 ms |  4.381 ms |   5.18x |
-| DependencyChanged |   5.1 µs |    5.1 µs |   1.00x |
+| Benchmark         |      200 |     1000 | 5x 输入 |
+| ----------------- | -------: | -------: | ------: |
+| StoreCold         | 1.668 ms | 8.444 ms |   5.06x |
+| LookupHit         | 1.044 ms | 5.407 ms |   5.18x |
+| LookupHitShallow  | 0.723 ms | 3.796 ms |   5.25x |
+| LookupMiss        | 0.290 ms | 1.437 ms |   4.96x |
+| LookupConcurrent  | 0.371 ms | 1.795 ms |   4.84x |
+| VerifyAll         | 0.845 ms | 4.381 ms |   5.18x |
+| DependencyChanged |   5.1 µs |   5.1 µs |   1.00x |
 
 新增 cache 用例：
 
-| Benchmark                  |      200 |      1000 |
-| -------------------------- | -------: | --------: |
+| Benchmark                   |      200 |      1000 |
+| --------------------------- | -------: | --------: |
 | LookupHitWithDeps（8 依赖） | 2.595 ms | 23.735 ms |
 | LookupHitLarge / 8（1 MiB） |        — |  6.515 ms |
 
-1000 条目时单条目成本：`StoreCold` 8.4 µs、`LookupHit` 5.4 µs、
-shallow hit 3.8 µs、miss 1.4 µs。
+1000 条目时单条目成本：`StoreCold` 8.4 µs、`LookupHit` 5.4 µs、 shallow hit 3.8 µs、miss 1.4 µs。
 
-重构内容：per-key 目录改为单个版本化 entry 文件；发布时不再读回 payload；
-lookup 直接打开 entry；64 KiB 以上 payload 使用 mmap。POSIX 上增加 `stat`
-快速路径，在构造 `ifstream` 前判断 entry 是否存在；Windows 保留直接打开，
-因为 `CreateFile` 元数据操作更贵。
+重构内容：per-key 目录改为单个版本化 entry 文件；发布时不再读回 payload； lookup 直接打开 entry；64 KiB 以上 payload 使用 mmap。POSIX 上增加 `stat` 快速路径，在构造 `ifstream` 前判断 entry 是否存在；Windows 保留直接打开，因为 `CreateFile` 元数据操作更贵。
 
-相对重构前基线：`StoreCold` 快 45%，`VerifyAll` 快 20%，`LookupHit` 快 10%。
-`LookupMiss/1000` 为 1.437 ms，重构前为 1.415 ms（+1.5%，约 0.02 µs/lookup）。
-POSIX 快速路径补回了直接打开带来的 +15% 回归，代价是命中路径约 +4%
-（5.407 ms vs 直接打开的 5.178 ms，但仍低于重构前的 6.029 ms）。
-`LookupMissDiagnose/200` 为 52.9 ms，仍是独立的诊断路径，会扫描 manifest。
+相对重构前基线：`StoreCold` 快 45%，`VerifyAll` 快 20%，`LookupHit` 快 10%。`LookupMiss/1000` 为 1.437 ms，重构前为 1.415 ms（+1.5%，约 0.02 µs/lookup）。 POSIX 快速路径补回了直接打开带来的 +15% 回归，代价是命中路径约 +4% （5.407 ms vs 直接打开的 5.178 ms，但仍低于重构前的 6.029 ms）。`LookupMissDiagnose/200` 为 52.9 ms，仍是独立的诊断路径，会扫描 manifest。
 
-cache 写入是进程安全的：entry 先写入进程唯一临时文件，再用 rename 提交；
-并发写入最终只保留一个 entry。
+cache 写入是进程安全的：entry 先写入进程唯一临时文件，再用 rename 提交；并发写入最终只保留一个 entry。
 
 ## Query 与 context
 
@@ -244,27 +234,23 @@ AMC **不内嵌进程池**。与 Ninja 启动多个 `clang` 一样，多文件�
 
 ### Cache（ms，200 / 1000 条目）
 
-CachyOS 列是单文件 entry 重构和 POSIX `stat` 快速路径之后的 2026-11-07 复测。
-Windows 列包含同一套单文件 entry、直接打开、按需校验和 64 KiB 以上 mmap；
-POSIX `stat` 快速路径不适用于 Windows。
+CachyOS 列是单文件 entry 重构和 POSIX `stat` 快速路径之后的 2026-11-07 复测。 Windows 列包含同一套单文件 entry、直接打开、按需校验和 64 KiB 以上 mmap； POSIX `stat` 快速路径不适用于 Windows。
 
-| Benchmark | CachyOS | Windows（优化后） | 倍数 |
-| --- | ---: | ---: | ---: |
-| StoreCold | 1.668 / 8.444 | 49.340 / 250.868 | 29.6x / 29.7x |
-| LookupHit | 1.044 / 5.407 | 9.405 / 48.017 | 9.0x / 8.9x |
-| LookupHitShallow | 0.723 / 3.796 | 4.435 / 22.798 | 6.1x / 6.0x |
-| LookupMiss | 0.290 / 1.437 | 1.676 / 8.833 | 5.8x / 6.1x |
-| LookupConcurrent | 0.371 / 1.795 | 3.597 / 17.267 | 9.7x / 9.6x |
-| VerifyAll | 0.845 / 4.381 | 9.979 / 51.538 | 11.8x / 11.8x |
-| DependencyChanged | 5.1 µs | 48 µs | 9.3x |
-| LookupMissDiagnose / 200 | 52.86 ms | 506 ms | 9.6x |
-| LookupHitLarge / 8 | 6.515 ms | 8.565 ms | 1.31x |
+| Benchmark                |       CachyOS | Windows（优化后） |          倍数 |
+| ------------------------ | ------------: | ----------------: | ------------: |
+| StoreCold                | 1.668 / 8.444 |  49.340 / 250.868 | 29.6x / 29.7x |
+| LookupHit                | 1.044 / 5.407 |    9.405 / 48.017 |   9.0x / 8.9x |
+| LookupHitShallow         | 0.723 / 3.796 |    4.435 / 22.798 |   6.1x / 6.0x |
+| LookupMiss               | 0.290 / 1.437 |     1.676 / 8.833 |   5.8x / 6.1x |
+| LookupConcurrent         | 0.371 / 1.795 |    3.597 / 17.267 |   9.7x / 9.6x |
+| VerifyAll                | 0.845 / 4.381 |    9.979 / 51.538 | 11.8x / 11.8x |
+| DependencyChanged        |        5.1 µs |             48 µs |          9.3x |
+| LookupMissDiagnose / 200 |      52.86 ms |            506 ms |          9.6x |
+| LookupHitLarge / 8       |      6.515 ms |          8.565 ms |         1.31x |
 
-`LookupHitWithDeps` 不放进表格：Windows 正常条件下 1000 条目约 52 ms，但同一
-二进制曾出现 645 ms 的离群 run。依赖读取成本受宿主文件系统状态影响很大。
+`LookupHitWithDeps` 不放进表格：Windows 正常条件下 1000 条目约 52 ms，但同一二进制曾出现 645 ms 的离群 run。依赖读取成本受宿主文件系统状态影响很大。
 
-重构后 CachyOS/Windows 倍数变大，是因为 Linux 侧变快；Windows 的残余成本是
-NTFS 元数据操作，不是算法差异。
+重构后 CachyOS/Windows 倍数变大，是因为 Linux 侧变快；Windows 的残余成本是 NTFS 元数据操作，不是算法差异。
 
 ### Query 与多文件
 
@@ -288,30 +274,26 @@ NTFS 元数据操作，不是算法差异。
 
 ## 优化历史
 
-| 变更                              |              之前 |     之后 |
-| --------------------------------- | ----------------: | -------: |
-| Lowering / 20k                    |          552.7 ms |  10.1 ms |
-| FullPipeline / 20k                |          525.7 ms |  21.2 ms |
-| Compatibility / 20k               |          455.4 ms |  15.5 ms |
-| Cache LookupMiss / 1000           |           1.454 s | 1.415 ms |
-| Query FunctionExact / 5k          |         370.96 µs |  12.6 µs |
-| LoadAbiOnly / 5k                  |   91.4 ms（full） |  16.5 ms |
-| ContextJsonStream / 20k           | 46.7 ms（string） |  44.7 ms |
-| Cache StoreCold / 1000（Linux）   |         15.306 ms |  8.444 ms |
-| Cache LookupHit / 1000（Linux）   |          6.029 ms |  5.407 ms |
-| Cache VerifyAll / 1000（Linux）   |          5.459 ms |  4.381 ms |
-| Cache LookupHitShallow / 1000（Linux） |             — |  3.796 ms |
-| Cache LookupMiss / 1000（Linux）  |          1.415 ms |  1.437 ms |
-| Cache StoreCold / 1000（Windows） |          533.1 ms | 250.9 ms |
-| Cache LookupHit / 1000（Windows） |           96.1 ms |  48.0 ms |
+| 变更                                   |              之前 |     之后 |
+| -------------------------------------- | ----------------: | -------: |
+| Lowering / 20k                         |          552.7 ms |  10.1 ms |
+| FullPipeline / 20k                     |          525.7 ms |  21.2 ms |
+| Compatibility / 20k                    |          455.4 ms |  15.5 ms |
+| Cache LookupMiss / 1000                |           1.454 s | 1.415 ms |
+| Query FunctionExact / 5k               |         370.96 µs |  12.6 µs |
+| LoadAbiOnly / 5k                       |   91.4 ms（full） |  16.5 ms |
+| ContextJsonStream / 20k                | 46.7 ms（string） |  44.7 ms |
+| Cache StoreCold / 1000（Linux）        |         15.306 ms | 8.444 ms |
+| Cache LookupHit / 1000（Linux）        |          6.029 ms | 5.407 ms |
+| Cache VerifyAll / 1000（Linux）        |          5.459 ms | 4.381 ms |
+| Cache LookupHitShallow / 1000（Linux） |                 — | 3.796 ms |
+| Cache LookupMiss / 1000（Linux）       |          1.415 ms | 1.437 ms |
+| Cache StoreCold / 1000（Windows）      |          533.1 ms | 250.9 ms |
+| Cache LookupHit / 1000（Windows）      |           96.1 ms |  48.0 ms |
 
-主要收益来自移除二次扫描、按需加载 sidecar，以及把 per-key cache 目录改为单个
-entry 文件。并行化被刻意放在最后。
+主要收益来自移除二次扫描、按需加载 sidecar，以及把 per-key cache 目录改为单个 entry 文件。并行化被刻意放在最后。
 
-Linux 的 `LookupMiss/1000` 在直接打开 entry 后曾从 1.415 ms 变为稳定的 1.627 ms 均值
-（+15%）。POSIX 专用 `stat` 快速路径把它补回到 1.437 ms（+1.5%）。`LookupHit/1000`
-为 5.407 ms，比直接打开慢约 4%，但仍比重构前的 6.029 ms 快 10%。
-`LookupMissDiagnose` 仍是独立的扫描诊断路径。
+Linux 的 `LookupMiss/1000` 在直接打开 entry 后曾从 1.415 ms 变为稳定的 1.627 ms 均值（+15%）。POSIX 专用 `stat` 快速路径把它补回到 1.437 ms（+1.5%）。`LookupHit/1000` 为 5.407 ms，比直接打开慢约 4%，但仍比重构前的 6.029 ms 快 10%。`LookupMissDiagnose` 仍是独立的扫描诊断路径。
 
 ## 回归门槛
 

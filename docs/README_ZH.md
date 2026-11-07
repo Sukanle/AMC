@@ -35,22 +35,21 @@ AMC 把原生 ABI 作为契约，而不是让 C 头文件成为唯一事实来�
 
 v0.3.2 边界上，核心架构已经就位：
 
-| 领域 | 状态 |
-| --- | --- |
-| Semantic model 与身份系统 | 完成 |
-| 模板声明 / 实例化 / `.semantic` | 完成 |
-| ABI lowering 与 `.lowering` | 完成 |
-| C++ / Rust / Zig 投影 | 完成 |
-| Rust FFI surface | target-aware；probe 验证 `repr(C)` / array / alias / enum / packed / transparent / union 布局 |
-| Rust adapter | `amc.rust.semantic/1` 已冻结；rustc helper 延后到 v0.4.0 |
-| typed `Result`、命名错误集、exposed handle | 完成 |
-| 接口契约与 proxy 层 | C++ 完成；Rust/Zig typed proxy |
-| 模块边界与物理拆分 | A0–A5 完成；A6 核心完成 |
-| 性能护栏 | pass/artifact/cache/query/multifile 套件 |
-| 多文件并行 | 由外部多个 `amc` 进程完成，产品内无进程池 |
+| 领域                                       | 状态                                                                                          |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| Semantic model 与身份系统                  | 完成                                                                                          |
+| 模板声明 / 实例化 / `.semantic`            | 完成                                                                                          |
+| ABI lowering 与 `.lowering`                | 完成                                                                                          |
+| C++ / Rust / Zig 投影                      | 完成                                                                                          |
+| Rust FFI surface                           | target-aware；probe 验证 `repr(C)` / array / alias / enum / packed / transparent / union 布局 |
+| Rust adapter                               | `amc.rust.semantic/1` 已冻结；rustc helper 延后到 v0.4.0                                      |
+| typed `Result`、命名错误集、exposed handle | 完成                                                                                          |
+| 接口契约与 proxy 层                        | C++ 完成；Rust/Zig typed proxy                                                                |
+| 模块边界与物理拆分                         | A0–A5 完成；A6 核心完成                                                                       |
+| 性能护栏                                   | pass/artifact/cache/query/multifile 套件                                                      |
+| 多文件并行                                 | 由外部多个 `amc` 进程完成，产品内无进程池                                                     |
 
-当前 P-core 基线与扩展性分析见[基准测试](bench/README_ZH.md)。
-发布说明见[变更记录](../CHANGELOG_ZH.md)。
+当前 P-core 基线与扩展性分析见[基准测试](bench/README_ZH.md)。发布说明见[变更记录](../CHANGELOG_ZH.md)。
 
 ## 仓库结构
 
@@ -82,41 +81,41 @@ AMC/
 
 ### 入门
 
-| 文档 | English | 描述 |
-| --- | --- | --- |
-| [amc_zh.md](amc/amc_zh.md) | [amc.md](amc/amc.md) | `amc` CLI、命令与诊断 |
+| 文档                          | English                 | 描述                  |
+| ----------------------------- | ----------------------- | --------------------- |
+| [amc_zh.md](amc/amc_zh.md)    | [amc.md](amc/amc.md)    | `amc` CLI、命令与诊断 |
 | [abic_zh.md](abic/abic_zh.md) | [abic.md](abic/abic.md) | `.abic.toml` 配置参考 |
 
 ### 架构
 
-| 文档 | English | 描述 |
-| --- | --- | --- |
-| [module-boundaries_zh.md](architecture/module-boundaries_zh.md) | [module-boundaries.md](architecture/module-boundaries.md) | 模块职责、依赖规则与私有实现布局 |
-| [基准测试](bench/README_ZH.md) | [Benchmarks](bench/README.md) | 套件、当前结果、扩展性与回归门槛 |
-| [rust-adapter_zh.md](architecture/rust-adapter_zh.md) | [rust-adapter.md](architecture/rust-adapter.md) | 未来 rustc helper 的 `amc.rust.semantic/1` adapter 契约 |
+| 文档                                                            | English                                                   | 描述                                                    |
+| --------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------- |
+| [module-boundaries_zh.md](architecture/module-boundaries_zh.md) | [module-boundaries.md](architecture/module-boundaries.md) | 模块职责、依赖规则与私有实现布局                        |
+| [基准测试](bench/README_ZH.md)                                  | [Benchmarks](bench/README.md)                             | 套件、当前结果、扩展性与回归门槛                        |
+| [rust-adapter_zh.md](architecture/rust-adapter_zh.md)           | [rust-adapter.md](architecture/rust-adapter.md)           | 未来 rustc helper 的 `amc.rust.semantic/1` adapter 契约 |
 
 ### 语言
 
-| 文档 | English | 描述 |
-| --- | --- | --- |
-| [lang/README_ZH.md](lang/README_ZH.md) | [lang/README.md](lang/README.md) | ABIX 投影模型 |
-| [cpp_zh.md](lang/cpp_zh.md) | [cpp.md](lang/cpp.md) | C++ 前端/后端与编译期检查 |
-| [rust_zh.md](lang/rust_zh.md) | [rust.md](lang/rust.md) | Rust provider、`repr(C)`、所有权与 `Result` |
-| [zig_zh.md](lang/zig_zh.md) | [zig.md](lang/zig.md) | Zig 后端投影与 `comptime` 检查 |
+| 文档                                   | English                          | 描述                                        |
+| -------------------------------------- | -------------------------------- | ------------------------------------------- |
+| [lang/README_ZH.md](lang/README_ZH.md) | [lang/README.md](lang/README.md) | ABIX 投影模型                               |
+| [cpp_zh.md](lang/cpp_zh.md)            | [cpp.md](lang/cpp.md)            | C++ 前端/后端与编译期检查                   |
+| [rust_zh.md](lang/rust_zh.md)          | [rust.md](lang/rust.md)          | Rust provider、`repr(C)`、所有权与 `Result` |
+| [zig_zh.md](lang/zig_zh.md)            | [zig.md](lang/zig.md)            | Zig 后端投影与 `comptime` 检查              |
 
 ### AI 与 Agent
 
-| 文档 | English | 描述 |
-| --- | --- | --- |
-| [MCP_zh.md](ai/MCP_zh.md) | [MCP.md](ai/MCP.md) | `amc-mcp` 服务器与 ABI 工具 |
+| 文档                        | English               | 描述                          |
+| --------------------------- | --------------------- | ----------------------------- |
+| [MCP_zh.md](ai/MCP_zh.md)   | [MCP.md](ai/MCP.md)   | `amc-mcp` 服务器与 ABI 工具   |
 | [troi_zh.md](ai/troi_zh.md) | [troi.md](ai/troi.md) | Agent 工作流的 token 效率度量 |
 
 ### 二进制检查
 
-| 文档 | English | 描述 |
-| --- | --- | --- |
+| 文档                                                      | English                                             | 描述                          |
+| --------------------------------------------------------- | --------------------------------------------------- | ----------------------------- |
 | [elf-inspection_zh.md](architecture/elf-inspection_zh.md) | [elf-inspection.md](architecture/elf-inspection.md) | ELF / Mach-O 中的 ABIX 元数据 |
-| [pe-inspection_zh.md](architecture/pe-inspection_zh.md) | [pe-inspection.md](architecture/pe-inspection.md) | Windows PE 中的 ABIX 元数据 |
+| [pe-inspection_zh.md](architecture/pe-inspection_zh.md)   | [pe-inspection.md](architecture/pe-inspection.md)   | Windows PE 中的 ABIX 元数据   |
 
 ## 构建、测试与基准
 

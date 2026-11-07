@@ -1934,8 +1934,7 @@ int main() {
         cache.record_store();
         const auto stats = cache.stats();
         check(stats.entries == 1 && stats.bytes > 0, "stats reports the committed entry");
-        check(stats.hits == 1 && stats.misses == 1 && stats.stores == 1,
-            "stats records lookup and store counters");
+        check(stats.hits == 1 && stats.misses == 1 && stats.stores == 1, "stats records lookup and store counters");
         check(cache.prune(amc::PruneOptions{0, 0}).removed == 0, "prune without limits keeps every entry");
         const auto dry = cache.prune(amc::PruneOptions{1, 0}, true);
         check(dry.removed == 1 && dry.freed_bytes == stats.bytes, "prune dry-run reports what would be removed");
@@ -1944,8 +1943,7 @@ int main() {
         check(cache.clear() >= 1 && cache.entries() == 0, "cache can be cleared");
         check(cache.store(base, artifacts, error), "re-store after clear");
         const auto pruned = cache.prune(amc::PruneOptions{1, 0});
-        check(pruned.removed == 1 && pruned.freed_bytes > 0 && cache.entries() == 0,
-            "prune honours the byte budget");
+        check(pruned.removed == 1 && pruned.freed_bytes > 0 && cache.entries() == 0, "prune honours the byte budget");
         cleanup_dir(root);
 
         // Concurrent writers of a fresh key must leave one complete, verifiable

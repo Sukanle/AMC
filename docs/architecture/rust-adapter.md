@@ -4,9 +4,7 @@
   English · <a href="rust-adapter_zh.md">中文</a>
 </p>
 
-This document freezes the adapter contract between AMC and the future Rust
-semantic helper. It is an **internal frontend adapter**, not an ABIX wire format
-and not a public stable API.
+This document freezes the adapter contract between AMC and the future Rust semantic helper. It is an **internal frontend adapter**, not an ABIX wire format and not a public stable API.
 
 ```mermaid
 flowchart TD
@@ -45,67 +43,67 @@ Rules:
 
 ```json
 {
-    "schema": "amc.rust.semantic/1",
-    "producer": {
-        "kind": "rustc-helper",
-        "version": "0.1.0",
-        "rustc": "1.99.1"
-    },
-    "target": {
-        "triple": "x86_64-unknown-linux-gnu",
-        "arch": "x86_64",
-        "os": "linux",
-        "abi": "gnu",
-        "pointer_bits": 64,
-        "endianness": "little",
-        "c_long_bits": 64
-    },
-    "crate": {
-        "name": "demo",
-        "edition": "2021",
-        "features": ["std"]
-    },
-    "types": [
+  "schema": "amc.rust.semantic/1",
+  "producer": {
+    "kind": "rustc-helper",
+    "version": "0.1.0",
+    "rustc": "1.99.1"
+  },
+  "target": {
+    "triple": "x86_64-unknown-linux-gnu",
+    "arch": "x86_64",
+    "os": "linux",
+    "abi": "gnu",
+    "pointer_bits": 64,
+    "endianness": "little",
+    "c_long_bits": 64
+  },
+  "crate": {
+    "name": "demo",
+    "edition": "2021",
+    "features": ["std"]
+  },
+  "types": [
+    {
+      "id": "rust:demo::DemoRect",
+      "name": "DemoRect",
+      "kind": "record",
+      "repr": ["C", "packed(2)"],
+      "size": 24,
+      "align": 2,
+      "fields": [
         {
-            "id": "rust:demo::DemoRect",
-            "name": "DemoRect",
-            "kind": "record",
-            "repr": ["C", "packed(2)"],
-            "size": 24,
-            "align": 2,
-            "fields": [
-                {
-                    "name": "origin",
-                    "offset": 0,
-                    "type": "rust:demo::DemoPoint"
-                },
-                { "name": "width", "offset": 8, "type": "rust:f64" }
-            ]
-        }
-    ],
-    "functions": [
-        {
-            "name": "demo_area",
-            "symbol": "demo_area",
-            "abi": "C",
-            "visibility": "public",
-            "return_type": "rust:f64",
-            "parameters": [
-                {
-                    "name": "rect",
-                    "type": "rust:*const demo::DemoRect",
-                    "mode": "borrowed"
-                }
-            ]
-        }
-    ],
-    "generics": [],
-    "traits": [],
-    "errors": [],
-    "provenance": {
-        "source": "src/lib.rs",
-        "rustc": "1.99.1"
+          "name": "origin",
+          "offset": 0,
+          "type": "rust:demo::DemoPoint"
+        },
+        { "name": "width", "offset": 8, "type": "rust:f64" }
+      ]
     }
+  ],
+  "functions": [
+    {
+      "name": "demo_area",
+      "symbol": "demo_area",
+      "abi": "C",
+      "visibility": "public",
+      "return_type": "rust:f64",
+      "parameters": [
+        {
+          "name": "rect",
+          "type": "rust:*const demo::DemoRect",
+          "mode": "borrowed"
+        }
+      ]
+    }
+  ],
+  "generics": [],
+  "traits": [],
+  "errors": [],
+  "provenance": {
+    "source": "src/lib.rs",
+    "rustc": "1.99.1"
+  }
 }
 ```
 
@@ -113,8 +111,7 @@ Rules:
 
 ### `target`
 
-Required for any layout-bearing record. The helper must report the target it
-compiled for; AMC must not substitute the Host.
+Required for any layout-bearing record. The helper must report the target it compiled for; AMC must not substitute the Host.
 
 ### `types`
 
@@ -125,34 +122,27 @@ compiled for; AMC must not substitute the Host.
 - `size` / `align`: target-specific, from rustc.
 - `fields[].offset`: target-specific, from rustc; unions report `0`.
 
-AMC converts these records into Semantic IR and decides whether an entity is
-ABI-safe. The helper does not decide ABI policy.
+AMC converts these records into Semantic IR and decides whether an entity is ABI-safe. The helper does not decide ABI policy.
 
 ### `functions`
 
 - `name` and `symbol` are separate: `#[link_name]` may change the symbol.
-- `abi` is the declared ABI (currently `C`); unsupported ABIs are rejected or
-  recorded as non-projectable.
+- `abi` is the declared ABI (currently `C`); unsupported ABIs are rejected or recorded as non-projectable.
 - `visibility` and `source` are provenance, not ABI identity.
-- `mode` describes observed ownership (`borrowed`, `owned`, `copy`) only when
-  the helper can prove it; absence means unspecified.
+- `mode` describes observed ownership (`borrowed`, `owned`, `copy`) only when the helper can prove it; absence means unspecified.
 - Only explicitly selected functions are exported.
 
 ### `generics` / `traits`
 
-Optional and additive. v0.4 may populate declarations, bounds, associated types
-and explicit instances. AMC must not assume that a missing entry means “not
-generic”; absence means “not selected/proven”.
+Optional and additive. v0.4 may populate declarations, bounds, associated types and explicit instances. AMC must not assume that a missing entry means “not generic”; absence means “not selected/proven”.
 
 ### `errors`
 
-Optional. `Result<T,E>` and error enums may be described as semantic entities;
-the ABI mapping is done by AMC's error pass, not by the helper.
+Optional. `Result<T,E>` and error enums may be described as semantic entities; the ABI mapping is done by AMC's error pass, not by the helper.
 
 ### `provenance`
 
-Debug and reproducibility only. It never participates in ABI identity or
-compatibility.
+Debug and reproducibility only. It never participates in ABI identity or compatibility.
 
 ## Rules
 

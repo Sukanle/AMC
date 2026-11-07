@@ -60,20 +60,20 @@ MCP is a thin JSON-RPC transport; all query and verification logic lives in AMC.
 
 `amc-mcp` implements MCP JSON-RPC over stdio (newline-delimited), supporting `initialize` / `ping` / `tools/list` / `tools/call`; notifications produce no response, unknown methods return `-32601`, and parse failures return `-32700`. Two MCP protocol versions are supported, `2024-11-05` and `2025-06-18`, with `2025-06-18` the preferred newest. On `initialize` the server echoes the client's requested `protocolVersion` when that version is supported, and otherwise negotiates down to the preferred newest supported version; `serverInfo` always reports `{"name": "amc-mcp", "version": "0.1.0"}`. The exposed tools are:
 
-| Tool | Parameters | Description |
-|------|------------|-------------|
-| `abix.get_module` | `module?` | package/target/ABIHash/counts |
-| `abix.list_types` | `module?` | all types with TypeID / LayoutHash / size / align |
-| `abix.get_type` | `name`\|`id`, `layout?`, `module?` | single type; `layout` includes field offsets |
-| `abix.list_functions` | `module?` | all functions: signature, return type, parameter count |
-| `abix.get_function` | `name`, `module?` | function signature, return type, parameters |
-| `abix.get_layout` | `name`\|`id`, `module?` | single type memory layout (size/align/field offsets) |
-| `abix.resolve_type` | `name`\|`id`, `module?` | resolve matching types by name or partial TypeID |
-| `abix.compare_abi` | `other`, `module?` | strict ABI comparison (missing types/layout changes count as drift) |
-| `abix.compare_types` | `name`, `other`, `module?` | cross-artifact single type comparison |
-| `abix.find_compatible` | `name`, `other?`, `module?` | cross-artifact compatibility check; omitting `other` searches the knowledge base |
-| `abix.list_modules` | — | list all indexed modules in the knowledge base |
-| `abix.search_type` | `name`\|`id` | cross-module type search, grouped by name with ABI consistency flags |
+| Tool                   | Parameters                         | Description                                                                      |
+| ---------------------- | ---------------------------------- | -------------------------------------------------------------------------------- |
+| `abix.get_module`      | `module?`                          | package/target/ABIHash/counts                                                    |
+| `abix.list_types`      | `module?`                          | all types with TypeID / LayoutHash / size / align                                |
+| `abix.get_type`        | `name`\|`id`, `layout?`, `module?` | single type; `layout` includes field offsets                                     |
+| `abix.list_functions`  | `module?`                          | all functions: signature, return type, parameter count                           |
+| `abix.get_function`    | `name`, `module?`                  | function signature, return type, parameters                                      |
+| `abix.get_layout`      | `name`\|`id`, `module?`            | single type memory layout (size/align/field offsets)                             |
+| `abix.resolve_type`    | `name`\|`id`, `module?`            | resolve matching types by name or partial TypeID                                 |
+| `abix.compare_abi`     | `other`, `module?`                 | strict ABI comparison (missing types/layout changes count as drift)              |
+| `abix.compare_types`   | `name`, `other`, `module?`         | cross-artifact single type comparison                                            |
+| `abix.find_compatible` | `name`, `other?`, `module?`        | cross-artifact compatibility check; omitting `other` searches the knowledge base |
+| `abix.list_modules`    | —                                  | list all indexed modules in the knowledge base                                   |
+| `abix.search_type`     | `name`\|`id`                       | cross-module type search, grouped by name with ABI consistency flags             |
 
 All tools reuse AMC's query and verify implementations, returning `structuredContent` (structured JSON) and `content[].text` (text form of the same JSON), so the CLI, MCP, and other consumers share one implementation. Usage:
 
@@ -124,9 +124,9 @@ amc-mcp --index libfoo.abix --index plugin.so # equivalent form
 
 After indexing:
 
-* `abix.list_modules` enumerates each module's path / package / ABIHash / counts;
-* `abix.search_type "Foo"` looks up matching types in every module, groups hits by type name, and flags each group as `consistent` — whether all occurrences share one TypeID and LayoutHash. This directly answers "find all types that implement the same ABI";
-* `abix.find_compatible "Foo"` (without `other`) uses the default module as source and checks compatibility against every other indexed module; when no other indexed module declares the requested type, the result reports a `reason` field saying so.
+- `abix.list_modules` enumerates each module's path / package / ABIHash / counts;
+- `abix.search_type "Foo"` looks up matching types in every module, groups hits by type name, and flags each group as `consistent` — whether all occurrences share one TypeID and LayoutHash. This directly answers "find all types that implement the same ABI";
+- `abix.find_compatible "Foo"` (without `other`) uses the default module as source and checks compatibility against every other indexed module; when no other indexed module declares the requested type, the result reports a `reason` field saying so.
 
 Single-module usage is unchanged: giving one path makes that module the default data source.
 
@@ -313,6 +313,7 @@ This query is performed at the Metadata layer by ABIX, with no source reading re
 ### Separating Production and Analysis Environments
 
 Release:
+
 ```
 program
 ├── code
@@ -320,6 +321,7 @@ program
 ```
 
 Debug / AI / Analysis environment:
+
 ```
 program
        │
@@ -373,10 +375,10 @@ This structure maps from Metadata to an ABI Knowledge Graph to Agent reasoning:
 
 "Compact Runtime Metadata + standalone Metadata Region + external `.abix`" simultaneously correspond to ABIX's three entry points:
 
-| Entry Point | Consumption Method | Purpose |
-|-------------|-------------------|---------|
-| **Runtime** | high-speed ABI lookup | dynamic binding, contract verification |
-| **AMC** | fast dump / query / verify / generate | development debugging, compatibility analysis |
-| **AI Agent / MCP** | structured ABI query / comparison / reasoning / auto-generation | intelligent code generation, ABI reasoning |
+| Entry Point        | Consumption Method                                              | Purpose                                       |
+| ------------------ | --------------------------------------------------------------- | --------------------------------------------- |
+| **Runtime**        | high-speed ABI lookup                                           | dynamic binding, contract verification        |
+| **AMC**            | fast dump / query / verify / generate                           | development debugging, compatibility analysis |
+| **AI Agent / MCP** | structured ABI query / comparison / reasoning / auto-generation | intelligent code generation, ABI reasoning    |
 
 ABIX Metadata is therefore also the machine-readable ABI interface in the ABIX ecosystem, not merely descriptive data attached to the Runtime for dynamic binding.

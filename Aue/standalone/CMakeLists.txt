@@ -30,8 +30,7 @@ add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/.. aue)
 install(TARGETS abix-conformance abix-bench RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(
     FILES ${CMAKE_CURRENT_LIST_DIR}/../README.md ${CMAKE_CURRENT_LIST_DIR}/../Conformance.lua
-          ${CMAKE_CURRENT_LIST_DIR}/../Edges.lua
-    DESTINATION ${CMAKE_INSTALL_DATADIR}/aue)
+    ${CMAKE_CURRENT_LIST_DIR}/../Edges.lua DESTINATION ${CMAKE_INSTALL_DATADIR}/aue)
 
 set(CPACK_PACKAGE_NAME "Aue")
 set(CPACK_PACKAGE_VENDOR "Sukanle")

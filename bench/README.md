@@ -4,8 +4,7 @@ Google Benchmark baselines for the v0.3.0 benchmark plan.
 
 ## Build
 
-Google Benchmark is optional. When `AMC_BUILD_BENCHMARKS=ON` and the package is
-available, `bench/` is added by the top-level CMake:
+Google Benchmark is optional. When `AMC_BUILD_BENCHMARKS=ON` and the package is available, `bench/` is added by the top-level CMake:
 
 ```bash
 cmake -S . -B build -G Ninja \
@@ -15,19 +14,18 @@ cmake -S . -B build -G Ninja \
 cmake --build build --parallel
 ```
 
-If Google Benchmark is not found, correctness targets are still built and the
-performance targets are skipped with a CMake status message.
+If Google Benchmark is not found, correctness targets are still built and the performance targets are skipped with a CMake status message.
 
 ## Targets
 
-| Target                    | Plan | Purpose                                           |
-| ------------------------- | ---- | ------------------------------------------------- |
-| `amc-pass-perf-bench`     | B1   | semantic/ABI/lowering/compatibility pipeline      |
-| `amc-artifact-perf-bench` | B2   | `.abix`, sidecars, metadata region, materialize   |
-| `amc-cache-perf-bench`    | B3   | cold store, hit/miss, dependencies, concurrency   |
-| `amc-query-perf-bench`    | B4   | type/function lookup, text/JSON/context rendering |
-| `amc-multifile-perf-bench`| OPT-6| sequential vs thread-pool multi-file ABI load     |
-| `abix-bench`              | B5   | Aue L0/L1/L2, fields, arrays and GC               |
+| Target                     | Plan  | Purpose                                           |
+| -------------------------- | ----- | ------------------------------------------------- |
+| `amc-pass-perf-bench`      | B1    | semantic/ABI/lowering/compatibility pipeline      |
+| `amc-artifact-perf-bench`  | B2    | `.abix`, sidecars, metadata region, materialize   |
+| `amc-cache-perf-bench`     | B3    | cold store, hit/miss, dependencies, concurrency   |
+| `amc-query-perf-bench`     | B4    | type/function lookup, text/JSON/context rendering |
+| `amc-multifile-perf-bench` | OPT-6 | sequential vs thread-pool multi-file ABI load     |
+| `abix-bench`               | B5    | Aue L0/L1/L2, fields, arrays and GC               |
 
 ## Run
 
@@ -48,13 +46,9 @@ python tools/run.py --bench-only --build-dir build/Release
 python tools/run.py                         # build + test + benchmark
 ```
 
-`tools/run_bench.py` forwards benchmark-name regexes to Google Benchmark,
-normalises `ns`/`us`/`ms`/`s` to nanoseconds, and writes one JSON file per
-executable under `--out`.
+`tools/run_bench.py` forwards benchmark-name regexes to Google Benchmark, normalises `ns`/`us`/`ms`/`s` to nanoseconds, and writes one JSON file per executable under `--out`.
 
-Pinning is cross-platform where the OS supports it: Linux uses
-`sched_setaffinity` plus cpufreq to distinguish P/E cores; Windows uses
-`SetProcessAffinityMask` plus `EfficiencyClass`; macOS currently runs unpinned.
+Pinning is cross-platform where the OS supports it: Linux uses `sched_setaffinity` plus cpufreq to distinguish P/E cores; Windows uses `SetProcessAffinityMask` plus `EfficiencyClass`; macOS currently runs unpinned.
 
 Short CTest smoke:
 
@@ -81,14 +75,11 @@ QueryFixture/ContextLlm/5000
 PassFixture/FullPipeline/5000
 ```
 
-`CacheReadFixture/LookupConcurrent` creates its worker threads inside the
-measured region; thread creation is intentionally part of that micro-benchmark.
+`CacheReadFixture/LookupConcurrent` creates its worker threads inside the measured region; thread creation is intentionally part of that micro-benchmark.
 
 ## External multi-process scaling
 
-AMC does not embed a process pool. Multi-file throughput comes from the build
-system launching independent `amc` processes, just like Ninja launches
-`clang`/`gcc`. Use the external harness to measure that model:
+AMC does not embed a process pool. Multi-file throughput comes from the build system launching independent `amc` processes, just like Ninja launches `clang`/`gcc`. Use the external harness to measure that model:
 
 ```bash
 python tools/run_multiprocess_bench.py \
@@ -96,11 +87,9 @@ python tools/run_multiprocess_bench.py \
   --instances 1 2 4 8 16 --repetitions 3
 ```
 
-The harness starts N `amc generate` processes at once with distinct output
-paths. It is not a production process pool and is not part of CTest.
+The harness starts N `amc generate` processes at once with distinct output paths. It is not a production process pool and is not part of CTest.
 
-For shared-cache contention, run several `amc build` processes with distinct
-`-B` directories and one `--cache`:
+For shared-cache contention, run several `amc build` processes with distinct `-B` directories and one `--cache`:
 
 ```bash
 python tools/stress_concurrent_build.py \
@@ -108,8 +97,6 @@ python tools/stress_concurrent_build.py \
   --cold-rounds 2 --warm-rounds 4
 ```
 
-The stress tool checks that every build succeeds, every output has the same
-digest, and concurrent writers leave exactly one cache entry.
+The stress tool checks that every build succeeds, every output has the same digest, and concurrent writers leave exactly one cache entry.
 
-Aue's `abix-bench` remains a standalone Lua micro-benchmark because it is also
-built by `Aue/standalone` without the AMC benchmark dependency.
+Aue's `abix-bench` remains a standalone Lua micro-benchmark because it is also built by `Aue/standalone` without the AMC benchmark dependency.

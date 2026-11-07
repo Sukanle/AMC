@@ -88,15 +88,15 @@ The generated header can then be included by a C++ consumer; `amc_abi_check.hpp`
 
 The provider is split by concern so the Clang frontend and the emitter backend stay maintainable:
 
-| Path | Responsibility |
-| --- | --- |
-| `include/SKL/AMC/Frontend/Cpp/Cpp.h` | public frontend entry (`run_frontend`) |
-| `include/SKL/AMC/Backend/Cpp/Cpp.h` | public backend entry (`run_backend`) |
+| Path                                    | Responsibility                                     |
+| --------------------------------------- | -------------------------------------------------- |
+| `include/SKL/AMC/Frontend/Cpp/Cpp.h`    | public frontend entry (`run_frontend`)             |
+| `include/SKL/AMC/Backend/Cpp/Cpp.h`     | public backend entry (`run_backend`)               |
 | `include/SKL/AMC/Private/Frontend/Cpp/` | `Native`, `Extractor`, `ThunkEmitter` declarations |
-| `src/SKL/AMC/Private/Frontend/Cpp/` | Clang visitor and thunk implementation |
-| `include/SKL/AMC/Private/Backend/Cpp/` | emitter declarations |
-| `src/SKL/AMC/Private/Backend/Cpp/` | projection/interface/handle/error/check emitters |
-| `CodeIn/Cpp/Prologue.hpp` | runtime-loaded generated prologue |
+| `src/SKL/AMC/Private/Frontend/Cpp/`     | Clang visitor and thunk implementation             |
+| `include/SKL/AMC/Private/Backend/Cpp/`  | emitter declarations                               |
+| `src/SKL/AMC/Private/Backend/Cpp/`      | projection/interface/handle/error/check emitters   |
+| `CodeIn/Cpp/Prologue.hpp`               | runtime-loaded generated prologue                  |
 
 `Extractor` is a non-owning Clang visitor; `ThunkEmitter` is a non-owning operation object. The C++ backend entry only loads the artifact, applies lowering and calls the emitters. Private headers are installed only with `-DAMC_INSTALL_PRIVATE_HEADERS=ON`.
 

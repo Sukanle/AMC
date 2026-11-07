@@ -4,8 +4,7 @@
   中文 · <a href="rust-adapter.md">English</a>
 </p>
 
-本文冻结 AMC 与未来 Rust semantic helper 之间的 adapter 契约。它是**内部前端
-adapter**，不是 ABIX wire format，也不是公共稳定 API。
+本文冻结 AMC 与未来 Rust semantic helper 之间的 adapter 契约。它是**内部前端 adapter**，不是 ABIX wire format，也不是公共稳定 API。
 
 ```mermaid
 flowchart TD
@@ -44,67 +43,67 @@ schema: "amc.rust.semantic/1"
 
 ```json
 {
-    "schema": "amc.rust.semantic/1",
-    "producer": {
-        "kind": "rustc-helper",
-        "version": "0.1.0",
-        "rustc": "1.99.1"
-    },
-    "target": {
-        "triple": "x86_64-unknown-linux-gnu",
-        "arch": "x86_64",
-        "os": "linux",
-        "abi": "gnu",
-        "pointer_bits": 64,
-        "endianness": "little",
-        "c_long_bits": 64
-    },
-    "crate": {
-        "name": "demo",
-        "edition": "2021",
-        "features": ["std"]
-    },
-    "types": [
+  "schema": "amc.rust.semantic/1",
+  "producer": {
+    "kind": "rustc-helper",
+    "version": "0.1.0",
+    "rustc": "1.99.1"
+  },
+  "target": {
+    "triple": "x86_64-unknown-linux-gnu",
+    "arch": "x86_64",
+    "os": "linux",
+    "abi": "gnu",
+    "pointer_bits": 64,
+    "endianness": "little",
+    "c_long_bits": 64
+  },
+  "crate": {
+    "name": "demo",
+    "edition": "2021",
+    "features": ["std"]
+  },
+  "types": [
+    {
+      "id": "rust:demo::DemoRect",
+      "name": "DemoRect",
+      "kind": "record",
+      "repr": ["C", "packed(2)"],
+      "size": 24,
+      "align": 2,
+      "fields": [
         {
-            "id": "rust:demo::DemoRect",
-            "name": "DemoRect",
-            "kind": "record",
-            "repr": ["C", "packed(2)"],
-            "size": 24,
-            "align": 2,
-            "fields": [
-                {
-                    "name": "origin",
-                    "offset": 0,
-                    "type": "rust:demo::DemoPoint"
-                },
-                { "name": "width", "offset": 8, "type": "rust:f64" }
-            ]
-        }
-    ],
-    "functions": [
-        {
-            "name": "demo_area",
-            "symbol": "demo_area",
-            "abi": "C",
-            "visibility": "public",
-            "return_type": "rust:f64",
-            "parameters": [
-                {
-                    "name": "rect",
-                    "type": "rust:*const demo::DemoRect",
-                    "mode": "borrowed"
-                }
-            ]
-        }
-    ],
-    "generics": [],
-    "traits": [],
-    "errors": [],
-    "provenance": {
-        "source": "src/lib.rs",
-        "rustc": "1.99.1"
+          "name": "origin",
+          "offset": 0,
+          "type": "rust:demo::DemoPoint"
+        },
+        { "name": "width", "offset": 8, "type": "rust:f64" }
+      ]
     }
+  ],
+  "functions": [
+    {
+      "name": "demo_area",
+      "symbol": "demo_area",
+      "abi": "C",
+      "visibility": "public",
+      "return_type": "rust:f64",
+      "parameters": [
+        {
+          "name": "rect",
+          "type": "rust:*const demo::DemoRect",
+          "mode": "borrowed"
+        }
+      ]
+    }
+  ],
+  "generics": [],
+  "traits": [],
+  "errors": [],
+  "provenance": {
+    "source": "src/lib.rs",
+    "rustc": "1.99.1"
+  }
 }
 ```
 
@@ -112,8 +111,7 @@ schema: "amc.rust.semantic/1"
 
 ### `target`
 
-任何带布局的 record 都必须有 target。helper 必须报告它实际编译的 target；
-AMC 不得用 Host 替代。
+任何带布局的 record 都必须有 target。helper 必须报告它实际编译的 target； AMC 不得用 Host 替代。
 
 ### `types`
 
@@ -136,13 +134,11 @@ AMC 将这些记录转换为 Semantic IR，并决定实体是否 ABI-safe。help
 
 ### `generics` / `traits`
 
-可选、additive。v0.4 可以填充声明、bounds、associated types 和显式实例。
-AMC 不能假设“缺失 = 不存在”；缺失只表示“未选择/未证明”。
+可选、additive。v0.4 可以填充声明、bounds、associated types 和显式实例。 AMC 不能假设“缺失 = 不存在”；缺失只表示“未选择/未证明”。
 
 ### `errors`
 
-可选。`Result<T,E>` 和 error enum 可以描述为语义实体；ABI 映射由 AMC 的
-error pass 完成，不由 helper 决定。
+可选。`Result<T,E>` 和 error enum 可以描述为语义实体；ABI 映射由 AMC 的 error pass 完成，不由 helper 决定。
 
 ### `provenance`
 

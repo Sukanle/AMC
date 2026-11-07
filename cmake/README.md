@@ -6,9 +6,7 @@ When AMC is installed as a package:
 find_package(AMC 0.1 CONFIG REQUIRED)
 ```
 
-`AMCConfig.cmake` includes `AMC.cmake`, exports `AMC::amc` and the providers,
-and resolves ABIX/MICS include directories through the imported ABIX targets.
-For an in-tree checkout you can include `AMC.cmake` directly.
+`AMCConfig.cmake` includes `AMC.cmake`, exports `AMC::amc` and the providers, and resolves ABIX/MICS include directories through the imported ABIX targets. For an in-tree checkout you can include `AMC.cmake` directly.
 
 Attach an ABI configuration to an existing target:
 
@@ -24,17 +22,13 @@ amc_add_abi(
   DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/include/foo.hpp)
 ```
 
-`ABIX_OUTPUT` must match the relative `[[export]].output` from the `.abic.toml`
-when evaluated below the build directory implied by the output path. `CPP_OUTPUT`
-is optional. When supplied, the generated header is attached to `TARGET` and its
-directory is added to the target's private include directories.
+`ABIX_OUTPUT` must match the relative `[[export]].output` from the `.abic.toml` when evaluated below the build directory implied by the output path. `CPP_OUTPUT` is optional. When supplied, the generated header is attached to `TARGET` and its directory is added to the target's private include directories.
 
 Set `AMC_EXECUTABLE` when AMC is not a target in the current project.
 
 ## Dumping Artifacts
 
-The standalone `amc-dump` tool reads a v4 `.abix` artifact and prints readable
-metadata to stdout:
+The standalone `amc-dump` tool reads a v4 `.abix` artifact and prints readable metadata to stdout:
 
 ```sh
 amc-dump build/foo.abix
@@ -46,7 +40,4 @@ To serialize the same metadata as JSON, provide an output path:
 amc-dump build/foo.abix --json build/foo.json
 ```
 
-The v4 JSON output contains the artifact profile and section list, package and
-target identity, full TypeId/LayoutHash type records, fields, functions with
-parameters, symbols, and the M7 `RuntimeRegistry` descriptor summary. The tool
-validates the artifact through `amc-core` before producing either output format.
+The v4 JSON output contains the artifact profile and section list, package and target identity, full TypeId/LayoutHash type records, fields, functions with parameters, symbols, and the M7 `RuntimeRegistry` descriptor summary. The tool validates the artifact through `amc-core` before producing either output format.
