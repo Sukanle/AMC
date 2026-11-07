@@ -4,42 +4,30 @@
 
 ### Added
 
-- AMC Host implementation of the ABIX cross-language lease C ABI:
-  `abix_lease_registry`, the `abix_lease_api` function table, synchronous
-  module-instance lookup, CLOSING/BUSY states and draining validation.
-- `tests/interop/lease/`: a C++ contract test plus Rust/Zig owned-object
-  wrappers that exercise acquire -> create -> destroy -> release, draining,
-  duplicate release and registry destroy.
-- Zig -> Rust handoff fixture: Zig creates the object and lease, a Rust cdylib
-  adopts them (`destroy -> release`) and Zig performs the final unregister.
-- `amc-lease-interop-test`: builds the provider, Host bridge and C++/Rust/Zig
-  consumers against the same ABIX checkout.
+- AMC Host implementation of the ABIX cross-language lease C ABI: `abix_lease_registry`, the `abix_lease_api` function table, synchronous module-instance lookup, CLOSING/BUSY states and draining validation.
+- `tests/interop/lease/`: a C++ contract test plus Rust/Zig owned-object wrappers that exercise acquire -> create -> destroy -> release, draining, duplicate release and registry destroy.
+- Zig -> Rust handoff fixture: Zig creates the object and lease, a Rust cdylib adopts them (`destroy -> release`) and Zig performs the final unregister.
+- `amc-lease-interop-test`: builds the provider, Host bridge and C++/Rust/Zig consumers against the same ABIX checkout.
 
 ## v0.3.2 — 2026-11-07
 
 ### Added
 
-- Frozen `amc.rust.semantic/1` adapter contract for the future rustc helper,
-  including target, crate, types, fields, functions and parameter ownership.
-- `amc-rust-semantic-schema-test`: validates the sample document, unknown
-  optional fields and required-field failures.
-- Rust layout support for `#[repr(transparent)]`, `#[repr(C, packed(N))]` and
-  `#[repr(C)]` unions.
+- Frozen `amc.rust.semantic/1` adapter contract for the future rustc helper, including target, crate, types, fields, functions and parameter ownership.
+- `amc-rust-semantic-schema-test`: validates the sample document, unknown optional fields and required-field failures.
+- Rust layout support for `#[repr(transparent)]`, `#[repr(C, packed(N))]` and `#[repr(C)]` unions.
 - rustc probe coverage for transparent, packed(N) and union layout.
 
 ### Changed
 
-- v0.3.x Rust work is now explicitly a transition adapter for the v0.4.0 rustc
-  frontend; full trait/generic/macro/Cargo semantics are deferred.
+- v0.3.x Rust work is now explicitly a transition adapter for the v0.4.0 rustc frontend; full trait/generic/macro/Cargo semantics are deferred.
 - Rust parser validates `repr(transparent)` as a single-field layout.
 
 ### Known limitations
 
-- advanced repr forms are layout-validated only; C++/Rust/Zig backend emission
-  for packed and union is not complete.
+- advanced repr forms are layout-validated only; C++/Rust/Zig backend emission for packed and union is not complete.
 - `repr(transparent)` does not yet model extra zero-sized fields.
-- cross-target probe, explicit `[[rust.expose]]` wrapper handoff and
-  error/ownership contract handoff remain later v0.3.x work.
+- cross-target probe, explicit `[[rust.expose]]` wrapper handoff and error/ownership contract handoff remain later v0.3.x work.
 
 ### Validation
 
@@ -52,20 +40,16 @@
 
 ### Added
 
-- Rust FFI surface now reads `[target]` facts (`arch`, `os`, `abi`, `pointer_bits`,
-  `endianness`, optional `c_long_bits`) and records them in the ABI module.
-- `amc-rust-layout-probe-test`: compares AMC layout with a generated rustc
-  `size_of` / `align_of` / `offset_of!` probe.
-- Rust parity fixtures for pointer-sized primitives, fixed arrays, type aliases,
-  non-default enum representation and packed structs.
+- Rust FFI surface now reads `[target]` facts (`arch`, `os`, `abi`, `pointer_bits`, `endianness`, optional `c_long_bits`) and records them in the ABI module.
+- `amc-rust-layout-probe-test`: compares AMC layout with a generated rustc `size_of` / `align_of` / `offset_of!` probe.
+- Rust parity fixtures for pointer-sized primitives, fixed arrays, type aliases, non-default enum representation and packed structs.
 - `repr(C, packed)` layout validation against rustc.
 - Void-returning `extern "C"` functions are now recorded instead of skipped.
 - Host target validation against `rustc --print cfg`.
 
 ### Changed
 
-- **Breaking for Rust imports:** a Rust `.abic.toml` now requires a `[target]`
-  section with `pointer_bits`. Existing configs must add:
+- **Breaking for Rust imports:** a Rust `.abic.toml` now requires a `[target]` section with `pointer_bits`. Existing configs must add:
 
   ```toml
   [target]
@@ -76,29 +60,22 @@
   endianness = "little"
   ```
 
-- Rust `pointer`, `isize`, `usize`, `c_long` and `c_ulong` are target-aware; the
-  old hard-coded 8-byte assumption is removed.
-- Project and provider versions are aligned to `0.3.1`; the MCP server version
-  is aligned as well.
+- Rust `pointer`, `isize`, `usize`, `c_long` and `c_ulong` are target-aware; the old hard-coded 8-byte assumption is removed.
+- Project and provider versions are aligned to `0.3.1`; the MCP server version is aligned as well.
 
 ### Fixed
 
-- `#[repr(C, packed)]` field offsets are now packed; previously only the overall
-  alignment was reduced.
+- `#[repr(C, packed)]` field offsets are now packed; previously only the overall alignment was reduced.
 - `#[repr(C, packed)]` layout is validated against rustc.
 - Rust functions returning `()` are no longer silently dropped.
 
 ### Known limitations
 
 - The layout probe is Host-only. Cross-target reflection is deferred.
-- `repr(C, packed)` is layout-validated but backend emission for packed types is
-  not implemented yet; it is not advertised as a complete projection feature.
-- Primitive aliases such as `isize` / `c_long` may share the ABI type with
-  `i32` / `i64`; source-spelling retention is a follow-up.
-- Windows x64 users must set `c_long_bits = 32` explicitly when the target uses
-  the Windows C ABI.
-- Advanced Rust semantics (trait, associated type, trait object, complex
-  lifetimes, Cargo workspace) remain v0.4.0 work.
+- `repr(C, packed)` is layout-validated but backend emission for packed types is not implemented yet; it is not advertised as a complete projection feature.
+- Primitive aliases such as `isize` / `c_long` may share the ABI type with `i32` / `i64`; source-spelling retention is a follow-up.
+- Windows x64 users must set `c_long_bits = 32` explicitly when the target uses the Windows C ABI.
+- Advanced Rust semantics (trait, associated type, trait object, complex lifetimes, Cargo workspace) remain v0.4.0 work.
 
 ### Validation
 
@@ -109,6 +86,4 @@
 
 ## v0.3.0 — 2026-11-06
 
-Semantic architecture release: semantic model, identities, templates, ABI
-lowering, C++/Rust/Zig projections, error contracts, interface proxies, cache
-and the v0.3 benchmark baseline. See the `v0.3.0` git tag.
+Semantic architecture release: semantic model, identities, templates, ABI lowering, C++/Rust/Zig projections, error contracts, interface proxies, cache and the v0.3 benchmark baseline. See the `v0.3.0` git tag.
