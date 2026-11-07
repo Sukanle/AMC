@@ -105,13 +105,28 @@ jobs:
         with:
           version: ${{ env.ZIG_VERSION }}
 
+      - name: Resolve ABIX revision
+        id: abix-ref
+        run: |
+          set -euo pipefail
+          if [ "$ABIX_REF" = "devel" ]; then
+            ref=$(git ls-remote https://github.com/Sukanle/ABIX.git refs/heads/devel | cut -f1)
+          else
+            ref="$ABIX_REF"
+          fi
+          if [ -z "$ref" ]; then
+            echo "could not resolve ABIX_REF=$ABIX_REF" >&2
+            exit 1
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
       - name: Cache FetchContent dependencies
         uses: actions/cache@v4
         with:
           path: dependencies
-          key: ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ hashFiles('CMakeLists.txt', 'cmake/Dependencies.cmake') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ steps.abix-ref.outputs.ref }}-${{ hashFiles('CMakeLists.txt', 'cmake/Dependencies.cmake') }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-
+            ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ steps.abix-ref.outputs.ref }}-
 
       - name: Configure and build AMC
         run: |
@@ -288,13 +303,28 @@ jobs:
         with:
           version: ${{ env.ZIG_VERSION }}
 
+      - name: Resolve ABIX revision
+        id: abix-ref
+        run: |
+          set -euo pipefail
+          if [ "$ABIX_REF" = "devel" ]; then
+            ref=$(git ls-remote https://github.com/Sukanle/ABIX.git refs/heads/devel | cut -f1)
+          else
+            ref="$ABIX_REF"
+          fi
+          if [ -z "$ref" ]; then
+            echo "could not resolve ABIX_REF=$ABIX_REF" >&2
+            exit 1
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
       - name: Cache FetchContent dependencies
         uses: actions/cache@v4
         with:
           path: dependencies
-          key: ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-${{ hashFiles('CMakeLists.txt', 'cmake/Dependencies.cmake') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ steps.abix-ref.outputs.ref }}-${{ hashFiles('CMakeLists.txt', 'cmake/Dependencies.cmake') }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ env.ABIX_REF }}-
+            ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ steps.abix-ref.outputs.ref }}-
 
       - name: Configure and build AMC
         run: |
