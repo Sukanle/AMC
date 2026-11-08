@@ -9,7 +9,7 @@ This is the first increment of the independent rustc helper described in `docs/a
 - target facts from the rustc target specification;
 - crate/provenance facts.
 
-The `types`, `functions`, `generics`, `traits` and `errors` arrays are intentionally empty in this increment. Later revisions fill them from rustc's semantic APIs without changing the envelope.
+This increment extracts `repr(C)` / `repr(transparent)` / packed / union records, enum layout and public `extern "C"` functions with their layout and signatures. `generics`, `traits` and `errors` remain empty and are filled by later revisions without changing the envelope.
 
 ## Requirements
 

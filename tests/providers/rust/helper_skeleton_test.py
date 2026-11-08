@@ -122,9 +122,36 @@ def main():
         crate = document.get("crate", {})
         check(crate.get("name") == "rust_demo", "crate name")
         check(crate.get("edition") == "2021", "crate edition")
-        for key in ("types", "functions", "generics", "traits", "errors"):
+        for key in ("generics", "traits", "errors"):
             check(isinstance(document.get(key), list) and document[key] == [],
-                  f"{key} is an empty array in the skeleton")
+                  f"{key} remains an empty array in this increment")
+
+        types = {item.get("name"): item for item in document.get("types", [])}
+        check("RustRect" in types, "record type extracted")
+        rect = types.get("RustRect", {})
+        check(rect.get("size") == 24 and rect.get("align") == 8, "RustRect layout")
+        check("rust_demo::RustRect" in rect.get("id", ""), "record identity is crate-qualified")
+        fields = {field.get("name"): field for field in rect.get("fields", [])}
+        check(fields.get("origin", {}).get("offset") == 0, "RustRect.origin offset")
+        check(fields.get("width", {}).get("offset") == 8, "RustRect.width offset")
+        check(fields.get("height", {}).get("offset") == 16, "RustRect.height offset")
+
+        check("RustArray" in types, "packed-layout record extracted")
+        array = types.get("RustArray", {})
+        check(array.get("size") == 8 and array.get("align") == 2, "RustArray layout")
+        array_fields = {field.get("name"): field for field in array.get("fields", [])}
+        check(array_fields.get("values", {}).get("offset") == 2, "RustArray.values offset")
+
+        check("RustTransparent" in types, "transparent record extracted")
+        check("transparent" in types.get("RustTransparent", {}).get("repr", []), "transparent repr")
+        check("u8" in types.get("RustSmallColor", {}).get("repr", []), "repr(u8) enum")
+
+        functions = {item.get("name"): item for item in document.get("functions", [])}
+        for name in ("rust_make_rect", "rust_rect_area", "rust_buffer_len", "rust_touch"):
+            check(name in functions, f"function {name} extracted")
+        check(functions.get("rust_rect_area", {}).get("abi") == "C", "function ABI is C")
+        check("rust_demo::RustRect" in functions.get("rust_rect_area", {}).get("parameters", [{}])[0].get("type", ""),
+              "function parameter uses the record identity")
         check(document.get("provenance", {}).get("source") == str(fixture), "provenance source")
 
         # stdout mode is part of the helper contract.

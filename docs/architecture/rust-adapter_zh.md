@@ -162,7 +162,7 @@ v0.4.0  amc-rustc-helper 先实现 target/crate envelope；
         types/functions/generics/traits/errors 后续增量填充，不改变 envelope
 ```
 
-v0.4.0 的首个增量用 `rustc_driver` 实现进程边界和 `target` / `crate` / `provenance` envelope。`amc-rust` 可以通过 `[rust] helper` 调用它并使用 target facts；helper 不可用时，parser/probe 仍是回退路径。构建 helper 需要 `rustc-dev` 组件。
+v0.4.0 的首个增量用 `rustc_driver` 实现进程边界，输出 `target` / `crate` / `provenance` envelope，并提取 `repr` 记录和 public `extern "C"` 函数。`amc-rust` 可以通过 `[rust] helper` 调用它并使用 target facts；helper 不可用时，parser/probe 仍是回退路径。构建 helper 需要 `rustc-dev` 组件。
 
 v0.3.x 不实现 helper，只做：
 
