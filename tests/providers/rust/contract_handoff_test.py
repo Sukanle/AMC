@@ -101,8 +101,12 @@ def main():
         consumer = os.path.join(work, "consumer.rs")
         with open(consumer, "w", encoding="utf-8") as handle:
             handle.write('''#[path = "gen/amc_generated.rs"]
-mod abi;
-use abi::*;
+pub mod abix;
+
+mod skl {
+    pub use crate::abix;
+}
+use skl::abix::*;
 
 fn main() {
     unsafe {

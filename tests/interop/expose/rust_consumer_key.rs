@@ -1,8 +1,12 @@
 // Rust consumer of a real cmdly type (cmdly::Key) exposed automatically: the
 // thunks, the discovery manifest and these bindings are all generated.
 #[path = "gen/amc_generated.rs"]
-mod abi;
-use abi::*;
+pub mod abix;
+
+mod skl {
+    pub use crate::abix;
+}
+use skl::abix::*;
 
 fn main() {
     unsafe {

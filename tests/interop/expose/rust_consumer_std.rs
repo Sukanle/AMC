@@ -2,8 +2,12 @@
 // methods speak SequenceView / StringView / Result, and the contracts are
 // recorded in the metadata region.
 #[path = "gen/amc_generated.rs"]
-mod abi;
-use abi::*;
+pub mod abix;
+
+mod skl {
+    pub use crate::abix;
+}
+use skl::abix::*;
 
 fn main() {
     unsafe {
@@ -34,7 +38,7 @@ fn main() {
         assert!(typed.is_err(), "typed result error");
         assert_eq!(typed.unwrap_err().0, 1, "typed error status");
 
-        let region = abi::metadata::Region::open(&abi::AMC_METADATA_REGION).expect("region");
+        let region = skl::abix::metadata::Region::open(&skl::abix::AMC_METADATA_REGION).expect("region");
         assert!(region.lowering_count() >= 3, "contracts recorded: {}", region.lowering_count());
     }
     println!("expose std: OK");

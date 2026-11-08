@@ -1,6 +1,10 @@
 #[path = "gen/amc_generated.rs"]
-mod abi;
-use abi::*;
+pub mod abix;
+
+mod skl {
+    pub use crate::abix;
+}
+use skl::abix::*;
 
 fn main() {
     let mut counter = OwnedCounter::create(40).expect("create");

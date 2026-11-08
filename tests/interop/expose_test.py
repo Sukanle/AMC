@@ -502,8 +502,12 @@ def main() -> int:
             rust_proxy_src = os.path.join(work, "rust_interface_proxy.rs")
             open(rust_proxy_src, "w", encoding="utf-8").write(
                 '#[path = "shapes_gen_rust/amc_generated.rs"]\n'
-                'mod abi;\n'
-                'use abi::*;\n'
+                'pub mod abix;\n'
+                '\n'
+                'mod skl {\n'
+                '    pub use crate::abix;\n'
+                '}\n'
+                'use skl::abix::*;\n'
                 'use core::ffi::c_void;\n'
                 'unsafe extern "C" fn fake_area(object: *mut c_void) -> core::ffi::c_int {\n'
                 '    unsafe { *(object as *mut i32) }\n'

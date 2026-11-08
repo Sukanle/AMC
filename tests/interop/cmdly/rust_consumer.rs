@@ -2,9 +2,13 @@
 // projection: owner ABI (RAII handle), a cross-language key callback, and the
 // scripted read-line. Cmdly's C++ API never crosses the boundary.
 #[path = "gen/amc_generated.rs"]
-mod abi;
+pub mod abix;
 
-use abi::*;
+mod skl {
+    pub use crate::abix;
+}
+
+use skl::abix::*;
 use core::ffi::c_void;
 use std::ffi::{CStr, CString};
 
@@ -57,7 +61,7 @@ fn main() {
         assert!(!out.is_null() && !CStr::from_ptr(out).to_bytes().is_empty(), "output captured");
 
         // The generated metadata region carries the same facts.
-        let region = abi::metadata::Region::open(&abi::AMC_METADATA_REGION).expect("region");
+        let region = skl::abix::metadata::Region::open(&skl::abix::AMC_METADATA_REGION).expect("region");
         assert!(region.find_type_by_name("cmdly_terminal").is_some(), "opaque handle in region");
         assert!(region.find_function_by_name("cmdly_read_line").is_some(), "read_line in region");
 

@@ -165,9 +165,11 @@ C ABI 标量会投影为 `core::ffi::c_*` 别名 (`c_int`、`c_double` 等)，�
 ## 示例
 
 ```rust
+#[path = "gen/amc_generated.rs"]
+pub mod abix;
+
 mod skl {
-    #[path = "gen/amc_generated.rs"]
-    pub mod abix;
+    pub use crate::abix;
 }
 
 use skl::abix::*;

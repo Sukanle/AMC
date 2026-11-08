@@ -1,7 +1,11 @@
 #[path = "gen/amc_generated.rs"]
-mod abi;
+pub mod abix;
 
-use abi::*;
+mod skl {
+    pub use crate::abix;
+}
+
+use skl::abix::*;
 use core::ffi::*;
 use std::ffi::CString;
 use std::sync::atomic::{AtomicUsize, Ordering};

@@ -3,8 +3,12 @@
 // the consumer passes a StringView / SequenceView and the generated adapter
 // marshals it back onto std::string / std::vector / std::span in the producer.
 #[path = "gen/amc_generated.rs"]
-mod abi;
-use abi::*;
+pub mod abix;
+
+mod skl {
+    pub use crate::abix;
+}
+use skl::abix::*;
 
 fn text_view(bytes: &[u8]) -> abix_str_utf8 {
     abix_str_utf8 {

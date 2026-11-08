@@ -7,9 +7,13 @@
 // defence: if the library and the metadata disagree, this file fails to build.
 
 #[path = "gen/amc_generated.rs"]
-mod abi;
+pub mod abix;
 
-use abi::*;
+mod skl {
+    pub use crate::abix;
+}
+
+use skl::abix::*;
 
 fn main() {
     unsafe {
@@ -77,7 +81,7 @@ fn main() {
 
         // Runtime metadata: parse the ABIX Metadata Region embedded in this
         // projection and check the facts it records against the Rust type.
-        let region = abi::metadata::Region::open(&abi::AMC_METADATA_REGION).expect("metadata region");
+        let region = skl::abix::metadata::Region::open(&skl::abix::AMC_METADATA_REGION).expect("metadata region");
         let demo = region.find_type_by_name("DemoVec2").expect("DemoVec2 in metadata");
         assert_eq!(demo.size, 16, "metadata size");
         assert_eq!(demo.align, 8, "metadata align");
@@ -94,7 +98,7 @@ fn main() {
         // `demo_scale` only borrows its argument; destroy consumes its handle.
         let create_index = region.function_index_by_name("demo_vec2_create").expect("create index");
         let ret = region.find_ownership(1, create_index).expect("create return contract");
-        assert_eq!(ret.mode, abi::metadata::OWNERSHIP_OWNED, "create returns owned");
+        assert_eq!(ret.mode, skl::abix::metadata::OWNERSHIP_OWNED, "create returns owned");
         assert_eq!(
             ret.release_function,
             region.function_index_by_name("demo_vec2_destroy").expect("destroy index"),
@@ -102,10 +106,10 @@ fn main() {
         );
         let scale = region.find_function_by_name("demo_scale").expect("demo_scale");
         let borrowed = region.find_ownership(0, scale.parameter_begin).expect("scale param contract");
-        assert_eq!(borrowed.mode, abi::metadata::OWNERSHIP_BORROWED, "scale borrows");
+        assert_eq!(borrowed.mode, skl::abix::metadata::OWNERSHIP_BORROWED, "scale borrows");
         let destroy = region.find_function_by_name("demo_vec2_destroy").expect("destroy");
         let consumed = region.find_ownership(0, destroy.parameter_begin).expect("destroy param contract");
-        assert_eq!(consumed.mode, abi::metadata::OWNERSHIP_OWNED, "destroy consumes");
+        assert_eq!(consumed.mode, skl::abix::metadata::OWNERSHIP_OWNED, "destroy consumes");
 
         // The error boundary contract is discoverable from the same directory.
         let div_index = region.function_index_by_name("demo_div").expect("div index");
@@ -141,7 +145,7 @@ fn main() {
         let target = region.target().expect("target description");
         assert_eq!(target.pointer_bits, 64, "pointer width");
         assert_eq!(target.endianness, 1, "little-endian");
-        let expected = abi::metadata::TargetExpectation {
+        let expected = skl::abix::metadata::TargetExpectation {
             arch: 1,
             os: 1,
             target_abi: 1,
@@ -149,16 +153,16 @@ fn main() {
             endianness: 1,
             calling_convention: 1,
         };
-        assert_eq!(region.verify_target(expected), abi::metadata::TARGET_COMPATIBLE, "target compatible");
-        let wrong = abi::metadata::TargetExpectation { arch: 2, ..Default::default() };
-        assert_eq!(region.verify_target(wrong), abi::metadata::TARGET_INCOMPATIBLE, "target incompatible");
+        assert_eq!(region.verify_target(expected), skl::abix::metadata::TARGET_COMPATIBLE, "target compatible");
+        let wrong = skl::abix::metadata::TargetExpectation { arch: 2, ..Default::default() };
+        assert_eq!(region.verify_target(wrong), skl::abix::metadata::TARGET_INCOMPATIBLE, "target incompatible");
 
         // Structured ABI verification: platform, layout and calling convention
         // are reported independently, so a reader can tell what matched.
         let abi = region.verify_abi(expected);
-        assert_eq!(abi.platform, abi::metadata::TARGET_COMPATIBLE, "abi platform");
-        assert_eq!(abi.layout, abi::metadata::TARGET_COMPATIBLE, "abi layout");
-        assert_eq!(abi.calling_convention, abi::metadata::TARGET_COMPATIBLE, "abi calling convention");
+        assert_eq!(abi.platform, skl::abix::metadata::TARGET_COMPATIBLE, "abi platform");
+        assert_eq!(abi.layout, skl::abix::metadata::TARGET_COMPATIBLE, "abi layout");
+        assert_eq!(abi.calling_convention, skl::abix::metadata::TARGET_COMPATIBLE, "abi calling convention");
 
         // ABIX-STD borrowed span (M3): a non-owning view over library memory.
         // The consumer reads it and never releases it; `demo_sum` takes it by
@@ -237,8 +241,8 @@ fn main() {
         // the reader learns an adapter is required but never runs it implicitly.
         let rev_index = region.type_index_by_name("abix_view_rev_i32").expect("rev type index");
         let lowering = region.find_lowering(rev_index).expect("lowering record");
-        assert_eq!(lowering.status, abi::metadata::LOWERING_NEEDS_ADAPTER, "rev needs adapter");
-        assert_eq!(lowering.reason, abi::metadata::LOWERING_REASON_LAYOUT, "rev lowering reason");
+        assert_eq!(lowering.status, skl::abix::metadata::LOWERING_NEEDS_ADAPTER, "rev needs adapter");
+        assert_eq!(lowering.reason, skl::abix::metadata::LOWERING_REASON_LAYOUT, "rev lowering reason");
         assert_eq!(
             lowering.contract_index,
             region.type_index_by_name("abix_span_i32").expect("span type index"),

@@ -165,9 +165,11 @@ The raw `extern "C"` calls remain `unsafe`; the wrappers reduce the unsafe surfa
 ## Example
 
 ```rust
+#[path = "gen/amc_generated.rs"]
+pub mod abix;
+
 mod skl {
-    #[path = "gen/amc_generated.rs"]
-    pub mod abix;
+    pub use crate::abix;
 }
 
 use skl::abix::*;

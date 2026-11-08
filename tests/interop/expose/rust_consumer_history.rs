@@ -3,8 +3,12 @@
 // exposes it with an ABIX-STD StringView parameter and generates the adapter,
 // so Rust drives the real cmdly history end to end.
 #[path = "gen/amc_generated.rs"]
-mod abi;
-use abi::*;
+pub mod abix;
+
+mod skl {
+    pub use crate::abix;
+}
+use skl::abix::*;
 
 fn text_view(bytes: &[u8]) -> abix_str_utf8 {
     abix_str_utf8 {
