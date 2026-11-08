@@ -32,7 +32,6 @@
 
 - cross-target probe 仍为后续工作；Host layout probe 已稳定。
 - `packed` / `transparent` / `union` 的 backend emission 延后到 v0.4.0，与一级表示模型一起落地；v0.3.x 只保留布局验证。
-- Windows 和 macOS 验证是本次发布的最终 tag 前门槛。
 
 ### 验证
 
@@ -41,7 +40,7 @@
 - `amc-lease-interop-test`、`amc-rust-expose-test`、`amc-rust-contract-test`、`amc-rust-clong-test`：passed。
 - `amc-provider-path-test`：passed。
 - Install smoke：`cmake --install` 后通过 PATH 调用 `amc build`。
-- Windows/macOS：在创建 v0.3.3 tag 前验证。
+- Windows/macOS：passed（tag 前已验证）。
 
 ## v0.3.2 — 2026-11-07
 

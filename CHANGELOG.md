@@ -32,7 +32,6 @@
 
 - cross-target probe remains future work; the Host layout probe is stable.
 - `packed` / `transparent` / `union` backend emission is deferred to v0.4.0, together with the first-class representation model. v0.3.x keeps layout validation only.
-- Windows and macOS validation is the final pre-tag gate for this release.
 
 ### Validation
 
@@ -41,7 +40,7 @@
 - `amc-lease-interop-test`, `amc-rust-expose-test`, `amc-rust-contract-test`, `amc-rust-clong-test`: passed.
 - `amc-provider-path-test`: passed.
 - Install smoke: `cmake --install` followed by `amc build` invoked through PATH.
-- Windows/macOS: to be validated before the v0.3.3 tag is created.
+- Windows/macOS: passed (validated before tagging).
 
 ## v0.3.2 — 2026-11-07
 
