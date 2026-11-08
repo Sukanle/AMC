@@ -35,11 +35,12 @@ language = "rust"
 files = ["src/lib.rs"]
 symbols = ["DemoVec2", "demo_add"]
 
-# 必需：Rust 布局与 target 绑定。`c_long_bits` 可选，默认跟随 pointer 宽度；
-# Windows x64 target 应显式设置为 32。
+# 必需：Rust 布局与 target 绑定。`c_long_bits` 可选：
+# os=1（Windows）默认 32 位，其他支持的 target 跟随 pointer 宽度；
+# 显式值始终优先。
 [target]
-arch = 1
-os = 1
+arch = 0
+os = 0
 abi = 1
 pointer_bits = 64
 endianness = "little"

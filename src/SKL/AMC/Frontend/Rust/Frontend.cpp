@@ -74,7 +74,11 @@ bool target_facts_from(const amc::lang::Config &config, TargetFacts &target, std
     target.pointer_bits = config.pointer_bits;
     target.endianness = config.endianness;
     target.pointer_size = config.pointer_bits / 8;
-    target.c_long_size = config.c_long_bits != 0 ? config.c_long_bits / 8 : target.pointer_size;
+    // ABIX target facts use os=1 for Windows. Windows x64 is LLP64, so c_long
+    // is 32-bit even when pointers are 64-bit; other supported targets follow
+    // the pointer width. An explicit c_long_bits always wins.
+    const uint32_t default_c_long_bits = config.os == 1 ? 32 : config.pointer_bits;
+    target.c_long_size = (config.c_long_bits != 0 ? config.c_long_bits : default_c_long_bits) / 8;
     if (target.c_long_size != 4 && target.c_long_size != 8) {
         error = "Rust frontend only supports 32/64-bit c_long";
         return false;

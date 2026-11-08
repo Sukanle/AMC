@@ -24,8 +24,8 @@ symbols = [
 ]
 
 [target]
-arch = 1
-os = 1
+arch = 0
+os = 0
 abi = 1
 pointer_bits = 64
 endianness = "little"

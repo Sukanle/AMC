@@ -35,11 +35,12 @@ language = "rust"
 files = ["src/lib.rs"]
 symbols = ["DemoVec2", "demo_add"]
 
-# Required: Rust layout is target-specific. `c_long_bits` is optional and
-# defaults to the pointer width; Windows x64 targets should set it to 32.
+# Required: Rust layout is target-specific. `c_long_bits` is optional:
+# os=1 (Windows) defaults to 32 bits, other supported targets follow the
+# pointer width. An explicit value always wins.
 [target]
-arch = 1
-os = 1
+arch = 0
+os = 0
 abi = 1
 pointer_bits = 64
 endianness = "little"
