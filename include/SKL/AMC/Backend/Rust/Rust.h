@@ -29,6 +29,11 @@ int run_backend(const char *input, const char *output);
 // Rust type that preserves the C ABI on the target. Exposed for tests.
 std::string primitive_rust_type(uint32_t primitive_abi);
 
+// Preserve pointer-sized source spellings (`isize`, `usize`) and the C
+// `c_long` / `c_ulong` aliases when projecting an ABIX primitive. Other
+// primitives keep the ABI-width mapping above.
+std::string primitive_rust_type(const amc::Type &type);
+
 // Render the Rust projection for a module. Exposed for tests.
 std::string generate_projection(const amc::AbiModule &module, const amc::ir::LoweringResult *lowering = nullptr);
 

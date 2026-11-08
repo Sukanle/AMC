@@ -181,7 +181,7 @@ Rust 文件仍需要链接原生库；当启用 `abix_link` 选项时，投影�
 - `repr(C, packed)` / `repr(C, packed(N))` 和 `repr(C)` union 只完成布局验证，backend emission 尚未完整实现。
 - `repr(transparent)` 目前要求恰好一个字段；额外的零大小字段尚未建模。
 - 记录的 ABI 是 target 相关的；Rust 消费方必须按与 provider 相同的 target 与 C ABI 编译。
-- `isize` / `c_long` 可能与 `i32` / `i64` 共享 ABI type；源拼写保留仍是已知限制。
+- `isize` / `usize` 在投影中保留 Rust 拼写；`c_long` / `c_ulong` 映射为 `core::ffi::c_long` / `c_ulong`。其他 primitive 继续使用 ABI 宽度映射。
 - panic 与异常不得穿越边界；错误边界契约是受支持的路径。
 - 生成文件是普通 Rust，可以在外层再封装成安全的 crate API。
 - `amc-rust` 链接 LLVM Support 但不使用 Clang AST；它的前端自行计算布局。

@@ -216,7 +216,7 @@ public:
         const int index = index_of(id);
         if (index < 0) return "core::ffi::c_void";
         const auto &type = m.types[static_cast<size_t>(index)];
-        if (type.kind == amc::TypeKind::primitive) return primitive_rust_type(type.primitive_abi);
+        if (type.kind == amc::TypeKind::primitive) return primitive_rust_type(type);
         if (type.kind == amc::TypeKind::pointer) return pointer_rust_type(type);
         return names[static_cast<size_t>(index)];
     }
@@ -992,6 +992,15 @@ bool emit_metadata_region(Output &o, const amc::AbiModule &m, std::string &error
 }
 
 }   // namespace
+
+std::string primitive_rust_type(const amc::Type &type) {
+    // These spellings are already the exact Rust type for the recorded ABI and
+    // are more precise than collapsing them to c_longlong/c_ulonglong.
+    if (type.name == "isize" || type.name == "usize") return type.name;
+    if (type.name == "c_long") return "core::ffi::c_long";
+    if (type.name == "c_ulong") return "core::ffi::c_ulong";
+    return primitive_rust_type(type.primitive_abi);
+}
 
 std::string primitive_rust_type(uint32_t primitive_abi) {
     const uint32_t kind = primitive_abi & 0xffu;

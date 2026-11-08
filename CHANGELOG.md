@@ -16,6 +16,7 @@
 - Track ABIX v0.3.3 (`AMC_ABIX_REF=v0.3.3`), the last additive 0.3.x surface; no STD layout changes.
 - `[export] symbols` no longer records a plain Rust function as C ABI; use `[[rust.expose]]` to generate an explicit wrapper.
 - Fixed duplicate TypeIDs when a Rust pointer or array spelling appears in more than one signature.
+- Rust projections preserve `isize` / `usize` and map `c_long` / `c_ulong` to `core::ffi::c_long` / `c_ulong` instead of collapsing every pointer-sized primitive to `c_longlong`.
 
 ### Compatibility
 

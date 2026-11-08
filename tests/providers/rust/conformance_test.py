@@ -60,6 +60,8 @@ def make_case(source_root: str) -> ProviderCase:
             ("C int projects to core::ffi::c_int", ["core::ffi::c_int"]),
             ("C double projects to core::ffi::c_double", ["core::ffi::c_double"]),
             ("projection emits offset assertions", ["offset_of!(RustRect, width)"]),
+            ("pointer-sized aliases keep isize", ["pub signed: isize"]),
+            ("pointer-sized aliases keep usize", ["pub unsigned: usize"]),
             ("projection embeds the ABIX metadata region", ["AMC_METADATA_REGION"]),
         ],
         compile_tool="rustc",

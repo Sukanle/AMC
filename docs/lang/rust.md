@@ -181,7 +181,7 @@ The Rust file still needs to link the native library; the projection provides `#
 - `repr(C, packed)` / `repr(C, packed(N))` and `repr(C)` unions are layout-validated, but their backend emission is not complete yet.
 - `repr(transparent)` currently requires exactly one field; extra zero-sized fields are not modelled in v0.3.2.
 - The recorded ABI is target-specific; compile the Rust consumer for the same target and C ABI as the provider.
-- `isize` / `c_long` may share an ABI type with `i32` / `i64`; source-spelling retention is still a known limitation.
+- `isize` / `usize` keep their Rust spelling in the projection; `c_long` / `c_ulong` map to `core::ffi::c_long` / `c_ulong`. Other primitives use the ABI-width mapping.
 - Panics and exceptions must not cross the boundary; the error boundary contract is the supported path.
 - The generated file is ordinary Rust and can be wrapped in a safe crate API.
 - `amc-rust` links LLVM Support but not Clang AST; its frontend computes the layout itself.
