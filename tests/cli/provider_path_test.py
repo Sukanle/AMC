@@ -38,9 +38,23 @@ def main():
         print(f"amc not found in {bin_dir}", file=sys.stderr)
         return 2
 
-    work = tempfile.mkdtemp(prefix="amc-provider-path.")
     env = dict(os.environ)
     env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
+
+    # Windows' CreateProcess resolves a bare program name against the *parent*
+    # process PATH, not against the PATH supplied through `env`. Resolve `amc`
+    # through the child PATH explicitly and pass it as `executable`, so argv[0]
+    # stays a bare name and the provider lookup still runs against the real
+    # executable location.
+    run_kwargs = {}
+    if sys.platform == "win32":
+        amc = shutil.which(exe("amc"), path=env["PATH"])
+        if amc is None:
+            print(f"amc not found on PATH: {bin_dir}", file=sys.stderr)
+            return 2
+        run_kwargs["executable"] = amc
+
+    work = tempfile.mkdtemp(prefix="amc-provider-path.")
 
     try:
         for name in ("rust_demo.rs", "rust_demo.abic.toml"):
@@ -49,7 +63,7 @@ def main():
         out = os.path.join(work, "out")
         result = subprocess.run(
             [exe("amc"), "build", "-c", config, "-B", out],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, cwd=work)
+            capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, cwd=work, **run_kwargs)
         output = (result.stdout or "") + (result.stderr or "")
         artifact = os.path.join(out, "rust_demo.abix")
         ok = result.returncode == 0 and os.path.isfile(artifact)
