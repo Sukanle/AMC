@@ -9,6 +9,14 @@
 - Zig -> Rust handoff fixture: Zig creates the object and lease, a Rust cdylib adopts them (`destroy -> release`) and Zig performs the final unregister.
 - `amc-lease-interop-test`: builds the provider, Host bridge and C++/Rust/Zig consumers against the same ABIX checkout.
 
+### Changed
+
+- Track ABIX v0.3.3 (`AMC_ABIX_REF=v0.3.3`), the last additive 0.3.x surface; no STD layout changes.
+
+### Compatibility
+
+- ABIX v0.4.0's breaking `abix_optional` / `abix_result` / `abix_str` update is not part of this release. AMC v0.4.0 will perform the lockstep migration and regenerate all artifacts.
+
 ## v0.3.2 — 2026-11-07
 
 ### Added

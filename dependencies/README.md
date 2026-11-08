@@ -2,7 +2,7 @@
 
 This directory holds the dependency checkouts that AMC's CMake fallback creates when an installed package cannot be found.
 
-When `find_package(ABIX 0.3 CONFIG COMPONENTS runtime)` fails, the build uses CMake `FetchContent` to clone ABIX (including its MICS submodule) here. When `find_package(EPCD 0.1 CONFIG COMPONENTS Core)` fails, it does the same for EPCD:
+When `find_package(ABIX 0.3.3 CONFIG COMPONENTS runtime)` fails, the build uses CMake `FetchContent` to clone ABIX (including its MICS submodule) here. When `find_package(EPCD 0.1 CONFIG COMPONENTS Core)` fails, it does the same for EPCD:
 
 ```text
 dependencies/
@@ -17,7 +17,7 @@ Notes:
 - This is **not** a source directory for AMC. Do not edit files here.
 - These checkouts are **not tracked** by Git; only this README is tracked.
 - There is no separate requirements list or maintenance workflow for this directory. Delete it at any time and CMake will re-create it on the next configure. An existing checkout is reused directly; passing a different `AMC_ABIX_REF` does not update it automatically, so delete `ABIX/` (or the whole directory) when you need a refresh.
-- To use a specific ABIX revision (the default is the released `v0.3.0` branch/tag), pass `-DAMC_ABIX_REF=<ref>` when configuring. The MICS revision comes from ABIX's submodule pointer.
+- To use a specific ABIX revision (the default is the released `v0.3.3` branch/tag), pass `-DAMC_ABIX_REF=<ref>` when configuring. The MICS revision comes from ABIX's submodule pointer.
 - To use a specific EPCD revision (the default is `v0.1.0-baseline`), pass `-DAMC_EPCD_REF=<ref>`. Existing `EPCD/` checkouts are reused until deleted.
 - Prefer installing ABIX and EPCD and passing `-DABIX_DIR=<prefix>/lib/cmake/ABIX` plus `-DCMAKE_PREFIX_PATH=<epcd-prefix>` when you want a reproducible build that does not download dependencies. The AMC CMake package export is only generated in this installed-package mode.
 - On CI, cache this directory with `actions/cache` keyed by the requested ABIX revision.
