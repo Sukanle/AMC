@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — v0.3.3
+## v0.3.3 — 2026-11-09
 
 ### Added
 
@@ -19,9 +19,28 @@
 - Rust projections preserve `isize` / `usize` and map `c_long` / `c_ulong` to `core::ffi::c_long` / `c_ulong` instead of collapsing every pointer-sized primitive to `c_longlong`.
 - Windows x64 (`os=1`) now defaults `c_long` / `c_ulong` to 32 bits; an explicit `c_long_bits` still overrides it.
 
+### Fixed
+
+- `amc` invoked through PATH (a bare `argv[0]`) now resolves `amc-<language>` next to the real executable instead of the current directory. Installed tools no longer fail with "provider closed the response stream".
+
 ### Compatibility
 
 - ABIX v0.4.0's breaking `abix_optional` / `abix_result` / `abix_str` update is not part of this release. AMC v0.4.0 will perform the lockstep migration and regenerate all artifacts.
+
+### Known limitations
+
+- cross-target probe remains future work; the Host layout probe is stable.
+- `packed` / `transparent` / `union` backend emission is deferred to v0.4.0, together with the first-class representation model. v0.3.x keeps layout validation only.
+- Windows and macOS validation is the final pre-tag gate for this release.
+
+### Validation
+
+- Linux: CTest 34/34 passed.
+- `amc-boundary-contracts` and `amc-boundary-edges --strict`: passed.
+- `amc-lease-interop-test`, `amc-rust-expose-test`, `amc-rust-contract-test`, `amc-rust-clong-test`: passed.
+- `amc-provider-path-test`: passed.
+- Install smoke: `cmake --install` followed by `amc build` invoked through PATH.
+- Windows/macOS: to be validated before the v0.3.3 tag is created.
 
 ## v0.3.2 — 2026-11-07
 

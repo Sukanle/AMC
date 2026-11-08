@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(
     AMC
-    VERSION 0.3.2
+    VERSION 0.3.3
     LANGUAGES C CXX)
 
 # Standalone AMC build. This repository prefers an installed ABIX package and
@@ -723,6 +723,9 @@ if(AMC_BUILD_TESTS AND AMC_PYTHON_EXECUTABLE)
                      ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
     add_test(NAME amc-bootstrap-test COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/cli/bootstrap_test.py
                                              ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
+    add_test(NAME amc-provider-path-test
+             COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/cli/provider_path_test.py
+                     ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
     add_test(NAME amc-boundary-contracts COMMAND ${AMC_PYTHON_EXECUTABLE}
                                                  ${AMC_SOURCE_DIR}/tools/check_module_boundaries.py --contracts-only)
     add_test(NAME amc-boundary-edges COMMAND ${AMC_PYTHON_EXECUTABLE}
@@ -744,5 +747,6 @@ if(AMC_BUILD_TESTS AND AMC_PYTHON_EXECUTABLE)
         amc-cmake-integration-test
         amc-elf-pe-metadata-test
         amc-bootstrap-test
+        amc-provider-path-test
         PROPERTIES ENVIRONMENT "${_amc_test_env}" TIMEOUT 180)
 endif()

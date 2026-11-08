@@ -298,7 +298,11 @@ bool provider_spawn(const fs::path &provider, ProviderProcess &proc, std::string
         close(request_pipe[1]);
         close(response_pipe[0]);
         close(response_pipe[1]);
-        execl(provider.c_str(), provider.c_str(), "--ipc", static_cast<char *>(nullptr));
+        // `provider` is only a bare name when the CLI itself was resolved
+        // through PATH; execvp keeps PATH lookup for that case while still
+        // handling an absolute path beside the executable.
+        char * const argv[] = {const_cast<char *>(provider.c_str()), const_cast<char *>("--ipc"), nullptr};
+        execvp(provider.c_str(), argv);
         _exit(127);
     }
     close(request_pipe[0]);

@@ -1,5 +1,47 @@
 # 变更记录
 
+## v0.3.3 — 2026-11-09
+
+### 新增
+
+- ABIX 跨语言 lease C ABI 的 AMC Host 实现：`abix_lease_registry`、`abix_lease_api` function table、module instance 同步查找、CLOSING/BUSY 状态和 draining 校验。
+- `tests/interop/lease/`：C++ 契约测试以及 Rust/Zig owned-object wrapper，覆盖 acquire -> create -> destroy -> release、draining、重复 release 和 registry destroy。
+- Zig -> Rust 接管 fixture：Zig 创建 object + lease，Rust cdylib 接管并执行 destroy -> release，Zig 完成最终 unregister。
+- `amc-lease-interop-test`：使用同一 ABIX checkout 构建 provider、Host bridge 和 C++/Rust/Zig 消费者。
+- 显式 `[[rust.expose]]` 交接：AMC 记录导出符号，并为普通 Rust 函数生成 `#[export_name = "<symbol>"] pub extern "C"` wrapper；`amc-rust-expose-test` 编译并调用生成的 wrapper。
+- Rust ownership / error contract 交接：`[[owned]]`、`[[contract]]`、`[[error]]` 在 Rust 侧端到端验证；`amc-rust-contract-test` 编译 native provider，并检查 RAII 与 `Result` wrapper。
+
+### 变更
+
+- 对齐 ABIX v0.3.4（`AMC_ABIX_REF=v0.3.4`），这是 additive v0.3.3 surface 之上的 docs-only 锁步修正；不改变 STD 布局。
+- `[export] symbols` 不再把普通 Rust 函数记录为 C ABI；需要显式使用 `[[rust.expose]]` 生成 wrapper。
+- 修复 Rust 指针或数组拼写在多个签名中重复出现时产生的重复 TypeID。
+- Rust 投影保留 `isize` / `usize`，并将 `c_long` / `c_ulong` 映射为 `core::ffi::c_long` / `c_ulong`，不再统一折叠为 `c_longlong`。
+- Windows x64（`os=1`）现在默认 `c_long` / `c_ulong` 为 32 位；显式 `c_long_bits` 仍然优先。
+
+### 修复
+
+- `amc` 通过 PATH 调用（`argv[0]` 为裸名字）时，现在会从真实可执行文件所在目录查找 `amc-<language>`，而不是当前目录。安装后的工具不再报 "provider closed the response stream"。
+
+### 兼容性
+
+- ABIX v0.4.0 对 `abix_optional` / `abix_result` / `abix_str` 的破坏性更新不属于本次发布。AMC v0.4.0 将执行锁步迁移并重新生成所有 artifact。
+
+### 已知限制
+
+- cross-target probe 仍为后续工作；Host layout probe 已稳定。
+- `packed` / `transparent` / `union` 的 backend emission 延后到 v0.4.0，与一级表示模型一起落地；v0.3.x 只保留布局验证。
+- Windows 和 macOS 验证是本次发布的最终 tag 前门槛。
+
+### 验证
+
+- Linux：CTest 34/34 passed。
+- `amc-boundary-contracts` 与 `amc-boundary-edges --strict`：passed。
+- `amc-lease-interop-test`、`amc-rust-expose-test`、`amc-rust-contract-test`、`amc-rust-clong-test`：passed。
+- `amc-provider-path-test`：passed。
+- Install smoke：`cmake --install` 后通过 PATH 调用 `amc build`。
+- Windows/macOS：在创建 v0.3.3 tag 前验证。
+
 ## v0.3.2 — 2026-11-07
 
 ### 新增

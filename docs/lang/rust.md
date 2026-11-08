@@ -180,7 +180,7 @@ The Rust file still needs to link the native library; the projection provides `#
 - The frontend is not a full `rustc` AST: only `#[repr(C)]` / `extern "C"` surfaces are extracted; generics, traits, lifetimes and bit-fields stay inside the module.
 - `repr(C)` layout is validated against a generated rustc probe in the provider conformance test (`amc-rust-layout-probe-test`); the probe currently covers the Host target only.
 - `repr(C, packed)` / `repr(C, packed(N))` and `repr(C)` unions are layout-validated only. Backend emission is deferred to v0.4.0, together with the first-class union/packed/transparent model; v0.3.x does not add an intermediate `TypeRepr` section.
-- `repr(transparent)` currently requires exactly one field; extra zero-sized fields are not modelled in v0.3.2.
+- `repr(transparent)` currently requires exactly one field; extra zero-sized fields are not modelled in v0.3.x.
 - The recorded ABI is target-specific; compile the Rust consumer for the same target and C ABI as the provider.
 - `isize` / `usize` keep their Rust spelling in the projection; `c_long` / `c_ulong` map to `core::ffi::c_long` / `c_ulong`. Other primitives use the ABI-width mapping.
 - Panics and exceptions must not cross the boundary; the error boundary contract is the supported path.

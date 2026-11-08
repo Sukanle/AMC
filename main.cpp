@@ -23,6 +23,45 @@
 
 #include <fmt/format.h>
 
+#if defined(_WIN32)
+#  include <windows.h>
+#elif defined(__APPLE__)
+#  include <mach-o/dyld.h>
+#else
+#  include <unistd.h>
+#endif
+
+namespace {
+
+// Resolve the directory that contains the running `amc` binary. `argv[0]` can
+// be a bare name when the tool is invoked through PATH; `fs::absolute(argv[0])`
+// would then point at the current directory and provider lookup would fail.
+std::filesystem::path executable_directory() {
+    namespace fs = std::filesystem;
+#if defined(_WIN32)
+    std::vector<char> buffer(4'096, 0);
+    const DWORD length = GetModuleFileNameA(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+    if (length > 0 && length < buffer.size()) return fs::path(std::string(buffer.data(), length)).parent_path();
+#elif defined(__APPLE__)
+    uint32_t size = 0;
+    _NSGetExecutablePath(nullptr, &size);
+    std::vector<char> buffer(size, 0);
+    if (_NSGetExecutablePath(buffer.data(), &size) == 0) {
+        std::error_code ec;
+        fs::path path = fs::weakly_canonical(fs::path(buffer.data()), ec);
+        if (!ec) return path.parent_path();
+        return fs::path(buffer.data()).parent_path();
+    }
+#else
+    std::vector<char> buffer(4'096, 0);
+    const ssize_t length = readlink("/proc/self/exe", buffer.data(), buffer.size() - 1);
+    if (length > 0) return fs::path(std::string(buffer.data(), static_cast<size_t>(length))).parent_path();
+#endif
+    return {};
+}
+
+}   // namespace
+
 int main(int argc, char **argv) {
     using namespace amc::cli;
 
@@ -74,7 +113,8 @@ int main(int argc, char **argv) {
         return 2;
     }
     const std::string command = args[1];
-    const fs::path executable_dir = fs::absolute(fs::path(args[0])).parent_path();
+    fs::path executable_dir = executable_directory();
+    if (executable_dir.empty()) executable_dir = fs::absolute(fs::path(args[0])).parent_path();
     const fs::path provider = executable_dir / "amc-cpp";
 
     if (command == "--list-languages") {

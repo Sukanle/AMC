@@ -161,7 +161,7 @@ struct Capability {
 
 // Language-agnostic description of an `amc-<language>` executable.
 struct Provider {
-    Provider(std::string language_, std::vector<Capability> capabilities_, std::string version_ = "0.3.2",
+    Provider(std::string language_, std::vector<Capability> capabilities_, std::string version_ = "0.3.3",
         std::vector<std::string> features_ = {}, uint32_t ir_min_ = 4, uint32_t ir_max_ = 4)
         : language(std::move(language_))
         , capabilities(std::move(capabilities_))
