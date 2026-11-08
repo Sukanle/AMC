@@ -33,6 +33,7 @@ env:
   # CMake accepts any newer LLVM/Clang installed by the user.
   LLVM_VERSION: "22"
   ZIG_VERSION: "0.17.0"
+  RUST_VERSION: "stable"
   # Minimum supported versions of dependencies whose distribution packages are
   # not API-compatible across Ubuntu releases (fmt 9 on Ubuntu 24.04 lacks
   # fmt::println, for example). CI builds these exact versions so the lower
@@ -50,6 +51,11 @@ jobs:
     if: ${{ inputs.platforms == 'all' || inputs.platforms == 'linux' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_COMPRESS: "true"
+      CCACHE_COMPILERCHECK: content
+      CCACHE_MAXSIZE: 2G
     steps:
       - name: Checkout AMC
         uses: actions/checkout@v4
@@ -58,7 +64,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            cmake ninja-build pkg-config binutils python3 git curl \
+            cmake ninja-build pkg-config binutils python3 git curl ccache \
             catch2 liblua5.4-dev
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc >/dev/null
           . /etc/os-release
@@ -67,6 +73,14 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             clang-${LLVM_VERSION} llvm-${LLVM_VERSION} llvm-${LLVM_VERSION}-dev \
             libclang-${LLVM_VERSION}-dev libclang-cpp${LLVM_VERSION}-dev libclang-common-${LLVM_VERSION}-dev
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: ${{ runner.os }}-${{ runner.arch }}-amc-ccache-llvm-${{ env.LLVM_VERSION }}-v${{ env.PINNED_CACHE_VERSION }}-${{ hashFiles('CMakeLists.txt', 'cmake/Dependencies.cmake') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-amc-ccache-llvm-${{ env.LLVM_VERSION }}-v${{ env.PINNED_CACHE_VERSION }}-
 
       - name: Cache pinned dependency builds
         id: pinned-deps
@@ -112,13 +126,32 @@ jobs:
             -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/benchmark"
           cmake --build benchmark-build --target install --parallel 2
 
+      - name: Cache Rust toolchain
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.rustup
+            ~/.cargo/bin
+          key: ${{ runner.os }}-${{ runner.arch }}-amc-rust-${{ env.RUST_VERSION }}-v${{ env.PINNED_CACHE_VERSION }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-amc-rust-${{ env.RUST_VERSION }}-
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Zig toolchain
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.tool_cache }}/zig
+          key: ${{ runner.os }}-${{ runner.arch }}-amc-zig-${{ env.ZIG_VERSION }}-v${{ env.PINNED_CACHE_VERSION }}
 
       - name: Setup Zig
         uses: mlugg/setup-zig@v2
         with:
           version: ${{ env.ZIG_VERSION }}
+          use-cache: true
+          use-tool-cache: true
+          cache-key: v${{ env.PINNED_CACHE_VERSION }}
 
       - name: Resolve ABIX revision
         id: abix-ref
@@ -159,10 +192,14 @@ jobs:
             ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ steps.abix-ref.outputs.ref }}-${{ steps.epcd-ref.outputs.ref }}-
 
       - name: Configure and build AMC
+        env:
+          CCACHE_DIR: ${{ runner.temp }}/ccache
         run: |
           LLVM_PREFIX="/usr/lib/llvm-${LLVM_VERSION}"
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DAMC_ABIX_REF="$ABIX_REF" \
             -DAMC_EPCD_REF="$EPCD_REF" \
             -DCMAKE_PREFIX_PATH="$LLVM_PREFIX;$RUNNER_TEMP/fmt;$RUNNER_TEMP/tomlplusplus;$RUNNER_TEMP/benchmark" \
@@ -278,6 +315,11 @@ jobs:
     if: ${{ inputs.platforms == 'all' || inputs.platforms == 'windows' }}
     runs-on: windows-latest
     timeout-minutes: 60
+    env:
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_COMPRESS: "true"
+      CCACHE_COMPILERCHECK: content
+      CCACHE_MAXSIZE: 2G
     defaults:
       run:
         shell: msys2 {0}
@@ -290,9 +332,11 @@ jobs:
         with:
           msystem: UCRT64
           update: true
+          cache: true
           install: >-
             mingw-w64-ucrt-x86_64-gcc
             mingw-w64-ucrt-x86_64-clang
+            mingw-w64-ucrt-x86_64-ccache
             mingw-w64-ucrt-x86_64-llvm
             mingw-w64-ucrt-x86_64-catch
             mingw-w64-ucrt-x86_64-benchmark=${{ env.WINDOWS_BENCHMARK_VERSION }}
@@ -304,6 +348,14 @@ jobs:
             mingw-w64-ucrt-x86_64-python
             curl
             git
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: ${{ runner.os }}-${{ runner.arch }}-amc-ccache-ucrt64-v${{ env.PINNED_CACHE_VERSION }}-${{ hashFiles('CMakeLists.txt', 'cmake/Dependencies.cmake') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-amc-ccache-ucrt64-v${{ env.PINNED_CACHE_VERSION }}-
 
       - name: Cache pinned dependency builds
         id: pinned-deps
@@ -339,10 +391,19 @@ jobs:
             -DCMAKE_INSTALL_PREFIX="$PREFIX"
           cmake --build tomlplusplus-build --target install --parallel 2
 
+      - name: Cache Zig toolchain
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.tool_cache }}/zig
+          key: ${{ runner.os }}-${{ runner.arch }}-amc-zig-${{ env.ZIG_VERSION }}-v${{ env.PINNED_CACHE_VERSION }}
+
       - name: Setup Zig
         uses: mlugg/setup-zig@v2
         with:
           version: ${{ env.ZIG_VERSION }}
+          use-cache: true
+          use-tool-cache: true
+          cache-key: v${{ env.PINNED_CACHE_VERSION }}
 
       - name: Resolve ABIX revision
         id: abix-ref
@@ -383,10 +444,14 @@ jobs:
             ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ steps.abix-ref.outputs.ref }}-${{ steps.epcd-ref.outputs.ref }}-
 
       - name: Configure and build AMC
+        env:
+          CCACHE_DIR: ${{ runner.temp }}/ccache
         run: |
           export CMAKE_PREFIX_PATH="$(cygpath -m "$MINGW_PREFIX");$(cygpath -m "$RUNNER_TEMP")/fmt;$(cygpath -m "$RUNNER_TEMP")/tomlplusplus"
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DAMC_ABIX_REF="$ABIX_REF" \
             -DAMC_EPCD_REF="$EPCD_REF" \
             -DAMC_BUILD_BENCHMARKS=ON \
