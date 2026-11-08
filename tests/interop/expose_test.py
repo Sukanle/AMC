@@ -541,48 +541,52 @@ def main() -> int:
                       "the Rust interface proxy binds, calls and rejects stale contracts",
                       (r.stdout + r.stderr)[-400:])
 
-        zig_proxy_gen = os.path.join(work, "shapes_gen_zig")
-        os.makedirs(zig_proxy_gen, exist_ok=True)
-        r = run([amc, "generate", shapes_abix, "-l", "zig", "-o", zig_proxy_gen])
-        if check(r.returncode == 0, "amc generate -l zig for the interface proxy", (r.stdout + r.stderr)[-400:]):
-            zig_proxy_src = os.path.join(work, "zig_interface_proxy.zig")
-            open(zig_proxy_src, "w", encoding="utf-8").write(
-                'const std = @import("std");\n'
-                'const abi = @import("shapes_gen_zig/amc_generated.zig");\n'
-                'fn fake_area(object: ?*anyopaque) callconv(.c) c_int {\n'
-                '    const value: *i32 = @ptrCast(@alignCast(object.?));\n'
-                '    return value.*;\n'
-                '}\n'
-                'pub fn main() !void {\n'
-                '    var value: i32 = 42;\n'
-                '    const methods = [_]abi.InterfaceMethodEntry{.{\n'
-                '        .signature_lo = abi.ShapeProxy.shape_area_signature_lo,\n'
-                '        .signature_hi = abi.ShapeProxy.shape_area_signature_hi,\n'
-                '        .entry = @intFromPtr(&fake_area),\n'
-                '        .slot = abi.ShapeProxy.shape_area_slot,\n'
-                '        .flags = 0,\n'
-                '    }};\n'
-                '    const proxy = try abi.ShapeProxy.bind(abi.ShapeProxy.ID_LO, abi.ShapeProxy.ID_HI,\n'
-                '        abi.ShapeProxy.VERSION, &value, methods[0..], null);\n'
-                '    if (proxy.shape_area() != 42) return error.BadValue;\n'
-                '    const wrong = abi.ShapeProxy.bind(abi.ShapeProxy.ID_LO, abi.ShapeProxy.ID_HI,\n'
-                '        abi.ShapeProxy.VERSION + 1, &value, methods[0..], null);\n'
-                '    if (wrong != error.VersionMismatch) return error.ExpectedVersionMismatch;\n'
-                '    var stale = methods;\n'
-                '    stale[0].signature_lo = 0;\n'
-                '    const invalid = abi.ShapeProxy.bind(abi.ShapeProxy.ID_LO, abi.ShapeProxy.ID_HI,\n'
-                '        abi.ShapeProxy.VERSION, &value, stale[0..], null);\n'
-                '    if (invalid != error.SignatureMismatch) return error.ExpectedSignatureMismatch;\n'
-                '    std.debug.print("zig interface proxy: OK\\n", .{});\n'
-                '}\n')
-            zig_proxy_bin = os.path.join(work, exe_name("zig_interface_proxy"))
-            r = run([zig, "build-exe", "zig_interface_proxy.zig", "-lc",
-                     "-femit-bin=" + zig_proxy_bin], cwd=work)
-            if check(r.returncode == 0, "the Zig interface proxy consumer compiles", r.stderr[-400:]):
-                r = run([zig_proxy_bin], env=env)
-                check(r.returncode == 0 and "zig interface proxy: OK" in (r.stdout + r.stderr),
-                      "the Zig interface proxy binds, calls and rejects stale contracts",
-                      (r.stdout + r.stderr)[-400:])
+        if zig and not IS_WINDOWS and not IS_MACOS:
+            zig_proxy_gen = os.path.join(work, "shapes_gen_zig")
+            os.makedirs(zig_proxy_gen, exist_ok=True)
+            r = run([amc, "generate", shapes_abix, "-l", "zig", "-o", zig_proxy_gen])
+            if check(r.returncode == 0, "amc generate -l zig for the interface proxy", (r.stdout + r.stderr)[-400:]):
+                zig_proxy_src = os.path.join(work, "zig_interface_proxy.zig")
+                open(zig_proxy_src, "w", encoding="utf-8").write(
+                    'const std = @import("std");\n'
+                    'const abi = @import("shapes_gen_zig/amc_generated.zig");\n'
+                    'fn fake_area(object: ?*anyopaque) callconv(.c) c_int {\n'
+                    '    const value: *i32 = @ptrCast(@alignCast(object.?));\n'
+                    '    return value.*;\n'
+                    '}\n'
+                    'pub fn main() !void {\n'
+                    '    var value: i32 = 42;\n'
+                    '    const methods = [_]abi.InterfaceMethodEntry{.{\n'
+                    '        .signature_lo = abi.ShapeProxy.shape_area_signature_lo,\n'
+                    '        .signature_hi = abi.ShapeProxy.shape_area_signature_hi,\n'
+                    '        .entry = @intFromPtr(&fake_area),\n'
+                    '        .slot = abi.ShapeProxy.shape_area_slot,\n'
+                    '        .flags = 0,\n'
+                    '    }};\n'
+                    '    const proxy = try abi.ShapeProxy.bind(abi.ShapeProxy.ID_LO, abi.ShapeProxy.ID_HI,\n'
+                    '        abi.ShapeProxy.VERSION, &value, methods[0..], null);\n'
+                    '    if (proxy.shape_area() != 42) return error.BadValue;\n'
+                    '    const wrong = abi.ShapeProxy.bind(abi.ShapeProxy.ID_LO, abi.ShapeProxy.ID_HI,\n'
+                    '        abi.ShapeProxy.VERSION + 1, &value, methods[0..], null);\n'
+                    '    if (wrong != error.VersionMismatch) return error.ExpectedVersionMismatch;\n'
+                    '    var stale = methods;\n'
+                    '    stale[0].signature_lo = 0;\n'
+                    '    const invalid = abi.ShapeProxy.bind(abi.ShapeProxy.ID_LO, abi.ShapeProxy.ID_HI,\n'
+                    '        abi.ShapeProxy.VERSION, &value, stale[0..], null);\n'
+                    '    if (invalid != error.SignatureMismatch) return error.ExpectedSignatureMismatch;\n'
+                    '    std.debug.print("zig interface proxy: OK\\n", .{});\n'
+                    '}\n')
+                zig_proxy_bin = os.path.join(work, exe_name("zig_interface_proxy"))
+                r = run([zig, "build-exe", "zig_interface_proxy.zig", "-lc",
+                         "-femit-bin=" + zig_proxy_bin], cwd=work)
+                if check(r.returncode == 0, "the Zig interface proxy consumer compiles", r.stderr[-400:]):
+                    r = run([zig_proxy_bin], env=env)
+                    check(r.returncode == 0 and "zig interface proxy: OK" in (r.stdout + r.stderr),
+                          "the Zig interface proxy binds, calls and rejects stale contracts",
+                          (r.stdout + r.stderr)[-400:])
+
+        else:
+            print("  [SKIP] Zig interface proxy consumer (zig not available or unsupported platform)")
 
     # Real-project comparison: expose a type from cmdly. Auto-expose covers its
     # representable surface; a std::string method is refused pending a contract.

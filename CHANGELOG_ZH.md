@@ -22,6 +22,7 @@
 ### 修复
 
 - `amc` 通过 PATH 调用（`argv[0]` 为裸名字）时，现在会从真实可执行文件所在目录查找 `amc-<language>`，而不是当前目录。安装后的工具不再报 "provider closed the response stream"。
+- Windows：当 Zig 不可用时，expose interop 测试会跳过 Zig interface-proxy consumer，与已有的 Zig handle/STD consumer 跳过逻辑一致。
 
 ### 兼容性
 

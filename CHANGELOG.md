@@ -22,6 +22,7 @@
 ### Fixed
 
 - `amc` invoked through PATH (a bare `argv[0]`) now resolves `amc-<language>` next to the real executable instead of the current directory. Installed tools no longer fail with "provider closed the response stream".
+- Windows: the expose interop test now skips the Zig interface-proxy consumer when Zig is unavailable, matching the existing Zig handle/STD consumer guards.
 
 ### Compatibility
 
