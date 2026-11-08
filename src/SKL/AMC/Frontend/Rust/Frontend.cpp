@@ -912,6 +912,9 @@ private:
             type.array_count = static_cast<uint32_t>(count);
             type.size = static_cast<uint32_t>(inner.size * count);
             type.align = inner.align;
+            for (const auto &existing : module_.types) {
+                if (existing.id == type.id) return {existing.id, existing.size, existing.align};
+            }
             const int index = static_cast<int>(module_.types.size());
             module_.types.push_back(std::move(type));
             return {module_.types[static_cast<size_t>(index)].id, module_.types[static_cast<size_t>(index)].size,
@@ -947,10 +950,16 @@ private:
     }
 
     Resolved add_aggregate_ref(const std::string &name, uint32_t size, uint32_t align, amc::TypeKind kind) {
+        const amc::Hash128 id = amc::hash_text(name, kTypeDomain);
+        // Pointer spellings repeat across parameters and returns; reuse the
+        // first record so the module never carries duplicate TypeIDs.
+        for (const auto &type : module_.types) {
+            if (type.id == id) return {type.id, type.size, type.align};
+        }
         amc::Type type;
         type.name = name;
         type.kind = kind;
-        type.id = amc::hash_text(name, kTypeDomain);
+        type.id = id;
         type.size = size;
         type.align = align;
         const int index = static_cast<int>(module_.types.size());

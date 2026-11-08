@@ -1,0 +1,46 @@
+[package]
+name = "rust_contracts"
+version = "0.1"
+
+[[import]]
+language = "rust"
+files = ["rust_contracts.rs"]
+symbols = [
+    "RustOwnedBuffer",
+    "rust_owned_create",
+    "rust_owned_destroy",
+    "rust_owned_live",
+    "rust_div",
+]
+
+# Release policy for the owned type: the destroy entry point lives in the
+# producing module, so the consumer never frees it directly.
+[[owned]]
+type = "RustOwnedBuffer"
+create = "rust_owned_create"
+destroy = "rust_owned_destroy"
+
+# The create call returns an owned value; the Rust backend emits an RAII
+# wrapper that calls the declared destroy entry.
+[[contract]]
+function = "rust_owned_create"
+returns = "owned"
+release = "rust_owned_destroy"
+
+# The status is the return value; the third parameter carries the result.
+[[error]]
+function = "rust_div"
+status = "return"
+success = 0
+value = 2
+domain = 0x1003000000000001
+
+[target]
+arch = 1
+os = 1
+abi = 1
+pointer_bits = 64
+endianness = "little"
+
+[[export]]
+output = "rust_contracts.abix"

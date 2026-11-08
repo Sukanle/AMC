@@ -79,6 +79,36 @@ Rules:
 - a generated wrapper requires `[thunks] output`;
 - `symbols` still selects types (and already-`extern "C"` functions); `[[rust.expose]]` is the explicit wrapper path for ordinary Rust functions.
 
+### Ownership and error contracts
+
+The generic `[[owned]]`, `[[contract]]` and `[[error]]` declarations apply to Rust functions too. They are resolved after the frontend records the ABI, so the Rust projection emits the same RAII and `Result` wrappers as the C++ path.
+
+```toml
+[[owned]]
+type = "RustOwnedBuffer"
+create = "rust_owned_create"
+destroy = "rust_owned_destroy"
+
+[[contract]]
+function = "rust_owned_create"
+returns = "owned"
+release = "rust_owned_destroy"
+
+[[error]]
+function = "rust_div"
+status = "return"
+success = 0
+value = 2
+domain = 0x1003000000000001
+```
+
+The generated projection then contains:
+
+- `OwnedRustOwnedBuffer` with `Drop` calling the declared destroy entry;
+- `rust_div_result(...) -> Result<..., RustDivError>`.
+
+The declarations reference types and functions that must be present in the module, either through `symbols` or `[[rust.expose]]`.
+
 A provider source looks like this:
 
 ```rust

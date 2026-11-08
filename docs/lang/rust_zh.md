@@ -79,6 +79,36 @@ mod demo_thunks;
 - 生成 wrapper 时必须提供 `[thunks] output`；
 - `symbols` 仍用于选择类型（以及已 `extern "C"` 的函数）；`[[rust.expose]]` 是普通 Rust 函数的显式 wrapper 路径。
 
+### 所有权与错误契约
+
+通用的 `[[owned]]`、`[[contract]]` 与 `[[error]]` 声明同样适用于 Rust 函数。它们在前端记录 ABI 之后解析，因此 Rust 投影会生成与 C++ 路径一致的 RAII 和 `Result` wrapper。
+
+```toml
+[[owned]]
+type = "RustOwnedBuffer"
+create = "rust_owned_create"
+destroy = "rust_owned_destroy"
+
+[[contract]]
+function = "rust_owned_create"
+returns = "owned"
+release = "rust_owned_destroy"
+
+[[error]]
+function = "rust_div"
+status = "return"
+success = 0
+value = 2
+domain = 0x1003000000000001
+```
+
+生成的投影包含：
+
+- `OwnedRustOwnedBuffer`，`Drop` 调用声明的 destroy 入口；
+- `rust_div_result(...) -> Result<..., RustDivError>`。
+
+声明引用的类型与函数必须存在于模块中，可以通过 `symbols` 或 `[[rust.expose]]` 选择。
+
 一个 provider 源码如下：
 
 ```rust
