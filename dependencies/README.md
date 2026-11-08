@@ -20,4 +20,4 @@ Notes:
 - To use a specific ABIX revision (the default is the released `v0.3.4` branch/tag), pass `-DAMC_ABIX_REF=<ref>` when configuring. The MICS revision comes from ABIX's submodule pointer.
 - To use a specific EPCD revision (the default is `v0.1.0-baseline`), pass `-DAMC_EPCD_REF=<ref>`. Existing `EPCD/` checkouts are reused until deleted.
 - Prefer installing ABIX and EPCD and passing `-DABIX_DIR=<prefix>/lib/cmake/ABIX` plus `-DCMAKE_PREFIX_PATH=<epcd-prefix>` when you want a reproducible build that does not download dependencies. The AMC CMake package export is only generated in this installed-package mode.
-- On CI, cache this directory with `actions/cache` keyed by the requested ABIX revision.
+- On CI, cache this directory with `actions/cache` keyed by the resolved ABIX and EPCD revisions.

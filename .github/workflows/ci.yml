@@ -24,8 +24,8 @@ concurrency:
 
 env:
   CTEST_OUTPUT_ON_FAILURE: "1"
-  # AMC devel tracks ABIX devel. Bump this to v0.3.1 once the ABIX release
-  # exists; v0.3.0 predates the lease C ABI (LeaseABI.h).
+  # AMC devel tracks ABIX devel for cross-repo development. Release builds pin
+  # the released ABIX tag (v0.3.4 for AMC v0.3.3).
   ABIX_REF: devel
   # EPCD currently publishes only the main branch (no release tags).
   EPCD_REF: main
@@ -41,6 +41,8 @@ env:
   TOMLPLUSPLUS_VERSION: "3.4.0"
   BENCHMARK_VERSION: "1.10.0"
   WINDOWS_BENCHMARK_VERSION: "1.10.0-1"
+  # Bump when the pinned dependency build flags or the toolchain ABI change.
+  PINNED_CACHE_VERSION: "1"
 
 jobs:
   linux:
@@ -66,7 +68,18 @@ jobs:
             clang-${LLVM_VERSION} llvm-${LLVM_VERSION} llvm-${LLVM_VERSION}-dev \
             libclang-${LLVM_VERSION}-dev libclang-cpp${LLVM_VERSION}-dev libclang-common-${LLVM_VERSION}-dev
 
+      - name: Cache pinned dependency builds
+        id: pinned-deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/fmt
+            ${{ runner.temp }}/tomlplusplus
+            ${{ runner.temp }}/benchmark
+          key: ${{ runner.os }}-${{ runner.arch }}-amc-pinned-v${{ env.PINNED_CACHE_VERSION }}-fmt-${{ env.FMT_VERSION }}-toml-${{ env.TOMLPLUSPLUS_VERSION }}-bench-${{ env.BENCHMARK_VERSION }}
+
       - name: Build pinned fmt
+        if: steps.pinned-deps.outputs.cache-hit != 'true'
         run: |
           curl -fsSL -o fmt.tar.gz "https://github.com/fmtlib/fmt/archive/refs/tags/${FMT_VERSION}.tar.gz"
           tar xzf fmt.tar.gz
@@ -78,6 +91,7 @@ jobs:
           cmake --build fmt-build --target install --parallel 2
 
       - name: Build pinned toml++
+        if: steps.pinned-deps.outputs.cache-hit != 'true'
         run: |
           curl -fsSL -o tomlplusplus.tar.gz "https://github.com/marzer/tomlplusplus/archive/refs/tags/v${TOMLPLUSPLUS_VERSION}.tar.gz"
           tar xzf tomlplusplus.tar.gz
@@ -88,6 +102,7 @@ jobs:
           cmake --build tomlplusplus-build --target install --parallel 2
 
       - name: Build pinned Google Benchmark
+        if: steps.pinned-deps.outputs.cache-hit != 'true'
         run: |
           curl -fsSL -o benchmark.tar.gz "https://github.com/google/benchmark/archive/refs/tags/v${BENCHMARK_VERSION}.tar.gz"
           tar xzf benchmark.tar.gz
@@ -120,13 +135,28 @@ jobs:
           fi
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve EPCD revision
+        id: epcd-ref
+        run: |
+          set -euo pipefail
+          if [ "$EPCD_REF" = "main" ]; then
+            ref=$(git ls-remote https://github.com/Sukanle/EPCD.git refs/heads/main | cut -f1)
+          else
+            ref="$EPCD_REF"
+          fi
+          if [ -z "$ref" ]; then
+            echo "could not resolve EPCD_REF=$EPCD_REF" >&2
+            exit 1
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
       - name: Cache FetchContent dependencies
         uses: actions/cache@v4
         with:
           path: dependencies
-          key: ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ steps.abix-ref.outputs.ref }}-${{ hashFiles('CMakeLists.txt', 'cmake/Dependencies.cmake') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ steps.abix-ref.outputs.ref }}-${{ steps.epcd-ref.outputs.ref }}-${{ hashFiles('CMakeLists.txt', 'cmake/Dependencies.cmake') }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ steps.abix-ref.outputs.ref }}-
+            ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ steps.abix-ref.outputs.ref }}-${{ steps.epcd-ref.outputs.ref }}-
 
       - name: Configure and build AMC
         run: |
@@ -275,7 +305,17 @@ jobs:
             curl
             git
 
+      - name: Cache pinned dependency builds
+        id: pinned-deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/fmt
+            ${{ runner.temp }}/tomlplusplus
+          key: ${{ runner.os }}-${{ runner.arch }}-ucrt64-amc-pinned-v${{ env.PINNED_CACHE_VERSION }}-fmt-${{ env.FMT_VERSION }}-toml-${{ env.TOMLPLUSPLUS_VERSION }}
+
       - name: Build pinned fmt
+        if: steps.pinned-deps.outputs.cache-hit != 'true'
         run: |
           PREFIX="$(cygpath -m "$RUNNER_TEMP")/fmt"
           curl -fsSL -o fmt.tar.gz "https://github.com/fmtlib/fmt/archive/refs/tags/${FMT_VERSION}.tar.gz"
@@ -288,6 +328,7 @@ jobs:
           cmake --build fmt-build --target install --parallel 2
 
       - name: Build pinned toml++
+        if: steps.pinned-deps.outputs.cache-hit != 'true'
         run: |
           PREFIX="$(cygpath -m "$RUNNER_TEMP")/tomlplusplus"
           curl -fsSL -o tomlplusplus.tar.gz "https://github.com/marzer/tomlplusplus/archive/refs/tags/v${TOMLPLUSPLUS_VERSION}.tar.gz"
@@ -318,13 +359,28 @@ jobs:
           fi
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve EPCD revision
+        id: epcd-ref
+        run: |
+          set -euo pipefail
+          if [ "$EPCD_REF" = "main" ]; then
+            ref=$(git ls-remote https://github.com/Sukanle/EPCD.git refs/heads/main | cut -f1)
+          else
+            ref="$EPCD_REF"
+          fi
+          if [ -z "$ref" ]; then
+            echo "could not resolve EPCD_REF=$EPCD_REF" >&2
+            exit 1
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
       - name: Cache FetchContent dependencies
         uses: actions/cache@v4
         with:
           path: dependencies
-          key: ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ steps.abix-ref.outputs.ref }}-${{ hashFiles('CMakeLists.txt', 'cmake/Dependencies.cmake') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ steps.abix-ref.outputs.ref }}-${{ steps.epcd-ref.outputs.ref }}-${{ hashFiles('CMakeLists.txt', 'cmake/Dependencies.cmake') }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ steps.abix-ref.outputs.ref }}-
+            ${{ runner.os }}-${{ runner.arch }}-amc-deps-${{ steps.abix-ref.outputs.ref }}-${{ steps.epcd-ref.outputs.ref }}-
 
       - name: Configure and build AMC
         run: |

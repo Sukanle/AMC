@@ -5,8 +5,8 @@ name: Cache cleanup
 # until GitHub evicts it by LRU. Purge old caches on a schedule so CI storage
 # (and the minutes spent managing it) stays bounded.
 #
-# Only caches produced by the ci.yml "Cache FetchContent dependencies" steps
-# are touched: their keys contain "amc-deps-". Anything else is left alone.
+# Only caches produced by the ci.yml dependency-cache steps are touched:
+# their keys contain "amc-deps-" or "amc-pinned-". Anything else is left alone.
 
 on:
   schedule:
@@ -53,7 +53,7 @@ jobs:
           import subprocess
           from datetime import datetime, timedelta, timezone
 
-          KEY_MARKER = "amc-deps-"
+          KEY_MARKERS = ("amc-deps-", "amc-pinned-")
           max_age = timedelta(days=int(os.environ["MAX_AGE_DAYS"]))
           dry_run = os.environ.get("DRY_RUN", "false").lower() in {"1", "true", "yes"}
           now = datetime.now(timezone.utc)
@@ -70,7 +70,7 @@ jobs:
 
           stale = []
           for cache in caches:
-              if KEY_MARKER not in cache["key"]:
+              if not any(marker in cache["key"] for marker in KEY_MARKERS):
                   continue
               last_used = parse(cache.get("lastAccessedAt")) or parse(cache.get("createdAt"))
               if last_used is None or now - last_used <= max_age:
