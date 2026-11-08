@@ -1,12 +1,33 @@
-// amc-rustc-helper — minimal v0.4.0 Rust semantic adapter producer.
+// amc-rustc-helper — v0.4.0 Rust semantic adapter producer.
 //
-// This skeleton establishes the process boundary and the stable
-// `amc.rust.semantic/1` envelope. It reports the target and crate facts from
-// the installed rustc and leaves types/functions empty for now; later revisions
-// fill them from rustc's semantic APIs without changing the schema envelope.
+// The helper links rustc's driver libraries in an isolated process and emits
+// the stable `amc.rust.semantic/1` envelope. The first rustc_driver increment
+// reports target, crate and provenance facts; type/function extraction follows
+// in later increments without changing the envelope.
 //
-// The helper intentionally has no external crate dependencies so it can be
-// built with a plain `rustc` invocation and shipped next to `amc-rust`.
+// Build (stable toolchain with the rustc-dev component):
+//
+//   RUSTC_BOOTSTRAP=1 rustc --edition 2021 \
+//     -L "$(rustc --print sysroot)/lib" \
+//     -L "$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/^host: //p')/lib" \
+//     -C link-arg=-Wl,-rpath,$(rustc --print sysroot)/lib \
+//     tools/rustc-helper/src/main.rs -o amc-rustc-helper
+
+#![feature(rustc_private)]
+
+extern crate rustc_abi;
+extern crate rustc_driver;
+extern crate rustc_hir;
+extern crate rustc_interface;
+extern crate rustc_middle;
+extern crate rustc_session;
+extern crate rustc_target;
+
+use rustc_abi::Endian;
+use rustc_driver::{Callbacks, Compilation};
+use rustc_hir::def_id::LOCAL_CRATE;
+use rustc_interface::interface;
+use rustc_middle::ty::TyCtxt;
 
 use std::env;
 use std::fs;
@@ -20,11 +41,12 @@ struct Options {
     edition: String,
     source: String,
     output: String,
+    target: Option<String>,
 }
 
 fn usage() -> String {
-    "usage: amc-rustc-helper --crate-name <name> [--edition <edition>] \
-     [--source <path>] [--output <path>]\n\
+    "usage: amc-rustc-helper --crate-name <name> --source <path> \
+     [--edition <edition>] [--target <triple>] [--output <path>]\n\
      \n\
      Emits one amc.rust.semantic/1 document on stdout when --output is omitted."
         .to_string()
@@ -35,6 +57,7 @@ fn parse_options() -> Result<Options, String> {
     let mut edition = String::from("2021");
     let mut source = String::new();
     let mut output = String::new();
+    let mut target = None;
     let args: Vec<String> = env::args().skip(1).collect();
     let mut index = 0;
     while index < args.len() {
@@ -56,6 +79,7 @@ fn parse_options() -> Result<Options, String> {
             "--edition" => edition = value,
             "--source" => source = value,
             "--output" => output = value,
+            "--target" => target = Some(value),
             _ => return Err(format!("unknown option: {}", flag)),
         }
         index += 2;
@@ -63,41 +87,16 @@ fn parse_options() -> Result<Options, String> {
     if crate_name.is_empty() {
         return Err("--crate-name is required".to_string());
     }
+    if source.is_empty() {
+        return Err("--source is required".to_string());
+    }
     Ok(Options {
         crate_name,
         edition,
         source,
         output,
+        target,
     })
-}
-
-fn run_rustc(args: &[&str]) -> Result<String, String> {
-    let output = Command::new("rustc")
-        .args(args)
-        .stdin(Stdio::null())
-        .output()
-        .map_err(|error| format!("cannot run rustc: {}", error))?;
-    if !output.status.success() {
-        return Err(format!(
-            "rustc {} failed: {}",
-            args.join(" "),
-            String::from_utf8_lossy(&output.stderr).trim()
-        ));
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
-}
-
-fn cfg_value<'a>(cfg: &'a str, key: &str) -> Option<&'a str> {
-    for line in cfg.lines() {
-        let line = line.trim();
-        if let Some(rest) = line.strip_prefix(key) {
-            let rest = rest.trim_start();
-            if let Some(rest) = rest.strip_prefix('=') {
-                return Some(rest.trim().trim_matches('"'));
-            }
-        }
-    }
-    None
 }
 
 fn json_string(value: &str) -> String {
@@ -118,6 +117,87 @@ fn json_string(value: &str) -> String {
     out
 }
 
+fn rustc_release() -> String {
+    Command::new("rustc")
+        .arg("--version")
+        .stdin(Stdio::null())
+        .output()
+        .ok()
+        .and_then(|output| {
+            if output.status.success() {
+                Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+struct HelperCallbacks {
+    output: String,
+    source: String,
+    rustc: String,
+}
+
+impl Callbacks for HelperCallbacks {
+    fn after_analysis(&mut self, _compiler: &interface::Compiler, tcx: TyCtxt<'_>) -> Compilation {
+        let target = &tcx.sess.target;
+        let triple = target.llvm_target.clone();
+        let arch = triple.split('-').next().unwrap_or("unknown").to_string();
+        let os = target.options.os.desc().to_string();
+        let abi = target.options.env.desc().to_string();
+        let pointer_bits = target.pointer_width;
+        let endianness = match target.endian {
+            Endian::Little => "little",
+            Endian::Big => "big",
+        };
+        let c_long_bits = if os == "windows" { 32 } else { pointer_bits };
+        let crate_name = tcx.crate_name(LOCAL_CRATE).to_string();
+        let edition = format!("{}", tcx.sess.edition());
+
+        let target_json = format!(
+            "{{\n    \"triple\": {},\n    \"arch\": {},\n    \"os\": {},\n    \"abi\": {},\n    \"pointer_bits\": {},\n    \"endianness\": {},\n    \"c_long_bits\": {}\n  }}",
+            json_string(&triple),
+            json_string(&arch),
+            json_string(&os),
+            json_string(&abi),
+            pointer_bits,
+            json_string(endianness),
+            c_long_bits
+        );
+        let crate_json = format!(
+            "{{\n    \"name\": {},\n    \"edition\": {},\n    \"features\": []\n  }}",
+            json_string(&crate_name),
+            json_string(&edition)
+        );
+        let producer = format!(
+            "{{\n    \"kind\": \"rustc-helper\",\n    \"version\": {},\n    \"rustc\": {}\n  }}",
+            json_string(HELPER_VERSION),
+            json_string(&self.rustc)
+        );
+        let provenance = format!(
+            "{{\n    \"source\": {},\n    \"rustc\": {}\n  }}",
+            json_string(&self.source),
+            json_string(&self.rustc)
+        );
+        let document = format!(
+            "{{\n  \"schema\": {},\n  \"producer\": {},\n  \"target\": {},\n  \"crate\": {},\n  \"types\": [],\n  \"functions\": [],\n  \"generics\": [],\n  \"traits\": [],\n  \"errors\": [],\n  \"provenance\": {}\n}}\n",
+            json_string(SCHEMA),
+            producer,
+            target_json,
+            crate_json,
+            provenance
+        );
+
+        if self.output.is_empty() || self.output == "-" {
+            print!("{}", document);
+        } else if let Err(error) = fs::write(&self.output, document) {
+            eprintln!("amc-rustc-helper: cannot write {}: {}", self.output, error);
+        }
+        Compilation::Stop
+    }
+}
+
 fn main() {
     let options = match parse_options() {
         Ok(options) => options,
@@ -128,88 +208,36 @@ fn main() {
         }
     };
 
-    let cfg = match run_rustc(&["--print", "cfg"]) {
-        Ok(cfg) => cfg,
-        Err(error) => {
-            eprintln!("amc-rustc-helper: {}", error);
-            std::process::exit(3);
-        }
-    };
-    let verbose = match run_rustc(&["-vV"]) {
-        Ok(verbose) => verbose,
-        Err(error) => {
-            eprintln!("amc-rustc-helper: {}", error);
-            std::process::exit(3);
-        }
-    };
-
-    let mut host = String::new();
-    let mut release = String::new();
-    for line in verbose.lines() {
-        if let Some(value) = line.strip_prefix("host: ") {
-            host = value.trim().to_string();
-        } else if let Some(value) = line.strip_prefix("release: ") {
-            release = value.trim().to_string();
-        }
-    }
-    if host.is_empty() {
-        eprintln!("amc-rustc-helper: rustc -vV did not report a host triple");
-        std::process::exit(3);
+    // rustc_private is an unstable interface even on a stable toolchain. The
+    // helper is pinned to a rustc version and runs as an isolated process.
+    unsafe {
+        env::set_var("RUSTC_BOOTSTRAP", "1");
     }
 
-    let arch = cfg_value(&cfg, "target_arch").unwrap_or("unknown");
-    let os = cfg_value(&cfg, "target_os").unwrap_or("unknown");
-    let endianness = cfg_value(&cfg, "target_endian").unwrap_or("unknown");
-    let pointer_bits = cfg_value(&cfg, "target_pointer_width").unwrap_or("0");
-    let abi = host.rsplit('-').next().unwrap_or("unknown");
-    // Rust's cfg surface does not expose c_long directly. Windows is LLP64;
-    // other supported targets follow the pointer width. AMC can override the
-    // value from [target] c_long_bits when the target is unusual.
-    let c_long_bits = if os == "windows" {
-        "32".to_string()
-    } else {
-        pointer_bits.to_string()
-    };
-
-    let target = format!(
-        "{{\n    \"triple\": {},\n    \"arch\": {},\n    \"os\": {},\n    \"abi\": {},\n    \"pointer_bits\": {},\n    \"endianness\": {},\n    \"c_long_bits\": {}\n  }}",
-        json_string(&host),
-        json_string(arch),
-        json_string(os),
-        json_string(abi),
-        pointer_bits,
-        json_string(endianness),
-        c_long_bits
-    );
-    let crate_section = format!(
-        "{{\n    \"name\": {},\n    \"edition\": {},\n    \"features\": []\n  }}",
-        json_string(&options.crate_name),
-        json_string(&options.edition)
-    );
-    let producer = format!(
-        "{{\n    \"kind\": \"rustc-helper\",\n    \"version\": {},\n    \"rustc\": {}\n  }}",
-        json_string(HELPER_VERSION),
-        json_string(&release)
-    );
-    let provenance = format!(
-        "{{\n    \"source\": {},\n    \"rustc\": {}\n  }}",
-        json_string(&options.source),
-        json_string(&release)
-    );
-
-    let document = format!(
-        "{{\n  \"schema\": {},\n  \"producer\": {},\n  \"target\": {},\n  \"crate\": {},\n  \"types\": [],\n  \"functions\": [],\n  \"generics\": [],\n  \"traits\": [],\n  \"errors\": [],\n  \"provenance\": {}\n}}\n",
-        json_string(SCHEMA),
-        producer,
-        target,
-        crate_section,
-        provenance
-    );
-
-    if options.output.is_empty() || options.output == "-" {
-        print!("{}", document);
-    } else if let Err(error) = fs::write(&options.output, document) {
-        eprintln!("amc-rustc-helper: cannot write {}: {}", options.output, error);
-        std::process::exit(4);
+    let metadata = env::temp_dir().join(format!("amc-rustc-helper-{}.rmeta", std::process::id()));
+    let metadata_path = metadata.to_string_lossy().into_owned();
+    let mut args = vec![
+        "rustc".to_string(),
+        "--crate-name".to_string(),
+        options.crate_name.clone(),
+        "--edition".to_string(),
+        options.edition.clone(),
+        "--crate-type=lib".to_string(),
+        "--emit=metadata".to_string(),
+        "-o".to_string(),
+        metadata_path.clone(),
+    ];
+    if let Some(target) = &options.target {
+        args.push("--target".to_string());
+        args.push(target.clone());
     }
+    args.push(options.source.clone());
+
+    let mut callbacks = HelperCallbacks {
+        output: options.output,
+        source: options.source,
+        rustc: rustc_release(),
+    };
+    rustc_driver::run_compiler(&args, &mut callbacks);
+    let _ = fs::remove_file(&metadata);
 }

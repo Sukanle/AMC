@@ -162,7 +162,7 @@ v0.4.0  amc-rustc-helper producer: target/crate envelope implemented first;
         types/functions/generics/traits/errors follow without schema changes
 ```
 
-The first v0.4.0 increment implements the process boundary and emits the `target` / `crate` / `provenance` envelope. `amc-rust` can invoke it through `[rust] helper` and uses its target facts; the parser/probe remains the fallback when the helper is unavailable.
+The first v0.4.0 increment implements the process boundary with `rustc_driver` and emits the `target` / `crate` / `provenance` envelope. `amc-rust` can invoke it through `[rust] helper` and uses its target facts; the parser/probe remains the fallback when the helper is unavailable. Building the helper requires the `rustc-dev` component.
 
 v0.3.x did not implement the helper. It only:
 

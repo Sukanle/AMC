@@ -44,6 +44,21 @@ def main():
         print("  [FAIL] helper source or fixture missing", file=sys.stderr)
         return 1
 
+    version = subprocess.run([rustc, "-vV"], capture_output=True, text=True,
+                             encoding="utf-8", errors="replace")
+    sysroot = subprocess.run([rustc, "--print", "sysroot"], capture_output=True, text=True,
+                             encoding="utf-8", errors="replace")
+    host = next((line.split(":", 1)[1].strip() for line in version.stdout.splitlines()
+                 if line.startswith("host:")), "")
+    sysroot_text = sysroot.stdout.strip() if sysroot.returncode == 0 else ""
+    driver_lib = os.path.join(sysroot_text, "lib")
+    driver_target_lib = os.path.join(sysroot_text, "lib", "rustlib", host, "lib")
+    has_driver = any(name.startswith("librustc_driver") for name in os.listdir(driver_lib)) \
+        if sysroot_text and os.path.isdir(driver_lib) else False
+    if not has_driver:
+        print("  [SKIP] rustc-dev component is not installed (librustc_driver missing)")
+        return 0
+
     work = tempfile.mkdtemp(prefix="amc-rustc-helper.")
     passed = failed = 0
 
@@ -66,8 +81,20 @@ def main():
 
     try:
         helper = os.path.join(work, exe("amc-rustc-helper"))
-        result = run([rustc, "--edition", "2021", str(helper_source), "-o", helper])
-        if not check(result.returncode == 0, "helper compiled", output(result)[-400:]):
+        link = [
+            "-L", driver_lib,
+            "-L", driver_target_lib,
+        ]
+        if sys.platform != "win32":
+            link += [
+                "-C", "link-arg=-Wl,-rpath," + driver_lib,
+                "-C", "link-arg=-Wl,-rpath," + driver_target_lib,
+            ]
+        build_env = dict(os.environ)
+        build_env["RUSTC_BOOTSTRAP"] = "1"
+        result = run([rustc, "--edition", "2021", str(helper_source), *link, "-o", helper],
+                     env=build_env)
+        if not check(result.returncode == 0, "helper compiled with rustc_driver", output(result)[-400:]):
             return 1
 
         version = run([helper, "--version"])
@@ -101,7 +128,7 @@ def main():
         check(document.get("provenance", {}).get("source") == str(fixture), "provenance source")
 
         # stdout mode is part of the helper contract.
-        result = run([helper, "--crate-name", "stdout_demo"])
+        result = run([helper, "--crate-name", "stdout_demo", "--source", str(fixture)])
         if check(result.returncode == 0, "helper supports stdout mode", output(result)[-200:]):
             stdout_document = json.loads(result.stdout)
             check(stdout_document.get("schema") == "amc.rust.semantic/1", "stdout schema id")

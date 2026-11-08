@@ -82,7 +82,7 @@ Rules:
 
 ### Optional rustc helper (v0.4.0 skeleton)
 
-The v0.4.0 helper process is available as a minimal skeleton. It reports target and crate facts and emits the stable `amc.rust.semantic/1` envelope; the type/function arrays are filled by later increments.
+The v0.4.0 helper process is available as a minimal skeleton. It links `rustc_driver` in an isolated process, reports target and crate facts, and emits the stable `amc.rust.semantic/1` envelope; the type/function arrays are filled by later increments. Building it requires a Rust toolchain with `rustc-dev`.
 
 ```toml
 [rust]

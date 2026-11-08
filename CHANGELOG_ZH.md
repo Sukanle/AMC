@@ -4,7 +4,7 @@
 
 ### 新增
 
-- `tools/rustc-helper/`：`amc-rustc-helper` 的首个骨架，一个无外部依赖的 Rust 进程，输出 `amc.rust.semantic/1` 的 target/crate/provenance envelope。
+- `tools/rustc-helper/`：`amc-rustc-helper` 的首个骨架，一个隔离的 `rustc_driver` 进程，输出 `amc.rust.semantic/1` 的 target/crate/provenance envelope。构建需要 `rustc-dev`。
 - `[rust] helper` 配置：`amc-rust` 会运行 helper 并使用其 target facts；当 `[target]` 已提供这些事实时，helper 失败会回退到 parser/probe。
 - `amc-rust-helper-test`：用 rustc 构建 helper，并验证 schema envelope 与 AMC 集成。
 

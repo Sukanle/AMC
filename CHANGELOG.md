@@ -4,7 +4,7 @@
 
 ### Added
 
-- `tools/rustc-helper/`: the first `amc-rustc-helper` skeleton, a dependency-free Rust process that emits the `amc.rust.semantic/1` target/crate/provenance envelope.
+- `tools/rustc-helper/`: the first `amc-rustc-helper` skeleton, an isolated `rustc_driver` process that emits the `amc.rust.semantic/1` target/crate/provenance envelope. Building it requires `rustc-dev`.
 - `[rust] helper` config: `amc-rust` runs the helper, uses its target facts, and falls back to the parser/probe path when `[target]` already provides them.
 - `amc-rust-helper-test`: builds the helper with rustc and validates both the schema envelope and the AMC integration.
 

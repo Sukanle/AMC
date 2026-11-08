@@ -82,7 +82,7 @@ mod demo_thunks;
 
 ### 可选 rustc helper（v0.4.0 骨架）
 
-v0.4.0 的 helper 进程已有一个最小骨架。它报告 target 与 crate 事实，并输出稳定的 `amc.rust.semantic/1` envelope；类型/函数数组由后续增量填充。
+v0.4.0 的 helper 进程已有一个最小骨架。它在独立进程中链接 `rustc_driver`，报告 target 与 crate 事实，并输出稳定的 `amc.rust.semantic/1` envelope；类型/函数数组由后续增量填充。构建需要带 `rustc-dev` 的 Rust toolchain。
 
 ```toml
 [rust]
