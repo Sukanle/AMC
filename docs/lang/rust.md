@@ -52,6 +52,33 @@ Without `[target] pointer_bits`, the Rust frontend fails explicitly instead of a
 
 The frontend is intentionally a preliminary extractor: it understands the subset that crosses an FFI boundary — `#[repr(C)]` structs/enums and `extern "C"` functions — and computes the same layout the C++ frontend gets from Clang. Generics, traits, lifetimes and bit-fields are out of scope; unsupported constructs are ignored rather than guessed.
 
+### Explicit export handoff
+
+`[[rust.expose]]` selects the functions that cross the boundary. The source function does not have to be `extern "C"`: AMC records the exported symbol and emits a `#[export_name = "<symbol>"] pub extern "C"` forwarding wrapper in the `[thunks]` output.
+
+```toml
+[[rust.expose]]
+function = "internal_add"
+as = "demo_add"          # optional; defaults to the source function name
+
+[thunks]
+output = "demo_thunks.rs"
+```
+
+Compile the generated file as a module in the same crate:
+
+```rust
+mod demo_thunks;
+```
+
+Rules:
+
+- `function` must be a free function at crate root and visible to the generated module (`pub` or `pub(crate)`);
+- methods with `self` are rejected in v0.3.3;
+- a function that is already `extern "C"` and keeps its name needs no wrapper;
+- a generated wrapper requires `[thunks] output`;
+- `symbols` still selects types (and already-`extern "C"` functions); `[[rust.expose]]` is the explicit wrapper path for ordinary Rust functions.
+
 A provider source looks like this:
 
 ```rust

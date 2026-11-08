@@ -8,10 +8,12 @@
 - `tests/interop/lease/`: a C++ contract test plus Rust/Zig owned-object wrappers that exercise acquire -> create -> destroy -> release, draining, duplicate release and registry destroy.
 - Zig -> Rust handoff fixture: Zig creates the object and lease, a Rust cdylib adopts them (`destroy -> release`) and Zig performs the final unregister.
 - `amc-lease-interop-test`: builds the provider, Host bridge and C++/Rust/Zig consumers against the same ABIX checkout.
+- Explicit `[[rust.expose]]` handoff: AMC records the exported symbol and emits `#[export_name = "<symbol>"] pub extern "C"` wrappers for ordinary Rust functions. `amc-rust-expose-test` compiles and calls the generated wrappers.
 
 ### Changed
 
 - Track ABIX v0.3.3 (`AMC_ABIX_REF=v0.3.3`), the last additive 0.3.x surface; no STD layout changes.
+- `[export] symbols` no longer records a plain Rust function as C ABI; use `[[rust.expose]]` to generate an explicit wrapper.
 
 ### Compatibility
 

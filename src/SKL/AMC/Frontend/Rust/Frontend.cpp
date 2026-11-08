@@ -25,6 +25,7 @@
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/Path.h>
+#include <llvm/Support/raw_ostream.h>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -216,7 +217,40 @@ struct RawFunction {
     std::vector<RawField> parameters;
     std::vector<std::string> return_type;
     bool extern_c = true;
+    bool has_receiver = false;
+    bool is_unsafe = false;
 };
+
+// Spell a parsed Rust type for the generated wrapper source. The parser keeps
+// tokens without whitespace, so pointers and references need explicit spacing
+// (`*const RustBuffer`, `&mut T`).
+std::string sanitize_ident(const std::string &name) {
+    std::string out;
+    for (const char c : name)
+        out += (std::isalnum(static_cast<unsigned char>(c)) || c == '_') ? c : '_';
+    if (out.empty() || std::isdigit(static_cast<unsigned char>(out[0]))) out.insert(out.begin(), '_');
+    return out;
+}
+
+std::string spell_type(const std::vector<std::string> &tokens) {
+    std::string out;
+    for (const std::string &token : tokens) {
+        const bool tight = token == ","
+                        || token == ">"
+                        || token == "]"
+                        || token == ")"
+                        || token == ";"
+                        || out.empty()
+                        || out.back() == '('
+                        || out.back() == '['
+                        || out.back() == '*'
+                        || out.back() == '&'
+                        || out.back() == '\'';
+        if (!tight) out += ' ';
+        out += token;
+    }
+    return out;
+}
 
 struct Attrs {
     bool repr_c = false;
@@ -387,8 +421,11 @@ private:
         Attrs attrs = parse_attributes();
         if (!ok_) return;
         skip_visibility();
-        while (check("unsafe") || check("const") || check("async"))
+        bool is_unsafe = false;
+        while (check("unsafe") || check("const") || check("async")) {
+            if (check("unsafe")) is_unsafe = true;
             advance();
+        }
 
         if (accept("struct")) {
             parse_struct(attrs);
@@ -411,7 +448,7 @@ private:
             return;
         }
         if (accept("fn")) {
-            parse_function();
+            parse_function(false, is_unsafe);
             return;
         }
         // Unrecognised item (module, impl, use, macro, ...): skip one token.
@@ -556,10 +593,13 @@ private:
             while (!at_end() && !check("}")) {
                 parse_attributes();
                 skip_visibility();
-                while (check("unsafe") || check("const"))
+                bool is_unsafe = false;
+                while (check("unsafe") || check("const")) {
+                    if (check("unsafe")) is_unsafe = true;
                     advance();
+                }
                 if (accept("fn")) {
-                    parse_extern_function_signature(is_c);
+                    parse_extern_function_signature(is_c, is_unsafe);
                 } else {
                     advance();
                 }
@@ -568,47 +608,53 @@ private:
             return;
         }
         // `extern "C" fn ...` definition.
-        while (check("unsafe") || check("const"))
+        bool is_unsafe = false;
+        while (check("unsafe") || check("const")) {
+            if (check("unsafe")) is_unsafe = true;
             advance();
-        if (accept("fn")) parse_function(is_c);
+        }
+        if (accept("fn")) parse_function(is_c, is_unsafe);
     }
 
     // A function declaration inside an `extern` block: `fn name(args) -> ret;`
-    void parse_extern_function_signature(bool is_c) {
+    void parse_extern_function_signature(bool is_c, bool is_unsafe) {
         RawFunction function;
         function.extern_c = is_c;
+        function.is_unsafe = is_unsafe;
         if (check_kind(Tok::Ident)) {
             function.name = peek().text;
             advance();
         }
-        parse_parameter_list(function.parameters);
+        parse_parameter_list(function.parameters, function.has_receiver);
         if (accept("->")) function.return_type = collect_type({";", "{"});
         accept(";");
         skip_balanced("{", "}");
         if (!function.name.empty()) functions_.push_back(std::move(function));
     }
 
-    void parse_function(bool is_c = true) {
+    void parse_function(bool is_c = false, bool is_unsafe = false) {
         RawFunction function;
         function.extern_c = is_c;
+        function.is_unsafe = is_unsafe;
         if (check_kind(Tok::Ident)) {
             function.name = peek().text;
             advance();
         }
-        parse_parameter_list(function.parameters);
+        parse_parameter_list(function.parameters, function.has_receiver);
         if (accept("->")) function.return_type = collect_type({";", "{"});
         accept(";");
         skip_balanced("{", "}");
         if (!function.name.empty()) functions_.push_back(std::move(function));
     }
 
-    void parse_parameter_list(std::vector<RawField> &parameters) {
+    void parse_parameter_list(std::vector<RawField> &parameters, bool &has_receiver) {
         if (!expect("(", "to open parameter list")) return;
         while (!at_end() && !check(")")) {
             parse_attributes();
             const bool reference_receiver = check("&") && (check("self", 1) || (check("mut", 1) && check("self", 2)));
             if (reference_receiver) {
                 // Receiver (`&self`, `&mut self`) — not part of the C ABI.
+                has_receiver = true;
                 advance();
                 accept("mut");
                 accept("self");
@@ -620,6 +666,7 @@ private:
                 continue;
             }
             if (accept("self")) {
+                has_receiver = true;
                 accept(",");
                 continue;
             }
@@ -657,20 +704,42 @@ public:
             by_name_.emplace(items_[i].name, i);
     }
 
-    amc::AbiModule build(const std::vector<std::string> &wanted) {
+    amc::AbiModule build(const std::vector<std::string> &wanted, const std::vector<std::string> &explicit_functions) {
         module_.package_name = "rust";
         module_.arch = target_.arch;
         module_.os = target_.os;
         module_.target_abi = target_.target_abi;
         module_.pointer_bits = target_.pointer_bits;
         module_.endianness = target_.endianness;
+
         for (const auto &name : wanted) {
             if (by_name_.count(name)) {
                 resolve_item(name);
                 continue;
             }
+            for (const auto &function : functions_) {
+                if (function.name != name) continue;
+                if (!function.extern_c) {
+                    set_error("function '" + name + "' is not extern \"C\"; use [[rust.expose]] to generate a wrapper");
+                } else {
+                    add_function(function);
+                }
+                break;
+            }
+        }
+        // Explicit [[rust.expose]] functions are selected even when they are not
+        // listed in [export] symbols. Wrappers are emitted as `extern "C"` raw
+        // functions before this point.
+        for (const auto &name : explicit_functions) {
+            if (by_name_.count(name)) continue;
+            bool matched = false;
             for (const auto &function : functions_)
-                if (function.name == name && function.extern_c) add_function(function);
+                if (function.name == name && function.extern_c) {
+                    add_function(function);
+                    matched = true;
+                    break;
+                }
+            if (!matched) set_error("exposed function not found or not wrappable: " + name);
         }
         return module_;
     }
@@ -684,6 +753,7 @@ private:
     std::unordered_map<std::string, size_t> by_name_;
     std::unordered_map<std::string, int> resolved_;
     std::unordered_map<std::string, int> primitive_ids_;
+    std::unordered_map<std::string, bool> added_functions_;
     amc::AbiModule module_;
     TargetFacts target_;
     std::string error_;
@@ -1025,6 +1095,7 @@ private:
     }
 
     void add_function(const RawFunction &raw) {
+        if (!added_functions_.emplace(raw.name, true).second) return;
         const bool void_return =
             raw.return_type.empty()
             || (raw.return_type.size() == 2 && raw.return_type[0] == "(" && raw.return_type[1] == ")");
@@ -1104,8 +1175,102 @@ int run_frontend(const char *config_path, const char *output_path) {
             functions.push_back(std::move(function));
     }
 
+    std::vector<std::string> exposed_names;
+    std::string wrapper_source;
+    std::unordered_map<std::string, bool> exposed_seen;
+    std::unordered_map<std::string, size_t> wrapper_item_counts;
+    for (const auto &decl : config.rust_exposed) {
+        const RawFunction *source = nullptr;
+        for (const auto &function : functions) {
+            if (function.name == decl.function) {
+                source = &function;
+                break;
+            }
+        }
+        if (source == nullptr) {
+            fmt::print(stderr, "[[rust.expose]] function not found: {}\n", decl.function);
+            return EXIT_FAILURE;
+        }
+        if (source->has_receiver) {
+            fmt::print(stderr, "[[rust.expose]] methods are not supported yet: {}\n", decl.function);
+            return EXIT_FAILURE;
+        }
+        const std::string exported = decl.as.empty() ? decl.function : decl.as;
+        if (!exposed_seen.emplace(exported, true).second) {
+            fmt::print(stderr, "[[rust.expose]] duplicate exported name: {}\n", exported);
+            return EXIT_FAILURE;
+        }
+
+        // A source function that is already `extern "C"` and keeps its name
+        // needs no wrapper. Everything else gets a tiny C-ABI forwarding
+        // wrapper so the producer never hand-writes the export.
+        const bool needs_wrapper = !source->extern_c || exported != decl.function;
+        if (needs_wrapper) {
+            // The wrapper's Rust item name must not collide with the source
+            // function; `#[export_name]` controls the C symbol instead.
+            const std::string base_item = "__amc_export_" + sanitize_ident(exported);
+            const size_t occurrence = wrapper_item_counts[base_item]++;
+            const std::string item = occurrence == 0 ? base_item : fmt::format("{}_{}", base_item, occurrence);
+            wrapper_source += fmt::format("#[export_name = \"{}\"]\npub extern \"C\" fn {}(", exported, item);
+            for (size_t i = 0; i < source->parameters.size(); ++i) {
+                if (i != 0) wrapper_source += ", ";
+                wrapper_source += fmt::format("p{}: {}", i, spell_type(source->parameters[i].type));
+            }
+            wrapper_source += ")";
+            const bool void_return =
+                source->return_type.empty()
+                || (source->return_type.size() == 2 && source->return_type[0] == "(" && source->return_type[1] == ")");
+            if (!void_return) {
+                wrapper_source += " -> ";
+                wrapper_source += spell_type(source->return_type);
+            }
+            wrapper_source += " {\n    ";
+            if (source->is_unsafe) wrapper_source += "unsafe { ";
+            wrapper_source += "crate::";
+            wrapper_source += decl.function;
+            wrapper_source += "(";
+            for (size_t i = 0; i < source->parameters.size(); ++i) {
+                if (i != 0) wrapper_source += ", ";
+                wrapper_source += fmt::format("p{}", i);
+            }
+            wrapper_source += ")";
+            if (source->is_unsafe) wrapper_source += " }";
+            wrapper_source += "\n}\n\n";
+
+            RawFunction wrapper = *source;
+            wrapper.name = exported;
+            wrapper.extern_c = true;
+            wrapper.has_receiver = false;
+            functions.push_back(std::move(wrapper));
+        }
+        exposed_names.push_back(exported);
+    }
+
+    if (!wrapper_source.empty()) {
+        if (config.thunks_output.empty()) {
+            fmt::print(stderr, "[[rust.expose]] requires a [thunks] output path\n");
+            return EXIT_FAILURE;
+        }
+        llvm::SmallString<256> path(base);
+        llvm::sys::path::append(path, config.thunks_output);
+        std::error_code ec;
+        llvm::raw_fd_ostream out(path, ec, llvm::sys::fs::OF_Text);
+        if (ec) {
+            fmt::print(stderr, "cannot write thunk source: {}: {}\n", path.str().str(), ec.message());
+            return EXIT_FAILURE;
+        }
+        out << "// Generated by `amc` - explicit Rust export wrappers for [[rust.expose]].\n"
+               "// Compile this file as a module in the same crate as the source functions.\n\n";
+        out << wrapper_source;
+        out.close();
+        if (out.has_error()) {
+            fmt::print(stderr, "cannot write thunk source: {}: {}\n", path.str().str(), out.error().message());
+            return EXIT_FAILURE;
+        }
+    }
+
     Builder builder(std::move(items), std::move(functions), target);
-    amc::AbiModule module = builder.build(config.symbols);
+    amc::AbiModule module = builder.build(config.symbols, exposed_names);
     if (amc::lang::cancellation_requested()) return amc::lang::kCapabilityCancelled;
     if (!builder.ok()) {
         fmt::print(stderr, "{}\n", builder.error());

@@ -1,0 +1,40 @@
+[package]
+name = "rust_expose"
+version = "0.1"
+
+[[import]]
+language = "rust"
+files = ["rust_expose.rs"]
+symbols = ["RustExposePoint"]
+
+# Explicit export handoff: ordinary Rust functions are wrapped by AMC, and the
+# exported C symbol is recorded in the artifact. `as` is optional.
+[[rust.expose]]
+function = "rust_expose_add"
+as = "rust_expose_add_exported"
+
+[[rust.expose]]
+function = "rust_expose_plain"
+
+[[rust.expose]]
+function = "rust_expose_unsafe"
+
+[[rust.expose]]
+function = "rust_expose_direct"
+
+[[rust.expose]]
+function = "rust_expose_point_sum"
+as = "rust_expose_point_sum_exported"
+
+[target]
+arch = 1
+os = 1
+abi = 1
+pointer_bits = 64
+endianness = "little"
+
+[thunks]
+output = "rust_expose_thunks.rs"
+
+[[export]]
+output = "rust_expose.abix"

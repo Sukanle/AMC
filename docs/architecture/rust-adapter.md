@@ -165,7 +165,7 @@ v0.3.x does not implement the helper. It only:
 
 - defines this schema;
 - validates target facts and layout probes;
-- defines explicit `[[rust.expose]]` / `extern "C"` handoff;
+- implements explicit `[[rust.expose]]` / `extern "C"` handoff, including generated `#[no_mangle] pub extern "C"` wrappers for ordinary Rust functions;
 - keeps `parser + probe` as the fallback path.
 
 ## Related documents

@@ -52,6 +52,33 @@ output = "demo.abix"
 
 前端刻意是一个初步提取器：它理解跨越 FFI 边界的那部分 Rust —— `#[repr(C)]` struct/enum 与 `extern "C"` 函数 —— 并计算与 C++ 前端从 Clang 得到的相同布局。泛型、trait、生命周期与位域不在范围内；不支持的构造会被忽略，而不是猜测。
 
+### 显式导出交接
+
+`[[rust.expose]]` 选择要跨边界的函数。源函数不必是 `extern "C"`：AMC 记录导出符号，并在 `[thunks]` 输出中生成 `#[export_name = "<symbol>"] pub extern "C"` 转发 wrapper。
+
+```toml
+[[rust.expose]]
+function = "internal_add"
+as = "demo_add"          # 可选，默认等于源函数名
+
+[thunks]
+output = "demo_thunks.rs"
+```
+
+把生成文件作为同一 crate 的模块编译：
+
+```rust
+mod demo_thunks;
+```
+
+规则：
+
+- `function` 必须是 crate 根部的自由函数，并对生成模块可见（`pub` 或 `pub(crate)`）；
+- 带 `self` 的方法在 v0.3.3 会被拒绝；
+- 已经是 `extern "C"` 且保持原名的函数不需要 wrapper；
+- 生成 wrapper 时必须提供 `[thunks] output`；
+- `symbols` 仍用于选择类型（以及已 `extern "C"` 的函数）；`[[rust.expose]]` 是普通 Rust 函数的显式 wrapper 路径。
+
 一个 provider 源码如下：
 
 ```rust

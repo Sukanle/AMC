@@ -160,6 +160,18 @@ bool config_load(const std::string &path, const std::string &expected_language, 
                 if (!decl.type.empty()) c.exposed.push_back(std::move(decl));
             }
         }
+        if (auto *rust = t["rust"].as_table()) {
+            if (auto *expose = (*rust)["expose"].as_array()) {
+                for (auto &&entry : *expose) {
+                    auto *table = entry.as_table();
+                    if (!table) continue;
+                    RustExposeDecl decl;
+                    decl.function = (*table)["function"].value_or("");
+                    decl.as = (*table)["as"].value_or("");
+                    if (!decl.function.empty()) c.rust_exposed.push_back(std::move(decl));
+                }
+            }
+        }
         if (auto *instantiations = t["instantiate"].as_array()) {
             for (auto &&entry : *instantiations) {
                 auto *table = entry.as_table();

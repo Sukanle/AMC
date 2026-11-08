@@ -98,6 +98,16 @@ struct AdaptDecl {
     std::string element;   // element spelling, required for std::vector / std::span
 };
 
+// An explicit Rust export. The source function does not have to be
+// `extern "C"`: AMC records `as` in the ABI and emits a small
+// `#[no_mangle] pub extern "C"` wrapper in the configured thunk source. This
+// keeps the handoff explicit instead of guessing which Rust functions cross
+// the boundary. `as` defaults to the source function name.
+struct RustExposeDecl {
+    std::string function;   // Rust source function name
+    std::string as;         // exported C symbol; empty = function
+};
+
 struct Config {
     std::string language;
     std::string db;              // compile_commands.json (optional)
@@ -119,6 +129,7 @@ struct Config {
     std::vector<InstantiateDecl> instantiations;   // [[instantiate]] generic instantiations
     std::vector<AdaptDecl> adaptations;            // [[adapt]] native↔ABIX-STD parameter mappings
     std::vector<ExposeDecl> exposed;               // [[expose]] automatic capability generation
+    std::vector<RustExposeDecl> rust_exposed;      // [[rust.expose]] explicit Rust export handoff
 };
 
 // A capability returns this value when it observed a cooperative cancellation
