@@ -83,7 +83,7 @@ void handle_request(const amc::Json &request) {
         capabilities.set("tools", amc::Json::object());
         amc::Json server = amc::Json::object();
         server.set("name", "amc-mcp");
-        server.set("version", "0.3.3");
+        server.set("version", "0.4.0");
         amc::Json result = amc::Json::object();
         result.set("protocolVersion", protocol);
         result.set("capabilities", std::move(capabilities));

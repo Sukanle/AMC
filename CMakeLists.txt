@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(
     AMC
-    VERSION 0.3.3
+    VERSION 0.4.0
     LANGUAGES C CXX)
 
 # Standalone AMC build. This repository prefers an installed ABIX package and
@@ -49,13 +49,13 @@ option(AMC_INSTALL_PRIVATE_HEADERS "Install AMC private implementation headers" 
 option(AMC_ENABLE_LLDB_PLUGIN "Build the optional LLDB plugin" ON)
 option(AMC_BUILD_AUE "Build the optional Aue Lua conformance prototype" ON)
 set(AMC_ABIX_REF
-    "v0.3.4"
+    "v0.4.0"
     CACHE STRING "ABIX git revision used when FetchContent downloads ABIX (tag, branch or commit)")
 set(AMC_DEPENDENCIES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dependencies")
 
 # Prefer an installed ABIX package. If it is missing, fetch ABIX with its
 # submodules into a repository-local checkout that is intentionally untracked.
-find_package(ABIX 0.3.3 CONFIG QUIET COMPONENTS runtime)
+find_package(ABIX 0.4.0 CONFIG QUIET COMPONENTS runtime)
 set(AMC_ABIX_FETCHED OFF)
 if(NOT ABIX_FOUND)
     set(AMC_ABIX_FETCHED ON)

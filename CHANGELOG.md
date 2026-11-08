@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased — v0.4.0
+
+### Breaking
+
+- Adopt the ABIX v0.4.0 explicit ABIX-STD layouts for `abix_optional`, `abix_result` and `abix_str`. `AMC_ABIX_REF` is now v0.4.0 and `find_package(ABIX 0.4.0)` is required.
+- Old v0.3.x `.abix` artifacts and generated bindings are not compatible; regenerate them with this tree.
+
+### Changed
+
+- `evaluate_optional` / `evaluate_result` / `evaluate_string_view` accept the v0.4.0 explicit `reserved` layouts and reject a malformed reserved field.
+- Synthesized StringView boundaries and C++ thunks include the explicit reserved word; error-boundary value indices follow the new `status, reserved, value` layout.
+- Rust/Zig/C++ interop fixtures use the explicit layouts.
+
+### Validation
+
+- Linux CTest: 34/34 passed.
+- The rustc frontend work continues separately; this entry records the ABIX lockstep only.
+
 ## v0.3.3 — 2026-11-09
 
 ### Added

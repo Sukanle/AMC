@@ -34,7 +34,7 @@ int main(int argc, char **argv) {
           {"frontend", amc::lang::cpp::run_frontend},
           {"backend", amc::lang::cpp::run_backend},
           },
-        "0.3.3",
+        "0.4.0",
         {"templates", "interfaces"},
     };
     return amc::lang::run_provider(argc, argv, provider);

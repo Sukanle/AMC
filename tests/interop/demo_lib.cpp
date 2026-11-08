@@ -101,7 +101,7 @@ DEMO_API abix_view_rev_i32 demo_numbers_rev() {
 }
 
 DEMO_API abix_str_utf8 demo_greeting() {
-    return abix_str_utf8{"hello", 5, static_cast<uint32_t>(abix_std::Encoding::utf8)};
+    return abix_str_utf8{"hello", 5, static_cast<uint32_t>(abix_std::Encoding::utf8), 0};
 }
 
 DEMO_API int64_t demo_str_len(abix_str_utf8 text) { return static_cast<int64_t>(text.len); }
@@ -135,11 +135,11 @@ DEMO_API int32_t demo_buffer_destroy(struct DemoBuffer *buffer) {
 }
 
 DEMO_API abix_optional_i32 demo_optional(int32_t present) {
-    return abix_optional_i32{present ? uint8_t{1} : uint8_t{0}, present ? 42 : 0};
+    return abix_optional_i32{present ? 1u : 0u, 0u, present ? 42 : 0};
 }
 
 DEMO_API abix_result_i32 demo_result(int32_t value) {
-    return abix_result_i32{value >= 0 ? 0 : 1, value >= 0 ? value * 2 : 0};
+    return abix_result_i32{value >= 0 ? 0 : 1, 0u, value >= 0 ? value * 2 : 0};
 }
 
 DEMO_API int32_t demo_callback_invoke(void *context) { return context ? *static_cast<int32_t *>(context) : 0; }

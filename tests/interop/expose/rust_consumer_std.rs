@@ -18,6 +18,7 @@ fn main() {
             data: text.as_ptr() as *const core::ffi::c_char,
             len: text.len() as u64,
             encoding: 0,
+            reserved: 0,
         };
         assert_eq!(metrics.text_length(s), 5, "string view through the handle wrapper");
 

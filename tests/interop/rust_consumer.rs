@@ -198,9 +198,9 @@ fn main() {
 
         // ABIX-STD P1 contracts: optional, result and callback.
         let present = demo_optional(1);
-        assert_eq!(present.has_value, 1, "optional present");
+        assert_eq!(present.discriminant, 1, "optional present");
         assert_eq!(present.value, 42, "optional value");
-        assert_eq!(demo_optional(0).has_value, 0, "optional absent");
+        assert_eq!(demo_optional(0).discriminant, 0, "optional absent");
 
         let ok = demo_result(5);
         assert_eq!(ok.status, 0, "result ok status");

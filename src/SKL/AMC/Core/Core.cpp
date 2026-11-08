@@ -1100,8 +1100,11 @@ LoweringResult evaluate_view(const AbiModule &module, Hash128 type_id, LoweringK
     const Type *type = find_type_by_id(module, type_id);
     if (!type || type->kind != TypeKind::record) return result;
 
-    // sequence-view = { data, length }; string-view = { data, length, encoding }.
-    const uint32_t required_fields = kind == LoweringKind::string_view ? 3u : 2u;
+    // sequence-view = { data, length };
+    // string-view   = { data, length, encoding } (v0.3.x)
+    //              or { data, length, encoding, reserved } (v0.4.0).
+    const uint32_t min_visible = kind == LoweringKind::string_view ? 3u : 2u;
+    const uint32_t max_visible = kind == LoweringKind::string_view ? 4u : 2u;
     uint32_t pointer_size = module.pointer_bits != 0 ? module.pointer_bits / 8 : 0;
     int pointer_index = -1;
     uint32_t visible = 0;
@@ -1118,7 +1121,7 @@ LoweringResult evaluate_view(const AbiModule &module, Hash128 type_id, LoweringK
             others.push_back(i);
         }
     }
-    if (visible != required_fields) {
+    if (visible < min_visible || visible > max_visible) {
         result.reason = static_cast<uint32_t>(LoweringReason::field_count);
         return result;
     }
@@ -1130,7 +1133,9 @@ LoweringResult evaluate_view(const AbiModule &module, Hash128 type_id, LoweringK
     std::sort(others.begin(), others.end(), [&](uint32_t a, uint32_t b) {
         return module.fields[type->field_begin + a].offset < module.fields[type->field_begin + b].offset;
     });
-    if (others.size() != required_fields - 1) {
+    const uint32_t min_others = kind == LoweringKind::string_view ? 2u : 1u;
+    const uint32_t max_others = kind == LoweringKind::string_view ? 3u : 1u;
+    if (others.size() < min_others || others.size() > max_others) {
         result.reason = static_cast<uint32_t>(LoweringReason::field_count);
         return result;
     }
@@ -1187,26 +1192,39 @@ LoweringResult evaluate_view(const AbiModule &module, Hash128 type_id, LoweringK
         result.reason = static_cast<uint32_t>(LoweringReason::length_type);
         return result;
     }
-    uint32_t trailing = length_type->size;
+    const amc::Field *encoding_field = nullptr;
+    const amc::Type *encoding_type = nullptr;
     if (kind == LoweringKind::string_view) {
-        const auto &encoding_field = module.fields[type->field_begin + others[1]];
-        const Type *encoding_type = find_type_by_id(module, encoding_field.type_id);
+        encoding_field = &module.fields[type->field_begin + others[1]];
+        encoding_type = find_type_by_id(module, encoding_field->type_id);
         if (!encoding_type
             || (encoding_type->primitive_abi & 0xffu) != static_cast<uint32_t>(PrimitiveAbiKind::uint)
             || encoding_type->size == 0) {
             result.reason = static_cast<uint32_t>(LoweringReason::length_type);
             return result;
         }
-        trailing += encoding_type->size;
+        // v0.4.0 adds an explicit trailing reserved word. It must be the
+        // uint32 field immediately after encoding and must be named reserved;
+        // an unknown trailing field is not silently treated as padding.
+        if (others.size() == 3) {
+            const auto &reserved_field = module.fields[type->field_begin + others[2]];
+            const Type *reserved_type = find_type_by_id(module, reserved_field.type_id);
+            if (reserved_field.name != "reserved" || !reserved_type || reserved_type->size != 4) {
+                result.reason = static_cast<uint32_t>(LoweringReason::layout);
+                return result;
+            }
+        }
     }
-    (void)trailing;
 
-    // Canonical layout: data at 0, then length, then (string view) encoding.
-    // Trailing padding is allowed -- only the field order/offsets matter.
+    // Canonical layout: data at 0, then length, then (string view) encoding,
+    // then the optional explicit reserved word.
     bool canonical = pointer_field.offset == 0 && length_field.offset == pointer_size;
     if (canonical && kind == LoweringKind::string_view) {
-        const auto &encoding_field = module.fields[type->field_begin + others[1]];
-        canonical = encoding_field.offset == pointer_size + length_type->size;
+        canonical = encoding_field->offset == pointer_size + length_type->size;
+        if (canonical && others.size() == 3) {
+            const auto &reserved_field = module.fields[type->field_begin + others[2]];
+            canonical = reserved_field.offset == encoding_field->offset + encoding_type->size;
+        }
     }
     if (canonical) {
         result.status = static_cast<uint32_t>(LoweringStatus::direct);
@@ -1264,20 +1282,31 @@ LoweringResult evaluate_pair(const AbiModule &module, Hash128 type_id, LoweringK
     const Type *type = find_type_by_id(module, type_id);
     if (!type || type->kind != TypeKind::record) return result;
 
-    int discriminant_index = -1, payload_index = -1;
+    int discriminant_index = -1, reserved_index = -1, payload_index = -1;
+    int first_visible = -1, last_visible = -1;
     uint32_t visible = 0;
     for (uint32_t i = 0; i < type->field_count; ++i) {
         const auto &field = module.fields[type->field_begin + i];
         if ((field.flags & field_base) != 0 || (field.flags & field_bitfield) != 0) continue;
         ++visible;
-        const Type *field_type = find_type_by_id(module, field.type_id);
-        if (discriminant_index < 0
-            && (discriminant_is_bool ? byte_discriminant(field_type) : integer_status(field_type)))
-            discriminant_index = static_cast<int>(i);
-        else
-            payload_index = static_cast<int>(i);
+        if (field.name == "reserved") {
+            reserved_index = static_cast<int>(i);
+            continue;
+        }
+        if (first_visible < 0) first_visible = static_cast<int>(i);
+        last_visible = static_cast<int>(i);
     }
-    if (visible != 2) {
+    discriminant_index = first_visible;
+    payload_index = last_visible;
+
+    // v0.4.0 layouts carry an explicit reserved word:
+    //   optional = { discriminant: uint32; reserved: uint32; value: T }
+    //   result   = { status: int32;       reserved: uint32; value: T }
+    // The v0.3.x two-field layouts are still accepted when reading an older
+    // artifact; the caller can decide whether regeneration is required.
+    const bool has_reserved = reserved_index >= 0;
+    const uint32_t expected_visible = has_reserved ? 3u : 2u;
+    if (visible != expected_visible) {
         result.reason = static_cast<uint32_t>(LoweringReason::field_count);
         return result;
     }
@@ -1292,6 +1321,22 @@ LoweringResult evaluate_pair(const AbiModule &module, Hash128 type_id, LoweringK
     const Type *discriminant_type = find_type_by_id(module, discriminant_field.type_id);
     const Type *payload_type = find_type_by_id(module, payload_field.type_id);
 
+    const bool discriminant_ok = discriminant_is_bool
+                                   ? (byte_discriminant(discriminant_type) || integer_status(discriminant_type))
+                                   : integer_status(discriminant_type);
+    if (!discriminant_ok) {
+        result.reason = static_cast<uint32_t>(LoweringReason::missing_data);
+        return result;
+    }
+    if (has_reserved) {
+        const auto &reserved_field = module.fields[type->field_begin + static_cast<uint32_t>(reserved_index)];
+        const Type *reserved_type = find_type_by_id(module, reserved_field.type_id);
+        if (!reserved_type || reserved_type->size != 4 || reserved_field.offset != 4) {
+            result.reason = static_cast<uint32_t>(LoweringReason::layout);
+            return result;
+        }
+    }
+
     // Payload matches the declared element by TypeID (or, failing that, spelling).
     if (!(element_id == Hash128{})) {
         if (!(payload_field.type_id == element_id)) {
@@ -1305,7 +1350,9 @@ LoweringResult evaluate_pair(const AbiModule &module, Hash128 type_id, LoweringK
         }
     }
     const uint32_t payload_align = payload_type ? (payload_type->align == 0 ? 1 : payload_type->align) : 1;
-    const uint32_t expected_offset = (discriminant_type->size + payload_align - 1) / payload_align * payload_align;
+    const uint32_t expected_offset = has_reserved
+                                       ? (8 + payload_align - 1) / payload_align * payload_align
+                                       : (discriminant_type->size + payload_align - 1) / payload_align * payload_align;
     if (discriminant_field.offset == 0 && payload_field.offset == expected_offset) {
         result.status = static_cast<uint32_t>(LoweringStatus::direct);
         result.reason = static_cast<uint32_t>(LoweringReason::ok);

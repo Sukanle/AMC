@@ -11,6 +11,7 @@ fn text_view(bytes: &[u8]) -> abix_str_utf8 {
         data: bytes.as_ptr() as *const core::ffi::c_char,
         len: bytes.len() as u64,
         encoding: 0,
+        reserved: 0,
     }
 }
 

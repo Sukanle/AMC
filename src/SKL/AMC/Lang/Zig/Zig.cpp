@@ -22,7 +22,7 @@ int main(int argc, char **argv) {
         {
           {"backend", amc::lang::zig::run_backend},
           },
-        "0.3.3",
+        "0.4.0",
         {"target"},
     };
     return amc::lang::run_provider(argc, argv, provider);

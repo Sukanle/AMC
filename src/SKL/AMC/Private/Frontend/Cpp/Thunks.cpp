@@ -171,7 +171,9 @@ bool ThunkEmitter::run(std::string &error) {
         uint32_t end = pointer_size + 8;
         if (string_view) {
             module.fields.push_back({type.id, "encoding", encoding_id, pointer_size + 8, 0});
-            end = pointer_size + 12;
+            // v0.4.0 makes the former implicit trailing padding explicit.
+            module.fields.push_back({type.id, "reserved", encoding_id, pointer_size + 12, 0});
+            end = pointer_size + 16;
         }
         type.field_count = static_cast<uint32_t>(module.fields.size()) - type.field_begin;
         type.align = pointer_size;

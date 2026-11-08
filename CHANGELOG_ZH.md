@@ -1,5 +1,23 @@
 # 变更记录
 
+## Unreleased — v0.4.0
+
+### 破坏性变更
+
+- 采用 ABIX v0.4.0 的显式 ABIX-STD 布局：`abix_optional`、`abix_result`、`abix_str`。`AMC_ABIX_REF` 改为 v0.4.0，并要求 `find_package(ABIX 0.4.0)`。
+- 旧 v0.3.x `.abix` artifact 与生成代码不兼容；必须用本树重新生成。
+
+### 变更
+
+- `evaluate_optional` / `evaluate_result` / `evaluate_string_view` 支持 v0.4.0 的显式 `reserved` 布局，并拒绝非法的 reserved 字段。
+- 合成的 StringView 边界与 C++ thunk 包含显式 reserved 字段；error-boundary 的值字段索引跟随新的 `status, reserved, value` 布局。
+- Rust/Zig/C++ interop fixture 改用显式布局。
+
+### 验证
+
+- Linux CTest：34/34 passed。
+- rustc frontend 工作另行推进；本条只记录 ABIX 锁步。
+
 ## v0.3.3 — 2026-11-09
 
 ### 新增

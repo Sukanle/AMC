@@ -59,8 +59,8 @@ pub fn main() !void {
 
     // ABIX-STD P1 contracts: optional, result and callback.
     const opt = abi.demo_optional(1);
-    if (opt.has_value != 1 or opt.value != 42) @panic("optional");
-    if (abi.demo_optional(0).has_value != 0) @panic("optional absent");
+    if (opt.discriminant != 1 or opt.value != 42) @panic("optional");
+    if (abi.demo_optional(0).discriminant != 0) @panic("optional absent");
     const res = abi.demo_result(5);
     if (res.status != 0 or res.value != 10) @panic("result");
     if (abi.demo_result(-1).status != 1) @panic("result error");
