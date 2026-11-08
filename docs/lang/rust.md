@@ -165,10 +165,12 @@ The raw `extern "C"` calls remain `unsafe`; the wrappers reduce the unsafe surfa
 ## Example
 
 ```rust
-#[path = "gen/amc_generated.rs"]
-mod abi;
+mod skl {
+    #[path = "gen/amc_generated.rs"]
+    pub mod abix;
+}
 
-use abi::*;
+use skl::abix::*;
 
 fn main() {
     unsafe {
