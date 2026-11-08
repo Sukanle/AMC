@@ -80,6 +80,17 @@ Rules:
 - a generated wrapper requires `[thunks] output`;
 - `symbols` still selects types (and already-`extern "C"` functions); `[[rust.expose]]` is the explicit wrapper path for ordinary Rust functions.
 
+### Optional rustc helper (v0.4.0 skeleton)
+
+The v0.4.0 helper process is available as a minimal skeleton. It reports target and crate facts and emits the stable `amc.rust.semantic/1` envelope; the type/function arrays are filled by later increments.
+
+```toml
+[rust]
+helper = "path/to/amc-rustc-helper"
+```
+
+When configured, `amc-rust` runs the helper and uses its target facts. If the helper fails and `[target]` already provides `pointer_bits`, endianness and `c_long_bits`, AMC falls back to the parser/probe path with a warning.
+
 ### Ownership and error contracts
 
 The generic `[[owned]]`, `[[contract]]` and `[[error]]` declarations apply to Rust functions too. They are resolved after the frontend records the ABI, so the Rust projection emits the same RAII and `Result` wrappers as the C++ path.

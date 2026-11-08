@@ -80,6 +80,17 @@ mod demo_thunks;
 - 生成 wrapper 时必须提供 `[thunks] output`；
 - `symbols` 仍用于选择类型（以及已 `extern "C"` 的函数）；`[[rust.expose]]` 是普通 Rust 函数的显式 wrapper 路径。
 
+### 可选 rustc helper（v0.4.0 骨架）
+
+v0.4.0 的 helper 进程已有一个最小骨架。它报告 target 与 crate 事实，并输出稳定的 `amc.rust.semantic/1` envelope；类型/函数数组由后续增量填充。
+
+```toml
+[rust]
+helper = "path/to/amc-rustc-helper"
+```
+
+配置后，`amc-rust` 会运行 helper 并使用其 target facts。如果 helper 失败且 `[target]` 已提供 `pointer_bits`、endianness 和 `c_long_bits`，AMC 会给出警告并回退到 parser/probe 路径。
+
 ### 所有权与错误契约
 
 通用的 `[[owned]]`、`[[contract]]` 与 `[[error]]` 声明同样适用于 Rust 函数。它们在前端记录 ABI 之后解析，因此 Rust 投影会生成与 C++ 路径一致的 RAII 和 `Result` wrapper。

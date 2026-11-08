@@ -2,6 +2,12 @@
 
 ## Unreleased — v0.4.0
 
+### 新增
+
+- `tools/rustc-helper/`：`amc-rustc-helper` 的首个骨架，一个无外部依赖的 Rust 进程，输出 `amc.rust.semantic/1` 的 target/crate/provenance envelope。
+- `[rust] helper` 配置：`amc-rust` 会运行 helper 并使用其 target facts；当 `[target]` 已提供这些事实时，helper 失败会回退到 parser/probe。
+- `amc-rust-helper-test`：用 rustc 构建 helper，并验证 schema envelope 与 AMC 集成。
+
 ### 破坏性变更
 
 - 采用 ABIX v0.4.0 的显式 ABIX-STD 布局：`abix_optional`、`abix_result`、`abix_str`。`AMC_ABIX_REF` 改为 v0.4.0，并要求 `find_package(ABIX 0.4.0)`。

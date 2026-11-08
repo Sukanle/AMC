@@ -130,6 +130,7 @@ struct Config {
     std::vector<AdaptDecl> adaptations;            // [[adapt]] native↔ABIX-STD parameter mappings
     std::vector<ExposeDecl> exposed;               // [[expose]] automatic capability generation
     std::vector<RustExposeDecl> rust_exposed;      // [[rust.expose]] explicit Rust export handoff
+    std::string rust_helper;                       // [rust] helper: amc-rustc-helper path (optional)
 };
 
 // A capability returns this value when it observed a cooperative cancellation

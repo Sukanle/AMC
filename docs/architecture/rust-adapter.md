@@ -158,10 +158,13 @@ Debug and reproducibility only. It never participates in ABI identity or compati
 
 ```text
 v0.3.x  schema frozen; probe and TargetFacts validate the same fields
-v0.4.0  amc-rustc-helper implements the producer side
+v0.4.0  amc-rustc-helper producer: target/crate envelope implemented first;
+        types/functions/generics/traits/errors follow without schema changes
 ```
 
-v0.3.x does not implement the helper. It only:
+The first v0.4.0 increment implements the process boundary and emits the `target` / `crate` / `provenance` envelope. `amc-rust` can invoke it through `[rust] helper` and uses its target facts; the parser/probe remains the fallback when the helper is unavailable.
+
+v0.3.x did not implement the helper. It only:
 
 - defines this schema;
 - validates target facts and layout probes;

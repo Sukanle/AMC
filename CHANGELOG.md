@@ -2,6 +2,12 @@
 
 ## Unreleased — v0.4.0
 
+### Added
+
+- `tools/rustc-helper/`: the first `amc-rustc-helper` skeleton, a dependency-free Rust process that emits the `amc.rust.semantic/1` target/crate/provenance envelope.
+- `[rust] helper` config: `amc-rust` runs the helper, uses its target facts, and falls back to the parser/probe path when `[target]` already provides them.
+- `amc-rust-helper-test`: builds the helper with rustc and validates both the schema envelope and the AMC integration.
+
 ### Breaking
 
 - Adopt the ABIX v0.4.0 explicit ABIX-STD layouts for `abix_optional`, `abix_result` and `abix_str`. `AMC_ABIX_REF` is now v0.4.0 and `find_package(ABIX 0.4.0)` is required.

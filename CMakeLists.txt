@@ -691,6 +691,9 @@ if(AMC_BUILD_TESTS AND AMC_PYTHON_EXECUTABLE)
     add_test(NAME amc-rust-semantic-schema-test
              COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/providers/rust/semantic_schema_test.py
                      ${AMC_SOURCE_DIR})
+    add_test(NAME amc-rust-helper-test
+             COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/providers/rust/helper_skeleton_test.py
+                     ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
     add_test(NAME amc-rust-expose-test
              COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/providers/rust/expose_handoff_test.py
                      ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})

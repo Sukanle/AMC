@@ -16,6 +16,7 @@
 #include "SKL/AMC/Frontend/Rust/Rust.h"
 
 #include "SKL/AMC/Core/Core.h"
+#include "SKL/AMC/Support/Json.h"
 
 #include <algorithm>
 #include <cctype>
@@ -25,6 +26,7 @@
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/Path.h>
+#include <llvm/Support/Program.h>
 #include <llvm/Support/raw_ostream.h>
 #include <string>
 #include <unordered_map>
@@ -83,6 +85,129 @@ bool target_facts_from(const amc::lang::Config &config, TargetFacts &target, std
         error = "Rust frontend only supports 32/64-bit c_long";
         return false;
     }
+    return true;
+}
+
+// Run the optional v0.4.0 rustc helper and use its target facts. The helper is
+// an independent process: AMC never links rustc or reads its internal types.
+bool query_rust_helper(amc::lang::Config &config, llvm::StringRef base, std::string &error, bool &fatal) {
+    fatal = false;
+    if (config.rust_helper.empty()) return true;
+    if (config.files.empty()) {
+        error = "[rust] helper requires at least one source file";
+        return false;
+    }
+
+    llvm::SmallString<256> helper(config.rust_helper);
+    if (llvm::sys::path::is_relative(helper)) {
+        llvm::SmallString<256> resolved(base);
+        llvm::sys::path::append(resolved, helper);
+        helper = std::move(resolved);
+    }
+    llvm::SmallString<256> source(config.files.front());
+    if (llvm::sys::path::is_relative(source)) {
+        llvm::SmallString<256> resolved(base);
+        llvm::sys::path::append(resolved, source);
+        source = std::move(resolved);
+    }
+
+    llvm::SmallString<64> temporary;
+    if (const std::error_code ec = llvm::sys::fs::createTemporaryFile("amc-rust-semantic", "json", temporary)) {
+        error = "cannot create rust helper output: " + ec.message();
+        return false;
+    }
+    const std::string crate = llvm::sys::path::stem(source).str();
+    const std::string edition = "2021";
+    llvm::SmallVector<llvm::StringRef, 10> args;
+    args.push_back(helper.str());
+    args.push_back("--crate-name");
+    args.push_back(crate);
+    args.push_back("--edition");
+    args.push_back(edition);
+    args.push_back("--source");
+    args.push_back(source.str());
+    args.push_back("--output");
+    args.push_back(temporary.str());
+
+    std::string exec_error;
+    const int status = llvm::sys::ExecuteAndWait(helper.str(), args, std::nullopt, {}, 0, 0, &exec_error);
+    if (status != 0) {
+        llvm::sys::fs::remove(temporary);
+        error = "rust helper failed";
+        if (!exec_error.empty())
+            error += ": " + exec_error;
+        else
+            error += " with status " + std::to_string(status);
+        return false;
+    }
+
+    auto buffer = llvm::MemoryBuffer::getFile(temporary);
+    llvm::sys::fs::remove(temporary);
+    if (!buffer) {
+        error = "cannot read rust helper output";
+        return false;
+    }
+    amc::Json root;
+    std::string parse_error;
+    if (!amc::parse_json((*buffer)->getBuffer(), root, parse_error)) {
+        error = "invalid rust helper JSON: " + parse_error;
+        return false;
+    }
+    const amc::Json *schema = root.find("schema");
+    if (schema == nullptr || schema->as_string() != "amc.rust.semantic/1") {
+        error = "rust helper schema mismatch";
+        fatal = true;
+        return false;
+    }
+    const amc::Json *target = root.find("target");
+    if (target == nullptr || !target->is_object()) {
+        error = "rust helper output has no target object";
+        fatal = true;
+        return false;
+    }
+    const auto number = [&](const char *key) -> int {
+        const amc::Json *value = target->find(key);
+        return value == nullptr ? -1 : static_cast<int>(value->as_number(-1));
+    };
+    const int pointer_bits = number("pointer_bits");
+    if (pointer_bits != 16 && pointer_bits != 32 && pointer_bits != 64) {
+        error = "rust helper target pointer_bits is invalid";
+        fatal = true;
+        return false;
+    }
+    const amc::Json *endianness = target->find("endianness");
+    const std::string endianness_text = endianness == nullptr ? std::string{} : endianness->as_string();
+    const uint32_t endianness_value = endianness_text == "little" ? 1u : (endianness_text == "big" ? 2u : 0u);
+    if (endianness_value == 0) {
+        error = "rust helper target endianness is invalid";
+        fatal = true;
+        return false;
+    }
+    const int c_long_bits = number("c_long_bits");
+    if (c_long_bits != 32 && c_long_bits != 64) {
+        error = "rust helper target c_long_bits is invalid";
+        fatal = true;
+        return false;
+    }
+
+    if (config.pointer_bits != 0 && config.pointer_bits != static_cast<uint32_t>(pointer_bits)) {
+        error = fmt::format(
+            "rust helper pointer_bits={} does not match [target] pointer_bits={}", pointer_bits, config.pointer_bits);
+        return false;
+    }
+    if (config.endianness != 0 && config.endianness != endianness_value) {
+        error = "rust helper endianness does not match [target] endianness";
+        return false;
+    }
+    if (config.c_long_bits != 0 && config.c_long_bits != static_cast<uint32_t>(c_long_bits)) {
+        error = fmt::format(
+            "rust helper c_long_bits={} does not match [target] c_long_bits={}", c_long_bits, config.c_long_bits);
+        return false;
+    }
+
+    if (config.pointer_bits == 0) config.pointer_bits = static_cast<uint32_t>(pointer_bits);
+    if (config.endianness == 0) config.endianness = endianness_value;
+    if (config.c_long_bits == 0) config.c_long_bits = static_cast<uint32_t>(c_long_bits);
     return true;
 }
 
@@ -1152,6 +1277,18 @@ int run_frontend(const char *config_path, const char *output_path) {
         return EXIT_FAILURE;
     }
     const llvm::StringRef base = llvm::sys::path::parent_path(config_path_abs);
+
+    if (!config.rust_helper.empty()) {
+        std::string helper_error;
+        bool helper_fatal = false;
+        if (!query_rust_helper(config, base, helper_error, helper_fatal)) {
+            if (helper_fatal || config.pointer_bits == 0) {
+                fmt::print(stderr, "{}\n", helper_error);
+                return EXIT_FAILURE;
+            }
+            fmt::print(stderr, "warning: {}\n", helper_error);
+        }
+    }
 
     TargetFacts target;
     if (!target_facts_from(config, target, error)) {

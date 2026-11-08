@@ -158,8 +158,11 @@ AMC 将这些记录转换为 Semantic IR，并决定实体是否 ABI-safe。help
 
 ```text
 v0.3.x  冻结 schema；probe 和 TargetFacts 验证相同字段
-v0.4.0  amc-rustc-helper 实现 producer 侧
+v0.4.0  amc-rustc-helper 先实现 target/crate envelope；
+        types/functions/generics/traits/errors 后续增量填充，不改变 envelope
 ```
+
+v0.4.0 的首个增量实现进程边界和 `target` / `crate` / `provenance` envelope。`amc-rust` 可以通过 `[rust] helper` 调用它并使用 target facts；helper 不可用时， parser/probe 仍是回退路径。
 
 v0.3.x 不实现 helper，只做：
 
