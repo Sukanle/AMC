@@ -20,6 +20,7 @@
 #include "SKL/AMC/Semantic/Serialize.h"
 #include "SKL/AMC/Semantic/Sync.h"
 #include "SKL/AMC/Support/Json.h"
+#include "SKL/AMC/Support/Owned.h"
 
 #include <algorithm>
 #include <cctype>
@@ -2138,6 +2139,57 @@ int run_frontend(const char *config_path, const char *output_path) {
     std::unordered_map<std::string, bool> emitted_boundaries;
     std::unordered_map<std::string, bool> exposed_seen;
     std::unordered_map<std::string, size_t> wrapper_item_counts;
+
+    // `create = "auto"` / `destroy = "auto"` synthesize the mechanical Box
+    // thunks. The user still owns the [[owned]]/[[contract]] declarations; AMC
+    // only supplies the `Box::new` factory and `Box::from_raw` release.
+    std::unordered_map<std::string, bool> auto_owned_generated;
+    for (const auto &owned : config.owned) {
+        const bool create_auto = owned.create == "auto";
+        const bool destroy_auto = owned.destroy == "auto";
+        if (!create_auto && !destroy_auto) continue;
+        if (!auto_owned_generated.emplace(owned.type, true).second) continue;
+        const RawItem *item = nullptr;
+        for (const auto &candidate : items)
+            if (candidate.name == owned.type) {
+                item = &candidate;
+                break;
+            }
+        if (item == nullptr) {
+            fmt::print(stderr, "[[owned]] auto thunks reference unknown type: {}\n", owned.type);
+            return EXIT_FAILURE;
+        }
+        if (create_auto) {
+            const std::string name = amc::support::auto_create_name(owned.type);
+            const std::string item_name = sanitize_ident(name);
+            wrapper_source += fmt::format(
+                "#[export_name = \"{}\"]\npub extern \"C\" fn {}(value: {}) -> *mut {} {{\n"
+                "    Box::into_raw(Box::new(value))\n}}\n\n",
+                name, item_name, owned.type, owned.type);
+            RawFunction function;
+            function.name = name;
+            function.extern_c = true;
+            function.parameters.push_back({"value", tokens_of(owned.type)});
+            function.return_type = tokens_of("*mut " + owned.type);
+            functions.push_back(std::move(function));
+            exposed_names.push_back(name);
+        }
+        if (destroy_auto) {
+            const std::string name = amc::support::auto_destroy_name(owned.type);
+            const std::string item_name = sanitize_ident(name);
+            wrapper_source += fmt::format(
+                "#[export_name = \"{}\"]\npub extern \"C\" fn {}(ptr: *mut {}) {{\n"
+                "    if !ptr.is_null() {{\n        unsafe {{ drop(Box::from_raw(ptr)); }}\n    }}\n}}\n\n",
+                name, item_name, owned.type);
+            RawFunction function;
+            function.name = name;
+            function.extern_c = true;
+            function.parameters.push_back({"ptr", tokens_of("*mut " + owned.type)});
+            functions.push_back(std::move(function));
+            exposed_names.push_back(name);
+        }
+    }
+
     for (const auto &adapt : config.adaptations) {
         const ContainerKind kind = adapt_kind(adapt.native);
         if (kind == ContainerKind::NONE) {

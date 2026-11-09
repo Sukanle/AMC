@@ -159,7 +159,21 @@ function = "widget_use"
 params = ["owned"]
 ```
 
-wrapper 会把返回的 `Box<T>` 转成 `Box::into_raw`，把 `Box<T>` 参数转成 `Box::from_raw`；create/destroy 仍由生产者显式提供。owned `String`/`Vec`/`Option` 返回值仍需要自己的 owned 契约。`Vec`/`Option` 的元素类型在本版本中必须是 primitive。
+wrapper 会把返回的 `Box<T>` 转成 `Box::into_raw`，把 `Box<T>` 参数转成 `Box::from_raw`。create/destroy 默认仍由生产者显式提供；机械配对可以选择自动生成：
+
+```toml
+[[owned]]
+type = "Widget"
+create = "auto"
+destroy = "auto"
+
+[[contract]]
+function = "widget_make"
+returns = "owned"
+release = "auto"
+```
+
+`create = "auto"` 生成 `fn(T) -> *mut T` 工厂（`Box::new`），`destroy = "auto"` 生成 `Box::from_raw` + drop，`release = "auto"` 复用匹配 `[[owned]]` 的 destroy 签名。owned `String`/`Vec`/`Option` 返回值仍需要自己的 owned 契约。`Vec`/`Option` 的元素类型在本版本中必须是 primitive。
 
 ### 所有权与错误契约
 

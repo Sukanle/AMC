@@ -15,6 +15,7 @@
  */
 #include "SKL/AMC/Compilation/Build.h"
 #include "SKL/AMC/Support/CommandLine.h"
+#include "SKL/AMC/Support/Owned.h"
 #include "SKL/AMC/Support/Process.h"
 #include "SKL/AMC/Compilation/Config.h"
 #include "SKL/AMC/Compilation/Meta.h"
@@ -81,8 +82,10 @@ bool resolve_ownership(const toml::table &config, amc::ABIModule &module, std::s
         }
         amc::OwnedType record;
         record.type_id = type->id;
-        const std::string create = (*table)["create"].value_or("");
-        const std::string destroy = (*table)["destroy"].value_or("");
+        std::string create = (*table)["create"].value_or("");
+        std::string destroy = (*table)["destroy"].value_or("");
+        if (create == "auto") create = amc::support::auto_create_name(type_name);
+        if (destroy == "auto") destroy = amc::support::auto_destroy_name(type_name);
         if (!create.empty()) {
             const amc::Function *function = find_function(create);
             if (!function) {
@@ -153,7 +156,33 @@ bool resolve_contracts(const toml::table &config, amc::ABIModule &module, std::s
             contract.target_index = static_cast<uint32_t>(index);
             contract.mode = parse_ownership_mode(returns);
             const std::string release = (*table)["release"].value_or("");
-            if (!release.empty()) {
+            if (release == "auto") {
+                const auto find_type_by_id = [&](amc::Hash128 id) -> const amc::Type * {
+                    for (const auto &type : module.types)
+                        if (type.id == id) return &type;
+                    return nullptr;
+                };
+                amc::Hash128 pointee{};
+                if (const amc::Type *return_type = find_type_by_id(function.return_type);
+                    return_type != nullptr && return_type->kind == amc::TypeKind::POINTER) {
+                    for (const auto &ref : module.pointees)
+                        if (ref.pointer == return_type->id) {
+                            pointee = ref.pointee;
+                            break;
+                        }
+                }
+                const amc::OwnedType *owned = nullptr;
+                for (const auto &record : module.owned)
+                    if (record.type_id == pointee) {
+                        owned = &record;
+                        break;
+                    }
+                if (owned == nullptr || owned->destroy == amc::Hash128{}) {
+                    error = "[[contract]] release = \"auto\" requires [[owned]] for the return type: " + function_name;
+                    return false;
+                }
+                contract.release = owned->destroy;
+            } else if (!release.empty()) {
                 const int release_index = function_index(release);
                 if (release_index < 0) {
                     error = "[[contract]] references unknown release function: " + release;

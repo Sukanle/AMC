@@ -159,7 +159,21 @@ function = "widget_use"
 params = ["owned"]
 ```
 
-The wrapper turns a returned `Box<T>` into `Box::into_raw` and a `Box<T>` parameter into `Box::from_raw`; the create/destroy functions remain explicit producer code. Owned `String`/`Vec`/`Option` returns still need their own owned contract. `Vec`/`Option` elements must be primitive in this version.
+The wrapper turns a returned `Box<T>` into `Box::into_raw` and a `Box<T>` parameter into `Box::from_raw`. The create/destroy pair stays explicit by default; the mechanical pair can be generated opt-in:
+
+```toml
+[[owned]]
+type = "Widget"
+create = "auto"
+destroy = "auto"
+
+[[contract]]
+function = "widget_make"
+returns = "owned"
+release = "auto"
+```
+
+`create = "auto"` emits a `fn(T) -> *mut T` factory (`Box::new`), and `destroy = "auto"` emits `Box::from_raw` plus drop. `release = "auto"` reuses the matching `[[owned]]` destroy signature. Owned `String`/`Vec`/`Option` returns still need their own owned contract. `Vec`/`Option` elements must be primitive in this version.
 
 ### Ownership and error contracts
 

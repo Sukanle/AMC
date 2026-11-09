@@ -134,11 +134,11 @@ Exactly one import per file. It selects the language frontend and the source.
 
 ### `[[owned]]` — release policy
 
-| Field     | Type   | Description                                         |
-| --------- | ------ | --------------------------------------------------- |
-| `type`    | string | Value type whose lifetime is managed by the library |
-| `create`  | string | Factory function name (optional)                    |
-| `destroy` | string | Release function name (required)                    |
+| Field     | Type   | Description                                                                     |
+| --------- | ------ | ------------------------------------------------------------------------------- |
+| `type`    | string | Value type whose lifetime is managed by the library                             |
+| `create`  | string | Factory function name (optional; `auto` emits a `Box::new` thunk for Rust)      |
+| `destroy` | string | Release function name (required; `auto` emits a `Box::from_raw` thunk for Rust) |
 
 ### `[[contract]]` — per-interaction ownership
 

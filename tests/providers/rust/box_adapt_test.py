@@ -159,6 +159,122 @@ fn main() {
             check(result.returncode == 0 and "rust box: OK" in output(result),
                   "consumer drives create, transfer and destroy", output(result)[-500:])
 
+        # Optional auto thunks: create = "auto" / destroy = "auto" synthesize
+        # the Box::new and Box::from_raw pair, while [[owned]]/[[contract]]
+        # still declare the policy.
+        auto_dir = os.path.join(work, "auto")
+        os.makedirs(auto_dir, exist_ok=True)
+        shutil.copyfile(os.path.join(work, "rust_box_api.rs"), os.path.join(auto_dir, "rust_box_api.rs"))
+        auto_config = os.path.join(auto_dir, "rust_box_auto.abic.toml")
+        with open(auto_config, "w", encoding="utf-8") as handle:
+            handle.write("""[package]
+name = "rust_box_auto"
+version = "0.1"
+
+[[import]]
+language = "rust"
+files = ["rust_box_api.rs"]
+symbols = ["BoxWidget", "box_widget_live"]
+
+[[adapt]]
+native = "Box"
+target = "*mut BoxWidget"
+
+[[owned]]
+type = "BoxWidget"
+create = "auto"
+destroy = "auto"
+
+[[contract]]
+function = "box_widget_make"
+returns = "owned"
+release = "auto"
+
+[[contract]]
+function = "box_widget_value"
+params = ["owned"]
+
+[[rust.expose]]
+function = "box_widget_make"
+as = "box_widget_make"
+
+[[rust.expose]]
+function = "box_widget_value"
+as = "box_widget_value"
+
+[target]
+arch = 0
+os = 0
+abi = 1
+pointer_bits = 64
+endianness = "little"
+
+[thunks]
+output = "box_auto_thunks.rs"
+
+[[export]]
+output = "rust_box_auto.abix"
+""")
+        result = run([str(amc), "build", "-c", auto_config, "-B", os.path.join(auto_dir, "out")])
+        auto_artifact = os.path.join(auto_dir, "out", "rust_box_auto.abix")
+        if check(result.returncode == 0 and os.path.isfile(auto_artifact),
+                 "auto create/destroy thunks build", output(result)[-600:]):
+            auto_thunks = open(os.path.join(auto_dir, "box_auto_thunks.rs"), encoding="utf-8").read()
+            check('export_name = "__amc_auto_create_BoxWidget"' in auto_thunks
+                  and "Box::into_raw(Box::new(value))" in auto_thunks,
+                  "auto create thunk is generated")
+            check('export_name = "__amc_auto_destroy_BoxWidget"' in auto_thunks
+                  and "Box::from_raw(ptr)" in auto_thunks,
+                  "auto destroy thunk is generated")
+            auto_gen = os.path.join(auto_dir, "gen")
+            result = run([str(amc), "generate", auto_artifact, "-l", "rust", "-o", auto_gen])
+            if check(result.returncode == 0, "auto Box Rust projection generated", output(result)[-400:]):
+                auto_projection = open(os.path.join(auto_gen, "amc_generated.rs"), encoding="utf-8").read()
+                check("pub fn create(value: BoxWidget)" in auto_projection,
+                      "auto create keeps the value parameter")
+                auto_root = os.path.join(auto_dir, "provider.rs")
+                with open(auto_root, "w", encoding="utf-8") as handle:
+                    handle.write('include!("rust_box_api.rs");\n')
+                    handle.write('include!("box_auto_thunks.rs");\n')
+                auto_provider = module_path(auto_dir, "rust_box_auto")
+                result = run([rustc, "--edition", "2021", "--crate-type", "cdylib",
+                              auto_root, "-o", auto_provider])
+                if check(result.returncode == 0, "auto Box provider compiled", output(result)[-500:]):
+                    auto_consumer = os.path.join(auto_dir, "consumer.rs")
+                    with open(auto_consumer, "w", encoding="utf-8") as handle:
+                        handle.write("""#[path = "gen/amc_generated.rs"]
+pub mod abix;
+
+mod skl {
+    pub use crate::abix;
+}
+use skl::abix::*;
+
+fn main() {
+    unsafe {
+        let owned = OwnedBoxWidget::create(BoxWidget { value: 9 }).expect("create");
+        assert_eq!(owned.as_ref().value, 9);
+        drop(owned);
+    }
+    println!("rust box auto: OK");
+}
+""")
+                    auto_bin = os.path.join(auto_dir, exe("consumer"))
+                    link = ["-L", "native=" + auto_dir, "-l", "dylib=rust_box_auto"]
+                    if sys.platform != "win32":
+                        link += ["-C", "link-arg=-Wl,-rpath," + auto_dir]
+                    result = run([rustc, "--edition", "2021", auto_consumer, "-o", auto_bin] + link)
+                    if check(result.returncode == 0, "auto Box consumer compiled", output(result)[-500:]):
+                        env = dict(os.environ)
+                        if sys.platform == "win32":
+                            env["PATH"] = auto_dir + os.pathsep + env.get("PATH", "")
+                        else:
+                            env["LD_LIBRARY_PATH"] = auto_dir + os.pathsep + env.get("LD_LIBRARY_PATH", "")
+                            env["DYLD_LIBRARY_PATH"] = auto_dir + os.pathsep + env.get("DYLD_LIBRARY_PATH", "")
+                        result = run([auto_bin], env=env)
+                        check(result.returncode == 0 and "rust box auto: OK" in output(result),
+                              "auto create/destroy pair runs", output(result)[-500:])
+
         # Explicit means explicit: dropping [[owned]] or [[contract]] fails closed.
         no_owned = os.path.join(work, "no_owned.abic.toml")
         with open(config, encoding="utf-8") as handle:
