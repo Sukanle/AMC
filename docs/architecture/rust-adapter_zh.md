@@ -208,7 +208,7 @@ v0.4.0  amc-rustc-helper 输出 target/crate envelope、types、functions、
         generics、traits 和 errors
 ```
 
-v0.4.0 的 helper 用 `rustc_driver` 实现进程边界，输出 `target` / `crate` / `provenance` envelope，遍历所有 free items（含嵌套 module），并提取 `repr` 记录、具体泛型实例、public `extern "C"` 函数、impl 方法、泛型声明、 traits/impls 和 `Result` error enum。存在 manifest 时还会读取 `cargo metadata` 的 workspace 事实；构建需要 `rustc-dev`。
+v0.4.0 的 helper 用 `rustc_driver` 实现进程边界，输出 `target` / `crate` / `provenance` envelope，遍历所有 free items（含嵌套 module），并提取 `repr` 记录、具体泛型实例、public `extern "C"` 函数、impl 方法、泛型声明、 traits/impls 和 `Result` error enum。存在 manifest 时还会读取 `cargo metadata` 的 workspace 事实。helper 是 `tools/rustc-helper/` 下的 Cargo 项目，构建需要 `rustc-dev`；`build.rs` 负责 sysroot 搜索路径和 rpath。
 
 `amc-rust` 通过 `[rust] helper` 调用它，将 helper 的 types/functions 导入 ABIX/Semantic IR，与源码 parser 交叉校验布局，并写出 semantic sidecar。 helper 不可用时 parser/probe 仍是回退路径；helper 已证明的语法如果 parser 无法建模，parser 错误会降级为 warning。
 

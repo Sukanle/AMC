@@ -7,7 +7,9 @@
 - `tools/rustc-helper/`: `amc-rustc-helper` is now a real `rustc_driver` semantic producer. It emits the `amc.rust.semantic/1` envelope and extracts `repr(C)` / `repr(transparent)` / packed / align / union / enum records from nested modules, concrete generic instances, public `extern "C"` functions (including `impl` associated functions), generic declarations, trait/impl metadata and `Result` error enums. Building it requires `rustc-dev`.
 - `[rust] helper` config: `amc-rust` imports the helper's types and functions into ABIX/Semantic IR, cross-checks their layouts against the source parser, and writes the semantic sidecar. Parser errors for syntax the helper already proved are downgraded to warnings. The parser/probe remains the fallback when the helper is unavailable.
 - Cargo metadata integration: the helper fills crate name, edition and declared features from `cargo metadata` through `--manifest-path` (or a manifest discovered above `--source`), with additive `--features`.
-- `amc-rust-helper-test`: builds the helper with rustc, validates generics/traits/errors/cargo metadata, cross-validates layout with a rustc `size_of`/`align_of`/`offset_of!` probe, and checks the AMC import path.
+- `amc-rust-helper-test`: builds the helper with Cargo, validates generics/traits/errors/cargo metadata, cross-validates layout with a rustc `size_of`/`align_of`/`offset_of!` probe, and checks the AMC import path.
+- `tools/rustc-helper` is now a Cargo project (`Cargo.toml`, `Cargo.lock`, `build.rs`). `clap` handles the command line, `serde_json` emits the envelope, and `cargo_metadata` reads workspace facts instead of hand-written parsers.
+- Rust projection: raw FFI declarations move into a `raw` module; generated wrappers keep the source names, are safe `pub fn` for pure value types and `pub unsafe fn` for pointer/owner contracts, and funnel every raw call through the generated `amc_ffi!` macro. `Owned*` and typed `Result` wrappers use the same macro.
 
 ### Breaking
 

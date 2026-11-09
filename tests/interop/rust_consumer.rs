@@ -16,10 +16,12 @@ mod skl {
 use skl::abix::*;
 
 fn main() {
-    unsafe {
-        // Pure value call.
-        assert_eq!(demo_add(2, 3), 5, "demo_add");
+    // Value-only entry points are generated as safe wrappers: no unsafe block
+    // is required here. Pointer and owner operations stay `unsafe` because the
+    // caller still has to uphold their raw contract.
+    assert_eq!(demo_add(2, 3), 5, "demo_add");
 
+    unsafe {
         // Call taking a typed pointer to a value type defined on the Rust side.
         let v = DemoVec2 { x: 4, y: 2.5 };
         let scaled = demo_scale(&v, 2.0);

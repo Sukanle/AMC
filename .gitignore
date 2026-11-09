@@ -1,14 +1,15 @@
+# build dir
 build/
-CMakeFiles/
-CMakeCache.txt
+
+# cmake
 compile_commands.json
-CMakeUserPresets.json
+CMake*.json
 *.user
+
+# python
 __pycache__/
 *.pyc
+
 # FetchContent dependency checkout: keep the README, ignore its contents.
 dependencies/*
 !dependencies/README.md
-
-# Local Google Benchmark runs
-bench/results/

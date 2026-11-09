@@ -145,7 +145,8 @@ amc generate build/package.abix -l rust -o gen/
 `amc_generated.rs` contains:
 
 - `#[repr(C)]` records and enums;
-- `unsafe extern "C"` declarations for the exported functions;
+- a `raw` module with the `unsafe extern "C"` declarations for the exported functions;
+- generated function wrappers and the `amc_ffi!` macro that owns the one `unsafe` call site;
 - `ABIX_*` constants for the type identity, size, align and field offsets;
 - `const _: () = assert!(core::mem::size_of::<T>() == ...)` / `align_of` / `offset_of!` checks;
 - an optional metadata-region module for run-time inspection.
@@ -160,7 +161,24 @@ The backend turns recorded contracts into Rust-native wrappers:
 - an error boundary becomes a typed `Result<T, E>` wrapper such as `demo_div_result`;
 - ABIX-STD span/string/optional/callback types project as typed records with their recorded layout.
 
-The raw `extern "C"` calls remain `unsafe`; the wrappers reduce the unsafe surface without hiding the ABI.
+## Safe wrappers
+
+The raw declarations live in `abix::raw`. Generated wrappers keep the source function names and split into two tiers:
+
+- **safe** `pub fn` when every parameter and the return value are plain ABI values (primitives, enums, records without raw pointers). Calling these needs no `unsafe` block;
+- **`pub unsafe fn`** when a parameter or result is a raw pointer, an owner or a type containing one. The unsafe contract is now explicit at the call site instead of implicit in an `extern` block.
+
+Every wrapper funnels its actual FFI call through one generated macro:
+
+```rust
+macro_rules! amc_ffi {
+    ($function:path($($arg:expr),* $(,)?)) => {
+        unsafe { $function($($arg),*) }
+    };
+}
+```
+
+`Owned*` RAII methods and typed `Result` wrappers also use `amc_ffi!`, so the generated unsafe block is centralised. The ABI itself is still explicit: the `raw` module and `ABIX_*` constants remain available to advanced consumers.
 
 ## Example
 
@@ -175,16 +193,18 @@ mod skl {
 use skl::abix::*;
 
 fn main() {
-    unsafe {
-        assert_eq!(demo_add(2, 3), 5);
+    // Value-only entry points are safe wrappers.
+    assert_eq!(demo_add(2, 3), 5);
 
+    // Pointer and owner operations keep an explicit unsafe contract.
+    unsafe {
         let v = DemoVec2 { x: 4, y: 2.5 };
         assert_eq!(demo_scale(&v, 2.0), 13.0);
-
-        let owned = OwnedDemoVec2::create(7, 1.5).expect("create");
-        assert_eq!(owned.as_ref().x, 7);
-        assert_eq!(demo_div_result(10, 2), Ok(5));
     }
+
+    let owned = OwnedDemoVec2::create(7, 1.5).expect("create");
+    assert_eq!(owned.as_ref().x, 7);
+    assert_eq!(demo_div_result(10, 2), Ok(5));
 }
 ```
 

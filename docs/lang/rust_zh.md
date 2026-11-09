@@ -145,7 +145,8 @@ amc generate build/package.abix -l rust -o gen/
 `amc_generated.rs` 包含：
 
 - `#[repr(C)]` 记录与枚举；
-- 导出函数的 `unsafe extern "C"` 声明；
+- 导出函数的 `unsafe extern "C"` 声明所在的 `raw` 模块；
+- 生成的函数包装与拥有唯一 `unsafe` 调用点的 `amc_ffi!` 宏；
 - 类型身份、大小、对齐与字段 offset 的 `ABIX_*` 常量；
 - `const _: () = assert!(core::mem::size_of::<T>() == ...)` / `align_of` / `offset_of!` 检查；
 - 可选的 metadata region 模块，用于运行时检查。
@@ -160,7 +161,24 @@ C ABI 标量会投影为 `core::ffi::c_*` 别名 (`c_int`、`c_double` 等)，�
 - 错误边界变成带类型的 `Result<T, E>` 包装，例如 `demo_div_result`；
 - ABIX-STD 的 span/string/optional/callback 类型按记录的布局投影为带类型的记录。
 
-原始 `extern "C"` 调用仍然是 `unsafe` 的；包装缩小了 unsafe 表面积，但没有掩盖 ABI。
+## 安全包装
+
+原始声明位于 `abix::raw`。生成的包装保留源码函数名，并分成两档：
+
+- **安全** `pub fn`：所有参数与返回值都是纯 ABI 值（primitive、enum、不含裸指针的 record）。调用时不需要 `unsafe`；
+- **`pub unsafe fn`**：参数或返回值包含裸指针、owner 或含指针类型。unsafe 契约现在显式出现在调用点，而不是隐藏在 `extern` 块中。
+
+每个包装都通过唯一生成的宏执行真正的 FFI 调用：
+
+```rust
+macro_rules! amc_ffi {
+    ($function:path($($arg:expr),* $(,)?)) => {
+        unsafe { $function($($arg),*) }
+    };
+}
+```
+
+`Owned*` RAII 方法和带类型的 `Result` 包装也使用 `amc_ffi!`，因此生成的 unsafe 块集中在一处。ABI 本身仍然显式：高级消费者仍可直接使用 `raw` 模块和 `ABIX_*` 常量。
 
 ## 示例
 
@@ -175,16 +193,18 @@ mod skl {
 use skl::abix::*;
 
 fn main() {
-    unsafe {
-        assert_eq!(demo_add(2, 3), 5);
+    // 纯值入口是安全包装。
+    assert_eq!(demo_add(2, 3), 5);
 
+    // 指针与 owner 操作保留显式 unsafe 契约。
+    unsafe {
         let v = DemoVec2 { x: 4, y: 2.5 };
         assert_eq!(demo_scale(&v, 2.0), 13.0);
-
-        let owned = OwnedDemoVec2::create(7, 1.5).expect("create");
-        assert_eq!(owned.as_ref().x, 7);
-        assert_eq!(demo_div_result(10, 2), Ok(5));
     }
+
+    let owned = OwnedDemoVec2::create(7, 1.5).expect("create");
+    assert_eq!(owned.as_ref().x, 7);
+    assert_eq!(demo_div_result(10, 2), Ok(5));
 }
 ```
 

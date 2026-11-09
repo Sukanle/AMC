@@ -296,7 +296,47 @@ public:
         return nullptr;
     }
 
+    // A value can cross the generated API without the caller proving a raw
+    // pointer contract: primitives, enums and records composed only of those.
+    bool is_safe_value(amc::Hash128 id) const {
+        std::set<std::pair<uint64_t, uint64_t>> seen;
+        return is_safe_value_impl(id, seen);
+    }
+
+    bool is_safe_function(const amc::Function &function) const {
+        const int return_index = index_of(function.return_type);
+        if (return_index < 0) return false;
+        const amc::Type &result = m.types[static_cast<size_t>(return_index)];
+        const bool returns_void = result.kind == amc::TypeKind::primitive
+                               && (result.primitive_abi & 0xffu) == static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
+        if (!returns_void && !is_safe_value(function.return_type)) return false;
+        for (const auto &parameter : function.parameters)
+            if (!is_safe_value(parameter.type_id)) return false;
+        return true;
+    }
+
 private:
+    bool is_safe_value_impl(amc::Hash128 id, std::set<std::pair<uint64_t, uint64_t>> &seen) const {
+        const int index = index_of(id);
+        if (index < 0) return false;
+        const amc::Type &type = m.types[static_cast<size_t>(index)];
+        if ((type.flags & amc::type_opaque) != 0) return false;
+        if (!seen.emplace(id.lo, id.hi).second) return true;
+        switch (type.kind) {
+            case amc::TypeKind::primitive:
+                return (type.primitive_abi & 0xffu) != static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
+            case amc::TypeKind::enumeration: return true;
+            case amc::TypeKind::record:
+                for (uint32_t i = 0; i < type.field_count; ++i)
+                    if (!is_safe_value_impl(m.fields[type.field_begin + i].type_id, seen)) return false;
+                return true;
+            case amc::TypeKind::alias:
+                if (type.field_count == 0) return false;
+                return is_safe_value_impl(m.fields[type.field_begin].type_id, seen);
+            default: return false;
+        }
+    }
+
     std::string resolve_spelling(const std::string &spelling) const {
         const auto found = by_spelling.find(normalise_type_spelling(spelling));
         if (found == by_spelling.end()) return {};
@@ -446,28 +486,80 @@ void emit_functions(Output &o, const Projector &p) {
     // runtime loader that resolves them itself.
     const std::string &library = p.m.package_name;
     const bool linkable = !library.empty() && library.find_first_of(" \t\"\\") == std::string::npos;
-    o.print("\n// Free functions declared with the C calling convention.\n");
-    if (linkable) o.print("// Enable `abix_link` to resolve them against `{}` at link time.\n", library);
-    for (const auto *function : free_functions) {
+
+    struct Signature {
         std::string params;
+        std::string args;
+        bool returns_void = false;
+        bool safe = false;
+    };
+    std::vector<Signature> signatures;
+    signatures.reserve(free_functions.size());
+
+    // Raw entry points stay in one module. Consumers should use the wrappers
+    // below; the module is public so an advanced consumer can reach the exact
+    // C symbol, but doing so opts back into the raw unsafe contract.
+    o.print("\n// Raw C entry points. Use the generated wrappers below for the\n");
+    o.print("// supported safe surface, or `amc_ffi!` when a raw call is required.\n");
+    if (linkable) o.print("// Enable `abix_link` to resolve them against `{}` at link time.\n", library);
+    o.print("#[doc(hidden)]\npub mod raw {{\n    use super::*;\n");
+    for (const auto *function : free_functions) {
+        Signature signature;
         for (size_t i = 0; i < function->parameters.size(); ++i) {
-            if (i != 0) params += ", ";
             const auto &parameter = function->parameters[i];
-            std::string parameter_name =
+            const std::string parameter_name =
                 parameter.name.empty() ? fmt::format("arg{}", i) : rust_field_ident(parameter.name);
-            params += fmt::format("{}: {}", parameter_name, p.field_type(parameter.type_id));
+            if (i != 0) {
+                signature.params += ", ";
+                signature.args += ", ";
+            }
+            signature.params += fmt::format("{}: {}", parameter_name, p.field_type(parameter.type_id));
+            signature.args += parameter_name;
         }
         const int return_index = p.index_of(function->return_type);
-        const bool returns_void = return_index >= 0
-                               && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::primitive
-                               && (p.m.types[static_cast<size_t>(return_index)].primitive_abi & 0xffu)
-                                      == static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
-        if (linkable) o.print("#[cfg_attr(abix_link, link(name = {}))]\n", rust_string(library));
-        if (returns_void)
-            o.print("unsafe extern \"C\" {{ pub fn {}({}) -> (); }}\n", rust_ident(function->name), params);
+        signature.returns_void = return_index >= 0
+                              && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::primitive
+                              && (p.m.types[static_cast<size_t>(return_index)].primitive_abi & 0xffu)
+                                     == static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
+        signature.safe = p.is_safe_function(*function);
+        if (linkable) o.print("    #[cfg_attr(abix_link, link(name = {}))]\n", rust_string(library));
+        if (signature.returns_void)
+            o.print(
+                "    unsafe extern \"C\" {{ pub fn {}({}) -> (); }}\n", rust_ident(function->name), signature.params);
         else
-            o.print("unsafe extern \"C\" {{ pub fn {}({}) -> {}; }}\n", rust_ident(function->name), params,
-                p.field_type(function->return_type));
+            o.print("    unsafe extern \"C\" {{ pub fn {}({}) -> {}; }}\n", rust_ident(function->name),
+                signature.params, p.field_type(function->return_type));
+        signatures.push_back(std::move(signature));
+    }
+    o.print("}}\n\n");
+
+    // Every generated wrapper funnels its raw call through this single macro,
+    // so the `unsafe` block lives in one place instead of being repeated (and
+    // accidentally widened) by consumers.
+    o.print("/// Wrap one raw ABI call in the single generated `unsafe` block.\n");
+    o.print("#[allow(unused_macros)]\nmacro_rules! amc_ffi {{\n");
+    o.print("    ($function:ident($($arg:expr),* $(,)?)) => {{\n");
+    o.print("        unsafe {{ raw::$function($($arg),*) }}\n");
+    o.print("    }};\n}}\n\n");
+
+    for (size_t index = 0; index < free_functions.size(); ++index) {
+        const auto *function = free_functions[index];
+        const Signature &signature = signatures[index];
+        if (signature.safe) {
+            o.print("/// Safe wrapper for the `{}` ABI entry point.\n", function->name);
+            o.print("#[inline]\npub fn {}({})", rust_ident(function->name), signature.params);
+        } else {
+            o.print("/// Wrapper for the `{}` ABI entry point.\n", function->name);
+            o.print("///\n/// The caller must uphold the raw pointer / owner contract.\n");
+            o.print("#[inline]\npub unsafe fn {}({})", rust_ident(function->name), signature.params);
+        }
+        if (!signature.returns_void) o.print(" -> {}", p.field_type(function->return_type));
+        o.print(" {{\n");
+        if (signature.returns_void)
+            o.print("    amc_ffi!({}({}));\n", rust_ident(function->name), signature.args);
+        else
+            o.print("    amc_ffi!({}({}))\n", rust_ident(function->name), signature.args);
+        o.print("}}\n");
     }
 }
 
@@ -507,7 +599,7 @@ void emit_owned(Output &o, const Projector &p) {
             }
             o.print("    /// Call `{}` and take ownership of the result.\n", create->name);
             o.print("    pub fn create({}) -> Option<Self> {{\n", params);
-            o.print("        unsafe {{ Self::from_raw({}({})) }}\n", rust_ident(create->name), args);
+            o.print("        unsafe {{ Self::from_raw(amc_ffi!({}({}))) }}\n", rust_ident(create->name), args);
             o.print("    }}\n");
         }
         o.print("    pub fn as_ptr(&self) -> *mut {} {{ self.ptr }}\n", type_name);
@@ -543,16 +635,16 @@ void emit_owned(Output &o, const Projector &p) {
                                        && (p.m.types[static_cast<size_t>(return_index)].primitive_abi & 0xffu)
                                               == static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
                 if (returns_void)
-                    o.print("    pub fn {}(&mut self{}) {{ unsafe {{ {}(self.ptr{}); }} }}\n", method_name, params,
+                    o.print("    pub fn {}(&mut self{}) {{ amc_ffi!({}(self.ptr{})); }}\n", method_name, params,
                         rust_ident(function->name), args);
                 else
-                    o.print("    pub fn {}(&mut self{}) -> {} {{ unsafe {{ {}(self.ptr{}) }} }}\n", method_name, params,
+                    o.print("    pub fn {}(&mut self{}) -> {} {{ amc_ffi!({}(self.ptr{})) }}\n", method_name, params,
                         p.field_type(function->return_type), rust_ident(function->name), args);
             }
         }
         o.print("}}\n");
         o.print("impl Drop for {} {{\n    fn drop(&mut self) {{\n", wrapper);
-        o.print("        if !self.ptr.is_null() {{ unsafe {{ {}(self.ptr); }} }}\n", rust_ident(destroy->name));
+        o.print("        if !self.ptr.is_null() {{ amc_ffi!({}(self.ptr)); }}\n", rust_ident(destroy->name));
         o.print("    }}\n}}\n");
     }
 }
@@ -826,7 +918,7 @@ void emit_errors(Output &o, const Projector &p) {
                     "impl {} {{\n    pub const SUCCESS: {} = {};\n}}\n", error_type, status_rust, record.success_value);
             }
             o.print("pub fn {}({}) -> Result<{}, {}> {{\n", function_rust + "_result", params, value_rust, error_type);
-            o.print("    let result = unsafe {{ {}({}) }};\n", function_rust, call_args);
+            o.print("    let result = amc_ffi!({}({}));\n", function_rust, call_args);
             if (set != nullptr)
                 o.print("    if result.{} == {} {{\n", status_access, record.success_value);
             else
@@ -868,7 +960,7 @@ void emit_errors(Output &o, const Projector &p) {
         }
         o.print("pub fn {}({}) -> Result<{}, {}> {{\n", function_rust + "_result", params, value_rust, error_type);
         o.print("    let mut value: {} = core::default::Default::default();\n", value_rust);
-        o.print("    let status = unsafe {{ {}({}) }};\n", function_rust, call_args);
+        o.print("    let status = amc_ffi!({}({}));\n", function_rust, call_args);
         if (set != nullptr)
             o.print(
                 "    if status == {} {{ Ok(value) }} else {{ Err({}(status)) }}\n", record.success_value, error_type);

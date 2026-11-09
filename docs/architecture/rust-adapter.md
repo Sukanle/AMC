@@ -208,7 +208,7 @@ v0.4.0  amc-rustc-helper producer: target/crate envelope, types, functions,
         generics, traits and errors
 ```
 
-The v0.4.0 helper implements the process boundary with `rustc_driver`, emits the `target` / `crate` / `provenance` envelope, walks all free items including nested modules, and extracts `repr` records, concrete generic instances, public `extern "C"` functions, impl methods, generic declarations, traits/impls and `Result` error enums. It also reads workspace facts from `cargo metadata` when a manifest is available and the helper is built with `rustc-dev`.
+The v0.4.0 helper implements the process boundary with `rustc_driver`, emits the `target` / `crate` / `provenance` envelope, walks all free items including nested modules, and extracts `repr` records, concrete generic instances, public `extern "C"` functions, impl methods, generic declarations, traits/impls and `Result` error enums. It also reads workspace facts from `cargo metadata` when a manifest is available. The helper is a Cargo project under `tools/rustc-helper/` and is built with `rustc-dev`; `build.rs` supplies the sysroot search paths and rpath.
 
 `amc-rust` invokes it through `[rust] helper`, imports the helper's types and functions into ABIX/Semantic IR, cross-checks their layouts against the source parser, and writes the semantic sidecar. The parser/probe remains the fallback when the helper is unavailable; parser errors for syntax the helper already proved are downgraded to warnings.
 

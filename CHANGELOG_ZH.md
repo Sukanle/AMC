@@ -7,7 +7,9 @@
 - `tools/rustc-helper/`：`amc-rustc-helper` 现在是真正的 `rustc_driver` 语义生产者。它输出 `amc.rust.semantic/1` envelope，并提取嵌套 module 中的 `repr(C)` / `repr(transparent)` / packed / align / union / enum 记录、具体泛型实例、public `extern "C"` 函数（含 `impl` 关联函数）、泛型声明、trait/impl 元数据和 `Result` error enum。构建需要 `rustc-dev`。
 - `[rust] helper` 配置：`amc-rust` 将 helper 的 types/functions 导入 ABIX/Semantic IR，与源码 parser 交叉校验布局，并写出 semantic sidecar。helper 已证明的语法如果 parser 无法建模，parser 错误会降级为 warning；helper 不可用时仍回退到 parser/probe。
 - Cargo metadata 集成：helper 通过 `--manifest-path`（或从 `--source` 向上发现的 manifest）读取 `cargo metadata`，填充 crate name、edition 和声明的 features，并支持 additive `--features`。
-- `amc-rust-helper-test`：用 rustc 构建 helper，验证 generics/traits/errors/cargo metadata，用 rustc `size_of`/`align_of`/`offset_of!` probe 交叉校验布局，并检查 AMC 导入路径。
+- `amc-rust-helper-test`：用 Cargo 构建 helper，验证 generics/traits/errors/cargo metadata，用 rustc `size_of`/`align_of`/`offset_of!` probe 交叉校验布局，并检查 AMC 导入路径。
+- `tools/rustc-helper` 改为 Cargo 项目（`Cargo.toml`、`Cargo.lock`、`build.rs`）。命令行交给 `clap`，envelope 交给 `serde_json`，workspace 事实交给 `cargo_metadata`，不再手写参数与 JSON 解析。
+- Rust 投影：原始 FFI 声明移入 `raw` 模块；生成的包装保留源码函数名，纯值类型为安全 `pub fn`，指针/owner 契约为 `pub unsafe fn`，所有原始调用统一走生成的 `amc_ffi!` 宏。`Owned*` 和 typed `Result` 包装使用同一宏。
 
 ### 破坏性变更
 

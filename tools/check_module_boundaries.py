@@ -76,7 +76,12 @@ def module_for_path(path: Path, root: Path) -> str:
         return "Query"
     if "/Support/" in rel:
         return "Support"
-    if "/Lang/C++/C++.cpp" in rel or "/Lang/Rust/Rust.cpp" in rel or "/Lang/Zig/Zig.cpp" in rel:
+    if (
+        "/Lang/C++/C++.cpp" in rel
+        or "/Lang/Cpp/Cpp.cpp" in rel
+        or "/Lang/Rust/Rust.cpp" in rel
+        or "/Lang/Zig/Zig.cpp" in rel
+    ):
         return "Provider"
     if "/Lang/" in rel:
         return "Frontend"

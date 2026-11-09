@@ -1,0 +1,3 @@
+[env]
+# `rustc_private` crates enable unstable features even on a stable toolchain.
+RUSTC_BOOTSTRAP = "1"

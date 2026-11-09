@@ -24,15 +24,12 @@ The helper now extracts:
 ## Build
 
 ```sh
-SYSROOT="$(rustc --print sysroot)"
-HOST="$(rustc -vV | sed -n 's/^host: //p')"
-RUSTC_BOOTSTRAP=1 rustc --edition 2021 tools/rustc-helper/src/main.rs \
-  -L "$SYSROOT/lib" \
-  -L "$SYSROOT/lib/rustlib/$HOST/lib" \
-  -C "link-arg=-Wl,-rpath,$SYSROOT/lib" \
-  -C "link-arg=-Wl,-rpath,$SYSROOT/lib/rustlib/$HOST/lib" \
-  -o amc-rustc-helper
+cd tools/rustc-helper
+cargo build --release
+# binary: target/release/amc-rustc-helper
 ```
+
+`build.rs` asks the active rustc for its sysroot and host triple, then adds the `rustc-dev` search paths and rpath entries. `RUSTC_BOOTSTRAP=1` is set by `.cargo/config.toml`; the helper also sets it at runtime for `rustc_driver`. Build with a toolchain that has the `rustc-dev` component, and keep the helper pinned to that toolchain.
 
 ## Run
 

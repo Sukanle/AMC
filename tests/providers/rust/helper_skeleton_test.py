@@ -32,16 +32,18 @@ def main():
 
     bin_dir = Path(argv[0]).resolve()
     source_root = Path(argv[1]).resolve() if len(argv) > 1 else bin_dir.parent.parent
-    helper_source = source_root / "tools" / "rustc-helper" / "src" / "main.rs"
+    helper_manifest = source_root / "tools" / "rustc-helper" / "Cargo.toml"
+    helper_target = source_root / "tools" / "rustc-helper" / "target"
     fixture = source_root / "tests" / "fixtures" / "rust_demo.rs"
     fixture_config = source_root / "tests" / "fixtures" / "rust_demo.abic.toml"
     amc = bin_dir / exe("amc")
     rustc = shutil.which("rustc")
-    if not rustc:
-        print("  [SKIP] rustc is required for the helper test")
+    cargo = shutil.which("cargo")
+    if not rustc or not cargo:
+        print("  [SKIP] rustc and cargo are required for the helper test")
         return 0
-    if not helper_source.is_file() or not fixture.is_file():
-        print("  [FAIL] helper source or fixture missing", file=sys.stderr)
+    if not helper_manifest.is_file() or not fixture.is_file():
+        print("  [FAIL] helper manifest or fixture missing", file=sys.stderr)
         return 1
 
     version = subprocess.run([rustc, "-vV"], capture_output=True, text=True,
@@ -80,21 +82,15 @@ def main():
         return (result.stdout or "") + (result.stderr or "")
 
     try:
-        helper = os.path.join(work, exe("amc-rustc-helper"))
-        link = [
-            "-L", driver_lib,
-            "-L", driver_target_lib,
-        ]
-        if sys.platform != "win32":
-            link += [
-                "-C", "link-arg=-Wl,-rpath," + driver_lib,
-                "-C", "link-arg=-Wl,-rpath," + driver_target_lib,
-            ]
+        helper = os.path.join(helper_target, "release", exe("amc-rustc-helper"))
         build_env = dict(os.environ)
         build_env["RUSTC_BOOTSTRAP"] = "1"
-        result = run([rustc, "--edition", "2021", str(helper_source), *link, "-o", helper],
-                     env=build_env)
-        if not check(result.returncode == 0, "helper compiled with rustc_driver", output(result)[-400:]):
+        result = run([cargo, "build", "--release", "--locked",
+                      "--manifest-path", str(helper_manifest),
+                      "--target-dir", str(helper_target)],
+                     cwd=str(helper_manifest.parent), env=build_env)
+        if not check(result.returncode == 0 and os.path.isfile(helper),
+                     "helper compiled with cargo and rustc_driver", output(result)[-600:]):
             return 1
 
         version = run([helper, "--version"])
