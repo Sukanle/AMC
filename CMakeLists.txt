@@ -431,6 +431,12 @@ add_executable(
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Backend/Cpp/StaticChecks.cpp)
 target_include_directories(amc-cpp PRIVATE ${AMC_INCLUDE_DIR})
 target_compile_definitions(amc-cpp PRIVATE ABIX_CLANG_RESOURCE_DIR="${AMC_CLANG_RESOURCE_DIR}")
+# Clang 23 headers contain C++20 keywords such as `consteval`. MICS's C++17
+# compatibility shim defines `consteval` as a macro, which then rewrites the
+# Clang token table and breaks `clang/AST/TokenKinds.def`. Compile the
+# Clang-facing provider as C++20 so `__cpp_consteval` is defined and the shim
+# stays inactive; the rest of AMC can remain C++17.
+target_compile_features(amc-cpp PRIVATE cxx_std_20)
 target_link_libraries(
     amc-cpp PRIVATE amc-core amc-lang amc-llvm ${AMC_CLANG_CPP_LIBRARY} fmt::fmt tomlplusplus::tomlplusplus)
 # clang-cpp may need the full LLVM dylib even when AMC_LLVM_LINK_LIBRARIES uses
