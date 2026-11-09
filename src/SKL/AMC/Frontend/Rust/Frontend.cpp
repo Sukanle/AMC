@@ -197,6 +197,27 @@ amc::semantic::RustSemantic helper_rust_semantic(const HelperDocument &document)
     if (!document.loaded) return rust;
     const amc::Json &root = document.root;
 
+    if (const amc::Json *cargo = root.find("cargo"); cargo != nullptr && cargo->is_object()) {
+        if (const amc::Json *field = cargo->find("package_id")) rust.cargo.package_id = field->as_string();
+        if (const amc::Json *field = cargo->find("manifest_path")) rust.cargo.manifest_path = field->as_string();
+        if (const amc::Json *field = cargo->find("workspace_root")) rust.cargo.workspace_root = field->as_string();
+        if (const amc::Json *field = cargo->find("target_directory")) rust.cargo.target_directory = field->as_string();
+        rust.cargo.workspace_members = helper_strings(cargo->find("workspace_members"));
+        rust.cargo.default_members = helper_strings(cargo->find("default_members"));
+        if (const amc::Json *dependencies = cargo->find("dependencies");
+            dependencies != nullptr && dependencies->is_array()) {
+            for (const amc::Json &value : dependencies->items()) {
+                amc::semantic::RustCargoDependency dependency;
+                if (const amc::Json *field = value.find("name")) dependency.name = field->as_string();
+                if (const amc::Json *field = value.find("requirement")) dependency.requirement = field->as_string();
+                if (const amc::Json *field = value.find("kind")) dependency.kind = field->as_string();
+                if (const amc::Json *field = value.find("path")) dependency.path = field->as_string();
+                if (const amc::Json *field = value.find("optional")) dependency.optional = field->as_bool();
+                rust.cargo.dependencies.push_back(std::move(dependency));
+            }
+        }
+    }
+
     if (const amc::Json *generics = root.find("generics"); generics != nullptr && generics->is_array()) {
         for (const amc::Json &value : generics->items()) {
             amc::semantic::RustGeneric generic;
@@ -401,6 +422,21 @@ bool query_rust_helper(
     }
 
     llvm::SmallVector<llvm::StringRef, 16> helper_args(args.begin(), args.end());
+    llvm::SmallString<256> manifest_path;
+    if (!config.rust_manifest.empty()) {
+        manifest_path = config.rust_manifest;
+        if (llvm::sys::path::is_relative(manifest_path)) {
+            llvm::SmallString<256> resolved(base);
+            llvm::sys::path::append(resolved, manifest_path);
+            manifest_path = std::move(resolved);
+        }
+        helper_args.push_back("--manifest-path");
+        helper_args.push_back(manifest_path.str());
+    }
+    if (!config.rust_target.empty()) {
+        helper_args.push_back("--target");
+        helper_args.push_back(config.rust_target);
+    }
     if (!feature_list.empty()) {
         helper_args.push_back("--features");
         helper_args.push_back(feature_list);

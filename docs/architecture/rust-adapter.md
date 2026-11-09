@@ -63,6 +63,26 @@ Rules:
     "edition": "2021",
     "features": ["std"]
   },
+  "cargo": {
+    "package_id": "path+file:///workspace/app#demo@0.2.0",
+    "manifest_path": "/workspace/app/Cargo.toml",
+    "workspace_root": "/workspace",
+    "target_directory": "/workspace/target",
+    "workspace_members": [
+      "path+file:///workspace/core#demo_core@0.1.0",
+      "path+file:///workspace/app#demo@0.2.0"
+    ],
+    "default_members": ["path+file:///workspace/app#demo@0.2.0"],
+    "dependencies": [
+      {
+        "name": "demo_core",
+        "requirement": "*",
+        "kind": "normal",
+        "optional": false,
+        "path": "/workspace/core"
+      }
+    ]
+  },
   "types": [
     {
       "id": "rust:demo::DemoRect",
@@ -115,6 +135,10 @@ Rules:
 ### `target`
 
 Required for any layout-bearing record. The helper must report the target it compiled for; AMC must not substitute the Host.
+
+### `cargo`
+
+Present when a Cargo manifest is available. `package_id`, `manifest_path`, `workspace_root` and `target_directory` identify the selected package and build layout. `workspace_members` and `default_members` list package IDs; `dependencies[]` records `name`, `requirement`, `kind` (`normal` / `dev` / `build`), `optional` and an optional `path`. Workspace facts are language/build metadata; they never enter ABI identity.
 
 ### `types`
 
@@ -211,7 +235,7 @@ The helper only describes the semantic entity. The ABI status mapping remains in
 
 ### `.semantic` Rust extension
 
-AMC copies `generics`, `traits`, `errors`, `lifetimes`, `trait_objects` and `async_functions` into the semantic sidecar under `"rust"`. ABIX-compatible types/functions still go through the ABI and lowering views; language-only facts stay in this extension.
+AMC copies `cargo`, `generics`, `traits`, `errors`, `lifetimes`, `trait_objects` and `async_functions` into the semantic sidecar under `"rust"`. ABIX-compatible types/functions still go through the ABI and lowering views; language-only facts stay in this extension.
 
 ### `provenance`
 

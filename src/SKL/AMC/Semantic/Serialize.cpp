@@ -200,6 +200,26 @@ Json rust_trait_method_json(const RustTraitMethod &method) {
 void append_rust_json(Json &root, const RustSemantic &rust) {
     Json out = Json::object();
 
+    Json cargo = Json::object();
+    cargo.set("package_id", rust.cargo.package_id);
+    cargo.set("manifest_path", rust.cargo.manifest_path);
+    cargo.set("workspace_root", rust.cargo.workspace_root);
+    cargo.set("target_directory", rust.cargo.target_directory);
+    cargo.set("workspace_members", string_array_json(rust.cargo.workspace_members));
+    cargo.set("default_members", string_array_json(rust.cargo.default_members));
+    Json dependencies = Json::array();
+    for (const auto &dependency : rust.cargo.dependencies) {
+        Json value = Json::object();
+        value.set("name", dependency.name);
+        value.set("requirement", dependency.requirement);
+        value.set("kind", dependency.kind);
+        value.set("optional", dependency.optional);
+        if (!dependency.path.empty()) value.set("path", dependency.path);
+        dependencies.push_back(std::move(value));
+    }
+    cargo.set("dependencies", std::move(dependencies));
+    out.set("cargo", std::move(cargo));
+
     Json generics = Json::array();
     for (const auto &generic : rust.generics) {
         Json value = Json::object();
@@ -456,15 +476,40 @@ void rust_async(const Json &section, RustSemantic &rust) {
     }
 }
 
+void rust_cargo(const Json &section, RustSemantic &rust) {
+    const Json *cargo = field(section, "cargo");
+    if (cargo == nullptr || !cargo->is_object()) return;
+
+    rust.cargo.package_id = string_field(*cargo, "package_id");
+    rust.cargo.manifest_path = string_field(*cargo, "manifest_path");
+    rust.cargo.workspace_root = string_field(*cargo, "workspace_root");
+    rust.cargo.target_directory = string_field(*cargo, "target_directory");
+    rust.cargo.workspace_members = read_string_array(*cargo, "workspace_members");
+    rust.cargo.default_members = read_string_array(*cargo, "default_members");
+    if (const Json *dependencies = field(*cargo, "dependencies"); dependencies != nullptr && dependencies->is_array()) {
+        for (const auto &value : dependencies->items()) {
+            RustCargoDependency dependency;
+            dependency.name = string_field(value, "name");
+            dependency.requirement = string_field(value, "requirement");
+            dependency.kind = string_field(value, "kind");
+            dependency.optional = bool_field(value, "optional");
+            dependency.path = string_field(value, "path");
+            rust.cargo.dependencies.push_back(std::move(dependency));
+        }
+    }
+}
+
 void read_rust_json(const Json &root, RustSemantic &rust) {
     const Json *section = field(root, "rust");
     if (section == nullptr || !section->is_object()) return;
 
+    rust_cargo(*section, rust);
     rust_generic(*section, rust);
     rust_traits(*section, rust);
     rust_errors(*section, rust);
     rust_lifetime(*section, rust);
     rust_traits_obj(*section, rust);
+    rust_async(*section, rust);
 }
 
 }   // namespace

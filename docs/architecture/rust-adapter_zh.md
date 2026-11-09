@@ -63,6 +63,26 @@ schema: "amc.rust.semantic/1"
     "edition": "2021",
     "features": ["std"]
   },
+  "cargo": {
+    "package_id": "path+file:///workspace/app#demo@0.2.0",
+    "manifest_path": "/workspace/app/Cargo.toml",
+    "workspace_root": "/workspace",
+    "target_directory": "/workspace/target",
+    "workspace_members": [
+      "path+file:///workspace/core#demo_core@0.1.0",
+      "path+file:///workspace/app#demo@0.2.0"
+    ],
+    "default_members": ["path+file:///workspace/app#demo@0.2.0"],
+    "dependencies": [
+      {
+        "name": "demo_core",
+        "requirement": "*",
+        "kind": "normal",
+        "optional": false,
+        "path": "/workspace/core"
+      }
+    ]
+  },
   "types": [
     {
       "id": "rust:demo::DemoRect",
@@ -115,6 +135,10 @@ schema: "amc.rust.semantic/1"
 ### `target`
 
 任何带布局的 record 都必须有 target。helper 必须报告它实际编译的 target； AMC 不得用 Host 替代。
+
+### `cargo`
+
+存在 Cargo manifest 时出现。`package_id`、`manifest_path`、`workspace_root`、`target_directory` 标识选中的 package 和构建布局；`workspace_members` / `default_members` 列出 package ID；`dependencies[]` 记录 `name`、`requirement`、`kind`（`normal` / `dev` / `build`）、`optional` 和可选 `path`。workspace 事实属于语言/构建元数据，不进入 ABI 身份。
 
 ### `types`
 
@@ -211,7 +235,7 @@ helper 只描述语义实体；ABI status 映射仍由 AMC 的 error pass 和显
 
 ### `.semantic` Rust 扩展区
 
-AMC 将 `generics`、`traits`、`errors`、`lifetimes`、`trait_objects` 和 `async_functions` 写入 semantic sidecar 的 `"rust"` 对象。ABIX 可投影的 types/functions 仍走 ABI 与 lowering 视图；纯语言事实保留在该扩展区。
+AMC 将 `cargo`、`generics`、`traits`、`errors`、`lifetimes`、`trait_objects` 和 `async_functions` 写入 semantic sidecar 的 `"rust"` 对象。ABIX 可投影的 types/functions 仍走 ABI 与 lowering 视图；纯语言事实保留在该扩展区。
 
 ### `provenance`
 

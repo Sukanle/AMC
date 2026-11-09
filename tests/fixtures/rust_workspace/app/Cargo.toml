@@ -1,0 +1,11 @@
+[package]
+name = "rust_workspace_app"
+version = "0.2.0"
+edition = "2021"
+
+[dependencies]
+rust_workspace_core = { path = "../core" }
+
+[features]
+default = []
+extra = []

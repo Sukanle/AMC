@@ -162,6 +162,8 @@ bool config_load(const std::string &path, const std::string &expected_language, 
         }
         if (auto *rust = t["rust"].as_table()) {
             c.rust_helper = (*rust)["helper"].value_or("");
+            c.rust_manifest = (*rust)["manifest"].value_or("");
+            c.rust_target = (*rust)["target"].value_or("");
             if (auto *features = (*rust)["features"].as_array())
                 for (auto &&value : *features) {
                     const std::string feature = value.value_or("");

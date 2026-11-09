@@ -420,7 +420,26 @@ struct RustAsyncFunc {
     std::string return_type;
 };
 
+struct RustCargoDependency {
+    std::string name;
+    std::string requirement;
+    std::string kind;
+    std::string path;
+    bool optional = false;
+};
+
+struct RustCargo {
+    std::string package_id;
+    std::string manifest_path;
+    std::string workspace_root;
+    std::string target_directory;
+    std::vector<std::string> workspace_members;
+    std::vector<std::string> default_members;
+    std::vector<RustCargoDependency> dependencies;
+};
+
 struct RustSemantic {
+    RustCargo cargo;
     std::vector<RustGeneric> generics;
     std::vector<RustTrait> traits;
     std::vector<RustError> errors;

@@ -306,6 +306,43 @@ def main():
             check(set(cargo_crate.get("features", [])) == {"default", "fast", "slow"},
                   "cargo features are recorded")
 
+        # Cargo workspace facts: members, default members, dependencies and the
+        # cross-compilation target are recorded in the `cargo` extension.
+        workspace_root = source_root / "tests" / "fixtures" / "rust_workspace"
+        workspace_manifest = workspace_root / "app" / "Cargo.toml"
+        workspace_source = workspace_root / "app" / "src" / "lib.rs"
+        workspace_json = os.path.join(work, "cargo_workspace.json")
+        host_triple = target.get("triple", "")
+        result = run([helper, "--crate-name", "rust_workspace_app", "--edition", "2021",
+                      "--source", str(workspace_source), "--manifest-path", str(workspace_manifest),
+                      "--target", host_triple, "--features", "extra",
+                      "--output", workspace_json])
+        if check(result.returncode == 0 and os.path.isfile(workspace_json),
+                 "helper reads cargo workspace metadata", output(result)[-400:]):
+            workspace = json.load(open(workspace_json, encoding="utf-8"))
+            workspace_cargo = workspace.get("cargo", {})
+            check(Path(workspace_cargo.get("workspace_root", "")).name == "rust_workspace",
+                  "cargo workspace root is recorded")
+            members = workspace_cargo.get("workspace_members", [])
+            check(len(members) == 2 and any("rust_workspace_core" in item for item in members)
+                  and any("rust_workspace_app" in item for item in members),
+                  "cargo workspace members are recorded")
+            default_members = workspace_cargo.get("default_members", [])
+            check(len(default_members) == 1 and "rust_workspace_app" in default_members[0],
+                  "cargo default members are recorded")
+            dependencies = workspace_cargo.get("dependencies", [])
+            core_dependency = next(
+                (item for item in dependencies if item.get("name") == "rust_workspace_core"), {})
+            check(core_dependency.get("kind") == "normal", "cargo dependency kind is recorded")
+            check(Path(core_dependency.get("path", "")).name == "core",
+                  "cargo path dependency is recorded")
+            check(workspace.get("crate", {}).get("name") == "rust_workspace_app",
+                  "cargo workspace package name")
+            check(set(workspace.get("crate", {}).get("features", [])) >= {"default", "extra"},
+                  "cargo workspace features are recorded")
+            check(workspace.get("target", {}).get("triple") == host_triple,
+                  "cargo target triple is forwarded to the helper")
+
         feature_json = os.path.join(work, "features-without-manifest.json")
         result = run([helper, "--crate-name", "rust_semantic", "--edition", "2021",
                       "--source", str(semantic_fixture), "--features", "default,fast",
@@ -413,6 +450,40 @@ def main():
                     match = json.loads(query.stdout).get("matches", [{}])[0]
                     check(match.get("size") == 8 and match.get("align") == 4,
                           "imported nested record keeps the helper layout")
+
+            # [rust] manifest / target / features: AMC forwards the Cargo
+            # workspace manifest and target triple to the helper and stores the
+            # workspace facts in the semantic sidecar.
+            workspace_dir = Path(work) / "workspace_import"
+            workspace_dir.mkdir()
+            shutil.copyfile(workspace_source, workspace_dir / "lib.rs")
+            workspace_config = workspace_dir / "workspace.abic.toml"
+            workspace_config.write_text(
+                "[package]\nname = \"rust_workspace_app\"\nversion = \"0.2.0\"\n\n"
+                "[[import]]\nlanguage = \"rust\"\nfiles = [\"lib.rs\"]\n"
+                "symbols = [\"WorkspaceApp\", \"workspace_app_value\"]\n\n"
+                "[rust]\nhelper = \"" + helper_toml + "\"\n"
+                "manifest = \"" + str(workspace_manifest).replace("\\", "/") + "\"\n"
+                "target = \"" + host_triple + "\"\nfeatures = [\"extra\"]\n\n"
+                "[[export]]\noutput = \"workspace.abix\"\n",
+                encoding="utf-8")
+            workspace_out = workspace_dir / "out"
+            result = run([str(amc), "build", "-c", str(workspace_config), "-B", str(workspace_out)])
+            workspace_artifact = workspace_out / "workspace.abix"
+            if check(result.returncode == 0 and workspace_artifact.is_file(),
+                     "AMC forwards [rust] manifest/target/features", output(result)[-500:]):
+                workspace_semantic = Path(str(workspace_artifact) + ".semantic")
+                if check(workspace_semantic.is_file(), "workspace semantic sidecar written"):
+                    semantic = json.loads(workspace_semantic.read_text(encoding="utf-8"))
+                    cargo = semantic.get("rust", {}).get("cargo", {})
+                    check(Path(cargo.get("workspace_root", "")).name == "rust_workspace",
+                          "AMC stores the cargo workspace root")
+                    check(len(cargo.get("workspace_members", [])) == 2,
+                          "AMC stores cargo workspace members")
+                    check(any(item.get("name") == "rust_workspace_core"
+                              for item in cargo.get("dependencies", [])),
+                          "AMC stores cargo dependencies")
+                    check(cargo.get("target_directory") != "", "AMC stores the cargo target directory")
 
         if keep:
             print("  kept artifacts in " + work)

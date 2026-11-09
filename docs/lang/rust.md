@@ -87,6 +87,8 @@ The v0.4.0 helper process links `rustc_driver` in an isolated process. It report
 ```toml
 [rust]
 helper = "path/to/amc-rustc-helper"
+manifest = "path/to/Cargo.toml"   # optional, explicit Cargo manifest
+target = "x86_64-unknown-linux-gnu"  # optional, rustc target triple
 features = ["default", "std"]
 
 [[instantiate]]
@@ -95,7 +97,7 @@ args = ["u64"]
 as = "WrapperU64"
 ```
 
-`[rust] features` is forwarded to the helper as `--features`. Each `[[instantiate]]` entry is forwarded as `--instantiate` and forces one concrete local generic instance with primitive arguments. The helper still does not enumerate every monomorphization.
+`[rust] manifest` is forwarded as `--manifest-path`, so the helper can resolve workspace members, default members, dependencies and the target directory through `cargo metadata`. `[rust] target` is forwarded as `--target` and selects the rustc target used for both layout and target facts. `[rust] features` is forwarded to the helper as `--features`. Each `[[instantiate]]` entry is forwarded as `--instantiate` and forces one concrete local generic instance with primitive arguments. The helper still does not enumerate every monomorphization.
 
 When configured, `amc-rust` runs the helper and uses its target facts. If the helper fails and `[target]` already provides `pointer_bits`, endianness and `c_long_bits`, AMC falls back to the parser/probe path with a warning.
 

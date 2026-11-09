@@ -72,10 +72,25 @@ struct Cli {
     instantiate: Vec<String>,
 }
 
+struct CargoDependency {
+    name: String,
+    requirement: String,
+    kind: String,
+    optional: bool,
+    path: Option<String>,
+}
+
 struct CargoFacts {
     name: String,
     edition: String,
     features: Vec<String>,
+    package_id: String,
+    manifest_path: String,
+    workspace_root: String,
+    target_directory: String,
+    workspace_members: Vec<String>,
+    default_members: Vec<String>,
+    dependencies: Vec<CargoDependency>,
 }
 
 fn rustc_release() -> String {
@@ -123,10 +138,37 @@ fn cargo_facts(cli: &Cli) -> Option<CargoFacts> {
         features.extend(package.features.keys().cloned());
         features.sort();
         features.dedup();
+        let dependencies = package
+            .dependencies
+            .iter()
+            .map(|dependency| CargoDependency {
+                name: dependency.name.clone(),
+                requirement: dependency.req.to_string(),
+                kind: dependency.kind.to_string(),
+                optional: dependency.optional,
+                path: dependency.path.as_ref().map(ToString::to_string),
+            })
+            .collect();
+        let default_members = if metadata.workspace_default_members.is_available() {
+            metadata
+                .workspace_default_members
+                .iter()
+                .map(ToString::to_string)
+                .collect()
+        } else {
+            Vec::new()
+        };
         return Some(CargoFacts {
             name: package.name.to_string(),
             edition: package.edition.to_string(),
             features,
+            package_id: package.id.to_string(),
+            manifest_path: package.manifest_path.to_string(),
+            workspace_root: metadata.workspace_root.to_string(),
+            target_directory: metadata.target_directory.to_string(),
+            workspace_members: metadata.workspace_members.iter().map(ToString::to_string).collect(),
+            default_members,
+            dependencies,
         });
     }
     None
@@ -1177,6 +1219,24 @@ impl Callbacks for HelperCallbacks {
             .as_ref()
             .map(|cargo| cargo.features.clone())
             .unwrap_or_else(|| self.features.clone());
+        let cargo_json = match &self.cargo {
+            None => Value::Null,
+            Some(cargo) => json!({
+                "package_id": cargo.package_id,
+                "manifest_path": cargo.manifest_path,
+                "workspace_root": cargo.workspace_root,
+                "target_directory": cargo.target_directory,
+                "workspace_members": cargo.workspace_members,
+                "default_members": cargo.default_members,
+                "dependencies": cargo.dependencies.iter().map(|dependency| json!({
+                    "name": dependency.name,
+                    "requirement": dependency.requirement,
+                    "kind": dependency.kind,
+                    "optional": dependency.optional,
+                    "path": dependency.path,
+                })).collect::<Vec<_>>(),
+            }),
+        };
 
         let document = json!({
             "schema": SCHEMA,
@@ -1199,6 +1259,7 @@ impl Callbacks for HelperCallbacks {
                 "edition": cargo_edition,
                 "features": features,
             },
+            "cargo": cargo_json,
             "types": types.into_values().collect::<Vec<_>>(),
             "functions": functions.into_values().collect::<Vec<_>>(),
             "generics": generics.into_values().collect::<Vec<_>>(),

@@ -1,0 +1,4 @@
+[workspace]
+members = ["core", "app"]
+default-members = ["app"]
+resolver = "2"
