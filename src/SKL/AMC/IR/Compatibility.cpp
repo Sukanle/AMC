@@ -15,11 +15,11 @@
  */
 #include "SKL/AMC/IR/Compatibility.h"
 
-namespace amc::ir {
+namespace skl::amc::ir {
 
 bool compare_contracts(
-    const AbiModule &contract, const AbiModule &implementation, CompatibilityResult &result, std::string &error) {
+    const ABIModule &contract, const ABIModule &implementation, CompatibilityResult &result, std::string &error) {
     return amc::verify_modules(contract, implementation, result, error);
 }
 
-}   // namespace amc::ir
+}   // namespace skl::amc::ir

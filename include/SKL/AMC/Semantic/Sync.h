@@ -19,7 +19,7 @@
 #include "SKL/AMC/Core/Core.h"
 #include "SKL/AMC/Semantic/Model.h"
 
-namespace amc::semantic {
+namespace skl::amc::semantic {
 
 // Complete the semantic model from the ABI view.
 //
@@ -30,8 +30,8 @@ namespace amc::semantic {
 // SemanticFunction records and fills `SemanticType::abi_type` /
 // `SemanticFunction::abi_signature`. Existing records are never replaced, so
 // frontend source facts keep precedence over the synthesized fallback.
-void synchronize_from_abi(const AbiModule &module, SemanticModule &semantic);
+void synchronize_from_abi(const ABIModule &module, SemanticModule &semantic);
 
-}   // namespace amc::semantic
+}   // namespace skl::amc::semantic
 
 #endif   // AMC_SEMANTIC_SYNC_H

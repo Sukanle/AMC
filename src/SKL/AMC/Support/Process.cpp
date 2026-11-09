@@ -24,7 +24,7 @@
 #  include <unistd.h>
 #endif
 
-namespace amc::support {
+namespace skl::amc::support {
 
 uint64_t process_id() noexcept {
 #if defined(_WIN32)
@@ -44,4 +44,4 @@ std::string unique_process_suffix() {
          + std::to_string(sequence.fetch_add(1, std::memory_order_relaxed));
 }
 
-}   // namespace amc::support
+}   // namespace skl::amc::support

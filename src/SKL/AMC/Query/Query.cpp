@@ -24,7 +24,7 @@
 
 #include <fmt/format.h>
 
-namespace amc {
+namespace skl::amc {
 namespace {
 
 using TypeKey = std::pair<uint64_t, uint64_t>;
@@ -45,7 +45,7 @@ bool parse_type_id(std::string_view text, Hash128 &value) {
     return true;
 }
 
-std::map<TypeKey, const Type *> index_types(const AbiModule &module) {
+std::map<TypeKey, const Type *> index_types(const ABIModule &module) {
     std::map<TypeKey, const Type *> index;
     for (const auto &type : module.types)
         index[{type.id.lo, type.id.hi}] = &type;
@@ -59,13 +59,13 @@ std::string type_name(const std::map<TypeKey, const Type *> &index, Hash128 id) 
 
 }   // namespace
 
-const Type *find_type_by_id(const AbiModule &module, Hash128 id) {
+const Type *find_type_by_id(const ABIModule &module, Hash128 id) {
     for (const auto &type : module.types)
         if (type.id == id) return &type;
     return nullptr;
 }
 
-std::vector<size_t> query_type_indices(const AbiModule &module, std::string_view needle) {
+std::vector<size_t> query_type_indices(const ABIModule &module, std::string_view needle) {
     std::vector<size_t> exact;
     Hash128 id{};
     const bool has_id = parse_type_id(needle, id);
@@ -108,7 +108,7 @@ std::vector<size_t> query_type_indices(const AbiModule &module, std::string_view
     return partial;
 }
 
-std::vector<size_t> query_function_indices(const AbiModule &module, std::string_view needle) {
+std::vector<size_t> query_function_indices(const ABIModule &module, std::string_view needle) {
     // The owner-qualified fallback needs a TypeID index. Build it lazily: most
     // artifacts contain free functions only, and building the full map for
     // every query dominates the exact-name path on large modules.
@@ -149,7 +149,7 @@ std::vector<size_t> query_function_indices(const AbiModule &module, std::string_
     return partial;
 }
 
-std::string query_types_text(const AbiModule &module, const std::vector<size_t> &indices, bool include_layout) {
+std::string query_types_text(const ABIModule &module, const std::vector<size_t> &indices, bool include_layout) {
     const auto index = index_types(module);
     std::string out = fmt::format("query: types matches={}\n", indices.size());
     for (const auto i : indices) {
@@ -170,7 +170,7 @@ std::string query_types_text(const AbiModule &module, const std::vector<size_t> 
     return out;
 }
 
-void query_types_json(const AbiModule &module, const std::vector<size_t> &indices, bool include_layout,
+void query_types_json(const ABIModule &module, const std::vector<size_t> &indices, bool include_layout,
     std::string_view needle, llvm::raw_ostream &out) {
     const auto index = index_types(module);
     out << fmt::format(
@@ -208,7 +208,7 @@ void query_types_json(const AbiModule &module, const std::vector<size_t> &indice
 }
 
 std::string query_types_json(
-    const AbiModule &module, const std::vector<size_t> &indices, bool include_layout, std::string_view needle) {
+    const ABIModule &module, const std::vector<size_t> &indices, bool include_layout, std::string_view needle) {
     std::string text;
     llvm::raw_string_ostream out(text);
     query_types_json(module, indices, include_layout, needle, out);
@@ -216,7 +216,7 @@ std::string query_types_json(
     return text;
 }
 
-std::string query_functions_text(const AbiModule &module, const std::vector<size_t> &indices) {
+std::string query_functions_text(const ABIModule &module, const std::vector<size_t> &indices) {
     const auto index = index_types(module);
     std::string out = fmt::format("query: functions matches={}\n", indices.size());
     for (const auto i : indices) {
@@ -224,9 +224,9 @@ std::string query_functions_text(const AbiModule &module, const std::vector<size
         out += fmt::format("  [{}] {} owner={} signature={} returns={} calling_convention={} flags={} parameters={}\n",
             i, function.name, function.owner_type == Hash128{} ? "-" : type_name(index, function.owner_type),
             hash_string(function.signature), type_name(index, function.return_type), function.calling_convention,
-            function.flags, function.parameters.size());
-        for (size_t p = 0; p < function.parameters.size(); ++p) {
-            const auto &parameter = function.parameters[p];
+            function.flags, function.params.size());
+        for (size_t p = 0; p < function.params.size(); ++p) {
+            const auto &parameter = function.params[p];
             out += fmt::format("      param {} {} type={} flags={}\n", p, parameter.name,
                 type_name(index, parameter.type_id), parameter.flags);
         }
@@ -235,7 +235,7 @@ std::string query_functions_text(const AbiModule &module, const std::vector<size
 }
 
 void query_functions_json(
-    const AbiModule &module, const std::vector<size_t> &indices, std::string_view needle, llvm::raw_ostream &out) {
+    const ABIModule &module, const std::vector<size_t> &indices, std::string_view needle, llvm::raw_ostream &out) {
     const auto index = index_types(module);
     out << fmt::format(
         "{{\"schema\":\"abix.query/1\",\"query\":{{\"kind\":\"function\",\"needle\":\"{}\"}},\"match_count\":{},"
@@ -253,8 +253,8 @@ void query_functions_json(
             json_escape(function.owner_type == Hash128{} ? "" : type_name(index, function.owner_type)),
             hash_string(function.signature), hash_string(function.return_type),
             json_escape(type_name(index, function.return_type)), function.calling_convention, function.flags);
-        for (size_t p = 0; p < function.parameters.size(); ++p) {
-            const auto &parameter = function.parameters[p];
+        for (size_t p = 0; p < function.params.size(); ++p) {
+            const auto &parameter = function.params[p];
             if (p) out << ",";
             out << fmt::format("{{\"index\":{},\"name\":\"{}\",\"type_id\":\"{}\",\"type_name\":\"{}\",\"flags\":{}}}",
                 p, json_escape(parameter.name), hash_string(parameter.type_id),
@@ -265,7 +265,7 @@ void query_functions_json(
     out << "]}\n";
 }
 
-std::string query_functions_json(const AbiModule &module, const std::vector<size_t> &indices, std::string_view needle) {
+std::string query_functions_json(const ABIModule &module, const std::vector<size_t> &indices, std::string_view needle) {
     std::string text;
     llvm::raw_string_ostream out(text);
     query_functions_json(module, indices, needle, out);
@@ -273,7 +273,7 @@ std::string query_functions_json(const AbiModule &module, const std::vector<size
     return text;
 }
 
-std::string compatibility_query_text(const AbiModule &source, const AbiModule &target, const VerifyResult &result) {
+std::string compatibility_query_text(const ABIModule &source, const ABIModule &target, const VerifyResult &result) {
     std::string out = fmt::format("query: compatibility\n  source: {}\n  target: {}\n  compatible={}\n",
         source.package_name, target.package_name, result.consistent ? "true" : "false");
     for (const auto &change : result.changes) {
@@ -287,7 +287,7 @@ std::string compatibility_query_text(const AbiModule &source, const AbiModule &t
 }
 
 void compatibility_query_json(
-    const AbiModule &source, const AbiModule &target, const VerifyResult &result, llvm::raw_ostream &out) {
+    const ABIModule &source, const ABIModule &target, const VerifyResult &result, llvm::raw_ostream &out) {
     out << fmt::format(
         "{{\"schema\":\"abix.query/1\",\"query\":{{\"kind\":\"compatibility\"}},\"source\":{{\"package\":\"{}\"}},"
         "\"target\":{{\"package\":\"{}\"}},\"compatible\":{},\"status\":\"{}\",\"changes\":[",
@@ -303,7 +303,7 @@ void compatibility_query_json(
     out << "]}\n";
 }
 
-std::string compatibility_query_json(const AbiModule &source, const AbiModule &target, const VerifyResult &result) {
+std::string compatibility_query_json(const ABIModule &source, const ABIModule &target, const VerifyResult &result) {
     std::string text;
     llvm::raw_string_ostream out(text);
     compatibility_query_json(source, target, result, out);
@@ -311,4 +311,4 @@ std::string compatibility_query_json(const AbiModule &source, const AbiModule &t
     return text;
 }
 
-}   // namespace amc
+}   // namespace skl::amc

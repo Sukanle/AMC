@@ -33,34 +33,35 @@
 
 namespace {
 
-amc::AbiModule make_module(size_t count) {
-    amc::AbiModule module;
+skl::amc::ABIModule make_module(size_t count) {
+    skl::amc::ABIModule module;
     module.package_name = "query_perf";
     module.package_version = "1.0";
 
-    amc::Type int_type;
+    skl::amc::Type int_type;
     int_type.name = "int";
-    int_type.kind = amc::TypeKind::primitive;
-    int_type.id = amc::hash_text("int", 0x54595045ULL);
+    int_type.kind = skl::amc::TypeKind::PRIMITIVE;
+    int_type.id = skl::amc::hash_text("int", 0x54595045ULL);
     int_type.size = 4;
     int_type.align = 4;
-    int_type.primitive_abi = amc::primitive_abi(4, amc::PrimitiveAbiKind::sint, amc::FloatFormat::none, true);
+    int_type.primitive_abi =
+        skl::amc::primitive_abi(4, skl::amc::PrimitiveABIKind::AMC_SINT, skl::amc::FloatFormat::NONE, true);
     module.types.push_back(int_type);
 
     module.types.reserve(count + 1);
     module.fields.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         const std::string name = "perf::R" + std::to_string(i);
-        amc::Type type;
+        skl::amc::Type type;
         type.name = name;
-        type.kind = amc::TypeKind::record;
-        type.id = amc::hash_text(name, 0x54595045ULL);
+        type.kind = skl::amc::TypeKind::RECORD;
+        type.id = skl::amc::hash_text(name, 0x54595045ULL);
         type.size = 4;
         type.align = 4;
         type.field_begin = static_cast<uint32_t>(module.fields.size());
         type.field_count = 1;
 
-        amc::Field field;
+        skl::amc::Field field;
         field.owner_type = type.id;
         field.name = "value";
         field.type_id = int_type.id;
@@ -72,18 +73,18 @@ amc::AbiModule make_module(size_t count) {
     module.functions.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         const std::string name = "perf::fn" + std::to_string(i);
-        amc::Function function;
+        skl::amc::Function function;
         function.name = name;
-        function.signature = amc::hash_text(name + ":signature", 0x5349474eULL);
+        function.signature = skl::amc::hash_text(name + ":signature", 0x5349474eULL);
         function.return_type = int_type.id;
-        amc::Parameter parameter;
+        skl::amc::Parameter parameter;
         parameter.name = "value";
         parameter.type_id = int_type.id;
-        function.parameters.push_back(std::move(parameter));
+        function.params.push_back(std::move(parameter));
         module.functions.push_back(std::move(function));
     }
 
-    amc::recompute_layout_hashes(module);
+    skl::amc::recompute_layout_hashes(module);
     return module;
 }
 
@@ -113,7 +114,7 @@ public:
     }
 
     size_t count = 0;
-    amc::AbiModule module;
+    skl::amc::ABIModule module;
     std::vector<size_t> all_types;
     std::vector<size_t> all_functions;
     std::string exact_type;
@@ -126,7 +127,7 @@ public:
 
 BENCHMARK_DEFINE_F(QueryFixture, TypeExact)(benchmark::State &state) {
     for (auto _ : state) {
-        auto result = amc::query_type_indices(module, exact_type);
+        auto result = skl::amc::query_type_indices(module, exact_type);
         benchmark::DoNotOptimize(result);
     }
     state.SetItemsProcessed(state.iterations());
@@ -135,7 +136,7 @@ BENCHMARK_REGISTER_F(QueryFixture, TypeExact)->Arg(5'000)->Arg(20'000);
 
 BENCHMARK_DEFINE_F(QueryFixture, TypeSubstring)(benchmark::State &state) {
     for (auto _ : state) {
-        auto result = amc::query_type_indices(module, substring);
+        auto result = skl::amc::query_type_indices(module, substring);
         benchmark::DoNotOptimize(result);
     }
     state.SetItemsProcessed(state.iterations());
@@ -144,7 +145,7 @@ BENCHMARK_REGISTER_F(QueryFixture, TypeSubstring)->Arg(5'000)->Arg(20'000);
 
 BENCHMARK_DEFINE_F(QueryFixture, TypeHex)(benchmark::State &state) {
     for (auto _ : state) {
-        auto result = amc::query_type_indices(module, hex);
+        auto result = skl::amc::query_type_indices(module, hex);
         benchmark::DoNotOptimize(result);
     }
     state.SetItemsProcessed(state.iterations());
@@ -153,7 +154,7 @@ BENCHMARK_REGISTER_F(QueryFixture, TypeHex)->Arg(5'000)->Arg(20'000);
 
 BENCHMARK_DEFINE_F(QueryFixture, FunctionExact)(benchmark::State &state) {
     for (auto _ : state) {
-        auto result = amc::query_function_indices(module, exact_function);
+        auto result = skl::amc::query_function_indices(module, exact_function);
         benchmark::DoNotOptimize(result);
     }
     state.SetItemsProcessed(state.iterations());
@@ -162,7 +163,7 @@ BENCHMARK_REGISTER_F(QueryFixture, FunctionExact)->Arg(5'000)->Arg(20'000);
 
 BENCHMARK_DEFINE_F(QueryFixture, TypesText)(benchmark::State &state) {
     for (auto _ : state) {
-        auto result = amc::query_types_text(module, all_types, true);
+        auto result = skl::amc::query_types_text(module, all_types, true);
         benchmark::DoNotOptimize(result);
     }
     state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(count));
@@ -171,7 +172,7 @@ BENCHMARK_REGISTER_F(QueryFixture, TypesText)->Arg(5'000)->Arg(20'000);
 
 BENCHMARK_DEFINE_F(QueryFixture, TypesJson)(benchmark::State &state) {
     for (auto _ : state) {
-        auto result = amc::query_types_json(module, all_types, true, "");
+        auto result = skl::amc::query_types_json(module, all_types, true, "");
         benchmark::DoNotOptimize(result);
     }
     state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(count));
@@ -180,7 +181,7 @@ BENCHMARK_REGISTER_F(QueryFixture, TypesJson)->Arg(5'000)->Arg(20'000);
 
 BENCHMARK_DEFINE_F(QueryFixture, FunctionsText)(benchmark::State &state) {
     for (auto _ : state) {
-        auto result = amc::query_functions_text(module, all_functions);
+        auto result = skl::amc::query_functions_text(module, all_functions);
         benchmark::DoNotOptimize(result);
     }
     state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(count));
@@ -189,7 +190,7 @@ BENCHMARK_REGISTER_F(QueryFixture, FunctionsText)->Arg(5'000)->Arg(20'000);
 
 BENCHMARK_DEFINE_F(QueryFixture, FunctionsJson)(benchmark::State &state) {
     for (auto _ : state) {
-        auto result = amc::query_functions_json(module, all_functions, "");
+        auto result = skl::amc::query_functions_json(module, all_functions, "");
         benchmark::DoNotOptimize(result);
     }
     state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(count));
@@ -198,7 +199,7 @@ BENCHMARK_REGISTER_F(QueryFixture, FunctionsJson)->Arg(5'000)->Arg(20'000);
 
 BENCHMARK_DEFINE_F(QueryFixture, ContextLlm)(benchmark::State &state) {
     for (auto _ : state) {
-        auto result = amc::context_to_llm(module, true);
+        auto result = skl::amc::context_to_llm(module, true);
         benchmark::DoNotOptimize(result);
     }
     state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(count));
@@ -208,7 +209,7 @@ BENCHMARK_REGISTER_F(QueryFixture, ContextLlm)->Arg(5'000)->Arg(20'000);
 BENCHMARK_DEFINE_F(QueryFixture, ContextLlmStream)(benchmark::State &state) {
     llvm::raw_null_ostream out;
     for (auto _ : state) {
-        amc::context_to_llm(module, true, out);
+        skl::amc::context_to_llm(module, true, out);
     }
     state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(count));
 }
@@ -216,7 +217,7 @@ BENCHMARK_REGISTER_F(QueryFixture, ContextLlmStream)->Arg(5'000)->Arg(20'000);
 
 BENCHMARK_DEFINE_F(QueryFixture, ContextJson)(benchmark::State &state) {
     for (auto _ : state) {
-        auto result = amc::context_to_json(module, true);
+        auto result = skl::amc::context_to_json(module, true);
         benchmark::DoNotOptimize(result);
     }
     state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(count));
@@ -226,7 +227,7 @@ BENCHMARK_REGISTER_F(QueryFixture, ContextJson)->Arg(5'000)->Arg(20'000);
 BENCHMARK_DEFINE_F(QueryFixture, ContextJsonStream)(benchmark::State &state) {
     llvm::raw_null_ostream out;
     for (auto _ : state) {
-        amc::context_to_json(module, true, out);
+        skl::amc::context_to_json(module, true, out);
     }
     state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(count));
 }

@@ -43,7 +43,7 @@
 #  define AMC_CLOSE close
 #endif
 
-namespace amc::lang {
+namespace skl::amc::lang {
 
 namespace {
 std::atomic<CancellationToken *> g_current_cancellation{nullptr};
@@ -745,4 +745,4 @@ int ipc(const Provider &provider) {
     }
 }
 
-}   // namespace amc::lang
+}   // namespace skl::amc::lang

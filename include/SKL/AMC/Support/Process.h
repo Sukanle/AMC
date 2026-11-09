@@ -18,7 +18,7 @@
 #include <cstdint>
 #include <string>
 
-namespace amc::support {
+namespace skl::amc::support {
 
 // OS process id. Used to keep temporary artifact and anchor paths unique when
 // a build system launches several `amc` processes for the same project.
@@ -28,4 +28,4 @@ uint64_t process_id() noexcept;
 // cache staging names.
 std::string unique_process_suffix();
 
-}   // namespace amc::support
+}   // namespace skl::amc::support

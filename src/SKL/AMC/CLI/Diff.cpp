@@ -28,19 +28,19 @@
 #include <fmt/format.h>
 
 namespace fs = std::filesystem;
-using amc::util::fail;
-using amc::util::g_error_format;
-using amc::util::read_error_category;
-using amc::util::usage_error;
+using skl::amc::util::fail;
+using skl::amc::util::g_error_format;
+using skl::amc::util::read_error_category;
+using skl::amc::util::usage_error;
 
-namespace amc::cli {
+namespace skl::amc::cli {
 
 int cmd_diff(char **args, int arg_count) {
     const std::string command = args[1];
     if (command == "diff" || command == "compatibility") {
         if (arg_count != 4 && !(command == "diff" && arg_count == 6 && std::string(args[4]) == "-o"))
             return usage_error(command + " expects two .abix inputs");
-        amc::AbiModule source, target, report;
+        amc::ABIModule source, target, report;
         std::string error;
         if (!amc::load_module_source(args[2], source, error))
             return fail(read_error_category(error), "read_abix", error, args[2]);
@@ -51,7 +51,7 @@ int cmd_diff(char **args, int arg_count) {
         amc::diagnostics::DiagnosticList diagnostics;
         if (!amc::pass::build_compatibility_report(source, target, report, context, diagnostics)) {
             const std::string message = diagnostics.empty() ? error : diagnostics.front().message;
-            return fail(amc::ErrorCategory::compatibility, "build_compatibility", message);
+            return fail(amc::ErrorCategory::COMPATIBILITY, "build_compatibility", message);
         }
         bool incompatible = false;
         for (const auto &record : report.compatibility) {
@@ -59,13 +59,13 @@ int cmd_diff(char **args, int arg_count) {
                 record.source_type.hi, record.target_type.lo, record.target_type.hi);
             if (record.map_index != UINT32_MAX) fmt::print(" map={}", record.map_index);
             fmt::print("\n");
-            incompatible = incompatible || record.kind == amc::CompatibilityKind::incompatible;
+            incompatible = incompatible || record.kind == amc::CompatibilityKind::INCOMP;
         }
         if (command == "diff" && arg_count == 6 && !amc::write_abix(report, args[5], error))
-            return fail(amc::ErrorCategory::io, "write_abix", error, args[5]);
+            return fail(amc::ErrorCategory::IO, "write_abix", error, args[5]);
         return command == "compatibility" && incompatible ? 1 : 0;
     }
     return usage_error(command + ": unsupported subcommand");
 }
 
-}   // namespace amc::cli
+}   // namespace skl::amc::cli

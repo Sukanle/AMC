@@ -29,12 +29,12 @@
 #include <llvm/Support/raw_ostream.h>
 
 namespace fs = std::filesystem;
-using amc::util::fail;
-using amc::util::g_error_format;
-using amc::util::read_error_category;
-using amc::util::usage_error;
+using skl::amc::util::fail;
+using skl::amc::util::g_error_format;
+using skl::amc::util::read_error_category;
+using skl::amc::util::usage_error;
 
-namespace amc::cli {
+namespace skl::amc::cli {
 
 int cmd_context(char **args, int arg_count) {
     const std::string command = args[1];
@@ -64,7 +64,7 @@ int cmd_context(char **args, int arg_count) {
         if (input.empty()) return usage_error("context requires an input .abix file");
         if (format != "llm" && format != "json") return usage_error("context --format must be llm or json");
 
-        amc::AbiModule module;
+        amc::ABIModule module;
         std::string error;
         if (!amc::load_module_source(input.string(), module, error))
             return fail(read_error_category(error), "read_abix", error, input.string());
@@ -82,15 +82,15 @@ int cmd_context(char **args, int arg_count) {
         }
         std::error_code ec;
         llvm::raw_fd_ostream file(output.string(), ec, llvm::sys::fs::OF_Text);
-        if (ec) return fail(amc::ErrorCategory::io, "context", "cannot write output", output.string(), ec.message());
+        if (ec) return fail(amc::ErrorCategory::IO, "context", "cannot write output", output.string(), ec.message());
         emit(file);
         file.close();
         if (file.has_error())
             return fail(
-                amc::ErrorCategory::io, "context", "cannot write output", output.string(), file.error().message());
+                amc::ErrorCategory::IO, "context", "cannot write output", output.string(), file.error().message());
         return 0;
     }
     return usage_error(command + ": unsupported subcommand");
 }
 
-}   // namespace amc::cli
+}   // namespace skl::amc::cli

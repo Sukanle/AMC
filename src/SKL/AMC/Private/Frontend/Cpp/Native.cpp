@@ -20,7 +20,7 @@
 #include <cctype>
 #include <string>
 
-namespace amc::lang::frontend::cpp {
+namespace skl::amc::lang::frontend::cpp {
 namespace {
 
 // Stable, language-independent name for a floating-point format. Two float
@@ -41,20 +41,20 @@ const char *float_semantics_tag(const llvm::fltSemantics &semantics) {
 
 amc::FloatFormat float_format_code(const llvm::fltSemantics &semantics) {
     using llvm::APFloatBase;
-    if (&semantics == &APFloatBase::IEEEhalf()) return amc::FloatFormat::ieee16;
-    if (&semantics == &APFloatBase::BFloat()) return amc::FloatFormat::bf16;
-    if (&semantics == &APFloatBase::IEEEsingle()) return amc::FloatFormat::ieee32;
-    if (&semantics == &APFloatBase::IEEEdouble()) return amc::FloatFormat::ieee64;
-    if (&semantics == &APFloatBase::IEEEquad()) return amc::FloatFormat::ieee128;
-    if (&semantics == &APFloatBase::x87DoubleExtended()) return amc::FloatFormat::x87_80;
-    if (&semantics == &APFloatBase::PPCDoubleDouble()) return amc::FloatFormat::ppc_double_double;
-    return amc::FloatFormat::none;
+    if (&semantics == &APFloatBase::IEEEhalf()) return amc::FloatFormat::IEEE16;
+    if (&semantics == &APFloatBase::BFloat()) return amc::FloatFormat::BF16;
+    if (&semantics == &APFloatBase::IEEEsingle()) return amc::FloatFormat::IEEE32;
+    if (&semantics == &APFloatBase::IEEEdouble()) return amc::FloatFormat::IEEE64;
+    if (&semantics == &APFloatBase::IEEEquad()) return amc::FloatFormat::IEEE128;
+    if (&semantics == &APFloatBase::x87DoubleExtended()) return amc::FloatFormat::X87_80;
+    if (&semantics == &APFloatBase::PPCDoubleDouble()) return amc::FloatFormat::PPC_DOUBLE_DOUBLE;
+    return amc::FloatFormat::NONE;
 }
 
 // Pick the ABI kind that matches the observed signedness of a type whose C
 // spelling does not fix it (`char`, `wchar_t`).
-amc::PrimitiveAbiKind signedness_kind(
-    bool is_signed, amc::PrimitiveAbiKind signed_kind, amc::PrimitiveAbiKind unsigned_kind) {
+amc::PrimitiveABIKind signedness_kind(
+    bool is_signed, amc::PrimitiveABIKind signed_kind, amc::PrimitiveABIKind unsigned_kind) {
     return is_signed ? signed_kind : unsigned_kind;
 }
 
@@ -67,37 +67,37 @@ std::string primitive_abi_key(clang::ASTContext &ctx, clang::QualType qt, uint32
     const bool is_signed = bt->isSignedInteger();
     switch (bt->getKind()) {
         case clang::BuiltinType::Void:
-            abi = amc::primitive_abi(bytes, amc::PrimitiveAbiKind::void_);
+            abi = amc::primitive_abi(bytes, amc::PrimitiveABIKind::AMC_VOID);
             return "prim:void";
         case clang::BuiltinType::Bool:
-            abi = amc::primitive_abi(bytes, amc::PrimitiveAbiKind::bool_);
+            abi = amc::primitive_abi(bytes, amc::PrimitiveABIKind::AMC_BOOL);
             return "prim:bool";
         case clang::BuiltinType::Char_S:
         case clang::BuiltinType::Char_U:
             // Plain `char`: signedness is target-defined, so the kind encodes
             // the *actual* signedness, not the spelling.
-            abi = amc::primitive_abi(bytes,
-                signedness_kind(is_signed, amc::PrimitiveAbiKind::char_signed, amc::PrimitiveAbiKind::char_unsigned));
+            abi = amc::primitive_abi(bytes, signedness_kind(is_signed, amc::PrimitiveABIKind::AMC_CHAR_SIGNED,
+                                                amc::PrimitiveABIKind::AMC_CHAR_UNSIGNED));
             return is_signed ? "prim:char_s" : "prim:char_u";
         case clang::BuiltinType::SChar:
-            abi = amc::primitive_abi(bytes, amc::PrimitiveAbiKind::schar, amc::FloatFormat::none, true);
+            abi = amc::primitive_abi(bytes, amc::PrimitiveABIKind::AMC_SCHAR, amc::FloatFormat::NONE, true);
             return "prim:schar";
         case clang::BuiltinType::UChar:
-            abi = amc::primitive_abi(bytes, amc::PrimitiveAbiKind::uchar);
+            abi = amc::primitive_abi(bytes, amc::PrimitiveABIKind::AMC_UCHAR);
             return "prim:uchar";
         case clang::BuiltinType::Char8:
-            abi = amc::primitive_abi(bytes, amc::PrimitiveAbiKind::char8);
+            abi = amc::primitive_abi(bytes, amc::PrimitiveABIKind::AMC_CHAR8);
             return "prim:char8";
         case clang::BuiltinType::Char16:
-            abi = amc::primitive_abi(bytes, amc::PrimitiveAbiKind::char16);
+            abi = amc::primitive_abi(bytes, amc::PrimitiveABIKind::AMC_CHAR16);
             return "prim:char16";
         case clang::BuiltinType::Char32:
-            abi = amc::primitive_abi(bytes, amc::PrimitiveAbiKind::char32);
+            abi = amc::primitive_abi(bytes, amc::PrimitiveABIKind::AMC_CHAR32);
             return "prim:char32";
         case clang::BuiltinType::WChar_S:
         case clang::BuiltinType::WChar_U:
-            abi = amc::primitive_abi(bytes,
-                signedness_kind(is_signed, amc::PrimitiveAbiKind::wchar_signed, amc::PrimitiveAbiKind::wchar_unsigned));
+            abi = amc::primitive_abi(bytes, signedness_kind(is_signed, amc::PrimitiveABIKind::AMC_WCHAR_SIGNED,
+                                                amc::PrimitiveABIKind::AMC_WCHAR_UNSIGNED));
             return std::string("prim:wchar") + (is_signed ? "_s" : "_u");
         default: break;
     }
@@ -106,8 +106,8 @@ std::string primitive_abi_key(clang::ASTContext &ctx, clang::QualType qt, uint32
         // width and signedness. `long`/`long long` still collapse because they
         // share both. The width is in bits (`prim:i32`), matching the `i8`/`u64`
         // spelling the rest of the toolchain uses.
-        abi = amc::primitive_abi(bytes, is_signed ? amc::PrimitiveAbiKind::sint : amc::PrimitiveAbiKind::uint,
-            amc::FloatFormat::none, is_signed);
+        abi = amc::primitive_abi(bytes, is_signed ? amc::PrimitiveABIKind::AMC_SINT : amc::PrimitiveABIKind::AMC_UINT,
+            amc::FloatFormat::NONE, is_signed);
         return std::string(is_signed ? "prim:i" : "prim:u") + std::to_string(bytes * 8);
     }
     if (bt->isFloatingPoint()) {
@@ -115,18 +115,18 @@ std::string primitive_abi_key(clang::ASTContext &ctx, clang::QualType qt, uint32
         // `double` is 32-bit IEEE collapses it with `float` (same ABI), while
         // x87 80-bit and IEEE binary128 stay distinct despite equal size.
         const auto format = float_format_code(ctx.getFloatTypeSemantics(qt));
-        abi = amc::primitive_abi(bytes, amc::PrimitiveAbiKind::floating, format);
+        abi = amc::primitive_abi(bytes, amc::PrimitiveABIKind::AMC_FLOAT, format);
         return std::string("prim:f") + float_semantics_tag(ctx.getFloatTypeSemantics(qt));
     }
     return {};
 }
 
 NativeKind native_kind_of(const std::string &name) {
-    if (name == "std::string") return NativeKind::string;
-    if (name == "std::string_view") return NativeKind::string_view;
-    if (name == "std::vector") return NativeKind::vector;
-    if (name == "std::span") return NativeKind::span;
-    return NativeKind::none;
+    if (name == "std::string") return NativeKind::STRING;
+    if (name == "std::string_view") return NativeKind::STRING_VIEW;
+    if (name == "std::vector") return NativeKind::VECTOR;
+    if (name == "std::span") return NativeKind::SPAN;
+    return NativeKind::NONE;
 }
 
 std::string normalise_element(const std::string &spelling) {
@@ -153,10 +153,10 @@ std::string normalise_element(const std::string &spelling) {
 
 std::string native_type_name(NativeKind kind, const std::string &element) {
     switch (kind) {
-        case NativeKind::string:      return "std::string";
-        case NativeKind::string_view: return "std::string_view";
-        case NativeKind::vector:      return "std::vector<" + element + ">";
-        case NativeKind::span:        return "std::span<" + element + ">";
+        case NativeKind::STRING:      return "std::string";
+        case NativeKind::STRING_VIEW: return "std::string_view";
+        case NativeKind::VECTOR:      return "std::vector<" + element + ">";
+        case NativeKind::SPAN:        return "std::span<" + element + ">";
         default:                      return {};
     }
 }
@@ -187,4 +187,4 @@ bool fixed_width_int(const std::string &spelling, uint32_t &size, bool &is_signe
     return false;
 }
 
-}   // namespace amc::lang::frontend::cpp
+}   // namespace skl::amc::lang::frontend::cpp

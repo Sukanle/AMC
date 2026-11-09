@@ -23,7 +23,7 @@
 
 #include <fmt/format.h>
 
-namespace amc {
+namespace skl::amc {
 namespace {
 
 using TypeKey = std::pair<uint64_t, uint64_t>;
@@ -31,7 +31,7 @@ using TypeIndex = std::map<TypeKey, size_t>;
 
 std::string hash_string(Hash128 value) { return fmt::format("0X{:016x}{:016x}", value.hi, value.lo); }
 
-TypeIndex build_type_index(const AbiModule &module) {
+TypeIndex build_type_index(const ABIModule &module) {
     TypeIndex index;
     for (size_t i = 0; i < module.types.size(); ++i)
         index[{module.types[i].id.lo, module.types[i].id.hi}] = i;
@@ -49,16 +49,16 @@ std::string type_ref(Hash128 id, const TypeIndex &index) {
 
 const char *symbol_kind_name(SymbolKind kind) {
     switch (kind) {
-        case SymbolKind::type:     return "type";
-        case SymbolKind::field:    return "field";
-        case SymbolKind::function: return "function";
+        case SymbolKind::TYPE:  return "type";
+        case SymbolKind::FIELD: return "field";
+        case SymbolKind::FUNC:  return "function";
     }
     return "unknown";
 }
 
 }   // namespace
 
-void context_to_llm(const AbiModule &module, bool include_names, llvm::raw_ostream &out) {
+void context_to_llm(const ABIModule &module, bool include_names, llvm::raw_ostream &out) {
     const TypeIndex index = build_type_index(module);
 
     out << "# ABIX ABI context\n";
@@ -107,10 +107,9 @@ void context_to_llm(const AbiModule &module, bool include_names, llvm::raw_ostre
         if (include_names && !function.name.empty()) out << fmt::format(" {}", function.name);
         out << fmt::format(" owner={} signature={} returns={} cc={} flags={} params={}\n",
             type_ref(function.owner_type, index), hash_string(function.signature),
-            type_ref(function.return_type, index), function.calling_convention, function.flags,
-            function.parameters.size());
-        for (size_t p = 0; p < function.parameters.size(); ++p) {
-            const auto &parameter = function.parameters[p];
+            type_ref(function.return_type, index), function.calling_convention, function.flags, function.params.size());
+        for (size_t p = 0; p < function.params.size(); ++p) {
+            const auto &parameter = function.params[p];
             out << fmt::format("    P{}.{}", i, p);
             if (include_names && !parameter.name.empty()) out << fmt::format(" {}", parameter.name);
             out << fmt::format(" type={} flags={}\n", type_ref(parameter.type_id, index), parameter.flags);
@@ -126,7 +125,7 @@ void context_to_llm(const AbiModule &module, bool include_names, llvm::raw_ostre
     }
 }
 
-std::string context_to_llm(const AbiModule &module, bool include_names) {
+std::string context_to_llm(const ABIModule &module, bool include_names) {
     std::string text;
     llvm::raw_string_ostream out(text);
     context_to_llm(module, include_names, out);
@@ -134,7 +133,7 @@ std::string context_to_llm(const AbiModule &module, bool include_names) {
     return text;
 }
 
-void context_to_json(const AbiModule &module, bool include_names, llvm::raw_ostream &out) {
+void context_to_json(const ABIModule &module, bool include_names, llvm::raw_ostream &out) {
     const TypeIndex index = build_type_index(module);
     const auto string = [](const std::string &value) { return fmt::format("\"{}\"", json_escape(value)); };
 
@@ -196,8 +195,8 @@ void context_to_json(const AbiModule &module, bool include_names, llvm::raw_ostr
             function.owner_type == Hash128{} ? "null" : "\"" + hash_string(function.owner_type) + "\"",
             hash_string(function.signature), hash_string(function.return_type), function.calling_convention,
             function.flags);
-        for (size_t p = 0; p < function.parameters.size(); ++p) {
-            const auto &parameter = function.parameters[p];
+        for (size_t p = 0; p < function.params.size(); ++p) {
+            const auto &parameter = function.params[p];
             if (p) out << ",";
             out << fmt::format("{{\"index\":{}", p);
             if (include_names) {
@@ -227,7 +226,7 @@ void context_to_json(const AbiModule &module, bool include_names, llvm::raw_ostr
     (void)index;
 }
 
-std::string context_to_json(const AbiModule &module, bool include_names) {
+std::string context_to_json(const ABIModule &module, bool include_names) {
     std::string text;
     llvm::raw_string_ostream out(text);
     context_to_json(module, include_names, out);
@@ -235,4 +234,4 @@ std::string context_to_json(const AbiModule &module, bool include_names) {
     return text;
 }
 
-}   // namespace amc
+}   // namespace skl::amc

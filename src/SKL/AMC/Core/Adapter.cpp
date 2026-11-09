@@ -23,7 +23,7 @@
 
 #include <fmt/format.h>
 
-namespace amc {
+namespace skl::amc {
 namespace {
 
 std::string hash_literal(Hash128 value) { return fmt::format("0x{:016x}{:016x}", value.hi, value.lo); }
@@ -44,24 +44,24 @@ std::string cpp_string(const std::string &value) {
 using TypeKey = std::pair<uint64_t, uint64_t>;
 using TypeMap = std::map<TypeKey, const Type *>;
 
-TypeMap index_types(const AbiModule &module) {
+TypeMap index_types(const ABIModule &module) {
     TypeMap map;
     for (const auto &type : module.types)
         map[{type.id.lo, type.id.hi}] = &type;
     return map;
 }
 
-const Field *field_at(const AbiModule &module, uint32_t index) {
+const Field *field_at(const ABIModule &module, uint32_t index) {
     return index < module.fields.size() ? &module.fields[index] : nullptr;
 }
 
-std::string field_label(const AbiModule &module, uint32_t index) {
+std::string field_label(const ABIModule &module, uint32_t index) {
     const Field *field = field_at(module, index);
     return field != nullptr ? field->name : std::string("<default>");
 }
 
 // Byte width of a field's ABI type, resolved through the module's type index.
-uint32_t field_type_size(const AbiModule &module, const TypeMap &types, uint32_t field_index) {
+uint32_t field_type_size(const ABIModule &module, const TypeMap &types, uint32_t field_index) {
     const Field *field = field_at(module, field_index);
     if (field == nullptr) return 0;
     const auto it = types.find({field->type_id.lo, field->type_id.hi});
@@ -109,7 +109,7 @@ std::string adapter_symbol(std::string_view name) {
     return symbol;
 }
 
-std::string generate_adapter(const AbiModule &source, const AbiModule &target, const AbiModule &report,
+std::string generate_adapter(const ABIModule &source, const ABIModule &target, const ABIModule &report,
     const AdapterOptions &options, std::string &error) {
     error.clear();
     if (report.maps.empty()) {
@@ -179,7 +179,7 @@ std::string generate_adapter(const AbiModule &source, const AbiModule &target, c
         }
         for (const auto &operation : map.operations) {
             switch (operation.opcode) {
-                case MapOpcode::copy_field:
+                case MapOpcode::COPY_FIELD:
                     out += "    memcpy(static_cast<uint8_t *>(target) + ";
                     out += fmt::to_string(operation.target_offset);
                     out += ",\n";
@@ -194,17 +194,17 @@ std::string generate_adapter(const AbiModule &source, const AbiModule &target, c
                     out += field_label(target, operation.target_field);
                     out += "\n";
                     break;
-                case MapOpcode::add_default:
+                case MapOpcode::ADD_DEFAULT:
                     out += "    // add_default ";
                     out += field_label(target, operation.target_field);
                     out += " (zero-initialised)\n";
                     break;
-                case MapOpcode::skip_field:
+                case MapOpcode::SKIP_FIELD:
                     out += "    // skip_field ";
                     out += field_label(source, operation.source_field);
                     out += "\n";
                     break;
-                case MapOpcode::convert_int: {
+                case MapOpcode::CONVERT_INT: {
                     const std::string from = int_type(field_type_size(source, source_types, operation.source_field));
                     const std::string to = int_type(field_type_size(target, target_types, operation.target_field));
                     if (from.empty() || to.empty()) {
@@ -233,7 +233,7 @@ std::string generate_adapter(const AbiModule &source, const AbiModule &target, c
                     out += "\n";
                     break;
                 }
-                case MapOpcode::convert_float: {
+                case MapOpcode::CONVERT_FLOAT: {
                     const std::string from = float_type(field_type_size(source, source_types, operation.source_field));
                     const std::string to = float_type(field_type_size(target, target_types, operation.target_field));
                     if (from.empty() || to.empty()) {
@@ -367,4 +367,4 @@ std::string generate_adapter(const AbiModule &source, const AbiModule &target, c
     return out;
 }
 
-}   // namespace amc
+}   // namespace skl::amc

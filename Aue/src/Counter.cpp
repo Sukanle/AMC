@@ -81,31 +81,31 @@ extern "C" int counter_live_count(lua_State *state) {
 
 #ifndef AUE_HAVE_GENERATED_CONTRACT
 namespace {
-const aue::Entry kCounterEntries[] = {
+const skl::aue::Entry kCounterEntries[] = {
     {       "new", 1,        counter_new},
     {       "add", 2,        counter_add},
     {       "get", 1,        counter_get},
     {"live_count", 0, counter_live_count},
 };
 
-const aue::Field kCounterChildFields[] = {
-    {"x", 0, sizeof(int32_t), aue::FieldKind::integer_signed},
-    {"y", 4, sizeof(int32_t), aue::FieldKind::integer_signed},
+const skl::aue::Field kCounterChildFields[] = {
+    {"x", 0, sizeof(int32_t), skl::aue::FieldKind::INTEGER_SIGNED},
+    {"y", 4, sizeof(int32_t), skl::aue::FieldKind::INTEGER_SIGNED},
 };
 
-const aue::Field kCounterFields[] = {
-    {"value", 0, sizeof(int32_t), aue::FieldKind::integer_signed},
-    {"child", 4, sizeof(CounterChild), aue::FieldKind::record, 0},
-    {"samples", 12, sizeof(Counter::samples), aue::FieldKind::array, 0xFFFFFFFFu, 4, 4, aue::FieldKind::integer_signed,
-     4},
+const skl::aue::Field kCounterFields[] = {
+    {"value", 0, sizeof(int32_t), skl::aue::FieldKind::INTEGER_SIGNED},
+    {"child", 4, sizeof(CounterChild), skl::aue::FieldKind::RECORD, 0},
+    {"samples", 12, sizeof(Counter::samples), skl::aue::FieldKind::ARRAY, 0xFFFFFFFFu, 4, 4,
+     skl::aue::FieldKind::INTEGER_SIGNED, 4},
 };
 
-const aue::Type kCounterTypes[] = {
+const skl::aue::Type kCounterTypes[] = {
     {"CounterChild", sizeof(CounterChild), alignof(CounterChild), kCounterChildFields, 2},
     {     "Counter",      sizeof(Counter),      alignof(Counter),      kCounterFields, 3},
 };
 
-const aue::Contract kCounterContract = {
+const skl::aue::Contract kCounterContract = {
     // Kept in sync with `Aue/Counter.abic.toml`; the generated conformance
     // script asserts the runtime contract and the metadata agree on this hash.
     "counter",
@@ -118,7 +118,7 @@ const aue::Contract kCounterContract = {
 }   // namespace
 #endif
 
-namespace aue {
+namespace skl::aue {
 
 void register_counter_types(lua_State *state) {
     register_contract_types(state, counter_contract());
@@ -127,10 +127,10 @@ void register_counter_types(lua_State *state) {
 
 const Contract &counter_contract() {
 #ifdef AUE_HAVE_GENERATED_CONTRACT
-    return amc_generated::lua_contract;
+    return amc::generated::lua_contract;
 #else
     return kCounterContract;
 #endif
 }
 
-}   // namespace aue
+}   // namespace skl::aue

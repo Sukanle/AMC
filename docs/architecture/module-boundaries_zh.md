@@ -192,7 +192,7 @@ CTest 同时运行 `--contracts-only` 和 `--strict`：`amc-boundary-contracts`�
 
 | 项目                                    | 目标                                                   | 状态           |
 | --------------------------------------- | ------------------------------------------------------ | -------------- |
-| `Core/Core.h`（`AbiModule`）            | `IR/` ABI view                                         | 未迁移         |
+| `Core/Core.h`（`ABIModule`）            | `IR/` ABI view                                         | 未迁移         |
 | `Semantic/*`                            | `IR/` semantic view                                    | 未迁移         |
 | `Lang/C++/Frontend.cpp`                 | `Frontend/Cpp/`                                        | 已迁移         |
 | `Lang/C++/Backend.cpp`                  | `Backend/Cpp/`                                         | 已迁移         |

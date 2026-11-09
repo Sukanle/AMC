@@ -31,11 +31,6 @@
 // `abix.find_compatible` can decide compatibility across the whole index.
 #include "SKL/AMC/Tool/MCP.h"
 
-using namespace amc::mcp;
-
-namespace amc::mcp {
-namespace {
-
 void print_usage() {
     fmt::print(stderr,
         "usage: amc-mcp [<file.abix|libfoo.so>...] [--index <path>] "
@@ -44,19 +39,16 @@ void print_usage() {
 
 bool load_index(const std::vector<std::string> &paths, std::string &error) {
     for (const auto &path : paths) {
-        IndexedModule entry;
+        skl::amc::mcp::IndexedModule entry;
         entry.path = path;
-        if (!amc::load_module_source(path, entry.module, error)) {
+        if (!skl::amc::load_module_source(path, entry.module, error)) {
             error = "cannot read module '" + path + "': " + error;
             return false;
         }
-        g_index.push_back(std::move(entry));
+        skl::amc::mcp::g_index.push_back(std::move(entry));
     }
     return true;
 }
-
-}   // namespace
-}   // namespace amc::mcp
 
 int main(int argc, char **argv) {
     std::vector<std::string> paths;
@@ -69,7 +61,7 @@ int main(int argc, char **argv) {
         } else if (argument == "--index" && i + 1 < argc) {
             paths.push_back(argv[++i]);
         } else if (argument == "--list-tools") {
-            fmt::print("{}\n", tools_catalogue().dump_pretty());
+            fmt::print("{}\n", skl::amc::mcp::tools_catalogue().dump_pretty());
             return 0;
         } else if (argument == "--help" || argument == "-h") {
             print_usage();
@@ -87,19 +79,20 @@ int main(int argc, char **argv) {
         fmt::print(stderr, "amc-mcp: {}\n", load_error);
         return 1;
     }
-    g_default_module = !explicit_default.empty() ? explicit_default : (paths.empty() ? std::string() : paths.front());
+    skl::amc::mcp::g_default_module =
+        !explicit_default.empty() ? explicit_default : (paths.empty() ? std::string() : paths.front());
 
     std::ios::sync_with_stdio(false);
     std::string line;
     while (std::getline(std::cin, line)) {
         if (line.empty()) continue;
-        amc::Json request;
+        skl::amc::Json request;
         std::string error;
-        if (!amc::parse_json(line, request, error)) {
-            respond(make_error(amc::Json(), -32'700, "parse error: " + error));
+        if (!skl::amc::parse_json(line, request, error)) {
+            skl::amc::mcp::respond(skl::amc::mcp::make_error(skl::amc::Json(), -32'700, "parse error: " + error));
             continue;
         }
-        handle_request(request);
+        skl::amc::mcp::handle_request(request);
     }
     return 0;
 }

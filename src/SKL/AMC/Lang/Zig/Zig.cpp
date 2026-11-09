@@ -17,13 +17,13 @@
 #include "SKL/AMC/Lang/Lang.h"
 
 int main(int argc, char **argv) {
-    static const amc::lang::Provider provider{
+    static const skl::amc::lang::Provider provider{
         "zig",
         {
-          {"backend", amc::lang::zig::run_backend},
+          {"backend", skl::amc::lang::zig::run_backend},
           },
         "0.4.0",
         {"target"},
     };
-    return amc::lang::run_provider(argc, argv, provider);
+    return skl::amc::lang::run_provider(argc, argv, provider);
 }

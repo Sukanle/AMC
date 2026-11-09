@@ -35,12 +35,12 @@
 #include <fmt/os.h>
 
 namespace fs = std::filesystem;
-using amc::util::fail;
-using amc::util::g_error_format;
-using amc::util::read_error_category;
-using amc::util::usage_error;
+using skl::amc::util::fail;
+using skl::amc::util::g_error_format;
+using skl::amc::util::read_error_category;
+using skl::amc::util::usage_error;
 
-namespace amc::cli {
+namespace skl::amc::cli {
 
 int cmd_symbols(char **args, int arg_count) {
     const std::string command = args[1];
@@ -74,33 +74,33 @@ int cmd_symbols(char **args, int arg_count) {
         if (command == "publish") {
             if (input.empty()) return usage_error("publish requires an input .abix or binary");
             std::ifstream file(input, std::ios::binary);
-            if (!file) return fail(amc::ErrorCategory::io, "publish", "cannot open input", input.string());
+            if (!file) return fail(amc::ErrorCategory::IO, "publish", "cannot open input", input.string());
             std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
             std::string error, key, meta, suffix;
             std::vector<uint8_t> artifact;
             if (amc::is_binary(bytes.data(), bytes.size())) {
                 std::vector<uint8_t> build_id;
                 if (!amc::read_build_id(bytes.data(), bytes.size(), build_id, error))
-                    return fail(amc::ErrorCategory::format, "publish", error, input.string());
+                    return fail(amc::ErrorCategory::FORMAT, "publish", error, input.string());
                 key = amc::hex_encode(build_id.data(), build_id.size());
                 if (!amc::find_binary_section(bytes.data(), bytes.size(), ".abix.metadata", artifact, error))
-                    return fail(amc::ErrorCategory::format, "publish", error, input.string());
+                    return fail(amc::ErrorCategory::FORMAT, "publish", error, input.string());
                 amc::MetadataHeader header;
                 if (!amc::read_metadata_header(artifact, header, error))
-                    return fail(amc::ErrorCategory::format, "publish", error, input.string());
+                    return fail(amc::ErrorCategory::FORMAT, "publish", error, input.string());
                 meta = elf_meta_document(key, header);
                 suffix = ".abixmeta";
             } else {
-                amc::AbiModule module;
+                amc::ABIModule module;
                 if (!amc::load_module_source(input.string(), module, error))
                     return fail(read_error_category(error), "read_abix", error, input.string());
                 amc::MetadataOptions options;
                 std::vector<uint8_t> region;
                 if (!amc::build_metadata_region(module, options, region, error))
-                    return fail(amc::ErrorCategory::internal, "build_metadata_region", error, input.string());
+                    return fail(amc::ErrorCategory::INTERNAL, "build_metadata_region", error, input.string());
                 amc::MetadataHeader header;
                 if (!amc::read_metadata_header(region, header, error))
-                    return fail(amc::ErrorCategory::internal, "read_metadata_header", error, input.string());
+                    return fail(amc::ErrorCategory::INTERNAL, "read_metadata_header", error, input.string());
                 if (!explicit_build_id.empty()) {
                     if (!amc::normalize_build_id(explicit_build_id, key))
                         return usage_error("--build-id expects hexadecimal digits");
@@ -124,7 +124,7 @@ int cmd_symbols(char **args, int arg_count) {
             }
             std::string stored_path;
             if (!amc::publish_symbol(root.string(), key, artifact, meta, suffix.c_str(), stored_path, error))
-                return fail(amc::ErrorCategory::io, "publish", error, input.string());
+                return fail(amc::ErrorCategory::IO, "publish", error, input.string());
             fmt::print("published key={} path={}\n", key, stored_path);
             return 0;
         }
@@ -136,21 +136,21 @@ int cmd_symbols(char **args, int arg_count) {
         } else {
             if (input.empty()) return usage_error("fetch requires a binary or --build-id");
             std::ifstream file(input, std::ios::binary);
-            if (!file) return fail(amc::ErrorCategory::io, "fetch", "cannot open input", input.string());
+            if (!file) return fail(amc::ErrorCategory::IO, "fetch", "cannot open input", input.string());
             std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
             if (!amc::is_binary(bytes.data(), bytes.size()))
-                return fail(amc::ErrorCategory::format, "fetch", "input is not an ELF or Mach-O binary", input.string(),
+                return fail(amc::ErrorCategory::FORMAT, "fetch", "input is not an ELF or Mach-O binary", input.string(),
                     "pass --build-id to look up by id directly");
             std::vector<uint8_t> build_id;
             std::string error;
             if (!amc::read_build_id(bytes.data(), bytes.size(), build_id, error))
-                return fail(amc::ErrorCategory::format, "fetch", error, input.string());
+                return fail(amc::ErrorCategory::FORMAT, "fetch", error, input.string());
             key = amc::hex_encode(build_id.data(), build_id.size());
         }
         std::vector<uint8_t> artifact;
         std::string path, error;
         if (!amc::fetch_symbol(root.string(), key, artifact, path, error))
-            return fail(amc::ErrorCategory::io, "fetch", error);
+            return fail(amc::ErrorCategory::IO, "fetch", error);
         if (output.empty()) {
             fmt::print("{}\n", path);
             return 0;
@@ -159,7 +159,7 @@ int cmd_symbols(char **args, int arg_count) {
             auto out = fmt::output_file(output.string());
             out.print("{}", fmt::string_view(reinterpret_cast<const char *>(artifact.data()), artifact.size()));
         } catch (const std::exception &e) {
-            return fail(amc::ErrorCategory::io, "fetch", "cannot write output", output.string(), e.what());
+            return fail(amc::ErrorCategory::IO, "fetch", "cannot write output", output.string(), e.what());
         }
         fmt::print("fetched {} -> {}\n", path, output.string());
         return 0;
@@ -167,4 +167,4 @@ int cmd_symbols(char **args, int arg_count) {
     return usage_error(command + ": unsupported subcommand");
 }
 
-}   // namespace amc::cli
+}   // namespace skl::amc::cli

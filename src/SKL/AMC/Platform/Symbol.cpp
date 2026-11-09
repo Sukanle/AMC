@@ -27,7 +27,7 @@
 
 namespace fs = std::filesystem;
 
-namespace amc {
+namespace skl::amc {
 namespace {
 
 uint32_t read_u32(const uint8_t *data, size_t offset) {
@@ -62,10 +62,10 @@ size_t align4(size_t value) { return (value + kNoteAlign - 1) & ~(kNoteAlign - 1
 
 bool read_build_id(const uint8_t *data, size_t size, std::vector<uint8_t> &build_id, std::string &error) {
     switch (detect_binary_format(data, size)) {
-        case BinaryFormat::elf:   return read_gnu_build_id(data, size, build_id, error);
-        case BinaryFormat::macho: return read_macho_uuid(data, size, build_id, error);
-        case BinaryFormat::pe:    return read_pe_debug_id(data, size, build_id, error);
-        case BinaryFormat::unknown:
+        case BinaryFormat::ELF:   return read_gnu_build_id(data, size, build_id, error);
+        case BinaryFormat::MACHO: return read_macho_uuid(data, size, build_id, error);
+        case BinaryFormat::PE:    return read_pe_debug_id(data, size, build_id, error);
+        case BinaryFormat::UNKNOWN:
             error = "not a supported binary (expected ELF, Mach-O or PE)";
             build_id.clear();
             return false;
@@ -342,4 +342,4 @@ std::string default_symbol_store_root() {
     return (fs::path(".abix") / "symbols").string();
 }
 
-}   // namespace amc
+}   // namespace skl::amc

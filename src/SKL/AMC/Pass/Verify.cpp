@@ -18,7 +18,7 @@
 #include "SKL/AMC/Core/Core.h"
 #include "SKL/AMC/IR/LoweringJson.h"
 
-namespace amc::pass {
+namespace skl::amc::pass {
 
 bool verify_abi(ir::Module &module, Context &context, diagnostics::DiagnosticList &diagnostics) {
     (void)context;
@@ -41,4 +41,4 @@ bool verify_lowering(ir::Module &module, Context &context, diagnostics::Diagnost
     return false;
 }
 
-}   // namespace amc::pass
+}   // namespace skl::amc::pass

@@ -19,7 +19,7 @@
 #include <limits>
 #include <string>
 
-namespace aue {
+namespace skl::aue {
 namespace {
 
 // `__index(table, key)` for the L1 Meta layer. Upvalue 1 is the pre-built
@@ -141,7 +141,7 @@ void *object_base(lua_State *state) {
 
 void push_native_value(lua_State *state, const void *address, const Field &field) {
     switch (field.kind) {
-        case FieldKind::integer_signed: {
+        case FieldKind::INTEGER_SIGNED: {
             int64_t value = 0;
             switch (field.size) {
                 case 1: {
@@ -173,7 +173,7 @@ void push_native_value(lua_State *state, const void *address, const Field &field
             lua_pushinteger(state, static_cast<lua_Integer>(value));
             return;
         }
-        case FieldKind::integer_unsigned: {
+        case FieldKind::INTEGER_UNSIGNED: {
             uint64_t value = 0;
             switch (field.size) {
                 case 1: {
@@ -208,7 +208,7 @@ void push_native_value(lua_State *state, const void *address, const Field &field
                 lua_pushinteger(state, static_cast<lua_Integer>(value));
             return;
         }
-        case FieldKind::floating: {
+        case FieldKind::FLOATING: {
             if (field.size == sizeof(float)) {
                 float raw = 0;
                 std::memcpy(&raw, address, sizeof(raw));
@@ -222,13 +222,13 @@ void push_native_value(lua_State *state, const void *address, const Field &field
             }
             return;
         }
-        case FieldKind::boolean: {
+        case FieldKind::BOOLEAN: {
             uint8_t raw = 0;
             std::memcpy(&raw, address, sizeof(raw));
             lua_pushboolean(state, raw != 0);
             return;
         }
-        case FieldKind::pointer: {
+        case FieldKind::POINTER: {
             uintptr_t raw = 0;
             if (field.size > sizeof(raw)) {
                 lua_pushnil(state);
@@ -240,18 +240,18 @@ void push_native_value(lua_State *state, const void *address, const Field &field
         }
         // Record/array/opaque fields are materialized by type_index rather than
         // read as scalars; keep them inaccessible if one reaches this path.
-        case FieldKind::record:
-        case FieldKind::array:
-        case FieldKind::opaque:
-        case FieldKind::unknown: lua_pushnil(state); return;
+        case FieldKind::RECORD:
+        case FieldKind::ARRAY:
+        case FieldKind::OPAQUE:
+        case FieldKind::UNKNOWN: lua_pushnil(state); return;
     }
     lua_pushnil(state);
 }
 
 void store_native_value(lua_State *state, void *address, const Field &field) {
     switch (field.kind) {
-        case FieldKind::integer_signed:
-        case FieldKind::integer_unsigned: {
+        case FieldKind::INTEGER_SIGNED:
+        case FieldKind::INTEGER_UNSIGNED: {
             const lua_Integer value = luaL_checkinteger(state, 3);
             switch (field.size) {
                 case 1: {
@@ -277,7 +277,7 @@ void store_native_value(lua_State *state, void *address, const Field &field) {
                 default: luaL_error(state, "field '%s' has unsupported width %u", field.name, field.size); return;
             }
         }
-        case FieldKind::floating: {
+        case FieldKind::FLOATING: {
             const lua_Number value = luaL_checknumber(state, 3);
             if (field.size == sizeof(float)) {
                 const float raw = static_cast<float>(value);
@@ -290,12 +290,12 @@ void store_native_value(lua_State *state, void *address, const Field &field) {
             }
             return;
         }
-        case FieldKind::boolean: {
+        case FieldKind::BOOLEAN: {
             const uint8_t raw = lua_toboolean(state, 3) != 0 ? 1 : 0;
             std::memcpy(address, &raw, sizeof(raw));
             return;
         }
-        case FieldKind::pointer: {
+        case FieldKind::POINTER: {
             const lua_Integer value = luaL_checkinteger(state, 3);
             const uintptr_t raw = static_cast<uintptr_t>(value);
             if (field.size > sizeof(raw)) {
@@ -307,10 +307,10 @@ void store_native_value(lua_State *state, void *address, const Field &field) {
         }
         // Record/array/opaque fields are rejected by type_newindex and
         // array_newindex before reaching this scalar store path.
-        case FieldKind::record:
-        case FieldKind::array:
-        case FieldKind::opaque:
-        case FieldKind::unknown: luaL_error(state, "field '%s' is not writable", field.name); return;
+        case FieldKind::RECORD:
+        case FieldKind::ARRAY:
+        case FieldKind::OPAQUE:
+        case FieldKind::UNKNOWN: luaL_error(state, "field '%s' is not writable", field.name); return;
     }
 }
 
@@ -355,13 +355,13 @@ int array_index(lua_State *state) {
         return 1;
     }
     auto *address = static_cast<uint8_t *>(view->base) + static_cast<size_t>(index - 1) * view->stride;
-    if (view->element_kind == FieldKind::record && view->element_type != nullptr && view->contract != nullptr) {
+    if (view->element_kind == FieldKind::RECORD && view->element_type != nullptr && view->contract != nullptr) {
         push_record_view(state, address, *view->element_type, *view->contract);
         return 1;
     }
-    if (view->element_kind == FieldKind::unknown
-        || view->element_kind == FieldKind::array
-        || view->element_kind == FieldKind::opaque) {
+    if (view->element_kind == FieldKind::UNKNOWN
+        || view->element_kind == FieldKind::ARRAY
+        || view->element_kind == FieldKind::OPAQUE) {
         return luaL_error(state, "array element type is not described by the contract");
     }
     Field element{"[]", 0, view->element_size, view->element_kind};
@@ -375,10 +375,10 @@ int array_newindex(lua_State *state) {
     const lua_Integer index = luaL_checkinteger(state, 2);
     if (index < 1 || index > static_cast<lua_Integer>(view->count))
         return luaL_error(state, "array index %d is out of range", static_cast<int>(index));
-    if (view->element_kind == FieldKind::record
-        || view->element_kind == FieldKind::array
-        || view->element_kind == FieldKind::opaque
-        || view->element_kind == FieldKind::unknown) {
+    if (view->element_kind == FieldKind::RECORD
+        || view->element_kind == FieldKind::ARRAY
+        || view->element_kind == FieldKind::OPAQUE
+        || view->element_kind == FieldKind::UNKNOWN) {
         return luaL_error(state, "array element type is not directly writable");
     }
     auto *address = static_cast<uint8_t *>(view->base) + static_cast<size_t>(index - 1) * view->stride;
@@ -410,21 +410,21 @@ int type_index(lua_State *state) {
     void *address = static_cast<uint8_t *>(base) + field->offset;
 
     switch (field->kind) {
-        case FieldKind::record:
+        case FieldKind::RECORD:
             if (contract != nullptr && field->type_index < contract->type_count) {
                 push_record_view(state, address, contract->types[field->type_index], *contract);
             } else {
                 lua_pushnil(state);
             }
             return 1;
-        case FieldKind::array:
+        case FieldKind::ARRAY:
             if (contract != nullptr)
                 push_array_view(state, address, *field, *contract);
             else
                 lua_pushnil(state);
             return 1;
-        case FieldKind::opaque:
-        case FieldKind::unknown: lua_pushnil(state); return 1;
+        case FieldKind::OPAQUE:
+        case FieldKind::UNKNOWN: lua_pushnil(state); return 1;
         default:                 push_native_value(state, address, *field); return 1;
     }
 }
@@ -437,10 +437,10 @@ int type_newindex(lua_State *state) {
     }
     void *base = object_base(state);
     if (base == nullptr) return luaL_error(state, "field access on a non-userdata value");
-    if (field->kind == FieldKind::record
-        || field->kind == FieldKind::array
-        || field->kind == FieldKind::opaque
-        || field->kind == FieldKind::unknown) {
+    if (field->kind == FieldKind::RECORD
+        || field->kind == FieldKind::ARRAY
+        || field->kind == FieldKind::OPAQUE
+        || field->kind == FieldKind::UNKNOWN) {
         return luaL_error(state, "field '%s' cannot be written as a whole", field->name);
     }
     store_native_value(state, static_cast<uint8_t *>(base) + field->offset, *field);
@@ -592,9 +592,9 @@ void register_native(lua_State *state, const Contract &contract) {
 
 const char *level_name(Level level) noexcept {
     switch (level) {
-        case Level::l0: return "l0";
-        case Level::l1: return "l1";
-        case Level::l2: return "l2";
+        case Level::L0: return "l0";
+        case Level::L1: return "l1";
+        case Level::L2: return "l2";
     }
     return "unknown";
 }
@@ -602,11 +602,11 @@ const char *level_name(Level level) noexcept {
 Level register_layer(lua_State *state, const Contract &contract, Level requested) {
     const Level selected = select_level(requested);
     switch (selected) {
-        case Level::l2: register_native(state, contract); break;
-        case Level::l1: register_meta(state, contract); break;
-        case Level::l0: register_direct(state, contract); break;
+        case Level::L2: register_native(state, contract); break;
+        case Level::L1: register_meta(state, contract); break;
+        case Level::L0: register_direct(state, contract); break;
     }
     return selected;
 }
 
-}   // namespace aue
+}   // namespace skl::aue

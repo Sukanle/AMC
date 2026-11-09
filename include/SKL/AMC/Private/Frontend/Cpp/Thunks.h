@@ -24,11 +24,11 @@
 #include <string>
 #include <vector>
 
-namespace amc {
-struct AbiModule;
+namespace skl::amc {
+struct ABIModule;
 }
 
-namespace amc::lang::frontend::cpp {
+namespace skl::amc::lang::frontend::cpp {
 
 // Non-owning operation object that turns the `[[expose]]` declarations into a
 // generated C thunk source file and registers the matching ABI entities.
@@ -36,17 +36,17 @@ namespace amc::lang::frontend::cpp {
 // view for the duration of the run.
 class ThunkEmitter {
 public:
-    ThunkEmitter(amc::AbiModule &module, const amc::lang::Config &config, std::vector<NativeAdapt> &adaptations,
+    ThunkEmitter(amc::ABIModule &module, const amc::lang::Config &config, std::vector<NativeAdapt> &adaptations,
         llvm::StringRef base, amc::semantic::SemanticModule &semantic);
 
     bool run(std::string &error);
 
 private:
-    amc::AbiModule &module_;
+    amc::ABIModule &module_;
     const amc::lang::Config &config_;
     std::vector<NativeAdapt> &adaptations_;
     llvm::StringRef base_;
     amc::semantic::SemanticModule &semantic_;
 };
 
-}   // namespace amc::lang::frontend::cpp
+}   // namespace skl::amc::lang::frontend::cpp

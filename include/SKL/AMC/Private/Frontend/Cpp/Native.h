@@ -23,16 +23,16 @@
 #include <cstdint>
 #include <string>
 
-namespace amc::lang::frontend::cpp {
+namespace skl::amc::lang::frontend::cpp {
 
 // The native C++ kinds an `[[adapt]]` may declare. Each maps a canonical STL
 // spelling onto an ABIX-STD boundary contract through a generated adapter.
 enum class NativeKind : uint32_t {
-    none = 0,
-    string = 1,        // std::string        -> string-view (owned copy in the adapter)
-    string_view = 2,   // std::string_view   -> string-view (borrowed)
-    vector = 3,        // std::vector<T>     -> sequence-view (owned copy in the adapter)
-    span = 4           // std::span<const T> -> sequence-view (borrowed)
+    NONE = 0,
+    STRING = 1,        // std::STRING        -> STRING-view (owned copy in the adapter)
+    STRING_VIEW = 2,   // std::STRING_VIEW   -> STRING-view (borrowed)
+    VECTOR = 3,        // std::VECTOR<T>     -> sequence-view (owned copy in the adapter)
+    SPAN = 4           // std::SPAN<const T> -> sequence-view (borrowed)
 };
 
 // One recorded native↔ABIX-STD parameter adaptation. The function keeps the
@@ -69,8 +69,8 @@ bool fixed_width_int(const std::string &spelling, uint32_t &size, bool &is_signe
 // Identity is the *abstract C ABI kind* — the width and format are recorded as
 // properties, not baked into the name. Returns an empty string when the type is
 // not a scalar builtin (pointer, array, record, ...), meaning the caller keeps
-// the spelling-based identity. `abi` is filled with the packed PrimitiveAbiKind
+// the spelling-based identity. `abi` is filled with the packed PrimitiveABIKind
 // + width + format.
 std::string primitive_abi_key(clang::ASTContext &ctx, clang::QualType qt, uint32_t &abi);
 
-}   // namespace amc::lang::frontend::cpp
+}   // namespace skl::amc::lang::frontend::cpp

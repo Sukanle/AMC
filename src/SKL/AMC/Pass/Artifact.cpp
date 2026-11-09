@@ -17,7 +17,7 @@
 
 #include <fmt/format.h>
 
-namespace amc::pass {
+namespace skl::amc::pass {
 
 bool verify_artifact(ir::Module &module, Context &context, diagnostics::DiagnosticList &diagnostics) {
     (void)context;
@@ -35,4 +35,4 @@ bool verify_artifact(ir::Module &module, Context &context, diagnostics::Diagnost
     return true;
 }
 
-}   // namespace amc::pass
+}   // namespace skl::amc::pass

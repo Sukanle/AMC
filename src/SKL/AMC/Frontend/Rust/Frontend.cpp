@@ -46,7 +46,7 @@
 // rules the C++ frontend obtains from Clang). Generics, traits, lifetimes and
 // bit-fields are out of scope; unsupported constructs are ignored rather than
 // guessed at, per `LANGUAGE-PLUGIN.md`.
-namespace amc::lang::rust {
+namespace skl::amc::lang::rust {
 namespace {
 
 constexpr uint64_t kTypeDomain = 0x54595045;   // "TYPE"
@@ -177,12 +177,12 @@ std::vector<std::string> helper_strings(const amc::Json *array) {
     return out;
 }
 
-std::vector<amc::semantic::RustGenericParameter> helper_parameters(const amc::Json &value) {
-    std::vector<amc::semantic::RustGenericParameter> out;
+std::vector<amc::semantic::RustGenericParam> helper_parameters(const amc::Json &value) {
+    std::vector<amc::semantic::RustGenericParam> out;
     const amc::Json *array = value.find("parameters");
     if (array == nullptr || !array->is_array()) return out;
     for (const amc::Json &item : array->items()) {
-        amc::semantic::RustGenericParameter parameter;
+        amc::semantic::RustGenericParam parameter;
         parameter.index = static_cast<uint32_t>(json_uint(item.find("index")));
         if (const amc::Json *field = item.find("name")) parameter.name = field->as_string();
         if (const amc::Json *field = item.find("kind")) parameter.kind = field->as_string();
@@ -204,7 +204,7 @@ amc::semantic::RustSemantic helper_rust_semantic(const HelperDocument &document)
             if (const amc::Json *field = value.find("name")) generic.name = field->as_string();
             if (const amc::Json *field = value.find("path")) generic.path = field->as_string();
             if (const amc::Json *field = value.find("kind")) generic.kind = field->as_string();
-            generic.parameters = helper_parameters(value);
+            generic.params = helper_parameters(value);
             generic.where_clause = helper_strings(value.find("where_clause"));
             generic.instances = helper_strings(value.find("instances"));
             rust.generics.push_back(std::move(generic));
@@ -221,7 +221,7 @@ amc::semantic::RustSemantic helper_rust_semantic(const HelperDocument &document)
             if (const amc::Json *field = value.find("self_type")) trait.self_type = field->as_string();
             if (const amc::Json *field = value.find("trait")) trait.trait_ref = field->as_string();
             if (const amc::Json *field = value.find("negative")) trait.negative = field->as_bool();
-            trait.parameters = helper_parameters(value);
+            trait.params = helper_parameters(value);
             trait.where_clause = helper_strings(value.find("where_clause"));
             trait.supertraits = helper_strings(value.find("supertraits"));
             if (const amc::Json *associated = value.find("associated_types");
@@ -249,7 +249,7 @@ amc::semantic::RustSemantic helper_rust_semantic(const HelperDocument &document)
                             amc::semantic::RustTraitParameter entry;
                             if (const amc::Json *field = parameter.find("name")) entry.name = field->as_string();
                             if (const amc::Json *field = parameter.find("type")) entry.type = field->as_string();
-                            method.parameters.push_back(std::move(entry));
+                            method.params.push_back(std::move(entry));
                         }
                     }
                     trait.methods.push_back(std::move(method));
@@ -268,7 +268,7 @@ amc::semantic::RustSemantic helper_rust_semantic(const HelperDocument &document)
             if (const amc::Json *field = value.find("kind")) error.kind = field->as_string();
             if (const amc::Json *variants = value.find("variants"); variants != nullptr && variants->is_array()) {
                 for (const amc::Json &item : variants->items()) {
-                    amc::semantic::RustErrorVariant variant;
+                    amc::semantic::RustErrorVar variant;
                     if (const amc::Json *field = item.find("name")) variant.name = field->as_string();
                     if (const amc::Json *field = item.find("discriminant")) variant.discriminant = field->as_string();
                     if (const amc::Json *field = item.find("payload")) variant.payload = field->as_string();
@@ -293,7 +293,7 @@ amc::semantic::RustSemantic helper_rust_semantic(const HelperDocument &document)
 
     if (const amc::Json *objects = root.find("trait_objects"); objects != nullptr && objects->is_array()) {
         for (const amc::Json &value : objects->items()) {
-            amc::semantic::RustTraitObject object;
+            amc::semantic::RustTraitObj object;
             if (const amc::Json *field = value.find("owner")) object.owner = field->as_string();
             if (const amc::Json *field = value.find("context")) object.context = field->as_string();
             if (const amc::Json *field = value.find("type")) object.type = field->as_string();
@@ -304,7 +304,7 @@ amc::semantic::RustSemantic helper_rust_semantic(const HelperDocument &document)
 
     if (const amc::Json *functions = root.find("async_functions"); functions != nullptr && functions->is_array()) {
         for (const amc::Json &value : functions->items()) {
-            amc::semantic::RustAsyncFunction function;
+            amc::semantic::RustAsyncFunc function;
             if (const amc::Json *field = value.find("id")) function.id = field->as_string();
             if (const amc::Json *field = value.find("path")) function.path = field->as_string();
             if (const amc::Json *field = value.find("name")) function.name = field->as_string();
@@ -494,15 +494,15 @@ bool query_rust_helper(
 }
 
 enum class Tok {
-    Ident,
-    Number,
-    String,
-    Punct,
-    End
+    IDENT,
+    NUMBER,
+    STRING,
+    PUNCT,
+    END,
 };
 
 struct Token {
-    Tok kind = Tok::End;
+    Tok kind = Tok::END;
     std::string text;
 };
 
@@ -551,7 +551,7 @@ std::vector<Token> lex(const std::string &source) {
                     value += source[j++];
                 }
             }
-            tokens.push_back({Tok::String, value});
+            tokens.push_back({Tok::STRING, value});
             i = j < n ? j + 1 : j;
             continue;
         }
@@ -576,7 +576,7 @@ std::vector<Token> lex(const std::string &source) {
             size_t j = i;
             while (j < n && is_ident_char(source[j]))
                 ++j;
-            tokens.push_back({Tok::Ident, source.substr(i, j - i)});
+            tokens.push_back({Tok::IDENT, source.substr(i, j - i)});
             i = j;
             continue;
         }
@@ -584,22 +584,22 @@ std::vector<Token> lex(const std::string &source) {
             size_t j = i;
             while (j < n && (is_ident_char(source[j]) || source[j] == '.'))
                 ++j;
-            tokens.push_back({Tok::Number, source.substr(i, j - i)});
+            tokens.push_back({Tok::NUMBER, source.substr(i, j - i)});
             i = j;
             continue;
         }
         if (i + 1 < n) {
             const std::string two = source.substr(i, 2);
             if (two == "::" || two == "->" || two == "=>") {
-                tokens.push_back({Tok::Punct, two});
+                tokens.push_back({Tok::PUNCT, two});
                 i += 2;
                 continue;
             }
         }
-        tokens.push_back({Tok::Punct, std::string(1, c)});
+        tokens.push_back({Tok::PUNCT, std::string(1, c)});
         ++i;
     }
-    tokens.push_back({Tok::End, {}});
+    tokens.push_back({Tok::END, {}});
     return tokens;
 }
 
@@ -610,11 +610,11 @@ struct RawField {
 
 struct RawItem {
     enum class Kind {
-        Record,
-        Enum,
-        Alias,
-        Union
-    } kind = Kind::Record;
+        RECORD,
+        ENUM,
+        ALIAS,
+        UNION,
+    } kind = Kind::RECORD;
     std::string name;
     std::vector<RawField> fields;
     uint32_t align_override = 0;
@@ -701,10 +701,10 @@ private:
     std::vector<RawFunction> functions_;
 
     const Token &peek(size_t offset = 0) const {
-        static const Token end{Tok::End, {}};
+        static const Token end{Tok::END, {}};
         return position_ + offset < tokens_.size() ? tokens_[position_ + offset] : end;
     }
-    bool at_end() const { return peek().kind == Tok::End; }
+    bool at_end() const { return peek().kind == Tok::END; }
     bool check(const char *text, size_t offset = 0) const { return peek(offset).text == text; }
     bool check_kind(Tok kind) const { return peek().kind == kind; }
     void advance() {
@@ -752,7 +752,7 @@ private:
                     if (token.text == s) stop = true;
                 if (stop) break;
             }
-            if (token.kind == Tok::Punct) {
+            if (token.kind == Tok::PUNCT) {
                 if (token.text == "<" || token.text == "[" || token.text == "(") {
                     ++depth;
                 } else if (token.text == ">" || token.text == "]" || token.text == ")") {
@@ -877,12 +877,12 @@ private:
     }
 
     void parse_struct(const Attrs &attrs) {
-        if (!check_kind(Tok::Ident)) {
+        if (!check_kind(Tok::IDENT)) {
             fail("struct name expected");
             return;
         }
         RawItem item;
-        item.kind = RawItem::Kind::Record;
+        item.kind = RawItem::Kind::RECORD;
         item.name = peek().text;
         item.align_override = attrs.align;
         item.packed_align = attrs.packed_align;
@@ -916,7 +916,7 @@ private:
             parse_attributes();
             skip_visibility();
             if (check("}")) break;
-            if (!check_kind(Tok::Ident)) {
+            if (!check_kind(Tok::IDENT)) {
                 advance();
                 continue;
             }
@@ -933,12 +933,12 @@ private:
     }
 
     void parse_union(const Attrs &attrs) {
-        if (!check_kind(Tok::Ident)) {
+        if (!check_kind(Tok::IDENT)) {
             fail("union name expected");
             return;
         }
         RawItem item;
-        item.kind = RawItem::Kind::Union;
+        item.kind = RawItem::Kind::UNION;
         item.name = peek().text;
         item.align_override = attrs.align;
         item.packed_align = attrs.packed_align;
@@ -950,7 +950,7 @@ private:
             parse_attributes();
             skip_visibility();
             if (check("}")) break;
-            if (!check_kind(Tok::Ident)) {
+            if (!check_kind(Tok::IDENT)) {
                 advance();
                 continue;
             }
@@ -967,12 +967,12 @@ private:
     }
 
     void parse_enum(const Attrs &attrs) {
-        if (!check_kind(Tok::Ident)) {
+        if (!check_kind(Tok::IDENT)) {
             fail("enum name expected");
             return;
         }
         RawItem item;
-        item.kind = RawItem::Kind::Enum;
+        item.kind = RawItem::Kind::ENUM;
         item.name = peek().text;
         item.enum_size = attrs.int_size == 0 ? 4 : attrs.int_size;
         advance();
@@ -982,12 +982,12 @@ private:
     }
 
     void parse_alias() {
-        if (!check_kind(Tok::Ident)) {
+        if (!check_kind(Tok::IDENT)) {
             fail("type alias name expected");
             return;
         }
         RawItem item;
-        item.kind = RawItem::Kind::Alias;
+        item.kind = RawItem::Kind::ALIAS;
         item.name = peek().text;
         advance();
         parse_generics_if_any();
@@ -1002,7 +1002,7 @@ private:
 
     void parse_extern() {
         bool is_c = true;
-        if (check_kind(Tok::String)) {
+        if (check_kind(Tok::STRING)) {
             is_c = peek().text == "C" || peek().text == "c";
             advance();
         }
@@ -1038,7 +1038,7 @@ private:
         RawFunction function;
         function.extern_c = is_c;
         function.is_unsafe = is_unsafe;
-        if (check_kind(Tok::Ident)) {
+        if (check_kind(Tok::IDENT)) {
             function.name = peek().text;
             advance();
         }
@@ -1053,7 +1053,7 @@ private:
         RawFunction function;
         function.extern_c = is_c;
         function.is_unsafe = is_unsafe;
-        if (check_kind(Tok::Ident)) {
+        if (check_kind(Tok::IDENT)) {
             function.name = peek().text;
             advance();
         }
@@ -1121,7 +1121,7 @@ public:
             by_name_.emplace(items_[i].name, i);
     }
 
-    amc::AbiModule build(const std::vector<std::string> &wanted, const std::vector<std::string> &explicit_functions) {
+    amc::ABIModule build(const std::vector<std::string> &wanted, const std::vector<std::string> &explicit_functions) {
         module_.package_name = "rust";
         module_.arch = target_.arch;
         module_.os = target_.os;
@@ -1171,7 +1171,7 @@ private:
     std::unordered_map<std::string, int> resolved_;
     std::unordered_map<std::string, int> primitive_ids_;
     std::unordered_map<std::string, bool> added_functions_;
-    amc::AbiModule module_;
+    amc::ABIModule module_;
     TargetFacts target_;
     std::string error_;
 
@@ -1189,52 +1189,52 @@ private:
         return -1;
     }
 
-    bool primitive_spec(const std::string &spelling, amc::PrimitiveAbiKind &kind, uint32_t &width,
+    bool primitive_spec(const std::string &spelling, amc::PrimitiveABIKind &kind, uint32_t &width,
         amc::FloatFormat &format, bool &signedness, std::string &descriptor) {
         // Pointer-sized Rust/C spellings follow the target, not the host.
         if (spelling == "isize" || spelling == "usize" || spelling == "c_long" || spelling == "c_ulong") {
             const bool is_signed = spelling == "isize" || spelling == "c_long";
             const bool is_c_long = spelling == "c_long" || spelling == "c_ulong";
             width = is_c_long ? target_.c_long_size : target_.pointer_size;
-            kind = is_signed ? amc::PrimitiveAbiKind::sint : amc::PrimitiveAbiKind::uint;
-            format = amc::FloatFormat::none;
+            kind = is_signed ? amc::PrimitiveABIKind::AMC_SINT : amc::PrimitiveABIKind::AMC_UINT;
+            format = amc::FloatFormat::NONE;
             signedness = is_signed;
             descriptor = fmt::format("prim:{}{}", is_signed ? 'i' : 'u', width * 8);
             return true;
         }
         struct Spec {
-            amc::PrimitiveAbiKind kind;
+            amc::PrimitiveABIKind kind;
             uint32_t width;
             amc::FloatFormat format;
             bool is_signed;
             const char *descriptor;
         };
         static const std::unordered_map<std::string, Spec> specs = {
-            {       "bool",         {amc::PrimitiveAbiKind::bool_, 1, amc::FloatFormat::none, false, "prim:bool"}},
-            {       "char",      {amc::PrimitiveAbiKind::char32, 4, amc::FloatFormat::none, false, "prim:char32"}},
-            {         "i8",             {amc::PrimitiveAbiKind::sint, 1, amc::FloatFormat::none, true, "prim:i8"}},
-            {        "i16",            {amc::PrimitiveAbiKind::sint, 2, amc::FloatFormat::none, true, "prim:i16"}},
-            {        "i32",            {amc::PrimitiveAbiKind::sint, 4, amc::FloatFormat::none, true, "prim:i32"}},
-            {        "i64",            {amc::PrimitiveAbiKind::sint, 8, amc::FloatFormat::none, true, "prim:i64"}},
-            {       "i128",          {amc::PrimitiveAbiKind::sint, 16, amc::FloatFormat::none, true, "prim:i128"}},
-            {         "u8",            {amc::PrimitiveAbiKind::uint, 1, amc::FloatFormat::none, false, "prim:u8"}},
-            {        "u16",           {amc::PrimitiveAbiKind::uint, 2, amc::FloatFormat::none, false, "prim:u16"}},
-            {        "u32",           {amc::PrimitiveAbiKind::uint, 4, amc::FloatFormat::none, false, "prim:u32"}},
-            {        "u64",           {amc::PrimitiveAbiKind::uint, 8, amc::FloatFormat::none, false, "prim:u64"}},
-            {       "u128",         {amc::PrimitiveAbiKind::uint, 16, amc::FloatFormat::none, false, "prim:u128"}},
-            {        "f32", {amc::PrimitiveAbiKind::floating, 4, amc::FloatFormat::ieee32, false, "prim:fieee32"}},
-            {        "f64", {amc::PrimitiveAbiKind::floating, 8, amc::FloatFormat::ieee64, false, "prim:fieee64"}},
-            {     "c_char",  {amc::PrimitiveAbiKind::char_signed, 1, amc::FloatFormat::none, true, "prim:char_s"}},
-            {    "c_schar",         {amc::PrimitiveAbiKind::schar, 1, amc::FloatFormat::none, true, "prim:schar"}},
-            {    "c_uchar",        {amc::PrimitiveAbiKind::uchar, 1, amc::FloatFormat::none, false, "prim:uchar"}},
-            {    "c_short",            {amc::PrimitiveAbiKind::sint, 2, amc::FloatFormat::none, true, "prim:i16"}},
-            {   "c_ushort",           {amc::PrimitiveAbiKind::uint, 2, amc::FloatFormat::none, false, "prim:u16"}},
-            {      "c_int",            {amc::PrimitiveAbiKind::sint, 4, amc::FloatFormat::none, true, "prim:i32"}},
-            {     "c_uint",           {amc::PrimitiveAbiKind::uint, 4, amc::FloatFormat::none, false, "prim:u32"}},
-            { "c_longlong",            {amc::PrimitiveAbiKind::sint, 8, amc::FloatFormat::none, true, "prim:i64"}},
-            {"c_ulonglong",           {amc::PrimitiveAbiKind::uint, 8, amc::FloatFormat::none, false, "prim:u64"}},
-            {    "c_float", {amc::PrimitiveAbiKind::floating, 4, amc::FloatFormat::ieee32, false, "prim:fieee32"}},
-            {   "c_double", {amc::PrimitiveAbiKind::floating, 8, amc::FloatFormat::ieee64, false, "prim:fieee64"}},
+            {       "bool",         {amc::PrimitiveABIKind::AMC_BOOL, 1, amc::FloatFormat::NONE, false, "prim:bool"}},
+            {       "char",     {amc::PrimitiveABIKind::AMC_CHAR32, 4, amc::FloatFormat::NONE, false, "prim:char32"}},
+            {         "i8",            {amc::PrimitiveABIKind::AMC_SINT, 1, amc::FloatFormat::NONE, true, "prim:i8"}},
+            {        "i16",           {amc::PrimitiveABIKind::AMC_SINT, 2, amc::FloatFormat::NONE, true, "prim:i16"}},
+            {        "i32",           {amc::PrimitiveABIKind::AMC_SINT, 4, amc::FloatFormat::NONE, true, "prim:i32"}},
+            {        "i64",           {amc::PrimitiveABIKind::AMC_SINT, 8, amc::FloatFormat::NONE, true, "prim:i64"}},
+            {       "i128",         {amc::PrimitiveABIKind::AMC_SINT, 16, amc::FloatFormat::NONE, true, "prim:i128"}},
+            {         "u8",           {amc::PrimitiveABIKind::AMC_UINT, 1, amc::FloatFormat::NONE, false, "prim:u8"}},
+            {        "u16",          {amc::PrimitiveABIKind::AMC_UINT, 2, amc::FloatFormat::NONE, false, "prim:u16"}},
+            {        "u32",          {amc::PrimitiveABIKind::AMC_UINT, 4, amc::FloatFormat::NONE, false, "prim:u32"}},
+            {        "u64",          {amc::PrimitiveABIKind::AMC_UINT, 8, amc::FloatFormat::NONE, false, "prim:u64"}},
+            {       "u128",        {amc::PrimitiveABIKind::AMC_UINT, 16, amc::FloatFormat::NONE, false, "prim:u128"}},
+            {        "f32",   {amc::PrimitiveABIKind::AMC_FLOAT, 4, amc::FloatFormat::IEEE32, false, "prim:fieee32"}},
+            {        "f64",   {amc::PrimitiveABIKind::AMC_FLOAT, 8, amc::FloatFormat::IEEE64, false, "prim:fieee64"}},
+            {     "c_char", {amc::PrimitiveABIKind::AMC_CHAR_SIGNED, 1, amc::FloatFormat::NONE, true, "prim:char_s"}},
+            {    "c_schar",        {amc::PrimitiveABIKind::AMC_SCHAR, 1, amc::FloatFormat::NONE, true, "prim:schar"}},
+            {    "c_uchar",       {amc::PrimitiveABIKind::AMC_UCHAR, 1, amc::FloatFormat::NONE, false, "prim:uchar"}},
+            {    "c_short",           {amc::PrimitiveABIKind::AMC_SINT, 2, amc::FloatFormat::NONE, true, "prim:i16"}},
+            {   "c_ushort",          {amc::PrimitiveABIKind::AMC_UINT, 2, amc::FloatFormat::NONE, false, "prim:u16"}},
+            {      "c_int",           {amc::PrimitiveABIKind::AMC_SINT, 4, amc::FloatFormat::NONE, true, "prim:i32"}},
+            {     "c_uint",          {amc::PrimitiveABIKind::AMC_UINT, 4, amc::FloatFormat::NONE, false, "prim:u32"}},
+            { "c_longlong",           {amc::PrimitiveABIKind::AMC_SINT, 8, amc::FloatFormat::NONE, true, "prim:i64"}},
+            {"c_ulonglong",          {amc::PrimitiveABIKind::AMC_UINT, 8, amc::FloatFormat::NONE, false, "prim:u64"}},
+            {    "c_float",   {amc::PrimitiveABIKind::AMC_FLOAT, 4, amc::FloatFormat::IEEE32, false, "prim:fieee32"}},
+            {   "c_double",   {amc::PrimitiveABIKind::AMC_FLOAT, 8, amc::FloatFormat::IEEE64, false, "prim:fieee64"}},
         };
         const auto it = specs.find(spelling);
         if (it == specs.end()) return false;
@@ -1246,13 +1246,13 @@ private:
         return true;
     }
 
-    int add_primitive(amc::PrimitiveAbiKind kind, uint32_t width, amc::FloatFormat format, bool signedness,
+    int add_primitive(amc::PrimitiveABIKind kind, uint32_t width, amc::FloatFormat format, bool signedness,
         const std::string &descriptor, const std::string &spelling) {
         const auto seen = primitive_ids_.find(descriptor);
         if (seen != primitive_ids_.end()) return seen->second;
         amc::Type type;
         type.name = spelling;
-        type.kind = amc::TypeKind::primitive;
+        type.kind = amc::TypeKind::PRIMITIVE;
         type.id = amc::hash_text(descriptor, kTypeDomain);
         type.size = width;
         type.align = width >= 16 ? 16 : (width == 0 ? 1 : width);
@@ -1281,7 +1281,7 @@ private:
             for (const auto &token : tokens)
                 name += token;
             const Resolved pointer =
-                add_aggregate_ref(name, target_.pointer_size, target_.pointer_size, amc::TypeKind::pointer);
+                add_aggregate_ref(name, target_.pointer_size, target_.pointer_size, amc::TypeKind::POINTER);
             // Record the pointee so element/contract matching uses ABI identity
             // (TypeID) instead of a spelling. An unresolvable pointee falls back
             // to the spelling without failing the parse.
@@ -1324,7 +1324,7 @@ private:
                 name += token;
             amc::Type type;
             type.name = name;
-            type.kind = amc::TypeKind::array;
+            type.kind = amc::TypeKind::ARRAY;
             type.id = amc::hash_text(name, kTypeDomain);
             type.array_count = static_cast<uint32_t>(count);
             type.size = static_cast<uint32_t>(inner.size * count);
@@ -1340,15 +1340,15 @@ private:
         // `()` -> C void (only meaningful as a return type; not emitted).
         if (tokens.size() == 2 && tokens[0] == "(" && tokens[1] == ")") {
             const int index =
-                add_primitive(amc::PrimitiveAbiKind::void_, 0, amc::FloatFormat::none, false, "prim:void", "void");
+                add_primitive(amc::PrimitiveABIKind::AMC_VOID, 0, amc::FloatFormat::NONE, false, "prim:void", "void");
             return {module_.types[static_cast<size_t>(index)].id, 0, 1};
         }
         std::string spelling;
         for (const auto &token : tokens)
             spelling += token;
-        amc::PrimitiveAbiKind kind;
+        amc::PrimitiveABIKind kind;
         uint32_t width = 0;
-        amc::FloatFormat format = amc::FloatFormat::none;
+        amc::FloatFormat format = amc::FloatFormat::NONE;
         bool signedness = false;
         std::string descriptor;
         if (tokens.size() == 1 && primitive_spec(spelling, kind, width, format, signedness, descriptor)) {
@@ -1400,16 +1400,16 @@ private:
         }
         const RawItem &item = items_[found->second];
         resolved_[name] = -1;   // mark in progress
-        if (item.kind == RawItem::Kind::Alias) {
+        if (item.kind == RawItem::Kind::ALIAS) {
             return finish_alias(item);
         }
-        if (item.kind == RawItem::Kind::Union) {
+        if (item.kind == RawItem::Kind::UNION) {
             return finish_union(item);
         }
-        if (item.kind == RawItem::Kind::Enum) {
+        if (item.kind == RawItem::Kind::ENUM) {
             amc::Type type;
             type.name = item.name;
-            type.kind = amc::TypeKind::enumeration;
+            type.kind = amc::TypeKind::ENUM;
             type.id = amc::hash_text(item.name, kTypeDomain);
             type.size = item.explicit_layout ? static_cast<uint32_t>(item.explicit_size)
                                              : (item.enum_size == 0 ? 4 : item.enum_size);
@@ -1425,7 +1425,7 @@ private:
     int finish_union(const RawItem &item) {
         amc::Type type;
         type.name = item.name;
-        type.kind = amc::TypeKind::record;
+        type.kind = amc::TypeKind::RECORD;
         type.id = amc::hash_text(item.name, kTypeDomain);
         const int index = static_cast<int>(module_.types.size());
         type.field_begin = static_cast<uint32_t>(module_.fields.size());
@@ -1462,7 +1462,7 @@ private:
     int finish_alias(const RawItem &item) {
         amc::Type type;
         type.name = item.name;
-        type.kind = amc::TypeKind::alias;
+        type.kind = amc::TypeKind::ALIAS;
         type.id = amc::hash_text(item.name, kTypeDomain);
         const int index = static_cast<int>(module_.types.size());
         type.field_begin = static_cast<uint32_t>(module_.fields.size());
@@ -1484,7 +1484,7 @@ private:
     int finish_record(const RawItem &item) {
         amc::Type type;
         type.name = item.name;
-        type.kind = amc::TypeKind::record;
+        type.kind = amc::TypeKind::RECORD;
         type.id = amc::hash_text(item.name, kTypeDomain);
         const int index = static_cast<int>(module_.types.size());
         type.field_begin = static_cast<uint32_t>(module_.fields.size());
@@ -1539,7 +1539,7 @@ private:
         function.calling_convention = 1;   // C
         if (void_return) {
             const int void_index =
-                add_primitive(amc::PrimitiveAbiKind::void_, 0, amc::FloatFormat::none, false, "prim:void", "void");
+                add_primitive(amc::PrimitiveABIKind::AMC_VOID, 0, amc::FloatFormat::NONE, false, "prim:void", "void");
             function.return_type = module_.types[static_cast<size_t>(void_index)].id;
         } else {
             const Resolved result = resolve_type(raw.return_type);
@@ -1551,7 +1551,7 @@ private:
             if (parameter.type.size() == 2 && parameter.type[0] == "(" && parameter.type[1] == ")") continue;
             const Resolved resolved = resolve_type(parameter.type);
             if (!ok()) return;
-            function.parameters.push_back({parameter.name, resolved.id, 0});
+            function.params.push_back({parameter.name, resolved.id, 0});
         }
         function.signature = amc::signature_hash(function);
         module_.functions.push_back(std::move(function));
@@ -1585,15 +1585,15 @@ std::vector<std::string> helper_type_tokens(
     std::vector<Token> tokens = lex(helper_type_spelling(text, names));
     std::vector<std::string> out;
     for (const Token &token : tokens)
-        if (token.kind != Tok::End) out.push_back(token.text);
+        if (token.kind != Tok::END) out.push_back(token.text);
     return out;
 }
 
 RawItem::Kind helper_raw_kind(const std::string &kind) {
-    if (kind == "union") return RawItem::Kind::Union;
-    if (kind == "enum") return RawItem::Kind::Enum;
-    if (kind == "alias") return RawItem::Kind::Alias;
-    return RawItem::Kind::Record;
+    if (kind == "union") return RawItem::Kind::UNION;
+    if (kind == "enum") return RawItem::Kind::ENUM;
+    if (kind == "alias") return RawItem::Kind::ALIAS;
+    return RawItem::Kind::RECORD;
 }
 
 void apply_helper_repr(const HelperType &type, RawItem &item) {
@@ -1694,7 +1694,7 @@ void merge_helper_functions(const HelperDocument &document, std::vector<RawFunct
     }
 }
 
-std::string cross_validate_helper(const HelperDocument &document, const amc::AbiModule &parser_module) {
+std::string cross_validate_helper(const HelperDocument &document, const amc::ABIModule &parser_module) {
     std::string mismatches;
     for (const HelperType &type : document.types) {
         if (type.generic) continue;
@@ -1902,7 +1902,7 @@ int run_frontend(const char *config_path, const char *output_path) {
         // layouts it derives with the rustc helper for every type both views
         // resolved; the helper layout wins, but a mismatch is a real bug.
         Builder parser_builder(parser_items, {}, target);
-        const amc::AbiModule parser_module = parser_builder.build(config.symbols, exposed_names);
+        const amc::ABIModule parser_module = parser_builder.build(config.symbols, exposed_names);
         if (parser_builder.ok()) {
             const std::string mismatches = cross_validate_helper(helper, parser_module);
             if (!mismatches.empty())
@@ -1911,7 +1911,7 @@ int run_frontend(const char *config_path, const char *output_path) {
     }
 
     Builder builder(std::move(items), std::move(functions), target);
-    amc::AbiModule module = builder.build(config.symbols, exposed_names);
+    amc::ABIModule module = builder.build(config.symbols, exposed_names);
     if (amc::lang::cancellation_requested()) return amc::lang::kCapabilityCancelled;
     if (!builder.ok()) {
         fmt::print(stderr, "{}\n", builder.error());
@@ -1939,4 +1939,4 @@ int run_frontend(const char *config_path, const char *output_path) {
     return EXIT_SUCCESS;
 }
 
-}   // namespace amc::lang::rust
+}   // namespace skl::amc::lang::rust

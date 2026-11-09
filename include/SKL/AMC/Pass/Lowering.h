@@ -20,7 +20,7 @@
 #include "SKL/AMC/IR/Lowering.h"
 #include "SKL/AMC/IR/Module.h"
 
-namespace amc::pass {
+namespace skl::amc::pass {
 
 struct LoweringOptions {
     bool strict = false;   // report rejected entities as errors instead of warnings
@@ -37,6 +37,6 @@ bool lower(const ir::Module &module, ir::LoweringResult &result, diagnostics::Di
 // contracts; strict callers use `lower(..., LoweringOptions{true})`.
 bool lower_pass(ir::Module &module, diagnostics::DiagnosticList &diagnostics);
 
-}   // namespace amc::pass
+}   // namespace skl::amc::pass
 
 #endif   // AMC_PASS_LOWERING_H

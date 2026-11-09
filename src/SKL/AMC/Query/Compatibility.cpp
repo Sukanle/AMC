@@ -15,11 +15,11 @@
  */
 #include "SKL/AMC/Query/Compatibility.h"
 
-namespace amc::query {
+namespace skl::amc::query {
 
 bool compare(
-    const AbiModule &contract, const AbiModule &implementation, ir::CompatibilityResult &result, std::string &error) {
+    const ABIModule &contract, const ABIModule &implementation, ir::CompatibilityResult &result, std::string &error) {
     return ir::compare_contracts(contract, implementation, result, error);
 }
 
-}   // namespace amc::query
+}   // namespace skl::amc::query

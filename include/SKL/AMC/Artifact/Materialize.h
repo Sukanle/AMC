@@ -24,7 +24,7 @@
 #include <string>
 #include <vector>
 
-namespace amc {
+namespace skl::amc {
 
 // AI-PM: runtime projection (materialization).
 //
@@ -49,11 +49,11 @@ struct MaterializedModule {
     MaterializedModule(const MaterializedModule &) = delete;
     MaterializedModule &operator=(const MaterializedModule &) = delete;
 
-    bool build(const AbiModule &module, std::string &error);
+    bool build(const ABIModule &module, std::string &error);
     bool build_from_region(const uint8_t *data, size_t size, std::string &error);
     bool build_from_region(const std::vector<uint8_t> &region, std::string &error);
 };
 
-}   // namespace amc
+}   // namespace skl::amc
 
 #endif

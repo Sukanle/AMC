@@ -25,7 +25,7 @@
 #include <string>
 #include <vector>
 
-namespace amc::lang::backend::cpp {
+namespace skl::amc::lang::backend::cpp {
 
 void Emit::types() {
     for (const auto &type : _m.types) {
@@ -66,9 +66,9 @@ void Emit::types() {
 void Emit::functions() {
     for (size_t i = 0; i < _m.functions.size(); ++i) {
         const auto &function = _m.functions[i];
-        const auto param_count = function.parameters.empty() ? 1 : function.parameters.size();
+        const auto param_count = function.params.empty() ? 1 : function.params.size();
         _o.print("inline constexpr ParameterInfo amc_function_{}_parameters[{}] = {{\n", i, param_count);
-        for (const auto &parameter : function.parameters)
+        for (const auto &parameter : function.params)
             _o.print("    {{{{{}, {}}}, {}}},\n", hex_u64(parameter.type_id.lo), hex_u64(parameter.type_id.hi),
                 parameter.flags);
         _o.print("}};\n");
@@ -76,7 +76,7 @@ void Emit::functions() {
             "inline constexpr FunctionInfo amc_function_{} {{amc_function_{}_parameters, {{{}, {}}},"
             " {{{}, {}}}, {}, {}, {}}};\n",
             i, i, hex_u64(function.signature.lo), hex_u64(function.signature.hi), hex_u64(function.return_type.lo),
-            hex_u64(function.return_type.hi), function.parameters.size(), function.calling_convention, function.flags);
+            hex_u64(function.return_type.hi), function.params.size(), function.calling_convention, function.flags);
     }
 }
 
@@ -129,8 +129,7 @@ void Emit::tables() {
             const auto &function = _m.functions[i];
             _o.print("    {{amc_function_{}_parameters, {{{}, {}}}, {{{}, {}}}, {}, {}, {}}},\n", i,
                 hex_u64(function.signature.lo), hex_u64(function.signature.hi), hex_u64(function.return_type.lo),
-                hex_u64(function.return_type.hi), function.parameters.size(), function.calling_convention,
-                function.flags);
+                hex_u64(function.return_type.hi), function.params.size(), function.calling_convention, function.flags);
         }
         _o.print("}};\n");
     }
@@ -253,10 +252,10 @@ void Emit::maps() {
         const auto op_count = map.operations.empty() ? 1 : map.operations.size();
         _o.print("inline constexpr MapOperation amc_map_{}_operations[{}] = {{\n", i, op_count);
         for (const auto &operation : map.operations) {
-            const char *opname = operation.opcode == amc::MapOpcode::copy_field    ? "copy_field"
-                               : operation.opcode == amc::MapOpcode::convert_int   ? "convert_int"
-                               : operation.opcode == amc::MapOpcode::convert_float ? "convert_float"
-                               : operation.opcode == amc::MapOpcode::add_default   ? "add_default"
+            const char *opname = operation.opcode == amc::MapOpcode::COPY_FIELD    ? "copy_field"
+                               : operation.opcode == amc::MapOpcode::CONVERT_INT   ? "convert_int"
+                               : operation.opcode == amc::MapOpcode::CONVERT_FLOAT ? "convert_float"
+                               : operation.opcode == amc::MapOpcode::ADD_DEFAULT   ? "add_default"
                                                                                    : "skip_field";
             _o.print("    {{MapOpcode::{}, {}, {}, {}, {}, {}, {{{}, {}}}}},\n", opname, operation.source_field,
                 operation.target_field, operation.source_offset, operation.target_offset, operation.byte_count,
@@ -272,19 +271,19 @@ void Emit::maps() {
             cpp_name(map.source_name), cpp_name(map.target_name), i, map.operations.size());
         for (const auto &operation : map.operations) {
             switch (operation.opcode) {
-                case amc::MapOpcode::copy_field:
+                case amc::MapOpcode::COPY_FIELD:
                     _o.print(
                         "    memcpy(static_cast<char *>(target) + {}, static_cast<const char *>(source) + {}, "
                         "{});\n",
                         operation.target_offset, operation.source_offset, operation.byte_count);
                     break;
-                case amc::MapOpcode::add_default:
+                case amc::MapOpcode::ADD_DEFAULT:
                     _o.print("    memset(static_cast<char *>(target) + {}, 0, {});\n", operation.target_offset,
                         operation.byte_count);
                     break;
-                case amc::MapOpcode::skip_field:  break;
-                case amc::MapOpcode::convert_int:
-                case amc::MapOpcode::convert_float:
+                case amc::MapOpcode::SKIP_FIELD:  break;
+                case amc::MapOpcode::CONVERT_INT:
+                case amc::MapOpcode::CONVERT_FLOAT:
                     _o.print("    return false;  // conversion requires an explicit native converter\n");
                     break;
             }
@@ -310,11 +309,11 @@ int Emit::projection(std::string &error) {
 
 void Emit::native_type_traits() {
     _o.print(
-        "}}  // namespace amc_generated\n"
+        "}}  // namespace skl::amc::generated\n"
         "#ifdef AMC_GENERATED_DECLARE_NATIVE_TYPE_TRAITS\n"
         "namespace skl::abix::runtime {{\n");
     for (const auto &type : _m.types) {
-        if (type.kind != amc::TypeKind::record
+        if (type.kind != amc::TypeKind::RECORD
             || (type.flags & amc::type_template_primary) != 0
             || type.name.find('<') != std::string::npos
             || type.name.rfind("std::", 0) == 0)
@@ -322,7 +321,7 @@ void Emit::native_type_traits() {
         const std::string id = fmt::format("{}_ABIX", cpp_name(type.name));
         _o.print(
             "template <> struct TypeTraits<::{}> {{\n"
-            "  static constexpr ::skl::abix::model::TypeId type_id = ::amc_generated::{}::type_id;\n"
+            "  static constexpr ::skl::abix::model::TypeId type_id = ::skl::amc::generated::{}::type_id;\n"
             "}};\n",
             type.name, id);
     }
@@ -331,4 +330,4 @@ void Emit::native_type_traits() {
         "#endif  // AMC_GENERATED_DECLARE_NATIVE_TYPE_TRAITS\n");
 }
 
-}   // namespace amc::lang::backend::cpp
+}   // namespace skl::amc::lang::backend::cpp

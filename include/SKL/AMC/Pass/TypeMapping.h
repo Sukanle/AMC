@@ -20,14 +20,14 @@
 #include "SKL/AMC/Diagnostics/Diagnostics.h"
 #include "SKL/AMC/Pass/Pass.h"
 
-namespace amc::pass {
+namespace skl::amc::pass {
 
 // A3: type-mapping compatibility report. The matching policy remains in
 // Core/Adapter; the pass owns the error/diagnostic boundary used by CLI and
 // Compilation.
-bool build_compatibility_report(const AbiModule &source, const AbiModule &target, AbiModule &report, Context &context,
+bool build_compatibility_report(const ABIModule &source, const ABIModule &target, ABIModule &report, Context &context,
     diagnostics::DiagnosticList &diagnostics);
 
-}   // namespace amc::pass
+}   // namespace skl::amc::pass
 
 #endif   // AMC_PASS_TYPE_MAPPING_H

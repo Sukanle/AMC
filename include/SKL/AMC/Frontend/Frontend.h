@@ -24,7 +24,7 @@
 #include <string>
 #include <vector>
 
-namespace amc::frontend {
+namespace skl::amc::frontend {
 
 // A0 contract: a frontend turns source-language input into IR. It must not
 // depend on any backend, and it must report unsupported constructs through
@@ -50,6 +50,6 @@ struct Frontend {
     std::function<Result(const Request &)> run;
 };
 
-}   // namespace amc::frontend
+}   // namespace skl::amc::frontend
 
 #endif   // AMC_FRONTEND_FRONTEND_H

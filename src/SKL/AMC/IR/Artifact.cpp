@@ -20,7 +20,7 @@
 
 #include <fstream>
 
-namespace amc::ir {
+namespace skl::amc::ir {
 namespace {
 
 bool exists(const std::string &path) {
@@ -50,4 +50,4 @@ bool load_artifact(const std::string &abi_path, Module &module, std::string &err
     return true;
 }
 
-}   // namespace amc::ir
+}   // namespace skl::amc::ir

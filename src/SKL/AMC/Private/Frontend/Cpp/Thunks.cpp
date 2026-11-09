@@ -31,9 +31,9 @@
 #include <utility>
 #include <vector>
 
-namespace amc::lang::frontend::cpp {
+namespace skl::amc::lang::frontend::cpp {
 
-ThunkEmitter::ThunkEmitter(amc::AbiModule &module, const amc::lang::Config &config,
+ThunkEmitter::ThunkEmitter(amc::ABIModule &module, const amc::lang::Config &config,
     std::vector<NativeAdapt> &adaptations, llvm::StringRef base, amc::semantic::SemanticModule &semantic)
     : module_(module)
     , config_(config)
@@ -85,7 +85,7 @@ static std::string include_spelling(
 }
 
 bool ThunkEmitter::run(std::string &error) {
-    amc::AbiModule &module = module_;
+    amc::ABIModule &module = module_;
     const amc::lang::Config &config = config_;
     std::vector<NativeAdapt> &adaptations = adaptations_;
     llvm::StringRef base = base_;
@@ -98,7 +98,7 @@ bool ThunkEmitter::run(std::string &error) {
     }
     for (const auto &adapt : config.adaptations) {
         const NativeKind kind = native_kind_of(adapt.native);
-        if (kind == NativeKind::none) {
+        if (kind == NativeKind::NONE) {
             error = "[[adapt]] native kind is not supported: " + adapt.native;
             return false;
         }
@@ -106,14 +106,14 @@ bool ThunkEmitter::run(std::string &error) {
             error = "[[adapt]] requires a boundary target type";
             return false;
         }
-        if ((kind == NativeKind::vector || kind == NativeKind::span) && adapt.element.empty()) {
+        if ((kind == NativeKind::VECTOR || kind == NativeKind::SPAN) && adapt.element.empty()) {
             error = "[[adapt]] requires an element spelling for " + adapt.native;
             return false;
         }
     }
     uint32_t pointer_size = 8;
     for (const auto &type : module.types)
-        if (type.kind == amc::TypeKind::pointer) {
+        if (type.kind == amc::TypeKind::POINTER) {
             pointer_size = type.size;
             break;
         }
@@ -132,7 +132,7 @@ bool ThunkEmitter::run(std::string &error) {
         return module.types.back().id;
     };
     const amc::Hash128 void_id =
-        intern("void", amc::TypeKind::primitive, 0, 1, amc::primitive_abi(0, amc::PrimitiveAbiKind::void_));
+        intern("void", amc::TypeKind::PRIMITIVE, 0, 1, amc::primitive_abi(0, amc::PrimitiveABIKind::AMC_VOID));
     const auto type_name = [&](amc::Hash128 id) -> std::string {
         for (const auto &type : module.types)
             if (type.id == id) return type.name;
@@ -144,26 +144,26 @@ bool ThunkEmitter::run(std::string &error) {
     // so the compiled parameter type is the header's); a consumer projects the
     // boundary by name. An existing type of the same name is reused untouched.
     const auto ensure_pointer = [&](const std::string &name, amc::Hash128 pointee) -> amc::Hash128 {
-        const amc::Hash128 id = intern(name, amc::TypeKind::pointer, pointer_size, pointer_size, 0);
+        const amc::Hash128 id = intern(name, amc::TypeKind::POINTER, pointer_size, pointer_size, 0);
         for (const auto &ref : module.pointees)
             if (ref.pointer == id) return id;
         module.pointees.push_back({id, pointee, amc::pointee_const});
         return id;
     };
     const amc::Hash128 len_id =
-        intern("unsigned long", amc::TypeKind::primitive, 8, 8, amc::primitive_abi(8, amc::PrimitiveAbiKind::uint));
+        intern("unsigned long", amc::TypeKind::PRIMITIVE, 8, 8, amc::primitive_abi(8, amc::PrimitiveABIKind::AMC_UINT));
     const amc::Hash128 encoding_id =
-        intern("unsigned int", amc::TypeKind::primitive, 4, 4, amc::primitive_abi(4, amc::PrimitiveAbiKind::uint));
+        intern("unsigned int", amc::TypeKind::PRIMITIVE, 4, 4, amc::primitive_abi(4, amc::PrimitiveABIKind::AMC_UINT));
     const auto ensure_boundary = [&](NativeAdapt &adapt) -> amc::Hash128 {
         for (const auto &type : module.types)
             if (type.name == adapt.target) return type.id;
-        const bool string_view = adapt.kind == static_cast<uint32_t>(NativeKind::string)
-                              || adapt.kind == static_cast<uint32_t>(NativeKind::string_view);
+        const bool string_view = adapt.kind == static_cast<uint32_t>(NativeKind::STRING)
+                              || adapt.kind == static_cast<uint32_t>(NativeKind::STRING_VIEW);
         const std::string element = adapt.element.empty() ? "char" : adapt.element;
         const amc::Hash128 data_id = ensure_pointer("const " + element + "*", adapt.element_id);
         amc::Type type;
         type.name = adapt.target;
-        type.kind = amc::TypeKind::record;
+        type.kind = amc::TypeKind::RECORD;
         type.id = amc::hash_text(type.name, 0x54595045);
         type.field_begin = static_cast<uint32_t>(module.fields.size());
         module.fields.push_back({type.id, "data", data_id, 0, 0});
@@ -187,11 +187,11 @@ bool ThunkEmitter::run(std::string &error) {
     // The C++ expression that marshals one boundary value at the call site.
     const auto adapt_expression = [&](const NativeAdapt &adapt, const std::string &arg) -> std::string {
         switch (static_cast<NativeKind>(adapt.kind)) {
-            case NativeKind::string:      return "std::string(" + arg + ".data, " + arg + ".len)";
-            case NativeKind::string_view: return "std::string_view(" + arg + ".data, " + arg + ".len)";
-            case NativeKind::vector:
+            case NativeKind::STRING:      return "std::string(" + arg + ".data, " + arg + ".len)";
+            case NativeKind::STRING_VIEW: return "std::string_view(" + arg + ".data, " + arg + ".len)";
+            case NativeKind::VECTOR:
                 return "std::vector<" + adapt.element + ">(" + arg + ".data, " + arg + ".data + " + arg + ".len)";
-            case NativeKind::span: return "std::span<const " + adapt.element + ">(" + arg + ".data, " + arg + ".len)";
+            case NativeKind::SPAN: return "std::span<const " + adapt.element + ">(" + arg + ".data, " + arg + ".len)";
             default:               return arg;
         }
     };
@@ -243,8 +243,8 @@ bool ThunkEmitter::run(std::string &error) {
     bool wants_string = false, wants_span = false;
     for (const auto &adapt : config.adaptations) {
         const NativeKind kind = native_kind_of(adapt.native);
-        if (kind == NativeKind::string || kind == NativeKind::string_view) wants_string = true;
-        if (kind == NativeKind::vector || kind == NativeKind::span) wants_span = true;
+        if (kind == NativeKind::STRING || kind == NativeKind::STRING_VIEW) wants_string = true;
+        if (kind == NativeKind::VECTOR || kind == NativeKind::SPAN) wants_span = true;
     }
     if (wants_string) source += "#include \"SKL/ABIX/STD/String.h\"\n";
     if (wants_span) source += "#include \"SKL/ABIX/STD/Span.h\"\n";
@@ -316,7 +316,7 @@ bool ThunkEmitter::run(std::string &error) {
         const std::string symbol_type = symbol_of(record->name);
         amc::semantic::ExposedType exposed_contract;
         exposed_contract.abi_type = type_id;
-        exposed_contract.qualified_name = cpp_type;
+        exposed_contract.qualified = cpp_type;
         exposed_contract.symbol = symbol_type;
         exposed_contract.has_constructor = expose.has_constructor;
         exposed_contract.opaque = expose.opaque;
@@ -330,7 +330,7 @@ bool ThunkEmitter::run(std::string &error) {
             if (function.owner_type == type_id) return true;
             return std::find(bases.begin(), bases.end(), function.owner_type) != bases.end();
         };
-        const amc::Hash128 self_id = intern(cpp_type + "*", amc::TypeKind::pointer, pointer_size, pointer_size, 0);
+        const amc::Hash128 self_id = intern(cpp_type + "*", amc::TypeKind::POINTER, pointer_size, pointer_size, 0);
 
         const auto register_thunk = [&](const std::string &name, amc::Hash128 ret,
                                         const std::vector<std::pair<std::string, amc::Hash128>> &params) {
@@ -342,7 +342,7 @@ bool ThunkEmitter::run(std::string &error) {
                 amc::Parameter p;
                 p.name = parameter.first;
                 p.type_id = parameter.second;
-                function.parameters.push_back(std::move(p));
+                function.params.push_back(std::move(p));
             }
             function.signature = amc::signature_hash(function);
             module.functions.push_back(std::move(function));
@@ -426,7 +426,7 @@ bool ThunkEmitter::run(std::string &error) {
                           + type_name(found->return_type);
                     return false;
                 }
-                for (const auto &parameter : found->parameters) {
+                for (const auto &parameter : found->params) {
                     NativeAdapt *adapt = find_adapt(parameter.type_id);
                     if (adapt != nullptr) {
                         // A declared native↔ABIX-STD adaptation: the thunk takes the
@@ -438,12 +438,12 @@ bool ThunkEmitter::run(std::string &error) {
                             amc::LoweringResult lowering;
                             lowering.type_id = adapt->native_type;
                             lowering.contract_type = adapt->boundary_type;
-                            const bool string_view = adapt->kind == static_cast<uint32_t>(NativeKind::string)
-                                                  || adapt->kind == static_cast<uint32_t>(NativeKind::string_view);
+                            const bool string_view = adapt->kind == static_cast<uint32_t>(NativeKind::STRING)
+                                                  || adapt->kind == static_cast<uint32_t>(NativeKind::STRING_VIEW);
                             lowering.kind = static_cast<uint32_t>(
-                                string_view ? amc::LoweringKind::string_view : amc::LoweringKind::sequence_view);
-                            lowering.status = static_cast<uint32_t>(amc::LoweringStatus::needs_adapter);
-                            lowering.reason = static_cast<uint32_t>(amc::LoweringReason::layout);
+                                string_view ? amc::LoweringKind::STRING_VIEW : amc::LoweringKind::SEQUENCE_VIEW);
+                            lowering.status = static_cast<uint32_t>(amc::LoweringStatus::NEEDS_ADAPTER);
+                            lowering.reason = static_cast<uint32_t>(amc::LoweringReason::LAYOUT);
                             module.lowerings.push_back(lowering);
                         }
                         continue;
@@ -465,8 +465,8 @@ bool ThunkEmitter::run(std::string &error) {
                 std::vector<std::pair<std::string, amc::Hash128>> signature = {
                     {"self", self_id}
                 };
-                for (size_t i = 0; i < found->parameters.size(); ++i) {
-                    const auto &parameter = found->parameters[i];
+                for (size_t i = 0; i < found->params.size(); ++i) {
+                    const auto &parameter = found->params[i];
                     const std::string name = parameter.name.empty() ? "arg" + std::to_string(i) : parameter.name;
                     const NativeAdapt *adapt = find_adapt(parameter.type_id);
                     const amc::Hash128 param_type = adapt != nullptr ? adapt->boundary_type : parameter.type_id;
@@ -495,8 +495,8 @@ bool ThunkEmitter::run(std::string &error) {
                 // use-after-free, so copy what the contract recording needs first.
                 const amc::Hash128 return_type_id = found->return_type;
                 std::vector<amc::Hash128> parameter_type_ids;
-                parameter_type_ids.reserve(found->parameters.size());
-                for (const auto &parameter : found->parameters)
+                parameter_type_ids.reserve(found->params.size());
+                for (const auto &parameter : found->params)
                     parameter_type_ids.push_back(parameter.type_id);
                 // Record the ABIX-STD contracts of the boundary types in this
                 // signature (span -> SequenceView, str -> StringView, result).
@@ -515,10 +515,10 @@ bool ThunkEmitter::run(std::string &error) {
                 // value are fields of the returned record, so a consumer can turn the
                 // C aggregate into a typed Result without inspecting a bare integer.
                 if (type_name(return_type_id).rfind("abix_result_", 0) == 0
-                    && return_contract.status != static_cast<uint32_t>(amc::LoweringStatus::unsupported)) {
+                    && return_contract.status != static_cast<uint32_t>(amc::LoweringStatus::UNSUPPORTED)) {
                     amc::ErrorContract contract;
                     contract.function_index = thunk_index;
-                    contract.status_source = amc::StatusSource::return_field;
+                    contract.status_source = amc::StatusSource::RETURN_FIELD;
                     contract.status_parameter = return_contract.pointer_field;
                     contract.value_parameter = return_contract.length_field;
                     contract.success_value = 0;
@@ -603,4 +603,4 @@ bool ThunkEmitter::run(std::string &error) {
     return true;
 }
 
-}   // namespace amc::lang::frontend::cpp
+}   // namespace skl::amc::lang::frontend::cpp

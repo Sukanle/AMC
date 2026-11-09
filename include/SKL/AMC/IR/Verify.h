@@ -21,7 +21,7 @@
 #include <string>
 #include <vector>
 
-namespace amc {
+namespace skl::amc {
 
 // AI-P1: verify that a runtime implementation still matches its frozen ABI
 // contract.
@@ -35,27 +35,27 @@ namespace amc {
 // must be an explicit decision. Ownership and error-boundary differences are
 // reported as contract drift without being folded into layout compatibility.
 enum class ChangeKind {
-    type_added,
-    type_removed,
-    layout_changed,
-    field_added,
-    field_removed,
-    field_offset_changed,
-    field_type_changed,
-    function_added,
-    function_removed,
-    function_signature_changed,
-    function_parameter_changed,
-    calling_convention_changed,
-    ownership_changed,
-    error_boundary_changed,
-    interface_changed,
+    TYPE_ADDED,
+    TYPE_REMOVED,
+    LAYOUT_CHANGED,
+    FIELD_ADDED,
+    FIELD_REMOVED,
+    FIELD_OFFSET_CHANGED,
+    FIELD_TYPE_CHANGED,
+    FUNCTION_ADDED,
+    FUNCTION_REMOVED,
+    FUNCTION_SIGNATURE_CHANGED,
+    FUNCTION_PARAMETER_CHANGED,
+    CALLING_CONVENTION_CHANGED,
+    OWNERSHIP_CHANGED,
+    ERROR_BOUNDARY_CHANGED,
+    INTERFACE_CHANGED,
 };
 
 const char *change_kind_name(ChangeKind kind);
 
 struct VerifyChange {
-    ChangeKind kind = ChangeKind::type_removed;
+    ChangeKind kind = ChangeKind::TYPE_REMOVED;
     std::string type;     // owning type name (may be empty for free functions)
     std::string name;     // field / function name when applicable
     std::string detail;   // human-readable explanation
@@ -70,13 +70,13 @@ struct VerifyResult {
 };
 
 bool verify_modules(
-    const AbiModule &contract, const AbiModule &implementation, VerifyResult &result, std::string &error);
+    const ABIModule &contract, const ABIModule &implementation, VerifyResult &result, std::string &error);
 
 std::string verify_result_to_text(const VerifyResult &result);
 std::string verify_result_to_json(const VerifyResult &result);
 std::string verify_report_to_text(const std::vector<VerifyResult> &results);
 std::string verify_report_to_json(const std::vector<VerifyResult> &results, bool consistent);
 
-}   // namespace amc
+}   // namespace skl::amc
 
 #endif

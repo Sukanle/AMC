@@ -29,12 +29,12 @@
 #include <fmt/format.h>
 
 namespace fs = std::filesystem;
-using amc::util::fail;
-using amc::util::g_error_format;
-using amc::util::read_error_category;
-using amc::util::usage_error;
+using skl::amc::util::fail;
+using skl::amc::util::g_error_format;
+using skl::amc::util::read_error_category;
+using skl::amc::util::usage_error;
 
-namespace amc::cli {
+namespace skl::amc::cli {
 
 int cmd_query(char **args, int arg_count) {
     const std::string command = args[1];
@@ -79,7 +79,7 @@ int cmd_query(char **args, int arg_count) {
         if (format != "text" && format != "json") return usage_error("query --format must be text or json");
         const bool json = format == "json";
 
-        amc::AbiModule module;
+        amc::ABIModule module;
         std::string error;
         if (!amc::load_module_source(input.string(), module, error))
             return fail(read_error_category(error), "read_abix", error, input.string());
@@ -97,12 +97,12 @@ int cmd_query(char **args, int arg_count) {
             return indices.empty() ? 1 : 0;
         }
 
-        amc::AbiModule target;
+        amc::ABIModule target;
         if (!amc::load_module_source(other.string(), target, error))
             return fail(read_error_category(error), "read_abix", error, other.string());
         amc::ir::CompatibilityResult result;
         if (!amc::query::compare(module, target, result, error))
-            return fail(amc::ErrorCategory::internal, "verify", error);
+            return fail(amc::ErrorCategory::INTERNAL, "verify", error);
         fmt::print("{}", json ? amc::compatibility_query_json(module, target, result)
                               : amc::compatibility_query_text(module, target, result));
         return result.consistent ? 0 : 1;
@@ -114,7 +114,7 @@ int cmd_inspect(char **args, int arg_count) {
     const std::string command = args[1];
     if (command == "inspect" || command == "validate") {
         if (arg_count != 3) return usage_error(command + " expects exactly one .abix input");
-        amc::AbiModule module;
+        amc::ABIModule module;
         std::string error;
         if (!amc::load_module_source(args[2], module, error))
             return fail(read_error_category(error), "read_abix", error, args[2]);
@@ -126,4 +126,4 @@ int cmd_inspect(char **args, int arg_count) {
     return usage_error(command + ": unsupported subcommand");
 }
 
-}   // namespace amc::cli
+}   // namespace skl::amc::cli

@@ -20,7 +20,7 @@
 
 #include <string>
 
-namespace amc::ir {
+namespace skl::amc::ir {
 
 // Stable IR-layer policy facade. Query and Pass consume this instead of
 // depending on one another; the implementation remains in Core/Verify.
@@ -28,8 +28,8 @@ using CompatibilityResult = amc::VerifyResult;
 using CompatibilityChange = amc::VerifyChange;
 
 bool compare_contracts(
-    const AbiModule &contract, const AbiModule &implementation, CompatibilityResult &result, std::string &error);
+    const ABIModule &contract, const ABIModule &implementation, CompatibilityResult &result, std::string &error);
 
-}   // namespace amc::ir
+}   // namespace skl::amc::ir
 
 #endif   // AMC_IR_COMPATIBILITY_H

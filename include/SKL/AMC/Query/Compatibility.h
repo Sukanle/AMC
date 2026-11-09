@@ -20,13 +20,13 @@
 
 #include <string>
 
-namespace amc::query {
+namespace skl::amc::query {
 
 // Query-layer compatibility facade. It deliberately depends on the IR policy,
 // not on Pass, so `amc query --compatible` keeps the Query -> Pass boundary.
 bool compare(
-    const AbiModule &contract, const AbiModule &implementation, ir::CompatibilityResult &result, std::string &error);
+    const ABIModule &contract, const ABIModule &implementation, ir::CompatibilityResult &result, std::string &error);
 
-}   // namespace amc::query
+}   // namespace skl::amc::query
 
 #endif   // AMC_QUERY_COMPATIBILITY_H

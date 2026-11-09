@@ -17,7 +17,7 @@
 
 #include <fmt/format.h>
 
-namespace amc::util {
+namespace skl::amc::util {
 
 std::string escape_json(const std::string &value) {
     std::string output;
@@ -48,4 +48,4 @@ void json_string(std::string &output, const std::string &value) {
 
 void indent(std::string &output, unsigned depth) { output += std::string(depth * 2, ' '); }
 
-}   // namespace amc::util
+}   // namespace skl::amc::util

@@ -39,8 +39,8 @@ bool rawget_is_function(lua_State *state, const char *key) {
     return result;
 }
 
-bool check_dispatch(lua_State *state, aue::Level level, std::string &error) {
-    if (level == aue::Level::l0) {
+bool check_dispatch(lua_State *state, skl::aue::Level level, std::string &error) {
+    if (level == skl::aue::Level::L0) {
         if (!rawget_is_function(state, "new")) {
             error = "L0 did not eagerly bind functions";
             return false;
@@ -48,7 +48,7 @@ bool check_dispatch(lua_State *state, aue::Level level, std::string &error) {
         return true;
     }
     if (rawget_is_function(state, "new")) {
-        error = std::string(aue::level_name(level)) + " bound functions eagerly instead of using __index";
+        error = std::string(skl::aue::level_name(level)) + " bound functions eagerly instead of using __index";
         return false;
     }
     lua_getglobal(state, "counter");
@@ -56,10 +56,10 @@ bool check_dispatch(lua_State *state, aue::Level level, std::string &error) {
     const bool resolved = lua_isfunction(state, -1) != 0;
     lua_pop(state, 2);
     if (!resolved) {
-        error = std::string(aue::level_name(level)) + " __index did not resolve the function";
+        error = std::string(skl::aue::level_name(level)) + " __index did not resolve the function";
         return false;
     }
-    if (level == aue::Level::l2) {
+    if (level == skl::aue::Level::L2) {
         // L2 deliberately does not memoize: every access crosses native
         // dispatch, so a rawget must still see no function.
         if (rawget_is_function(state, "new")) {
@@ -88,20 +88,20 @@ int capture_print(lua_State *state) {
     return 0;
 }
 
-bool run_layer(
-    const std::string &script, aue::Level requested, aue::Level &selected, std::string &output, std::string &error) {
+bool run_layer(const std::string &script, skl::aue::Level requested, skl::aue::Level &selected, std::string &output,
+    std::string &error) {
     lua_State *state = luaL_newstate();
     if (state == nullptr) {
         error = "cannot create Lua state";
         return false;
     }
     luaL_openlibs(state);
-    aue::register_counter_types(state);
+    skl::aue::register_counter_types(state);
 
     lua_pushcfunction(state, capture_print);
     lua_setglobal(state, "print");
 
-    selected = aue::register_layer(state, aue::counter_contract(), requested);
+    selected = skl::aue::register_layer(state, skl::aue::counter_contract(), requested);
     lua_setglobal(state, "counter");
 
     // Prove the layers really differ in dispatch, not just in output:
@@ -130,17 +130,17 @@ bool run_layer(
 
 int main(int argc, char **argv) {
     const char *script = nullptr;
-    aue::Level requested = aue::compiled_level;
+    auto requested = skl::aue::compiled_level;
     for (int i = 1; i < argc; ++i) {
         const std::string argument = argv[i];
         if (argument == "--requested" && i + 1 < argc) {
             const std::string value = argv[++i];
             if (value == "l0")
-                requested = aue::Level::l0;
+                requested = skl::aue::Level::L0;
             else if (value == "l1")
-                requested = aue::Level::l1;
+                requested = skl::aue::Level::L1;
             else if (value == "l2")
-                requested = aue::Level::l2;
+                requested = skl::aue::Level::L2;
             else {
                 fmt::print(stderr, "abix-conformance: unknown level '{}'\n", value);
                 return 2;
@@ -157,23 +157,26 @@ int main(int argc, char **argv) {
         return 2;
     }
 
-    aue::Level golden_level = aue::Level::l0, selected = aue::Level::l0;
-    std::string golden, actual, error;
-    if (!run_layer(script, aue::Level::l0, golden_level, golden, error)) {
+    auto golden_level = skl::aue::Level::L0;
+    auto selected = skl::aue::Level::L0;
+    std::string golden;
+    std::string actual;
+    std::string error;
+    if (!run_layer(script, skl::aue::Level::L0, golden_level, golden, error)) {
         fmt::print(stderr, "abix-conformance: L0 failed: {}\n", error);
         return 1;
     }
     if (!run_layer(script, requested, selected, actual, error)) {
-        fmt::print(stderr, "abix-conformance: {} failed: {}\n", aue::level_name(requested), error);
+        fmt::print(stderr, "abix-conformance: {} failed: {}\n", skl::aue::level_name(requested), error);
         return 1;
     }
     if (golden != actual) {
-        fmt::print(stderr, "abix-conformance: L0 != {}\n--- L0 ---\n{}--- {} ---\n{}", aue::level_name(selected),
-            golden, aue::level_name(selected), actual);
+        fmt::print(stderr, "abix-conformance: L0 != {}\n--- L0 ---\n{}--- {} ---\n{}", skl::aue::level_name(selected),
+            golden, skl::aue::level_name(selected), actual);
         return 1;
     }
-    fmt::print("abix-conformance: l0 == {} (requested={} selected={}{}) ({} bytes)\n{}", aue::level_name(selected),
-        aue::level_name(requested), aue::level_name(selected), selected != requested ? ", degraded" : "", golden.size(),
-        golden.c_str());
+    fmt::print("abix-conformance: l0 == {} (requested={} selected={}{}) ({} bytes)\n{}", skl::aue::level_name(selected),
+        skl::aue::level_name(requested), skl::aue::level_name(selected), selected != requested ? ", degraded" : "",
+        golden.size(), golden.c_str());
     return 0;
 }

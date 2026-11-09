@@ -24,16 +24,16 @@
 #include <utility>
 #include <vector>
 
-namespace amc::diagnostics {
+namespace skl::amc::diagnostics {
 
 enum class Severity : uint32_t {
-    note,
-    warning,
-    error,
+    NOTE,
+    WARNING,
+    ERROR,
 };
 
 struct Diagnostic {
-    Severity severity = Severity::error;
+    Severity severity = Severity::ERROR;
     std::string code;    // stable machine-readable code
     std::string stage;   // frontend / pass / backend / compilation
     std::string message;
@@ -46,20 +46,20 @@ using DiagnosticList = std::vector<Diagnostic>;
 
 inline bool has_errors(const DiagnosticList &diagnostics) {
     return std::any_of(
-        diagnostics.begin(), diagnostics.end(), [](const Diagnostic &e) { return e.severity == Severity::error; });
+        diagnostics.begin(), diagnostics.end(), [](const Diagnostic &e) { return e.severity == Severity::ERROR; });
 }
 
 inline size_t error_count(const DiagnosticList &diagnostics) {
     return static_cast<size_t>(std::count_if(
-        diagnostics.begin(), diagnostics.end(), [](const Diagnostic &d) { return d.severity == Severity::error; }));
+        diagnostics.begin(), diagnostics.end(), [](const Diagnostic &d) { return d.severity == Severity::ERROR; }));
 }
 
 inline void add_error(DiagnosticList &diagnostics, std::string code, std::string stage, std::string message) {
-    diagnostics.push_back({Severity::error, std::move(code), std::move(stage), std::move(message), {}, 0, 0});
+    diagnostics.push_back({Severity::ERROR, std::move(code), std::move(stage), std::move(message), {}, 0, 0});
 }
 
 inline void add_warning(DiagnosticList &diagnostics, std::string code, std::string stage, std::string message) {
-    diagnostics.push_back({Severity::warning, std::move(code), std::move(stage), std::move(message), {}, 0, 0});
+    diagnostics.push_back({Severity::WARNING, std::move(code), std::move(stage), std::move(message), {}, 0, 0});
 }
 
 struct Summary {
@@ -75,6 +75,6 @@ Summary summarize(const DiagnosticList &diagnostics);
 std::string diagnostics_to_text(const DiagnosticList &diagnostics);
 std::string diagnostics_to_json(const DiagnosticList &diagnostics);
 
-}   // namespace amc::diagnostics
+}   // namespace skl::amc::diagnostics
 
 #endif   // AMC_DIAGNOSTICS_DIAGNOSTICS_H

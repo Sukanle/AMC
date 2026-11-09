@@ -18,14 +18,14 @@
 
 #include <string>
 
-namespace amc {
-struct AbiModule;
+namespace skl::amc {
+struct ABIModule;
 struct Hash128;
 struct MetadataHeader;
 struct VerifyResult;
-}   // namespace amc
+}   // namespace skl::amc
 
-namespace amc::cli {
+namespace skl::amc::cli {
 
 // Shared CLI formatting/diagnostic helpers. Kept out of CLI.h so the command
 // surface does not drag the IR into the interface layer.
@@ -33,9 +33,9 @@ std::string json_quote(const std::string &value);
 bool parse_hash128(const std::string &text, amc::Hash128 &value);
 std::string hash_key(amc::Hash128 value);
 std::string elf_meta_document(const std::string &key, const amc::MetadataHeader &header);
-std::string abi_diagnostics(const amc::AbiModule &reference, const amc::VerifyResult &result);
-std::string abi_diagnostics_json(const amc::AbiModule &reference, const amc::VerifyResult &result);
+std::string abi_diagnostics(const amc::ABIModule &reference, const amc::VerifyResult &result);
+std::string abi_diagnostics_json(const amc::ABIModule &reference, const amc::VerifyResult &result);
 
-}   // namespace amc::cli
+}   // namespace skl::amc::cli
 
 #endif   // AMC_CLI_SUPPORT_H

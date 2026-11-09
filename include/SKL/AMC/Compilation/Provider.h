@@ -20,7 +20,7 @@
 #include <string>
 #include <vector>
 
-namespace amc::compilation {
+namespace skl::amc::compilation {
 
 // One entry of `AMC/providers.toml`. `roles` contains `frontend` and/or
 // `backend`; `protocol` is `jsonl-v1` for provider processes and `direct` for
@@ -58,6 +58,6 @@ bool dispatch_provider(const std::filesystem::path &provider, const char *capabi
 int generate(const std::filesystem::path &provider, const std::filesystem::path &input,
     const std::filesystem::path &destination, const std::string &extension);
 
-}   // namespace amc::compilation
+}   // namespace skl::amc::compilation
 
 #endif   // AMC_COMPILATION_PROVIDER_H

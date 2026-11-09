@@ -22,21 +22,21 @@
 #include <unordered_set>
 #include <vector>
 
-namespace amc::semantic {
+namespace skl::amc::semantic {
 namespace {
 
 SemanticTypeKind semantic_kind(TypeKind kind) {
     switch (kind) {
-        case TypeKind::primitive:      return SemanticTypeKind::builtin;
-        case TypeKind::enumeration:    return SemanticTypeKind::enumeration;
-        case TypeKind::record:         return SemanticTypeKind::record;
-        case TypeKind::pointer:        return SemanticTypeKind::pointer;
-        case TypeKind::array:          return SemanticTypeKind::array;
-        case TypeKind::function:       return SemanticTypeKind::function;
-        case TypeKind::namespace_type: return SemanticTypeKind::unknown;
-        case TypeKind::alias:          return SemanticTypeKind::unknown;
+        case TypeKind::PRIMITIVE: return SemanticTypeKind::BUILTIN;
+        case TypeKind::ENUM:      return SemanticTypeKind::ENUM;
+        case TypeKind::RECORD:    return SemanticTypeKind::RECORD;
+        case TypeKind::POINTER:   return SemanticTypeKind::POINTER;
+        case TypeKind::ARRAY:     return SemanticTypeKind::ARRAY;
+        case TypeKind::FUNC:      return SemanticTypeKind::FUNC;
+        case TypeKind::NAMESPACE: return SemanticTypeKind::UNKNOWN;
+        case TypeKind::ALIAS:     return SemanticTypeKind::UNKNOWN;
     }
-    return SemanticTypeKind::unknown;
+    return SemanticTypeKind::UNKNOWN;
 }
 
 std::string unqualified(std::string_view name) {
@@ -46,10 +46,10 @@ std::string unqualified(std::string_view name) {
 
 Visibility visibility_of(uint32_t flags) {
     switch ((flags & field_visibility_mask) >> field_visibility_shift) {
-        case 0:  return Visibility::public_;
-        case 1:  return Visibility::protected_;
-        case 2:  return Visibility::private_;
-        default: return Visibility::none;
+        case 0:  return Visibility::PUBLIC;
+        case 1:  return Visibility::PROTECTED;
+        case 2:  return Visibility::PRIVATE;
+        default: return Visibility::NONE;
     }
 }
 
@@ -69,12 +69,12 @@ struct TypeIds {
 
 }   // namespace
 
-void synchronize_from_abi(const AbiModule &module, SemanticModule &semantic) {
+void synchronize_from_abi(const ABIModule &module, SemanticModule &semantic) {
     if (semantic.rules_version == 0) semantic.rules_version = semantic_rules_version;
     TypeIds type_ids;
     for (const auto &type : semantic.types) {
         if (!type.id.valid()) continue;
-        type_ids.by_name.emplace(type.qualified_name, type.id);
+        type_ids.by_name.emplace(type.qualified, type.id);
         if (type.abi_type.lo != 0 || type.abi_type.hi != 0) type_ids.add(type.abi_type, type.id);
     }
 
@@ -89,7 +89,7 @@ void synchronize_from_abi(const AbiModule &module, SemanticModule &semantic) {
             if (named != type_ids.by_name.end()) id = named->second;
         }
         if (!id.valid()) {
-            id = semantic_type_identity(semantic_kind(type.kind), type.name, Qualifiers{}, ValueCategory::value, {}, {},
+            id = semantic_type_identity(semantic_kind(type.kind), type.name, Qualifiers{}, ValueCategory::VALUE, {}, {},
                 {}, semantic.rules_version);
             semantic.types.push_back(
                 {id, semantic_kind(type.kind), type.name, Qualifiers{}, {}, {}, {}, type.id, {}, 0});
@@ -110,7 +110,7 @@ void synchronize_from_abi(const AbiModule &module, SemanticModule &semantic) {
         if (!exposed.type.valid() && (exposed.abi_type.lo != 0 || exposed.abi_type.hi != 0))
             exposed.type = type_ids.find(exposed.abi_type);
         if (!exposed.type.valid()) {
-            const auto named = type_ids.by_name.find(exposed.qualified_name);
+            const auto named = type_ids.by_name.find(exposed.qualified);
             if (named != type_ids.by_name.end()) exposed.type = named->second;
         }
     }
@@ -122,7 +122,7 @@ void synchronize_from_abi(const AbiModule &module, SemanticModule &semantic) {
     for (const auto &record : semantic.records)
         record_keys[record.type.value.lo].insert(record.type.value.hi);
     for (const auto &type : module.types) {
-        if (type.kind != TypeKind::record && type.kind != TypeKind::alias) continue;
+        if (type.kind != TypeKind::RECORD && type.kind != TypeKind::ALIAS) continue;
         const SemanticTypeId id = type_ids.find(type.id);
         if (!id.valid()) continue;
         if (record_keys[id.value.lo].count(id.value.hi) != 0) continue;
@@ -168,9 +168,9 @@ void synchronize_from_abi(const AbiModule &module, SemanticModule &semantic) {
         if (function.owner_type.lo != 0 || function.owner_type.hi != 0) owner = type_ids.find(function.owner_type);
         const SemanticTypeId return_type = type_ids.find(function.return_type);
         std::vector<SemanticTypeId> parameters;
-        parameters.reserve(function.parameters.size());
+        parameters.reserve(function.params.size());
         bool complete = true;
-        for (const auto &parameter : function.parameters) {
+        for (const auto &parameter : function.params) {
             const SemanticTypeId parameter_type = type_ids.find(parameter.type_id);
             if (!parameter_type.valid()) {
                 complete = false;
@@ -180,13 +180,12 @@ void synchronize_from_abi(const AbiModule &module, SemanticModule &semantic) {
         }
         if (!complete) continue;
 
-        const SemanticFunctionKind kind =
-            owner.valid() ? SemanticFunctionKind::member_function : SemanticFunctionKind::free_function;
+        const SemanticFuncKind kind = owner.valid() ? SemanticFuncKind::MEMBER : SemanticFuncKind::FREE;
         const std::string name = unqualified(function.name);
-        SemanticFunctionId id = semantic_function_identity(
-            kind, owner, name, parameters, Qualifiers{}, ValueCategory::value, {}, semantic.rules_version);
+        auto id = semantic_function_identity(
+            kind, owner, name, parameters, Qualifiers{}, ValueCategory::VALUE, {}, semantic.rules_version);
 
-        SemanticFunction *existing = nullptr;
+        SemanticFunc *existing = nullptr;
         for (auto &candidate : semantic.functions) {
             if (candidate.id == id) {
                 existing = &candidate;
@@ -198,10 +197,10 @@ void synchronize_from_abi(const AbiModule &module, SemanticModule &semantic) {
             // different function kind in the source model than the generic
             // member-function identity above. Match the declaration by name and
             // arity when there is exactly one unlinked candidate.
-            SemanticFunction *candidate = nullptr;
+            SemanticFunc *candidate = nullptr;
             size_t matches = 0;
             for (auto &item : semantic.functions) {
-                if (item.qualified_name != function.name || item.parameters.size() != parameters.size()) continue;
+                if (item.qualified != function.name || item.params.size() != parameters.size()) continue;
                 if (item.abi_signature.lo != 0 || item.abi_signature.hi != 0) continue;
                 candidate = &item;
                 ++matches;
@@ -212,12 +211,12 @@ void synchronize_from_abi(const AbiModule &module, SemanticModule &semantic) {
             existing->abi_signature = function.signature;
             existing->owner = owner;
             existing->return_type = return_type;
-            existing->parameters.clear();
+            existing->params.clear();
             for (size_t i = 0; i < parameters.size(); ++i) {
-                SemanticParameter parameter;
-                parameter.name = function.parameters[i].name;
+                SemanticParam parameter;
+                parameter.name = function.params[i].name;
                 parameter.type = parameters[i];
-                existing->parameters.push_back(std::move(parameter));
+                existing->params.push_back(std::move(parameter));
             }
             continue;
         }
@@ -227,23 +226,23 @@ void synchronize_from_abi(const AbiModule &module, SemanticModule &semantic) {
             continue;
         }
 
-        SemanticFunction record;
+        SemanticFunc record;
         record.id = id;
         record.kind = kind;
-        record.qualified_name = function.name;
-        record.unqualified_name = name;
+        record.qualified = function.name;
+        record.unqualified = name;
         record.owner = owner;
         record.return_type = return_type;
         record.abi_signature = function.signature;
         for (size_t i = 0; i < parameters.size(); ++i) {
-            SemanticParameter parameter;
-            parameter.name = function.parameters[i].name;
+            SemanticParam parameter;
+            parameter.name = function.params[i].name;
             parameter.type = parameters[i];
-            record.parameters.push_back(std::move(parameter));
+            record.params.push_back(std::move(parameter));
         }
         function_keys[id.value.lo].insert(id.value.hi);
         semantic.functions.push_back(std::move(record));
     }
 }
 
-}   // namespace amc::semantic
+}   // namespace skl::amc::semantic

@@ -22,7 +22,7 @@
 
 #include <stdint.h>
 
-namespace amc::ir {
+namespace skl::amc::ir {
 
 // A0 contract: the IR is the only data exchanged between a frontend, the pass
 // pipeline and a backend. Until A2 merges the two views, it aggregates the
@@ -36,13 +36,13 @@ struct ArtifactInfo {
 };
 
 struct Module {
-    AbiModule abi;
+    ABIModule abi;
     semantic::SemanticModule semantic;
     LoweringResult lowering;
     ArtifactInfo artifact;
     uint32_t schema_version = module_schema_version;
 };
 
-}   // namespace amc::ir
+}   // namespace skl::amc::ir
 
 #endif   // AMC_IR_MODULE_H

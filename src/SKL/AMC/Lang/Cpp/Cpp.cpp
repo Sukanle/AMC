@@ -21,21 +21,21 @@
 
 int main(int argc, char **argv) {
 #ifdef __APPLE__
-    if (!amc::lang::cpp::kClangResourceDir[0]) {
+    if (!skl::amc::lang::cpp::kClangResourceDir[0]) {
         fmt::print(stderr,
             "warning: ABIX_CLANG_RESOURCE_DIR not set at build time; "
             "built-in headers (stdarg.h, etc.) may not be found.\n");
     }
 #endif
 
-    static const amc::lang::Provider provider{
+    static const skl::amc::lang::Provider provider{
         "cpp",
         {
-          {"frontend", amc::lang::cpp::run_frontend},
-          {"backend", amc::lang::cpp::run_backend},
+          {"frontend", skl::amc::lang::cpp::run_frontend},
+          {"backend", skl::amc::lang::cpp::run_backend},
           },
         "0.4.0",
         {"templates", "interfaces"},
     };
-    return amc::lang::run_provider(argc, argv, provider);
+    return skl::amc::lang::run_provider(argc, argv, provider);
 }

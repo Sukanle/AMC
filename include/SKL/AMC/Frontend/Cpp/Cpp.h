@@ -20,7 +20,7 @@
 #include <string>
 #include <vector>
 
-namespace amc::lang::cpp {
+namespace skl::amc::lang::cpp {
 
 // Clang resource directory (e.g. /opt/homebrew/opt/llvm/lib/clang/22),
 // detected at build time via `clang -print-resource-dir` and injected as a
@@ -36,4 +36,4 @@ void append_macos_sysroot(std::vector<std::string> &flags);
 // stdarg.h, ...) are found without an .abic.toml naming a toolchain version.
 void append_clang_resource_dir(std::vector<std::string> &flags);
 
-}   // namespace amc::lang::cpp
+}   // namespace skl::amc::lang::cpp

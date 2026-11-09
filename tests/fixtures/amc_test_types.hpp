@@ -13,9 +13,9 @@ struct AmcTestBar {
 };
 
 enum class AmcTestColor : int32_t {
-    Red = 0,
-    Green = 1,
-    Blue = 2,
+    RED = 0,
+    GREEN = 1,
+    BLUE = 2,
 };
 
 int32_t amc_test_create(AmcTestFoo *out, AmcTestColor c);

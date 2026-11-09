@@ -20,7 +20,7 @@
 
 #include <string>
 
-namespace amc {
+namespace skl::amc {
 
 // Options controlling what `amc adapter` emits.
 struct AdapterOptions {
@@ -28,7 +28,7 @@ struct AdapterOptions {
     // projection types (`<namespace>::<symbol>_ABIX`). Requires the projection
     // header to be included before the adapter, guarded by ABIX_ADAPTER_TYPED.
     bool typed = false;
-    std::string typed_namespace = "amc_generated";
+    std::string typed_namespace = "skl::amc::generated";
     // Emit a C ABI shim (`abix_adapter_apply`) so the generated adapter can be
     // compiled into a standalone shared library.
     bool shim = false;
@@ -43,18 +43,18 @@ struct AdapterOptions {
 // projections being present. Integer and floating-point widening/narrowing are
 // emitted as casts; unsignedness is not tracked by the model, so casts go
 // through signed intermediates.
-std::string generate_adapter(const AbiModule &source, const AbiModule &target, const AbiModule &report,
+std::string generate_adapter(const ABIModule &source, const ABIModule &target, const ABIModule &report,
     const AdapterOptions &options, std::string &error);
 
 // Convenience overload using the default options (no typed specializations).
 inline std::string generate_adapter(
-    const AbiModule &source, const AbiModule &target, const AbiModule &report, std::string &error) {
+    const ABIModule &source, const ABIModule &target, const ABIModule &report, std::string &error) {
     return generate_adapter(source, target, report, AdapterOptions{}, error);
 }
 
 // C identifier for a qualified ABIX name (`a::B` -> `a_B`).
 std::string adapter_symbol(std::string_view name);
 
-}   // namespace amc
+}   // namespace skl::amc
 
 #endif

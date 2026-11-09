@@ -25,40 +25,40 @@
 #include <string_view>
 #include <vector>
 
-namespace amc {
+namespace skl::amc {
 
 // AI-PS: the AMC query engine.
 //
 // `amc query` and the future MCP server share this layer so there is exactly
 // one implementation of "find a type / find a function / compare two modules".
-// Results are addressed by index into the AbiModule so callers can render
+// Results are addressed by index into the ABIModule so callers can render
 // text, JSON or a protocol message from the same data.
 
 // Resolves a needle (exact name, then substring; or a 0x/32-hex TypeID) to
 // type indices, in module order.
-std::vector<size_t> query_type_indices(const AbiModule &module, std::string_view needle);
-std::vector<size_t> query_function_indices(const AbiModule &module, std::string_view needle);
+std::vector<size_t> query_type_indices(const ABIModule &module, std::string_view needle);
+std::vector<size_t> query_function_indices(const ABIModule &module, std::string_view needle);
 
 // Resolves a type id to its declared name, or nullptr when unknown.
-const Type *find_type_by_id(const AbiModule &module, Hash128 id);
+const Type *find_type_by_id(const ABIModule &module, Hash128 id);
 
-std::string query_types_text(const AbiModule &module, const std::vector<size_t> &indices, bool include_layout);
+std::string query_types_text(const ABIModule &module, const std::vector<size_t> &indices, bool include_layout);
 std::string query_types_json(
-    const AbiModule &module, const std::vector<size_t> &indices, bool include_layout, std::string_view needle);
-void query_types_json(const AbiModule &module, const std::vector<size_t> &indices, bool include_layout,
+    const ABIModule &module, const std::vector<size_t> &indices, bool include_layout, std::string_view needle);
+void query_types_json(const ABIModule &module, const std::vector<size_t> &indices, bool include_layout,
     std::string_view needle, llvm::raw_ostream &out);
-std::string query_functions_text(const AbiModule &module, const std::vector<size_t> &indices);
-std::string query_functions_json(const AbiModule &module, const std::vector<size_t> &indices, std::string_view needle);
+std::string query_functions_text(const ABIModule &module, const std::vector<size_t> &indices);
+std::string query_functions_json(const ABIModule &module, const std::vector<size_t> &indices, std::string_view needle);
 void query_functions_json(
-    const AbiModule &module, const std::vector<size_t> &indices, std::string_view needle, llvm::raw_ostream &out);
+    const ABIModule &module, const std::vector<size_t> &indices, std::string_view needle, llvm::raw_ostream &out);
 // "Is `target` a safe replacement for `source`?" — strict: every type, layout,
 // field set and function signature in `source` must exist unchanged in
 // `target`. Additions in `target` are reported as drift too.
-std::string compatibility_query_text(const AbiModule &source, const AbiModule &target, const VerifyResult &result);
-std::string compatibility_query_json(const AbiModule &source, const AbiModule &target, const VerifyResult &result);
+std::string compatibility_query_text(const ABIModule &source, const ABIModule &target, const VerifyResult &result);
+std::string compatibility_query_json(const ABIModule &source, const ABIModule &target, const VerifyResult &result);
 void compatibility_query_json(
-    const AbiModule &source, const AbiModule &target, const VerifyResult &result, llvm::raw_ostream &out);
+    const ABIModule &source, const ABIModule &target, const VerifyResult &result, llvm::raw_ostream &out);
 
-}   // namespace amc
+}   // namespace skl::amc
 
 #endif

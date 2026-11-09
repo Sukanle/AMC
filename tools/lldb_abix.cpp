@@ -62,7 +62,7 @@ namespace {
 
 // --- small helpers -------------------------------------------------------
 
-std::string hash_hex(amc::Hash128 value) {
+std::string hash_hex(skl::amc::Hash128 value) {
     char buffer[40];
     snprintf(buffer, sizeof(buffer), "0x%016llx%016llx", static_cast<unsigned long long>(value.hi),
         static_cast<unsigned long long>(value.lo));
@@ -97,19 +97,21 @@ std::vector<std::string> tokens(char **command) {
     return out;
 }
 
-bool load_target_module(const std::string &path, amc::AbiModule &module, lldb::SBCommandReturnObject &result) {
+bool load_target_module(const std::string &path, skl::amc::ABIModule &module, lldb::SBCommandReturnObject &result) {
     std::string error;
-    if (!amc::load_module_source(path, module, error)) {
+    if (!skl::amc::load_module_source(path, module, error)) {
         result.SetError(("abix: cannot read '" + path + "': " + error).c_str());
         return false;
     }
     return true;
 }
 
-const amc::Type *type_by_id(const amc::AbiModule &module, amc::Hash128 id) { return amc::find_type_by_id(module, id); }
+const skl::amc::Type *type_by_id(const skl::amc::ABIModule &module, skl::amc::Hash128 id) {
+    return skl::amc::find_type_by_id(module, id);
+}
 
-std::string type_label(const amc::AbiModule &module, amc::Hash128 id) {
-    const amc::Type *type = type_by_id(module, id);
+std::string type_label(const skl::amc::ABIModule &module, skl::amc::Hash128 id) {
+    const skl::amc::Type *type = type_by_id(module, id);
     return type != nullptr ? type->name : hash_hex(id);
 }
 
@@ -196,18 +198,18 @@ void run_info(lldb::SBDebugger &debugger, lldb::SBCommandReturnObject &result) {
         result.SetError(("abix info: cannot read '" + path + "'").c_str());
         return;
     }
-    if (!amc::is_binary(image.data(), image.size())) {
+    if (!skl::amc::is_binary(image.data(), image.size())) {
         result.SetError("abix info: target is not an ELF or Mach-O binary");
         return;
     }
     std::vector<uint8_t> region;
     std::string error;
-    if (!amc::find_binary_section(image.data(), image.size(), ".abix.metadata", region, error)) {
+    if (!skl::amc::find_binary_section(image.data(), image.size(), ".abix.metadata", region, error)) {
         result.SetError(("abix info: no embedded metadata region (" + error + ")").c_str());
         return;
     }
-    amc::MetadataHeader header;
-    if (!amc::read_metadata_header(region.data(), region.size(), header, error)) {
+    skl::amc::MetadataHeader header;
+    if (!skl::amc::read_metadata_header(region.data(), region.size(), header, error)) {
         result.SetError(("abix info: " + error).c_str());
         return;
     }
@@ -228,9 +230,9 @@ void run_type(lldb::SBDebugger &debugger, const std::string &needle, bool layout
         result.SetError("abix type: no target binary loaded");
         return;
     }
-    amc::AbiModule module;
+    skl::amc::ABIModule module;
     if (!load_target_module(path, module, result)) return;
-    const auto indices = amc::query_type_indices(module, needle);
+    const auto indices = skl::amc::query_type_indices(module, needle);
     if (indices.empty()) {
         result.SetError(("abix type: no type matches '" + needle + "'").c_str());
         return;
@@ -238,10 +240,10 @@ void run_type(lldb::SBDebugger &debugger, const std::string &needle, bool layout
     for (const auto index : indices) {
         const auto &type = module.types[index];
         result.Printf("[%llu] %s kind=%s size=%u align=%u\n", static_cast<unsigned long long>(index), type.name.c_str(),
-            amc::type_kind_name(type.kind).c_str(), type.size, type.align);
+            skl::amc::type_kind_name(type.kind).c_str(), type.size, type.align);
         result.Printf("      id=%s layout=%s flags=0x%x fields=%u\n", hash_hex(type.id).c_str(),
             hash_hex(type.layout_hash).c_str(), type.flags, type.field_count);
-        if (const amc::SourceOrigin *source = amc::find_source_origin(module, type.id))
+        if (const skl::amc::SourceOrigin *source = skl::amc::find_source_origin(module, type.id))
             result.Printf("      source=%s:%u:%u\n", source->file.c_str(), source->line, source->column);
         if (!layout) continue;
         for (uint32_t f = 0; f < type.field_count; ++f) {
@@ -260,9 +262,9 @@ void run_function(lldb::SBDebugger &debugger, const std::string &needle, lldb::S
         result.SetError("abix function: no target binary loaded");
         return;
     }
-    amc::AbiModule module;
+    skl::amc::ABIModule module;
     if (!load_target_module(path, module, result)) return;
-    const auto indices = amc::query_function_indices(module, needle);
+    const auto indices = skl::amc::query_function_indices(module, needle);
     if (indices.empty()) {
         result.SetError(("abix function: no function matches '" + needle + "'").c_str());
         return;
@@ -270,12 +272,12 @@ void run_function(lldb::SBDebugger &debugger, const std::string &needle, lldb::S
     for (const auto index : indices) {
         const auto &function = module.functions[index];
         result.Printf("[%llu] %s owner=%s\n", static_cast<unsigned long long>(index), function.name.c_str(),
-            function.owner_type == amc::Hash128{} ? "-" : type_label(module, function.owner_type).c_str());
+            function.owner_type == skl::amc::Hash128{} ? "-" : type_label(module, function.owner_type).c_str());
         result.Printf("      signature=%s returns=%s cc=%u flags=0x%x params=%llu\n",
             hash_hex(function.signature).c_str(), type_label(module, function.return_type).c_str(),
-            function.calling_convention, function.flags, static_cast<unsigned long long>(function.parameters.size()));
-        for (size_t p = 0; p < function.parameters.size(); ++p) {
-            const auto &parameter = function.parameters[p];
+            function.calling_convention, function.flags, static_cast<unsigned long long>(function.params.size()));
+        for (size_t p = 0; p < function.params.size(); ++p) {
+            const auto &parameter = function.params[p];
             result.Printf("      param %llu %-12s %s\n", static_cast<unsigned long long>(p), parameter.name.c_str(),
                 type_label(module, parameter.type_id).c_str());
         }
@@ -284,12 +286,12 @@ void run_function(lldb::SBDebugger &debugger, const std::string &needle, lldb::S
 
 // --- abix verify / check -------------------------------------------------
 
-void print_changes(const amc::VerifyResult &verification, lldb::SBCommandReturnObject &result) {
+void print_changes(const skl::amc::VerifyResult &verification, lldb::SBCommandReturnObject &result) {
     result.Printf("  compatible=%s changes=%llu\n", verification.consistent ? "true" : "false",
         static_cast<unsigned long long>(verification.changes.size()));
     for (const auto &change : verification.changes) {
         std::string line = "  - ";
-        line += amc::change_kind_name(change.kind);
+        line += skl::amc::change_kind_name(change.kind);
         if (!change.type.empty()) line += " type=" + change.type;
         if (!change.name.empty()) line += " name=" + change.name;
         if (!change.detail.empty()) line += " (" + change.detail + ")";
@@ -303,13 +305,13 @@ void run_verify(lldb::SBDebugger &debugger, const std::string &other_path, lldb:
         result.SetError("abix verify: no target binary loaded");
         return;
     }
-    amc::AbiModule module;
+    skl::amc::ABIModule module;
     if (!load_target_module(path, module, result)) return;
-    amc::AbiModule other;
+    skl::amc::ABIModule other;
     if (!load_target_module(other_path, other, result)) return;
-    amc::VerifyResult verification;
+    skl::amc::VerifyResult verification;
     std::string error;
-    if (!amc::verify_modules(module, other, verification, error)) {
+    if (!skl::amc::verify_modules(module, other, verification, error)) {
         result.SetError(("abix verify: " + error).c_str());
         return;
     }
@@ -325,17 +327,17 @@ void run_check(lldb::SBDebugger &debugger, const std::string &name, const std::s
         result.SetError("abix check: no target binary loaded");
         return;
     }
-    amc::AbiModule module;
+    skl::amc::ABIModule module;
     if (!load_target_module(path, module, result)) return;
-    amc::AbiModule other;
+    skl::amc::ABIModule other;
     if (!load_target_module(other_path, other, result)) return;
-    amc::VerifyResult verification;
+    skl::amc::VerifyResult verification;
     std::string error;
-    if (!amc::verify_modules(module, other, verification, error)) {
+    if (!skl::amc::verify_modules(module, other, verification, error)) {
         result.SetError(("abix check: " + error).c_str());
         return;
     }
-    amc::VerifyResult filtered;
+    skl::amc::VerifyResult filtered;
     filtered.package = verification.package;
     for (const auto &change : verification.changes)
         if (change.type == name) filtered.changes.push_back(change);
@@ -353,16 +355,16 @@ void run_source(lldb::SBDebugger &debugger, const std::string &name, lldb::SBCom
         result.SetError("abix source: no target binary loaded");
         return;
     }
-    amc::AbiModule module;
+    skl::amc::ABIModule module;
     std::string error;
-    if (!amc::load_module_source(path, module, error)) {
+    if (!skl::amc::load_module_source(path, module, error)) {
         result.SetError(("abix source: " + error).c_str());
         return;
     }
-    const auto indices = amc::query_type_indices(module, name);
+    const auto indices = skl::amc::query_type_indices(module, name);
     if (!indices.empty()) {
         const auto &type = module.types[indices.front()];
-        if (const amc::SourceOrigin *source = amc::find_source_origin(module, type.id)) {
+        if (const skl::amc::SourceOrigin *source = skl::amc::find_source_origin(module, type.id)) {
             result.Printf("%s:%u:%u\n", source->file.c_str(), source->line, source->column);
             return;
         }
@@ -372,21 +374,21 @@ void run_source(lldb::SBDebugger &debugger, const std::string &name, lldb::SBCom
     // back to the plan's chain: BuildID -> symbol server -> debug `.abix`,
     // which carries the optional Source Origin section.
     std::vector<uint8_t> image;
-    if (read_file(path, image) && amc::is_binary(image.data(), image.size())) {
+    if (read_file(path, image) && skl::amc::is_binary(image.data(), image.size())) {
         std::vector<uint8_t> build_id;
-        if (amc::read_build_id(image.data(), image.size(), build_id, error)) {
-            const std::string key = amc::hex_encode(build_id.data(), build_id.size());
+        if (skl::amc::read_build_id(image.data(), image.size(), build_id, error)) {
+            const std::string key = skl::amc::hex_encode(build_id.data(), build_id.size());
             std::vector<uint8_t> artifact;
             std::string stored_path;
-            if (amc::fetch_symbol(amc::default_symbol_store_root(), key, artifact, stored_path, error)
+            if (skl::amc::fetch_symbol(skl::amc::default_symbol_store_root(), key, artifact, stored_path, error)
                 && stored_path.size() > 5
                 && stored_path.compare(stored_path.size() - 5, 5, ".abix") == 0) {
-                amc::AbiModule fetched;
-                if (amc::load_module_source(stored_path, fetched, error)) {
-                    const auto fetched_indices = amc::query_type_indices(fetched, name);
+                skl::amc::ABIModule fetched;
+                if (skl::amc::load_module_source(stored_path, fetched, error)) {
+                    const auto fetched_indices = skl::amc::query_type_indices(fetched, name);
                     if (!fetched_indices.empty()) {
                         const auto &type = fetched.types[fetched_indices.front()];
-                        if (const amc::SourceOrigin *source = amc::find_source_origin(fetched, type.id)) {
+                        if (const skl::amc::SourceOrigin *source = skl::amc::find_source_origin(fetched, type.id)) {
                             result.Printf("%s:%u:%u\n", source->file.c_str(), source->line, source->column);
                             return;
                         }
@@ -429,9 +431,9 @@ void run_cast(lldb::SBDebugger &debugger, const std::string &expression, const s
     }
     const uint64_t address = value.GetValueAsUnsigned(0);
 
-    amc::AbiModule module;
+    skl::amc::ABIModule module;
     if (!load_target_module(path, module, result)) return;
-    const auto indices = amc::query_type_indices(module, type_name);
+    const auto indices = skl::amc::query_type_indices(module, type_name);
     if (indices.empty()) {
         result.SetError(("abix cast: no type matches '" + type_name + "'").c_str());
         return;
@@ -450,7 +452,7 @@ void run_cast(lldb::SBDebugger &debugger, const std::string &expression, const s
     result.Printf(
         "abix cast: %s @ 0x%llx (%u bytes)\n", type.name.c_str(), static_cast<unsigned long long>(address), type.size);
     if (type.field_count == 0) {
-        result.Printf("  raw %s\n", amc::hex_encode(data.data(), data.size()).c_str());
+        result.Printf("  raw %s\n", skl::amc::hex_encode(data.data(), data.size()).c_str());
         return;
     }
     for (uint32_t f = 0; f < type.field_count; ++f) {

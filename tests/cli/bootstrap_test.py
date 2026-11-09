@@ -140,8 +140,8 @@ def run_bootstrap_test(
             return 1
 
         header_text = header.read_text()
-        if "amc_AbiModule_ABIX" not in header_text:
-            print("[FAIL] projection lacks AbiModule descriptor", file=sys.stderr)
+        if "amc_ABIModule_ABIX" not in header_text:
+            print("[FAIL] projection lacks ABIModule descriptor", file=sys.stderr)
             return 1
         if "amc_MapOperation_ABIX" not in header_text:
             print("[FAIL] projection lacks MapOperation descriptor", file=sys.stderr)

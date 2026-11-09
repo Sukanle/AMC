@@ -17,9 +17,9 @@
 
 #include "SKL/AMC/IR/TypeMapping.h"
 
-namespace amc::pass {
+namespace skl::amc::pass {
 
-bool build_compatibility_report(const AbiModule &source, const AbiModule &target, AbiModule &report, Context &context,
+bool build_compatibility_report(const ABIModule &source, const ABIModule &target, ABIModule &report, Context &context,
     diagnostics::DiagnosticList &diagnostics) {
     (void)context;
     std::string error;
@@ -30,4 +30,4 @@ bool build_compatibility_report(const AbiModule &source, const AbiModule &target
     return true;
 }
 
-}   // namespace amc::pass
+}   // namespace skl::amc::pass

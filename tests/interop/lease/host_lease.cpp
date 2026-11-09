@@ -3,7 +3,7 @@
 #include <new>
 #include <utility>
 
-namespace amc::test::lease {
+namespace skl::amc::test::lease {
 
 using skl::abix::poly::begin_unload;
 using skl::abix::poly::mark_unloaded;
@@ -162,4 +162,4 @@ void HostLeaseRegistry::release_entry(void *context, abix_lease_registry *regist
     static_cast<HostLeaseRegistry *>(context)->release(registry, lease);
 }
 
-}   // namespace amc::test::lease
+}   // namespace skl::amc::test::lease

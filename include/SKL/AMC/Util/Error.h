@@ -20,7 +20,7 @@
 
 #include "SKL/AMC/Diagnostics/Error.h"
 
-namespace amc::util {
+namespace skl::amc::util {
 
 // Process-wide error envelope selector, set once from `--error-format`.
 extern amc::ErrorFormat g_error_format;
@@ -36,6 +36,6 @@ int usage_error(const std::string &message);
 // Maps a free-form load error to the right category (I/O vs format).
 amc::ErrorCategory read_error_category(const std::string &message);
 
-}   // namespace amc::util
+}   // namespace skl::amc::util
 
 #endif   // AMC_UTIL_ERROR_H

@@ -15,7 +15,7 @@
  */
 #include "SKL/AMC/Util/Names.h"
 
-namespace amc::util {
+namespace skl::amc::util {
 
 std::string arch_name(uint32_t value) {
     switch (value) {
@@ -66,49 +66,49 @@ std::string function_calling_convention_name(uint32_t value) {
 }
 
 const char *primitive_kind_name(uint32_t kind) {
-    switch (static_cast<amc::PrimitiveAbiKind>(kind & 0xffu)) {
-        case amc::PrimitiveAbiKind::none:           return "none";
-        case amc::PrimitiveAbiKind::void_:          return "void";
-        case amc::PrimitiveAbiKind::bool_:          return "bool";
-        case amc::PrimitiveAbiKind::char_signed:    return "char_signed";
-        case amc::PrimitiveAbiKind::char_unsigned:  return "char_unsigned";
-        case amc::PrimitiveAbiKind::schar:          return "schar";
-        case amc::PrimitiveAbiKind::uchar:          return "uchar";
-        case amc::PrimitiveAbiKind::char8:          return "char8";
-        case amc::PrimitiveAbiKind::char16:         return "char16";
-        case amc::PrimitiveAbiKind::char32:         return "char32";
-        case amc::PrimitiveAbiKind::wchar_signed:   return "wchar_signed";
-        case amc::PrimitiveAbiKind::wchar_unsigned: return "wchar_unsigned";
-        case amc::PrimitiveAbiKind::sint:           return "sint";
-        case amc::PrimitiveAbiKind::uint:           return "uint";
-        case amc::PrimitiveAbiKind::floating:       return "floating";
+    switch (static_cast<amc::PrimitiveABIKind>(kind & 0xffu)) {
+        case amc::PrimitiveABIKind::AMC_NONE:           return "none";
+        case amc::PrimitiveABIKind::AMC_VOID:           return "void";
+        case amc::PrimitiveABIKind::AMC_BOOL:           return "bool";
+        case amc::PrimitiveABIKind::AMC_CHAR_SIGNED:    return "char_signed";
+        case amc::PrimitiveABIKind::AMC_CHAR_UNSIGNED:  return "char_unsigned";
+        case amc::PrimitiveABIKind::AMC_SCHAR:          return "schar";
+        case amc::PrimitiveABIKind::AMC_UCHAR:          return "uchar";
+        case amc::PrimitiveABIKind::AMC_CHAR8:          return "char8";
+        case amc::PrimitiveABIKind::AMC_CHAR16:         return "char16";
+        case amc::PrimitiveABIKind::AMC_CHAR32:         return "char32";
+        case amc::PrimitiveABIKind::AMC_WCHAR_SIGNED:   return "wchar_signed";
+        case amc::PrimitiveABIKind::AMC_WCHAR_UNSIGNED: return "wchar_unsigned";
+        case amc::PrimitiveABIKind::AMC_SINT:           return "sint";
+        case amc::PrimitiveABIKind::AMC_UINT:           return "uint";
+        case amc::PrimitiveABIKind::AMC_FLOAT:          return "floating";
     }
     return "unknown";
 }
 
 const char *float_format_name(uint32_t format) {
     switch (static_cast<amc::FloatFormat>((format & amc::primitive_format_mask) >> amc::primitive_format_shift)) {
-        case amc::FloatFormat::none:              return "none";
-        case amc::FloatFormat::ieee16:            return "ieee16";
-        case amc::FloatFormat::bf16:              return "bf16";
-        case amc::FloatFormat::ieee32:            return "ieee32";
-        case amc::FloatFormat::ieee64:            return "ieee64";
-        case amc::FloatFormat::ieee128:           return "ieee128";
-        case amc::FloatFormat::x87_80:            return "x87_80";
-        case amc::FloatFormat::ppc_double_double: return "ppc_double_double";
+        case amc::FloatFormat::NONE:              return "none";
+        case amc::FloatFormat::IEEE16:            return "ieee16";
+        case amc::FloatFormat::BF16:              return "bf16";
+        case amc::FloatFormat::IEEE32:            return "ieee32";
+        case amc::FloatFormat::IEEE64:            return "ieee64";
+        case amc::FloatFormat::IEEE128:           return "ieee128";
+        case amc::FloatFormat::X87_80:            return "x87_80";
+        case amc::FloatFormat::PPC_DOUBLE_DOUBLE: return "ppc_double_double";
     }
     return "unknown";
 }
 
 const char *map_opcode_name(amc::MapOpcode opcode) {
     switch (opcode) {
-        case amc::MapOpcode::copy_field:    return "copy_field";
-        case amc::MapOpcode::convert_int:   return "convert_int";
-        case amc::MapOpcode::convert_float: return "convert_float";
-        case amc::MapOpcode::add_default:   return "add_default";
-        case amc::MapOpcode::skip_field:    return "skip_field";
+        case amc::MapOpcode::COPY_FIELD:    return "copy_field";
+        case amc::MapOpcode::CONVERT_INT:   return "convert_int";
+        case amc::MapOpcode::CONVERT_FLOAT: return "convert_float";
+        case amc::MapOpcode::ADD_DEFAULT:   return "add_default";
+        case amc::MapOpcode::SKIP_FIELD:    return "skip_field";
     }
     return "unknown";
 }
 
-}   // namespace amc::util
+}   // namespace skl::amc::util

@@ -20,12 +20,12 @@
 
 #include <string>
 
-namespace amc::ir {
+namespace skl::amc::ir {
 
 // Stable IR-layer policy facade for source->target type mapping. The matching
 // implementation remains in Core/Core; Pass/TypeMapping adds diagnostics.
-bool build_type_mapping(const AbiModule &source, const AbiModule &target, AbiModule &report, std::string &error);
+bool build_type_mapping(const ABIModule &source, const ABIModule &target, ABIModule &report, std::string &error);
 
-}   // namespace amc::ir
+}   // namespace skl::amc::ir
 
 #endif   // AMC_IR_TYPE_MAPPING_H

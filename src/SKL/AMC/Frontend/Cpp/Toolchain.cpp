@@ -32,7 +32,7 @@
 #  define ABIX_CLANG_RESOURCE_DIR ""
 #endif
 
-namespace amc::lang::cpp {
+namespace skl::amc::lang::cpp {
 
 const char * const kClangResourceDir = ABIX_CLANG_RESOURCE_DIR;
 
@@ -204,4 +204,4 @@ void append_clang_resource_dir(std::vector<std::string> &flags) {
 }
 #endif
 
-}   // namespace amc::lang::cpp
+}   // namespace skl::amc::lang::cpp

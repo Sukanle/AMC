@@ -17,7 +17,7 @@
 
 #include <string>
 
-namespace amc::semantic {
+namespace skl::amc::semantic {
 namespace {
 
 // Domain separators keep the four identity families independent even when
@@ -51,11 +51,11 @@ void append_hash(std::string &out, Hash128 value) {
 
 void append_type_id(std::string &out, SemanticTypeId value) { append_hash(out, value.value); }
 
-void append_function_id(std::string &out, SemanticFunctionId value) { append_hash(out, value.value); }
+void append_function_id(std::string &out, SemanticFuncId value) { append_hash(out, value.value); }
 
 void append_template_decl_id(std::string &out, TemplateDeclId value) { append_hash(out, value.value); }
 
-void append_template_instance_id(std::string &out, TemplateInstanceId value) { append_hash(out, value.value); }
+void append_template_instance_id(std::string &out, TemplateInstId value) { append_hash(out, value.value); }
 
 void append_qualifiers(std::string &out, const Qualifiers &qualifiers) {
     append_u32(
@@ -66,7 +66,7 @@ void append_qualifiers(std::string &out, const Qualifiers &qualifiers) {
 
 SemanticTypeId semantic_type_identity(SemanticTypeKind kind, std::string_view canonical_name,
     const Qualifiers &qualifiers, ValueCategory category, SemanticTypeId canonical, SemanticTypeId element,
-    TemplateInstanceId instance, uint32_t rules_version) {
+    TemplateInstId instance, uint32_t rules_version) {
     std::string key;
     append_u32(key, rules_version);
     append_u32(key, static_cast<uint32_t>(kind));
@@ -79,9 +79,9 @@ SemanticTypeId semantic_type_identity(SemanticTypeKind kind, std::string_view ca
     return SemanticTypeId{hash_text(key, semantic_type_domain)};
 }
 
-SemanticFunctionId semantic_function_identity(SemanticFunctionKind kind, SemanticTypeId owner,
+SemanticFuncId semantic_function_identity(SemanticFuncKind kind, SemanticTypeId owner,
     std::string_view unqualified_name, const std::vector<SemanticTypeId> &parameters, const Qualifiers &qualifiers,
-    ValueCategory ref_qualifier, TemplateInstanceId instance, uint32_t rules_version) {
+    ValueCategory ref_qualifier, TemplateInstId instance, uint32_t rules_version) {
     std::string key;
     append_u32(key, rules_version);
     append_u32(key, static_cast<uint32_t>(kind));
@@ -93,17 +93,17 @@ SemanticFunctionId semantic_function_identity(SemanticFunctionKind kind, Semanti
     append_qualifiers(key, qualifiers);
     append_u32(key, static_cast<uint32_t>(ref_qualifier));
     append_template_instance_id(key, instance);
-    return SemanticFunctionId{hash_text(key, semantic_function_domain)};
+    return SemanticFuncId{hash_text(key, semantic_function_domain)};
 }
 
-TemplateDeclId template_decl_identity(TemplateKind kind, std::string_view qualified_name,
-    const std::vector<TemplateParameter> &parameters, Hash128 requires_hash, uint32_t rules_version) {
+TemplateDeclId template_decl_identity(TemplateTypeKind kind, std::string_view qualified_name,
+    const std::vector<TemplateParam> &parameters, Hash128 requires_hash, uint32_t rules_version) {
     std::string key;
     append_u32(key, rules_version);
     append_u32(key, static_cast<uint32_t>(kind));
     append_string(key, qualified_name);
     append_u32(key, static_cast<uint32_t>(parameters.size()));
-    for (const TemplateParameter &parameter : parameters) {
+    for (const TemplateParam &parameter : parameters) {
         append_u32(key, static_cast<uint32_t>(parameter.kind));
         append_u32(key, parameter.index);
         append_string(key, parameter.name);
@@ -114,21 +114,21 @@ TemplateDeclId template_decl_identity(TemplateKind kind, std::string_view qualif
     return TemplateDeclId{hash_text(key, template_decl_domain)};
 }
 
-TemplateInstanceId template_instance_identity(TemplateDeclId declaration,
-    const std::vector<TemplateArgumentKey> &arguments, bool explicit_specialization, uint32_t rules_version) {
+TemplateInstId template_instance_identity(TemplateDeclId declaration, const std::vector<TemplateArgKey> &arguments,
+    bool explicit_specialization, uint32_t rules_version) {
     std::string key;
     append_u32(key, rules_version);
     append_template_decl_id(key, declaration);
     append_u32(key, explicit_specialization ? 1u : 0u);
     append_u32(key, static_cast<uint32_t>(arguments.size()));
-    for (const TemplateArgumentKey &argument : arguments) {
+    for (const TemplateArgKey &argument : arguments) {
         append_u32(key, static_cast<uint32_t>(argument.kind));
         append_type_id(key, argument.type);
         append_u64(key, static_cast<uint64_t>(argument.value));
         append_template_decl_id(key, argument.template_decl);
         append_hash(key, argument.canonical);
     }
-    return TemplateInstanceId{hash_text(key, template_instance_domain)};
+    return TemplateInstId{hash_text(key, template_instance_domain)};
 }
 
-}   // namespace amc::semantic
+}   // namespace skl::amc::semantic

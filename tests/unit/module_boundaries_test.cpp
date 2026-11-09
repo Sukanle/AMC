@@ -36,21 +36,21 @@ void check(bool condition, const char *message) {
 }
 
 void test_ir_contract() {
-    amc::ir::Module module;
-    check(module.schema_version == amc::ir::module_schema_version, "IR module carries its schema version");
+    skl::amc::ir::Module module;
+    check(module.schema_version == skl::amc::ir::module_schema_version, "IR module carries its schema version");
     check(module.abi.types.empty(), "IR module starts with an empty ABI view");
     check(module.semantic.types.empty(), "IR module starts with an empty semantic view");
 }
 
 void test_frontend_contract() {
-    amc::frontend::Request request;
+    skl::amc::frontend::Request request;
     request.language = "cpp";
     request.config_path = "api.abic.toml";
 
-    amc::frontend::Frontend frontend;
+    skl::amc::frontend::Frontend frontend;
     frontend.language = "cpp";
-    frontend.run = [](const amc::frontend::Request &input) {
-        amc::frontend::Result result;
+    frontend.run = [](const skl::amc::frontend::Request &input) {
+        skl::amc::frontend::Result result;
         result.module.abi.package_name = input.language;
         result.dependencies.push_back(input.config_path);
         return result;
@@ -63,46 +63,46 @@ void test_frontend_contract() {
 }
 
 void test_pass_contract() {
-    amc::ir::Module module;
-    amc::pass::Context context;
-    amc::diagnostics::DiagnosticList diagnostics;
+    skl::amc::ir::Module module;
+    skl::amc::pass::Context context;
+    skl::amc::diagnostics::DiagnosticList diagnostics;
     std::vector<std::string> order;
 
-    amc::pass::Pipeline pipeline;
+    skl::amc::pass::Pipeline pipeline;
     pipeline.passes.push_back(
-        {"first", [&](amc::ir::Module &, amc::pass::Context &, amc::diagnostics::DiagnosticList &out) {
+        {"first", [&](skl::amc::ir::Module &, skl::amc::pass::Context &, skl::amc::diagnostics::DiagnosticList &out) {
              order.push_back("first");
-             amc::diagnostics::add_warning(out, "demo_warning", "pass", "example warning");
+             skl::amc::diagnostics::add_warning(out, "demo_warning", "pass", "example warning");
              return true;
          }});
     pipeline.passes.push_back(
-        {"second", [&](amc::ir::Module &, amc::pass::Context &, amc::diagnostics::DiagnosticList &out) {
+        {"second", [&](skl::amc::ir::Module &, skl::amc::pass::Context &, skl::amc::diagnostics::DiagnosticList &out) {
              order.push_back("second");
-             out.push_back({amc::diagnostics::Severity::note, "demo_note", "pass", "example note", {}, 0, 0});
+             out.push_back({skl::amc::diagnostics::Severity::NOTE, "demo_note", "pass", "example note", {}, 0, 0});
              return true;
          }});
 
     check(pipeline.run(module, context, diagnostics), "pass pipeline runs in order");
     check(order.size() == 2 && order[0] == "first" && order[1] == "second", "pass order is preserved");
-    check(!amc::diagnostics::has_errors(diagnostics), "warnings and notes do not fail the pipeline");
+    check(!skl::amc::diagnostics::has_errors(diagnostics), "warnings and notes do not fail the pipeline");
 
-    amc::diagnostics::DiagnosticList failed;
-    amc::pass::Pipeline failing;
-    failing.passes.push_back(
-        {"broken", [](amc::ir::Module &, amc::pass::Context &, amc::diagnostics::DiagnosticList &) { return false; }});
+    skl::amc::diagnostics::DiagnosticList failed;
+    skl::amc::pass::Pipeline failing;
+    failing.passes.push_back({"broken", [](skl::amc::ir::Module &, skl::amc::pass::Context &,
+                                            skl::amc::diagnostics::DiagnosticList &) { return false; }});
     check(!failing.run(module, context, failed), "a failing pass stops the pipeline");
-    check(amc::diagnostics::has_errors(failed), "a failing pass produces a diagnostic");
+    check(skl::amc::diagnostics::has_errors(failed), "a failing pass produces a diagnostic");
     check(!failed.empty() && failed[0].code == "pass_failed", "missing pass diagnostics get a stable code");
 }
 
 void test_backend_contract() {
-    amc::ir::Module module;
-    amc::backend::Request request;
+    skl::amc::ir::Module module;
+    skl::amc::backend::Request request;
     request.module = &module;
     request.language = "rust";
     request.output_directory = "out";
 
-    amc::backend::Result result;
+    skl::amc::backend::Result result;
     result.artifacts.push_back({
         "generated.rs", "out/generated.rs", {1, 2, 3}
     });
@@ -112,11 +112,11 @@ void test_backend_contract() {
 }
 
 void test_compilation_contract() {
-    amc::compilation::Request request;
+    skl::amc::compilation::Request request;
     request.config_path = "api.abic.toml";
     request.build_directory = "build";
 
-    amc::compilation::Result result;
+    skl::amc::compilation::Result result;
     result.module.abi.package_name = "api";
     check(result.ok(), "compilation result without diagnostics is successful");
     check(result.module.abi.package_name == "api", "compilation exposes the compiled IR");

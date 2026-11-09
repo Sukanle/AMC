@@ -44,34 +44,35 @@ namespace {
 
 using Clock = std::chrono::steady_clock;
 
-amc::AbiModule make_module(size_t count) {
-    amc::AbiModule module;
+skl::amc::ABIModule make_module(size_t count) {
+    skl::amc::ABIModule module;
     module.package_name = "artifact_perf";
     module.package_version = "1.0";
 
-    amc::Type int_type;
+    skl::amc::Type int_type;
     int_type.name = "int";
-    int_type.kind = amc::TypeKind::primitive;
-    int_type.id = amc::hash_text("int", 0x54595045ULL);
+    int_type.kind = skl::amc::TypeKind::PRIMITIVE;
+    int_type.id = skl::amc::hash_text("int", 0x54595045ULL);
     int_type.size = 4;
     int_type.align = 4;
-    int_type.primitive_abi = amc::primitive_abi(4, amc::PrimitiveAbiKind::sint, amc::FloatFormat::none, true);
+    int_type.primitive_abi =
+        skl::amc::primitive_abi(4, skl::amc::PrimitiveABIKind::AMC_SINT, skl::amc::FloatFormat::NONE, true);
     module.types.push_back(int_type);
 
     module.types.reserve(count + 1);
     module.fields.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         const std::string name = "perf::R" + std::to_string(i);
-        amc::Type type;
+        skl::amc::Type type;
         type.name = name;
-        type.kind = amc::TypeKind::record;
-        type.id = amc::hash_text(name, 0x54595045ULL);
+        type.kind = skl::amc::TypeKind::RECORD;
+        type.id = skl::amc::hash_text(name, 0x54595045ULL);
         type.size = 4;
         type.align = 4;
         type.field_begin = static_cast<uint32_t>(module.fields.size());
         type.field_count = 1;
 
-        amc::Field field;
+        skl::amc::Field field;
         field.owner_type = type.id;
         field.name = "value";
         field.type_id = int_type.id;
@@ -83,23 +84,23 @@ amc::AbiModule make_module(size_t count) {
     module.functions.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         const std::string name = "perf::fn" + std::to_string(i);
-        amc::Function function;
+        skl::amc::Function function;
         function.name = name;
-        function.signature = amc::hash_text(name + ":signature", 0x5349474eULL);
+        function.signature = skl::amc::hash_text(name + ":signature", 0x5349474eULL);
         function.return_type = int_type.id;
-        amc::Parameter parameter;
+        skl::amc::Parameter parameter;
         parameter.name = "value";
         parameter.type_id = int_type.id;
-        function.parameters.push_back(std::move(parameter));
+        function.params.push_back(std::move(parameter));
         module.functions.push_back(std::move(function));
     }
 
-    amc::recompute_layout_hashes(module);
+    skl::amc::recompute_layout_hashes(module);
     return module;
 }
 
-amc::semantic::SemanticModule make_semantic(const amc::AbiModule &module) {
-    amc::semantic::SemanticModule semantic;
+skl::amc::semantic::SemanticModule make_semantic(const skl::amc::ABIModule &module) {
+    skl::amc::semantic::SemanticModule semantic;
     semantic.package_name = module.package_name;
     semantic.package_version = module.package_version;
     semantic.rules_version = 1;
@@ -107,43 +108,43 @@ amc::semantic::SemanticModule make_semantic(const amc::AbiModule &module) {
     semantic.functions.reserve(module.functions.size());
 
     for (const auto &type : module.types) {
-        if (type.kind != amc::TypeKind::record) continue;
-        amc::semantic::SemanticType item;
-        item.id = amc::semantic::SemanticTypeId{type.id};
-        item.kind = amc::semantic::SemanticTypeKind::record;
-        item.qualified_name = type.name;
+        if (type.kind != skl::amc::TypeKind::RECORD) continue;
+        skl::amc::semantic::SemanticType item;
+        item.id = skl::amc::semantic::SemanticTypeId{type.id};
+        item.kind = skl::amc::semantic::SemanticTypeKind::RECORD;
+        item.qualified = type.name;
         item.abi_type = type.id;
         semantic.types.push_back(std::move(item));
     }
 
     for (const auto &function : module.functions) {
-        amc::semantic::SemanticFunction item;
-        item.id = amc::semantic::SemanticFunctionId{amc::hash_text(function.name + ":semantic", 0x53454e46ULL)};
-        item.kind = amc::semantic::SemanticFunctionKind::free_function;
-        item.qualified_name = function.name;
-        item.unqualified_name = function.name;
+        skl::amc::semantic::SemanticFunc item;
+        item.id = skl::amc::semantic::SemanticFuncId{skl::amc::hash_text(function.name + ":semantic", 0x53454e46ULL)};
+        item.kind = skl::amc::semantic::SemanticFuncKind::FREE;
+        item.qualified = function.name;
+        item.unqualified = function.name;
         item.abi_signature = function.signature;
         semantic.functions.push_back(std::move(item));
     }
     return semantic;
 }
 
-amc::ir::LoweringResult make_lowering(const amc::AbiModule &module) {
-    amc::ir::LoweringResult lowering;
+skl::amc::ir::LoweringResult make_lowering(const skl::amc::ABIModule &module) {
+    skl::amc::ir::LoweringResult lowering;
     lowering.rules_version = 1;
     lowering.types.reserve(module.types.size());
     lowering.functions.reserve(module.functions.size());
 
     for (size_t i = 0; i < module.types.size(); ++i) {
         const auto &type = module.types[i];
-        if (type.kind != amc::TypeKind::record) continue;
-        amc::ir::LoweredType lowered;
-        lowered.semantic = amc::semantic::SemanticTypeId{type.id};
+        if (type.kind != skl::amc::TypeKind::RECORD) continue;
+        skl::amc::ir::LoweredType lowered;
+        lowered.semantic = skl::amc::semantic::SemanticTypeId{type.id};
         lowered.abi = type.id;
         lowered.abi_index = static_cast<uint32_t>(i);
         lowered.name = type.name;
-        lowered.status = amc::ir::LoweringStatus::lowered;
-        lowered.reason = amc::ir::LoweringReason::ok;
+        lowered.status = skl::amc::ir::LoweringStatus::LOWERED;
+        lowered.reason = skl::amc::ir::LoweringReason::OK;
         lowered.size = type.size;
         lowered.align = type.align;
         lowered.layout_hash = type.layout_hash;
@@ -151,13 +152,13 @@ amc::ir::LoweringResult make_lowering(const amc::AbiModule &module) {
     }
 
     for (const auto &function : module.functions) {
-        amc::ir::LoweredFunction lowered;
+        skl::amc::ir::LoweredFunction lowered;
         lowered.semantic =
-            amc::semantic::SemanticFunctionId{amc::hash_text(function.name + ":semantic", 0x53454e46ULL)};
+            skl::amc::semantic::SemanticFuncId{skl::amc::hash_text(function.name + ":semantic", 0x53454e46ULL)};
         lowered.abi = function.signature;
         lowered.name = function.name;
-        lowered.status = amc::ir::LoweringStatus::lowered;
-        lowered.reason = amc::ir::LoweringReason::ok;
+        lowered.status = skl::amc::ir::LoweringStatus::LOWERED;
+        lowered.reason = skl::amc::ir::LoweringReason::OK;
         lowered.signature = function.signature;
         lowered.return_type = function.return_type;
         lowering.functions.push_back(std::move(lowered));
@@ -183,15 +184,15 @@ public:
         lowering_path = fs::path(artifact.string() + ".lowering");
 
         std::string error;
-        if (!amc::write_abix(module, artifact.string(), error)) throw std::runtime_error("write_abix: " + error);
-        if (!amc::semantic::write_semantic_json(make_semantic(module), semantic_path.string(), error))
+        if (!skl::amc::write_abix(module, artifact.string(), error)) throw std::runtime_error("write_abix: " + error);
+        if (!skl::amc::semantic::write_semantic_json(make_semantic(module), semantic_path.string(), error))
             throw std::runtime_error("write_semantic: " + error);
-        if (!amc::ir::write_lowering_json(make_lowering(module), lowering_path.string(), error))
+        if (!skl::amc::ir::write_lowering_json(make_lowering(module), lowering_path.string(), error))
             throw std::runtime_error("write_lowering: " + error);
 
-        amc::MetadataOptions options;
-        options.build_id = amc::hash_text("artifact-perf-build", 0x4255494cULL);
-        if (!amc::build_metadata_region(module, options, region, error))
+        skl::amc::MetadataOptions options;
+        options.build_id = skl::amc::hash_text("artifact-perf-build", 0x4255494cULL);
+        if (!skl::amc::build_metadata_region(module, options, region, error))
             throw std::runtime_error("build_metadata_region: " + error);
     }
 
@@ -201,7 +202,7 @@ public:
     }
 
     size_t count = 0;
-    amc::AbiModule module;
+    skl::amc::ABIModule module;
     fs::path directory;
     fs::path artifact;
     fs::path semantic_path;
@@ -215,7 +216,7 @@ BENCHMARK_DEFINE_F(ArtifactFixture, WriteAbix)(benchmark::State &state) {
     std::string error;
     for (auto _ : state) {
         error.clear();
-        bool ok = amc::write_abix(module, artifact.string(), error);
+        bool ok = skl::amc::write_abix(module, artifact.string(), error);
         benchmark::DoNotOptimize(ok);
     }
     state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(count));
@@ -223,12 +224,12 @@ BENCHMARK_DEFINE_F(ArtifactFixture, WriteAbix)(benchmark::State &state) {
 BENCHMARK_REGISTER_F(ArtifactFixture, WriteAbix)->Arg(5'000)->Arg(10'000);
 
 BENCHMARK_DEFINE_F(ArtifactFixture, ReadAbix)(benchmark::State &state) {
-    amc::AbiModule decoded;
+    skl::amc::ABIModule decoded;
     std::string error;
     for (auto _ : state) {
         decoded = {};
         error.clear();
-        bool ok = amc::read_abix(artifact.string(), decoded, error);
+        bool ok = skl::amc::read_abix(artifact.string(), decoded, error);
         benchmark::DoNotOptimize(decoded);
         benchmark::DoNotOptimize(ok);
     }
@@ -239,9 +240,9 @@ BENCHMARK_REGISTER_F(ArtifactFixture, ReadAbix)->Arg(5'000)->Arg(10'000);
 BENCHMARK_DEFINE_F(ArtifactFixture, LoadArtifact)(benchmark::State &state) {
     std::string error;
     for (auto _ : state) {
-        amc::ir::Module loaded;
+        skl::amc::ir::Module loaded;
         error.clear();
-        bool ok = amc::ir::load_artifact(artifact.string(), loaded, error);
+        bool ok = skl::amc::ir::load_artifact(artifact.string(), loaded, error);
         benchmark::DoNotOptimize(loaded);
         benchmark::DoNotOptimize(ok);
     }
@@ -250,14 +251,14 @@ BENCHMARK_DEFINE_F(ArtifactFixture, LoadArtifact)(benchmark::State &state) {
 BENCHMARK_REGISTER_F(ArtifactFixture, LoadArtifact)->Arg(5'000)->Arg(10'000);
 
 BENCHMARK_DEFINE_F(ArtifactFixture, LoadAbiOnly)(benchmark::State &state) {
-    amc::ir::LoadOptions options;
+    skl::amc::ir::LoadOptions options;
     options.semantic = false;
     options.lowering = false;
     std::string error;
     for (auto _ : state) {
-        amc::ir::Module loaded;
+        skl::amc::ir::Module loaded;
         error.clear();
-        bool ok = amc::ir::load_artifact(artifact.string(), loaded, error, options);
+        bool ok = skl::amc::ir::load_artifact(artifact.string(), loaded, error, options);
         benchmark::DoNotOptimize(loaded);
         benchmark::DoNotOptimize(ok);
     }
@@ -266,13 +267,13 @@ BENCHMARK_DEFINE_F(ArtifactFixture, LoadAbiOnly)(benchmark::State &state) {
 BENCHMARK_REGISTER_F(ArtifactFixture, LoadAbiOnly)->Arg(5'000)->Arg(10'000);
 
 BENCHMARK_DEFINE_F(ArtifactFixture, LoadWithSemantic)(benchmark::State &state) {
-    amc::ir::LoadOptions options;
+    skl::amc::ir::LoadOptions options;
     options.lowering = false;
     std::string error;
     for (auto _ : state) {
-        amc::ir::Module loaded;
+        skl::amc::ir::Module loaded;
         error.clear();
-        bool ok = amc::ir::load_artifact(artifact.string(), loaded, error, options);
+        bool ok = skl::amc::ir::load_artifact(artifact.string(), loaded, error, options);
         benchmark::DoNotOptimize(loaded);
         benchmark::DoNotOptimize(ok);
     }
@@ -281,13 +282,13 @@ BENCHMARK_DEFINE_F(ArtifactFixture, LoadWithSemantic)(benchmark::State &state) {
 BENCHMARK_REGISTER_F(ArtifactFixture, LoadWithSemantic)->Arg(5'000)->Arg(10'000);
 
 BENCHMARK_DEFINE_F(ArtifactFixture, LoadWithLowering)(benchmark::State &state) {
-    amc::ir::LoadOptions options;
+    skl::amc::ir::LoadOptions options;
     options.semantic = false;
     std::string error;
     for (auto _ : state) {
-        amc::ir::Module loaded;
+        skl::amc::ir::Module loaded;
         error.clear();
-        bool ok = amc::ir::load_artifact(artifact.string(), loaded, error, options);
+        bool ok = skl::amc::ir::load_artifact(artifact.string(), loaded, error, options);
         benchmark::DoNotOptimize(loaded);
         benchmark::DoNotOptimize(ok);
     }
@@ -296,13 +297,13 @@ BENCHMARK_DEFINE_F(ArtifactFixture, LoadWithLowering)(benchmark::State &state) {
 BENCHMARK_REGISTER_F(ArtifactFixture, LoadWithLowering)->Arg(5'000)->Arg(10'000);
 
 BENCHMARK_DEFINE_F(ArtifactFixture, BuildMetadata)(benchmark::State &state) {
-    amc::MetadataOptions options;
-    options.build_id = amc::hash_text("artifact-perf-build", 0x4255494cULL);
+    skl::amc::MetadataOptions options;
+    options.build_id = skl::amc::hash_text("artifact-perf-build", 0x4255494cULL);
     std::string error;
     for (auto _ : state) {
         std::vector<uint8_t> output;
         error.clear();
-        bool ok = amc::build_metadata_region(module, options, output, error);
+        bool ok = skl::amc::build_metadata_region(module, options, output, error);
         benchmark::DoNotOptimize(output);
         benchmark::DoNotOptimize(ok);
     }
@@ -314,7 +315,7 @@ BENCHMARK_DEFINE_F(ArtifactFixture, VerifyMetadata)(benchmark::State &state) {
     std::string error;
     for (auto _ : state) {
         error.clear();
-        bool ok = amc::verify_metadata_region(region, error);
+        bool ok = skl::amc::verify_metadata_region(region, error);
         benchmark::DoNotOptimize(ok);
     }
     state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(count));
@@ -322,12 +323,12 @@ BENCHMARK_DEFINE_F(ArtifactFixture, VerifyMetadata)(benchmark::State &state) {
 BENCHMARK_REGISTER_F(ArtifactFixture, VerifyMetadata)->Arg(5'000)->Arg(10'000);
 
 BENCHMARK_DEFINE_F(ArtifactFixture, ModuleFromRegion)(benchmark::State &state) {
-    amc::AbiModule decoded;
+    skl::amc::ABIModule decoded;
     std::string error;
     for (auto _ : state) {
         decoded = {};
         error.clear();
-        bool ok = amc::module_from_region(region, decoded, error);
+        bool ok = skl::amc::module_from_region(region, decoded, error);
         benchmark::DoNotOptimize(decoded);
         benchmark::DoNotOptimize(ok);
     }
@@ -338,7 +339,7 @@ BENCHMARK_REGISTER_F(ArtifactFixture, ModuleFromRegion)->Arg(5'000)->Arg(10'000)
 BENCHMARK_DEFINE_F(ArtifactFixture, Materialize)(benchmark::State &state) {
     std::string error;
     for (auto _ : state) {
-        amc::MaterializedModule materialized;
+        skl::amc::MaterializedModule materialized;
         error.clear();
         bool ok = materialized.build(module, error);
         benchmark::DoNotOptimize(materialized);
@@ -351,7 +352,7 @@ BENCHMARK_REGISTER_F(ArtifactFixture, Materialize)->Arg(5'000)->Arg(10'000);
 BENCHMARK_DEFINE_F(ArtifactFixture, MaterializeRegion)(benchmark::State &state) {
     std::string error;
     for (auto _ : state) {
-        amc::MaterializedModule materialized;
+        skl::amc::MaterializedModule materialized;
         error.clear();
         bool ok = materialized.build_from_region(region, error);
         benchmark::DoNotOptimize(materialized);

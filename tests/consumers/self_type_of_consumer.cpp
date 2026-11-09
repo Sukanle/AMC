@@ -31,7 +31,7 @@ void reclaim(void *object) noexcept {
 
 int main() {
     skl::abix::runtime::Registry<64> registry;
-    if (registry.register_module(amc_generated::amc_module) != skl::abix::runtime::RegisterStatus::ok) return 1;
+    if (registry.register_module(skl::amc::generated::amc_module) != skl::abix::runtime::RegisterStatus::ok) return 1;
     if (!registry.type_of<skl::abix::model::TypeDesc>()
         || !registry.type_of<skl::abix::model::TypeInfo>()
         || !registry.type_of<skl::abix::rcu::Epoch>()

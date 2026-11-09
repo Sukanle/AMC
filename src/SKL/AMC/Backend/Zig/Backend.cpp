@@ -36,7 +36,7 @@
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/raw_ostream.h>
 
-namespace amc::lang::zig {
+namespace skl::amc::lang::zig {
 namespace {
 
 // Thin wrapper over `fmt::memory_buffer` so the emit helpers read like a file
@@ -127,7 +127,7 @@ bool spelling_has_qualifier(const std::string &spelling, const std::string &qual
 
 class Projector {
 public:
-    explicit Projector(const amc::AbiModule &module, const amc::ir::LoweringResult *lowering)
+    explicit Projector(const amc::ABIModule &module, const amc::ir::LoweringResult *lowering)
         : m(module)
         , lowering(lowering) {
         names.reserve(m.types.size());
@@ -139,7 +139,7 @@ public:
             names.push_back(std::move(candidate));
         }
         for (size_t i = 0; i < m.types.size(); ++i)
-            if (m.types[i].kind != amc::TypeKind::pointer)
+            if (m.types[i].kind != amc::TypeKind::POINTER)
                 by_spelling.emplace(normalise_type_spelling(m.types[i].name), static_cast<int>(i));
     }
 
@@ -164,8 +164,8 @@ public:
         const int index = index_of(id);
         if (index < 0) return "anyopaque";
         const auto &type = m.types[static_cast<size_t>(index)];
-        if (type.kind == amc::TypeKind::primitive) return primitive_zig_type(type.primitive_abi);
-        if (type.kind == amc::TypeKind::pointer) return pointer_zig_type(type);
+        if (type.kind == amc::TypeKind::PRIMITIVE) return primitive_zig_type(type.primitive_abi);
+        if (type.kind == amc::TypeKind::POINTER) return pointer_zig_type(type);
         return decl_name(id);
     }
 
@@ -199,7 +199,7 @@ public:
     const amc::ir::LoweredExposedType *exposed_for(amc::Hash128 type_id) const {
         if (lowering == nullptr) return nullptr;
         for (const auto &record : lowering->exposed)
-            if (record.abi == type_id && record.status == amc::ir::LoweringStatus::lowered) return &record;
+            if (record.abi == type_id && record.status == amc::ir::LoweringStatus::LOWERED) return &record;
         return nullptr;
     }
 
@@ -219,7 +219,7 @@ public:
         return nullptr;
     }
 
-    const amc::AbiModule &m;
+    const amc::ABIModule &m;
 
 private:
     std::string resolve_spelling(const std::string &spelling) const {
@@ -314,21 +314,21 @@ void emit_opaque(Output &o, const Projector &p, const amc::Type &type) {
 
 void emit_type(Output &o, const Projector &p, const amc::Type &type) {
     switch (type.kind) {
-        case amc::TypeKind::record:
+        case amc::TypeKind::RECORD:
             if ((type.flags & amc::type_opaque) != 0)
                 emit_opaque(o, p, type);
             else
                 emit_record(o, p, type);
             break;
-        case amc::TypeKind::enumeration: emit_enumeration(o, p, type); break;
-        case amc::TypeKind::alias:       emit_alias(o, p, type); break;
-        case amc::TypeKind::pointer:
+        case amc::TypeKind::ENUM:  emit_enumeration(o, p, type); break;
+        case amc::TypeKind::ALIAS: emit_alias(o, p, type); break;
+        case amc::TypeKind::POINTER:
             o.print("pub const {} = {};\n", p.decl_name(type.id), p.pointer_zig_type(type));
             break;
-        case amc::TypeKind::array:          emit_opaque(o, p, type); break;
-        case amc::TypeKind::namespace_type: break;
-        case amc::TypeKind::primitive:      break;
-        case amc::TypeKind::function:       break;
+        case amc::TypeKind::ARRAY:     emit_opaque(o, p, type); break;
+        case amc::TypeKind::NAMESPACE: break;
+        case amc::TypeKind::PRIMITIVE: break;
+        case amc::TypeKind::FUNC:      break;
     }
 }
 
@@ -340,17 +340,17 @@ void emit_functions(Output &o, const Projector &p) {
     o.print("\n// Free functions declared with the C calling convention.\n");
     for (const auto *function : free_functions) {
         std::string params;
-        for (size_t i = 0; i < function->parameters.size(); ++i) {
+        for (size_t i = 0; i < function->params.size(); ++i) {
             if (i != 0) params += ", ";
-            const auto &parameter = function->parameters[i];
+            const auto &parameter = function->params[i];
             std::string parameter_name = parameter.name.empty() ? fmt::format("arg{}", i) : zig_ident(parameter.name);
             params += fmt::format("{}: {}", parameter_name, p.field_type(parameter.type_id));
         }
         const int return_index = p.index_of(function->return_type);
         const bool returns_void = return_index >= 0
-                               && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::primitive
+                               && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::PRIMITIVE
                                && (p.m.types[static_cast<size_t>(return_index)].primitive_abi & 0xffu)
-                                      == static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
+                                      == static_cast<uint32_t>(amc::PrimitiveABIKind::AMC_VOID);
         if (returns_void)
             o.print("pub extern fn {}({}) void;\n", zig_ident(function->name), params);
         else
@@ -364,20 +364,20 @@ void emit_exposed_handles(Output &o, const Projector &p) {
     if (records.empty()) return;
     o.print("\n// Exposed-handle wrappers: create/destroy and typed method thunks.\n");
     for (const auto &record : records) {
-        if (record.status != amc::ir::LoweringStatus::lowered) continue;
+        if (record.status != amc::ir::LoweringStatus::LOWERED) continue;
         const amc::Function *create = p.function_by_signature(record.create);
         const amc::Function *destroy = p.function_by_signature(record.destroy);
         const std::string handle = p.decl_name(record.abi) + "Handle";
         std::string self_type = "?*anyopaque";
         if (create != nullptr)
             self_type = p.field_type(create->return_type);
-        else if (destroy != nullptr && !destroy->parameters.empty())
-            self_type = p.field_type(destroy->parameters[0].type_id);
+        else if (destroy != nullptr && !destroy->params.empty())
+            self_type = p.field_type(destroy->params[0].type_id);
         else
             for (const auto &method : record.methods) {
                 const amc::Function *function = p.function_by_signature(method.abi);
-                if (function != nullptr && !function->parameters.empty()) {
-                    self_type = p.field_type(function->parameters[0].type_id);
+                if (function != nullptr && !function->params.empty()) {
+                    self_type = p.field_type(function->params[0].type_id);
                     break;
                 }
             }
@@ -386,8 +386,8 @@ void emit_exposed_handles(Output &o, const Projector &p) {
 
         if (create != nullptr) {
             std::string params, args;
-            for (size_t i = 0; i < create->parameters.size(); ++i) {
-                const auto &parameter = create->parameters[i];
+            for (size_t i = 0; i < create->params.size(); ++i) {
+                const auto &parameter = create->params[i];
                 const std::string name = parameter.name.empty() ? fmt::format("arg{}", i) : zig_ident(parameter.name);
                 params += fmt::format("{}{}: {}", i == 0 ? "" : ", ", name, p.field_type(parameter.type_id));
                 args += fmt::format("{}{}", i == 0 ? "" : ", ", name);
@@ -408,12 +408,12 @@ void emit_exposed_handles(Output &o, const Projector &p) {
         }
         for (const auto &method : record.methods) {
             const amc::Function *function = p.function_by_signature(method.abi);
-            if (function == nullptr || function->parameters.empty()) continue;
+            if (function == nullptr || function->params.empty()) continue;
             const std::string name = zig_ident(method.name);
             if (name == "create" || name == "deinit") continue;
             std::string params, args;
-            for (size_t i = 1; i < function->parameters.size(); ++i) {
-                const auto &parameter = function->parameters[i];
+            for (size_t i = 1; i < function->params.size(); ++i) {
+                const auto &parameter = function->params[i];
                 const std::string parameter_name =
                     parameter.name.empty() ? fmt::format("arg{}", i - 1) : zig_ident(parameter.name);
                 params += fmt::format(", {}: {}", parameter_name, p.field_type(parameter.type_id));
@@ -421,9 +421,9 @@ void emit_exposed_handles(Output &o, const Projector &p) {
             }
             const int return_index = p.index_of(function->return_type);
             const bool returns_void = return_index >= 0
-                                   && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::primitive
+                                   && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::PRIMITIVE
                                    && (p.m.types[static_cast<size_t>(return_index)].primitive_abi & 0xffu)
-                                          == static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
+                                          == static_cast<uint32_t>(amc::PrimitiveABIKind::AMC_VOID);
             if (returns_void)
                 o.print("    pub fn {}(self: *{}{}) void {{ {}(self.ptr{}); }}\n", name, handle, params,
                     zig_ident(function->name), args);
@@ -506,9 +506,9 @@ void emit_interface_proxies(Output &o, const Projector &p) {
                 params += ", " + p.field_type(method->parameters[i].type_id);
             const int return_index = p.index_of(method->return_type);
             const bool returns_void = return_index >= 0
-                                   && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::primitive
+                                   && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::PRIMITIVE
                                    && (p.m.types[static_cast<size_t>(return_index)].primitive_abi & 0xffu)
-                                          == static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
+                                          == static_cast<uint32_t>(amc::PrimitiveABIKind::AMC_VOID);
             o.print("    {}: *const fn ({}) callconv(.c) {},\n", zig_ident("fn_" + method->name), params,
                 returns_void ? "void" : p.field_type(method->return_type));
         }
@@ -559,9 +559,9 @@ void emit_interface_proxies(Output &o, const Projector &p) {
                 params += ", " + p.field_type(method->parameters[i].type_id);
             const int return_index = p.index_of(method->return_type);
             const bool returns_void = return_index >= 0
-                                   && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::primitive
+                                   && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::PRIMITIVE
                                    && (p.m.types[static_cast<size_t>(return_index)].primitive_abi & 0xffu)
-                                          == static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
+                                          == static_cast<uint32_t>(amc::PrimitiveABIKind::AMC_VOID);
             o.print(
                 "            .{} = @as(*const fn ({}) callconv(.c) {}, @ptrCast(@alignCast(@as(*anyopaque, "
                 "@ptrFromInt(entries[{}]))))),\n",
@@ -586,9 +586,9 @@ void emit_interface_proxies(Output &o, const Projector &p) {
             }
             const int return_index = p.index_of(method->return_type);
             const bool returns_void = return_index >= 0
-                                   && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::primitive
+                                   && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::PRIMITIVE
                                    && (p.m.types[static_cast<size_t>(return_index)].primitive_abi & 0xffu)
-                                          == static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
+                                          == static_cast<uint32_t>(amc::PrimitiveABIKind::AMC_VOID);
             if (returns_void)
                 o.print("    pub fn {}(self: *const {}{}) void {{ self.{} (self.object{}); }}\n", name, type,
                     params.empty() ? "" : ", " + params, zig_ident("fn_" + method->name),
@@ -662,7 +662,7 @@ void emit_error_wrappers(Output &o, const Projector &p) {
         std::string value_type, status_type;
         std::string status_access, value_access;
         std::string params, call_args;
-        if (record.status_source == amc::StatusSource::return_field) {
+        if (record.status_source == amc::StatusSource::RETURN_FIELD) {
             const amc::Type *result = find_type(function.return_type);
             if (result == nullptr
                 || record.status_parameter >= result->field_count
@@ -674,22 +674,22 @@ void emit_error_wrappers(Output &o, const Projector &p) {
             status_type = p.field_type(status_field.type_id);
             status_access = zig_ident(status_field.name);
             value_access = zig_ident(value_field.name);
-            for (size_t i = 0; i < function.parameters.size(); ++i) {
+            for (size_t i = 0; i < function.params.size(); ++i) {
                 if (i != 0) {
                     params += ", ";
                     call_args += ", ";
                 }
-                const std::string name = parameter_name(function.parameters[i], i);
-                params += fmt::format("{}: {}", name, p.field_type(function.parameters[i].type_id));
+                const std::string name = parameter_name(function.params[i], i);
+                params += fmt::format("{}: {}", name, p.field_type(function.params[i].type_id));
                 call_args += name;
             }
-        } else if (record.status_source == amc::StatusSource::return_value) {
-            if (record.value_parameter == UINT32_MAX || record.value_parameter >= function.parameters.size()) continue;
-            const amc::Hash128 value_id = pointee_of(function.parameters[record.value_parameter].type_id);
+        } else if (record.status_source == amc::StatusSource::RETURN_VALUE) {
+            if (record.value_parameter == UINT32_MAX || record.value_parameter >= function.params.size()) continue;
+            const amc::Hash128 value_id = pointee_of(function.params[record.value_parameter].type_id);
             if (value_id.lo == 0 && value_id.hi == 0) continue;
             value_type = p.field_type(value_id);
             status_type = p.field_type(function.return_type);
-            for (size_t i = 0; i < function.parameters.size(); ++i) {
+            for (size_t i = 0; i < function.params.size(); ++i) {
                 if (i == record.value_parameter) {
                     call_args += (call_args.empty() ? "" : ", ") + std::string("&value");
                     continue;
@@ -698,8 +698,8 @@ void emit_error_wrappers(Output &o, const Projector &p) {
                     params += ", ";
                     call_args += ", ";
                 }
-                const std::string name = parameter_name(function.parameters[i], i);
-                params += fmt::format("{}: {}", name, p.field_type(function.parameters[i].type_id));
+                const std::string name = parameter_name(function.params[i], i);
+                params += fmt::format("{}: {}", name, p.field_type(function.params[i].type_id));
                 call_args += name;
             }
         } else {
@@ -708,18 +708,18 @@ void emit_error_wrappers(Output &o, const Projector &p) {
 
         o.print(
             "pub fn {}_result({}) AmcResult({}, {}) {{\n", zig_ident(function.name), params, value_type, status_type);
-        if (record.status_source == amc::StatusSource::return_value)
+        if (record.status_source == amc::StatusSource::RETURN_VALUE)
             o.print("    var value: {} = undefined;\n", value_type);
-        if (record.status_source == amc::StatusSource::return_field)
+        if (record.status_source == amc::StatusSource::RETURN_FIELD)
             o.print("    const raw = {}({});\n", zig_ident(function.name), call_args);
         else
             o.print("    const status = {}({});\n", zig_ident(function.name), call_args);
-        if (record.status_source == amc::StatusSource::return_field)
+        if (record.status_source == amc::StatusSource::RETURN_FIELD)
             o.print("    if (raw.{} == @as({}, {})) return .{{ .ok = raw.{} }};\n", status_access, status_type,
                 record.success_value, value_access);
         else
             o.print("    if (status == @as({}, {})) return .{{ .ok = value }};\n", status_type, record.success_value);
-        if (record.status_source == amc::StatusSource::return_field)
+        if (record.status_source == amc::StatusSource::RETURN_FIELD)
             o.print("    return .{{ .err = raw.{} }};\n", status_access);
         else
             o.print("    return .{{ .err = status }};\n");
@@ -730,7 +730,7 @@ void emit_error_wrappers(Output &o, const Projector &p) {
 void emit_layout_checks(Output &o, const Projector &p) {
     bool any = false;
     for (const auto &type : p.m.types) {
-        if (type.kind != amc::TypeKind::record || type.name.empty()) continue;
+        if (type.kind != amc::TypeKind::RECORD || type.name.empty()) continue;
         if (!any) {
             o.print("\n// Compile-time ABI assertions: a layout drift is a compile error.\n");
             o.print("comptime {{\n");
@@ -752,7 +752,7 @@ void emit_layout_checks(Output &o, const Projector &p) {
     if (any) o.print("}}\n");
 }
 
-bool emit_metadata_region(Output &o, const amc::AbiModule &m, std::string &error) {
+bool emit_metadata_region(Output &o, const amc::ABIModule &m, std::string &error) {
     amc::MetadataOptions options;
     std::vector<uint8_t> region;
     if (!amc::build_metadata_region(m, options, region, error)) return false;
@@ -773,19 +773,19 @@ bool emit_metadata_region(Output &o, const amc::AbiModule &m, std::string &error
 std::string primitive_zig_type(uint32_t primitive_abi) {
     const uint32_t kind = primitive_abi & 0xffu;
     const uint32_t width = (primitive_abi & amc::primitive_width_mask) >> amc::primitive_width_shift;
-    switch (static_cast<amc::PrimitiveAbiKind>(kind)) {
-        case amc::PrimitiveAbiKind::void_:          return "void";
-        case amc::PrimitiveAbiKind::bool_:          return "bool";
-        case amc::PrimitiveAbiKind::char_signed:
-        case amc::PrimitiveAbiKind::char_unsigned:  return "c_char";
-        case amc::PrimitiveAbiKind::schar:          return "i8";
-        case amc::PrimitiveAbiKind::uchar:          return "u8";
-        case amc::PrimitiveAbiKind::char8:          return "u8";
-        case amc::PrimitiveAbiKind::char16:         return "u16";
-        case amc::PrimitiveAbiKind::char32:         return "u32";
-        case amc::PrimitiveAbiKind::wchar_signed:   return width == 2 ? "i16" : "i32";
-        case amc::PrimitiveAbiKind::wchar_unsigned: return width == 2 ? "u16" : "u32";
-        case amc::PrimitiveAbiKind::sint:
+    switch (static_cast<amc::PrimitiveABIKind>(kind)) {
+        case amc::PrimitiveABIKind::AMC_VOID:           return "void";
+        case amc::PrimitiveABIKind::AMC_BOOL:           return "bool";
+        case amc::PrimitiveABIKind::AMC_CHAR_SIGNED:
+        case amc::PrimitiveABIKind::AMC_CHAR_UNSIGNED:  return "c_char";
+        case amc::PrimitiveABIKind::AMC_SCHAR:          return "i8";
+        case amc::PrimitiveABIKind::AMC_UCHAR:          return "u8";
+        case amc::PrimitiveABIKind::AMC_CHAR8:          return "u8";
+        case amc::PrimitiveABIKind::AMC_CHAR16:         return "u16";
+        case amc::PrimitiveABIKind::AMC_CHAR32:         return "u32";
+        case amc::PrimitiveABIKind::AMC_WCHAR_SIGNED:   return width == 2 ? "i16" : "i32";
+        case amc::PrimitiveABIKind::AMC_WCHAR_UNSIGNED: return width == 2 ? "u16" : "u32";
+        case amc::PrimitiveABIKind::AMC_SINT:
             switch (width) {
                 case 1:  return "i8";
                 case 2:  return "i16";
@@ -794,7 +794,7 @@ std::string primitive_zig_type(uint32_t primitive_abi) {
                 case 4:
                 default: return "c_int";
             }
-        case amc::PrimitiveAbiKind::uint:
+        case amc::PrimitiveABIKind::AMC_UINT:
             switch (width) {
                 case 1:  return "u8";
                 case 2:  return "u16";
@@ -803,26 +803,26 @@ std::string primitive_zig_type(uint32_t primitive_abi) {
                 case 4:
                 default: return "c_uint";
             }
-        case amc::PrimitiveAbiKind::floating: {
+        case amc::PrimitiveABIKind::AMC_FLOAT: {
             switch (static_cast<amc::FloatFormat>(
                 (primitive_abi & amc::primitive_format_mask) >> amc::primitive_format_shift)) {
-                case amc::FloatFormat::ieee32:            return "f32";
-                case amc::FloatFormat::ieee64:            return "f64";
-                case amc::FloatFormat::ieee16:            return "u16";
-                case amc::FloatFormat::bf16:              return "u16";
-                case amc::FloatFormat::ieee128:           return "u128";
-                case amc::FloatFormat::x87_80:            return "u128";
-                case amc::FloatFormat::ppc_double_double: return "u128";
-                case amc::FloatFormat::none:
+                case amc::FloatFormat::IEEE32:            return "f32";
+                case amc::FloatFormat::IEEE64:            return "f64";
+                case amc::FloatFormat::IEEE16:            return "u16";
+                case amc::FloatFormat::BF16:              return "u16";
+                case amc::FloatFormat::IEEE128:           return "u128";
+                case amc::FloatFormat::X87_80:            return "u128";
+                case amc::FloatFormat::PPC_DOUBLE_DOUBLE: return "u128";
+                case amc::FloatFormat::NONE:
                 default:                                  return "f64";
             }
         }
-        case amc::PrimitiveAbiKind::none:
-        default:                          return "anyopaque";
+        case amc::PrimitiveABIKind::AMC_NONE:
+        default:                              return "anyopaque";
     }
 }
 
-std::string generate_projection(const amc::AbiModule &module, const amc::ir::LoweringResult *lowering) {
+std::string generate_projection(const amc::ABIModule &module, const amc::ir::LoweringResult *lowering) {
     Projector projector(module, lowering);
     fmt::memory_buffer buffer;
     Output o{buffer};
@@ -862,7 +862,7 @@ int run_backend(const char *input, const char *output) {
         fmt::print(stderr, "{}\n", error);
         return 1;
     }
-    amc::AbiModule module = std::move(artifact.abi);
+    amc::ABIModule module = std::move(artifact.abi);
     amc::ir::LoweringResult lowering = std::move(artifact.lowering);
     std::string lowering_error;
     if (!amc::ir::apply_lowering_contracts(lowering, module, lowering_error)) {
@@ -892,4 +892,4 @@ int run_backend(const char *input, const char *output) {
     return 0;
 }
 
-}   // namespace amc::lang::zig
+}   // namespace skl::amc::lang::zig

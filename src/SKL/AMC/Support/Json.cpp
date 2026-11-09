@@ -18,7 +18,7 @@
 #include <stdint.h>
 #include <string>
 
-namespace amc {
+namespace skl::amc {
 namespace {
 
 json_object *new_string(const std::string &value) {
@@ -172,24 +172,24 @@ Json Json::object() { return from_owned(json_create_object()); }
 Json Json::array() { return from_owned(json_create_array()); }
 
 Json::Type Json::type() const {
-    if (!node_) return Type::null;
+    if (!node_) return Type::NULL_;
     switch (node_->ikey.type) {
-        case JSON_BOOL:   return Type::boolean;
+        case JSON_BOOL:   return Type::BOOLEAN;
         case JSON_INT:
         case JSON_HEX:
         case JSON_LINT:
         case JSON_LHEX:
-        case JSON_DOUBLE: return Type::number;
-        case JSON_STRING: return Type::string;
-        case JSON_ARRAY:  return Type::array;
-        case JSON_OBJECT: return Type::object;
-        default:          return Type::null;
+        case JSON_DOUBLE: return Type::NUMBER;
+        case JSON_STRING: return Type::STRING;
+        case JSON_ARRAY:  return Type::ARRAY;
+        case JSON_OBJECT: return Type::OBJECT;
+        default:          return Type::NULL_;
     }
 }
 
-bool Json::is_null() const { return type() == Type::null; }
-bool Json::is_object() const { return type() == Type::object; }
-bool Json::is_array() const { return type() == Type::array; }
+bool Json::is_null() const { return type() == Type::NULL_; }
+bool Json::is_object() const { return type() == Type::OBJECT; }
+bool Json::is_array() const { return type() == Type::ARRAY; }
 
 void Json::replace_root(json_object *node) {
     auto owner = std::make_shared<Owner>();
@@ -326,4 +326,4 @@ bool parse_json(std::string_view text, Json &value, std::string &error) {
     return true;
 }
 
-}   // namespace amc
+}   // namespace skl::amc

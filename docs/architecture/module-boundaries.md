@@ -194,7 +194,7 @@ CTest runs both `--contracts-only` and `--strict` as `amc-boundary-contracts` an
 
 | Item                                    | Target                                                   | Status       |
 | --------------------------------------- | -------------------------------------------------------- | ------------ |
-| `Core/Core.h` (`AbiModule`)             | `IR/` ABI view                                           | remaining    |
+| `Core/Core.h` (`ABIModule`)             | `IR/` ABI view                                           | remaining    |
 | `Semantic/*`                            | `IR/` semantic view                                      | remaining    |
 | `Lang/C++/Frontend.cpp`                 | `Frontend/Cpp/`                                          | moved        |
 | `Lang/C++/Backend.cpp`                  | `Backend/Cpp/`                                           | moved        |

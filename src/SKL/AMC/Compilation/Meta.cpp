@@ -22,9 +22,9 @@
 
 #include <fmt/os.h>
 
-namespace amc::compilation {
+namespace skl::amc::compilation {
 
-bool write_abix_meta(const AbiModule &module, const std::filesystem::path &artifact, std::string &error) {
+bool write_abix_meta(const ABIModule &module, const std::filesystem::path &artifact, std::string &error) {
     MetadataOptions options;
     std::vector<uint8_t> region;
     if (!build_metadata_region(module, options, region, error)) return false;
@@ -40,4 +40,4 @@ bool write_abix_meta(const AbiModule &module, const std::filesystem::path &artif
     return true;
 }
 
-}   // namespace amc::compilation
+}   // namespace skl::amc::compilation

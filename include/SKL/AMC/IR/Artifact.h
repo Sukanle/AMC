@@ -20,7 +20,7 @@
 
 #include <string>
 
-namespace amc::ir {
+namespace skl::amc::ir {
 
 // A2 artifact boundary: the IR is the in-memory model; `.abix`, `.semantic`
 // and `.lowering` are independent persistence contracts next to the artifact.
@@ -47,6 +47,6 @@ struct LoadOptions {
 // `<path>.lowering` in every backend.
 bool load_artifact(const std::string &abi_path, Module &module, std::string &error, LoadOptions options = {});
 
-}   // namespace amc::ir
+}   // namespace skl::amc::ir
 
 #endif   // AMC_IR_ARTIFACT_H

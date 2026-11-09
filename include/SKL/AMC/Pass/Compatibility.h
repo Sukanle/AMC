@@ -20,14 +20,14 @@
 #include "SKL/AMC/IR/Compatibility.h"
 #include "SKL/AMC/Pass/Pass.h"
 
-namespace amc::pass {
+namespace skl::amc::pass {
 
 // frozen-contract / implementation compatibility. The comparison policy is
 // named by IR/Compatibility; the pass turns its result into the shared
 // diagnostic channel so CLI, Compilation and future tooling use the same path.
-bool compare_modules(const AbiModule &contract, const AbiModule &implementation, ir::CompatibilityResult &result,
+bool compare_modules(const ABIModule &contract, const ABIModule &implementation, ir::CompatibilityResult &result,
     Context &context, diagnostics::DiagnosticList &diagnostics);
 
-}   // namespace amc::pass
+}   // namespace skl::amc::pass
 
 #endif   // AMC_PASS_COMPATIBILITY_H

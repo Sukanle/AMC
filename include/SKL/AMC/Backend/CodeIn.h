@@ -19,7 +19,7 @@
 #include <string>
 #include <string_view>
 
-namespace amc::backend {
+namespace skl::amc::backend {
 
 // Shared CodeIn asset loader for language backends (C++, Rust, Zig).
 //
@@ -32,6 +32,6 @@ bool read_codein_text(std::string_view relative, std::string &text, std::string 
 // fatal backend error. Throws std::runtime_error.
 std::string read_codein_text(std::string_view relative);
 
-}   // namespace amc::backend
+}   // namespace skl::amc::backend
 
 #endif   // AMC_BACKEND_CODEIN_H

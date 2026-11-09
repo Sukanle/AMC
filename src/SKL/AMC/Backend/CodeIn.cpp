@@ -39,7 +39,7 @@
 #  include <unistd.h>
 #endif
 
-namespace amc::backend {
+namespace skl::amc::backend {
 namespace {
 
 std::mutex &codein_mutex() {
@@ -156,4 +156,4 @@ std::string read_codein_text(std::string_view relative) {
     return text;
 }
 
-}   // namespace amc::backend
+}   // namespace skl::amc::backend

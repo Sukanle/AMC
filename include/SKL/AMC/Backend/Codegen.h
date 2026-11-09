@@ -19,7 +19,7 @@
 #include <string>
 #include <string_view>
 
-namespace amc::backend {
+namespace skl::amc::backend {
 
 // Shared, language-neutral code generation helpers. Keeping these in one place
 // stops the C++, Rust and Zig backends from drifting on identifier and literal
@@ -39,4 +39,4 @@ std::string sanitize_identifier(std::string_view name);
 // carriage return and tab are escaped; everything else is copied verbatim.
 std::string escape_string_literal(std::string_view value);
 
-}   // namespace amc::backend
+}   // namespace skl::amc::backend

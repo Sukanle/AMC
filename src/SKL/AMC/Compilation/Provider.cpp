@@ -46,7 +46,7 @@
 #  include <unistd.h>
 #endif
 
-namespace amc::compilation {
+namespace skl::amc::compilation {
 namespace fs = std::filesystem;
 using amc::util::fail;
 
@@ -596,12 +596,12 @@ int generate(
         fs::create_directories(output.parent_path(), ec);
         if (ec)
             return fail(
-                amc::ErrorCategory::io, "generate", "cannot create output directory", output.string(), ec.message());
+                amc::ErrorCategory::IO, "generate", "cannot create output directory", output.string(), ec.message());
     }
     std::string error;
     if (!dispatch_provider(provider, "backend", input, output, error))
-        return fail(amc::ErrorCategory::provider, "backend", error, input.string());
+        return fail(amc::ErrorCategory::PROVIDER, "backend", error, input.string());
     return 0;
 }
 
-}   // namespace amc::compilation
+}   // namespace skl::amc::compilation

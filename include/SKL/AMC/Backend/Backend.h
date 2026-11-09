@@ -24,7 +24,7 @@
 #include <string>
 #include <vector>
 
-namespace amc::backend {
+namespace skl::amc::backend {
 
 // A0 contract: a backend reads a validated IR and emits files. It must not
 // parse source languages or include Clang AST headers.
@@ -52,6 +52,6 @@ struct Backend {
     std::function<Result(const Request &)> generate;
 };
 
-}   // namespace amc::backend
+}   // namespace skl::amc::backend
 
 #endif   // AMC_BACKEND_BACKEND_H

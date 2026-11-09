@@ -22,7 +22,7 @@
 #include <cstddef>
 #include <cstdio>
 
-namespace amc {
+namespace skl::amc {
 namespace {
 
 #ifdef AMC_HAS_EPCD_INTERFACE
@@ -85,4 +85,4 @@ bool errors_registered() noexcept {
 [[maybe_unused]] const bool amc_epcd_registration = register_errors();
 #endif
 
-}   // namespace amc
+}   // namespace skl::amc

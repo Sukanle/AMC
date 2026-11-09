@@ -20,7 +20,7 @@
 #include "amc_map.hpp"
 
 int main() {
-    using Tag = amc_generated::amc_map_MapRecord_ABIX;
+    using Tag = skl::amc::generated::amc_map_MapRecord_ABIX;
     std::array<uint8_t, 4> source{
         {1, 2, 3, 4}
     };
@@ -29,7 +29,7 @@ int main() {
     };
     std::array<uint8_t, 8> dynamic_target = static_target;
 
-    if (!amc_generated::MapPrivate<Tag, Tag>::apply(static_target.data(), source.data())) return 1;
+    if (!skl::amc::generated::MapPrivate<Tag, Tag>::apply(static_target.data(), source.data())) return 1;
 
     constexpr skl::abix::model::Field source_fields[] = {
         {0, {1, 0}, 0, 0, 0, 0}

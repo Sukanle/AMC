@@ -21,7 +21,7 @@
 
 #include <string>
 
-namespace amc::lang::backend::cpp {
+namespace skl::amc::lang::backend::cpp {
 
 const amc::Function *Emit::find_function(amc::Hash128 signature) {
     if (signature.lo == 0 && signature.hi == 0) return nullptr;
@@ -33,11 +33,10 @@ const amc::Function *Emit::find_function(amc::Hash128 signature) {
 std::string Emit::self_type_of(
     const amc::Function *create, const amc::Function *destroy, const amc::ir::LoweredExposedType &record) {
     if (create != nullptr) return cpp_type_of(_m, create->return_type);
-    if (destroy != nullptr && !destroy->parameters.empty()) return cpp_type_of(_m, destroy->parameters[0].type_id);
+    if (destroy != nullptr && !destroy->params.empty()) return cpp_type_of(_m, destroy->params[0].type_id);
     for (const auto &method : record.methods) {
         const amc::Function *function = find_function(method.abi);
-        if (function != nullptr && !function->parameters.empty())
-            return cpp_type_of(_m, function->parameters[0].type_id);
+        if (function != nullptr && !function->params.empty()) return cpp_type_of(_m, function->params[0].type_id);
     }
     return "void*";
 }
@@ -45,8 +44,8 @@ std::string Emit::self_type_of(
 void Emit::decl(const amc::Function *function) {
     if (function == nullptr) return;
     std::string params;
-    for (size_t i = 0; i < function->parameters.size(); ++i) {
-        const auto &parameter = function->parameters[i];
+    for (size_t i = 0; i < function->params.size(); ++i) {
+        const auto &parameter = function->params[i];
         if (i != 0) params += ", ";
         params += cpp_type_of(_m, parameter.type_id);
     }
@@ -90,8 +89,8 @@ void Emit::handle(const amc::ir::LoweredExposedType &record, const amc::Function
     _o.print("    explicit operator bool() const {{ return _ptr != nullptr; }}\n");
     if (create != nullptr) {
         std::string params, args;
-        for (size_t i = 0; i < create->parameters.size(); ++i) {
-            const auto &parameter = create->parameters[i];
+        for (size_t i = 0; i < create->params.size(); ++i) {
+            const auto &parameter = create->params[i];
             const std::string name = parameter.name.empty() ? fmt::format("arg{}", i) : cpp_name(parameter.name);
             if (i != 0) {
                 params += ", ";
@@ -104,7 +103,7 @@ void Emit::handle(const amc::ir::LoweredExposedType &record, const amc::Function
     }
     for (const auto &method : record.methods) {
         const amc::Function *function = find_function(method.abi);
-        if (function == nullptr || function->parameters.empty()) continue;
+        if (function == nullptr || function->params.empty()) continue;
         const std::string name = cpp_name(method.name);
         if (name == "create" || name == "reset" || name == "native_handle") continue;
         const int return_index = [&] {
@@ -113,12 +112,12 @@ void Emit::handle(const amc::ir::LoweredExposedType &record, const amc::Function
             return -1;
         }();
         const bool returns_void = return_index >= 0
-                               && _m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::primitive
+                               && _m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::PRIMITIVE
                                && (_m.types[static_cast<size_t>(return_index)].primitive_abi & 0xffu)
-                                      == static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
+                                      == static_cast<uint32_t>(amc::PrimitiveABIKind::AMC_VOID);
         std::string params, args;
-        for (size_t i = 1; i < function->parameters.size(); ++i) {
-            const auto &parameter = function->parameters[i];
+        for (size_t i = 1; i < function->params.size(); ++i) {
+            const auto &parameter = function->params[i];
             const std::string parameter_name =
                 parameter.name.empty() ? fmt::format("arg{}", i - 1) : cpp_name(parameter.name);
             if (i != 1) params += ", ";
@@ -144,7 +143,7 @@ void Emit::handles(const amc::ir::LoweringResult &lowering) {
     // thunks plus typed method calls. The method list and signatures come from
     // the lowering contract, never from parsing the thunk names.
     for (const auto &record : lowering.exposed) {
-        if (record.status != amc::ir::LoweringStatus::lowered) continue;
+        if (record.status != amc::ir::LoweringStatus::LOWERED) continue;
         const amc::Function *create = find_function(record.create);
         const amc::Function *destroy = find_function(record.destroy);
         if (create == nullptr && destroy == nullptr && record.methods.empty()) continue;
@@ -152,4 +151,4 @@ void Emit::handles(const amc::ir::LoweringResult &lowering) {
     }
 }
 
-}   // namespace amc::lang::backend::cpp
+}   // namespace skl::amc::lang::backend::cpp

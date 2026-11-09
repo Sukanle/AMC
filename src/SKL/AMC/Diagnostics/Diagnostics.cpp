@@ -19,13 +19,13 @@
 
 #include <fmt/format.h>
 
-namespace amc::diagnostics {
+namespace skl::amc::diagnostics {
 
 const char *severity_name(Severity severity) {
     switch (severity) {
-        case Severity::note:    return "note";
-        case Severity::warning: return "warning";
-        case Severity::error:   return "error";
+        case Severity::NOTE:    return "note";
+        case Severity::WARNING: return "warning";
+        case Severity::ERROR:   return "error";
     }
     return "error";
 }
@@ -34,9 +34,9 @@ Summary summarize(const DiagnosticList &diagnostics) {
     Summary summary;
     for (const auto &diagnostic : diagnostics) {
         switch (diagnostic.severity) {
-            case Severity::note:    ++summary.notes; break;
-            case Severity::warning: ++summary.warnings; break;
-            case Severity::error:   ++summary.errors; break;
+            case Severity::NOTE:    ++summary.notes; break;
+            case Severity::WARNING: ++summary.warnings; break;
+            case Severity::ERROR:   ++summary.errors; break;
         }
     }
     return summary;
@@ -106,4 +106,4 @@ std::string diagnostics_to_json(const DiagnosticList &diagnostics) {
     return output;
 }
 
-}   // namespace amc::diagnostics
+}   // namespace skl::amc::diagnostics

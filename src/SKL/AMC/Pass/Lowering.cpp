@@ -24,7 +24,7 @@
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringMap.h>
 
-namespace amc::pass {
+namespace skl::amc::pass {
 namespace {
 
 std::string normalize_name(std::string name) {
@@ -72,7 +72,7 @@ bool lower(const ir::Module &module, ir::LoweringResult &result, diagnostics::Di
     for (const auto &type : module.semantic.types) {
         ir::LoweredType lowered;
         lowered.semantic = type.id;
-        lowered.name = type.qualified_name;
+        lowered.name = type.qualified;
 
         // The frontend records a direct `abi_type` link. Prefer it so lowering
         // never has to re-identify a type by its spelling; the name lookup is a
@@ -87,7 +87,7 @@ bool lower(const ir::Module &module, ir::LoweringResult &result, diagnostics::Di
             }
         }
         if (abi_type == nullptr) {
-            if (const auto found = abi_types.find(normalize_name(type.qualified_name)); found != abi_types.end()) {
+            if (const auto found = abi_types.find(normalize_name(type.qualified)); found != abi_types.end()) {
                 abi_type = found->second.first;
                 abi_index = found->second.second;
             }
@@ -98,13 +98,13 @@ bool lower(const ir::Module &module, ir::LoweringResult &result, diagnostics::Di
             lowered.size = abi_type->size;
             lowered.align = abi_type->align;
             lowered.layout_hash = abi_type->layout_hash;
-            lowered.status = ir::LoweringStatus::lowered;
-            lowered.reason = ir::LoweringReason::ok;
+            lowered.status = ir::LoweringStatus::LOWERED;
+            lowered.reason = ir::LoweringReason::OK;
         } else {
-            lowered.status = ir::LoweringStatus::rejected;
-            lowered.reason = ir::LoweringReason::missing_abi_type;
-            report(diagnostics, options, "lowering_missing_abi_type",
-                "no ABI type for semantic type: " + type.qualified_name);
+            lowered.status = ir::LoweringStatus::REJECTED;
+            lowered.reason = ir::LoweringReason::MISSING_ABI_TYPE;
+            report(
+                diagnostics, options, "lowering_missing_abi_type", "no ABI type for semantic type: " + type.qualified);
         }
         lowered_type_index[type.id] = static_cast<uint32_t>(result.types.size());
         result.types.push_back(std::move(lowered));
@@ -121,7 +121,7 @@ bool lower(const ir::Module &module, ir::LoweringResult &result, diagnostics::Di
             if (const auto found = lowered_type_index.find(base.type); found != lowered_type_index.end())
                 item.abi = result.types[found->second].abi;
             else
-                lowered.reason = ir::LoweringReason::layout_unverified;
+                lowered.reason = ir::LoweringReason::LAYOUT_UNVERIFIED;
             lowered.bases.push_back(item);
         }
         for (const auto &field : record->second->fields) {
@@ -132,16 +132,16 @@ bool lower(const ir::Module &module, ir::LoweringResult &result, diagnostics::Di
             if (const auto found = lowered_type_index.find(field.type); found != lowered_type_index.end())
                 item.type = result.types[found->second].abi;
             else
-                lowered.reason = ir::LoweringReason::layout_unverified;
+                lowered.reason = ir::LoweringReason::LAYOUT_UNVERIFIED;
             lowered.fields.push_back(std::move(item));
         }
     }
 
-    std::map<semantic::SemanticFunctionId, uint32_t> lowered_function_index;
+    std::map<semantic::SemanticFuncId, uint32_t> lowered_function_index;
     for (const auto &function : module.semantic.functions) {
         ir::LoweredFunction lowered;
         lowered.semantic = function.id;
-        lowered.name = function.qualified_name;
+        lowered.name = function.qualified;
 
         // The frontend records the ABI signature produced for this overload;
         // that is the authoritative link. Name + arity remains only for
@@ -154,14 +154,14 @@ bool lower(const ir::Module &module, ir::LoweringResult &result, diagnostics::Di
                     matching.emplace_back(&module.abi.functions[index], index);
         } else {
             llvm::SmallVector<std::pair<const Function *, uint32_t>, 1> candidates;
-            const auto qualified = abi_functions.find(normalize_name(function.qualified_name));
+            const auto qualified = abi_functions.find(normalize_name(function.qualified));
             if (qualified != abi_functions.end()) candidates = qualified->second;
             if (candidates.empty()) {
-                const auto plain = abi_functions.find(normalize_name(function.unqualified_name));
+                const auto plain = abi_functions.find(normalize_name(function.unqualified));
                 if (plain != abi_functions.end()) candidates = plain->second;
             }
             for (const auto &candidate : candidates)
-                if (candidate.first->parameters.size() == function.parameters.size()) matching.push_back(candidate);
+                if (candidate.first->params.size() == function.params.size()) matching.push_back(candidate);
         }
 
         if (matching.size() == 1) {
@@ -169,20 +169,20 @@ bool lower(const ir::Module &module, ir::LoweringResult &result, diagnostics::Di
             lowered.signature = matching.front().first->signature;
             lowered.return_type = matching.front().first->return_type;
             lowered.abi_index = matching.front().second;
-            for (const auto &parameter : matching.front().first->parameters)
+            for (const auto &parameter : matching.front().first->params)
                 lowered.parameters.push_back({parameter.type_id, parameter.flags});
-            lowered.status = ir::LoweringStatus::lowered;
-            lowered.reason = ir::LoweringReason::ok;
+            lowered.status = ir::LoweringStatus::LOWERED;
+            lowered.reason = ir::LoweringReason::OK;
         } else if (matching.empty()) {
-            lowered.status = ir::LoweringStatus::rejected;
-            lowered.reason = ir::LoweringReason::missing_abi_function;
+            lowered.status = ir::LoweringStatus::REJECTED;
+            lowered.reason = ir::LoweringReason::MISSING_ABI_FUNCTION;
             report(diagnostics, options, "lowering_missing_abi_function",
-                "no ABI function for semantic function: " + function.qualified_name);
+                "no ABI function for semantic function: " + function.qualified);
         } else {
-            lowered.status = ir::LoweringStatus::rejected;
-            lowered.reason = ir::LoweringReason::ambiguous_abi_function;
+            lowered.status = ir::LoweringStatus::REJECTED;
+            lowered.reason = ir::LoweringReason::AMBIGUOUS_ABI_FUNCTION;
             report(diagnostics, options, "lowering_ambiguous_abi_function",
-                "ambiguous ABI function for semantic function: " + function.qualified_name);
+                "ambiguous ABI function for semantic function: " + function.qualified);
         }
         lowered_function_index[function.id] = static_cast<uint32_t>(result.functions.size());
         result.functions.push_back(std::move(lowered));
@@ -209,10 +209,9 @@ bool lower(const ir::Module &module, ir::LoweringResult &result, diagnostics::Di
                     if (!(module.abi.functions[i].signature == lowered.abi)) continue;
                     uint32_t parameter_base = 0;
                     for (uint32_t j = 0; j < i; ++j)
-                        parameter_base += static_cast<uint32_t>(module.abi.functions[j].parameters.size());
-                    const uint32_t target = lowered.interaction == semantic::InteractionKind::return_value
-                                              ? i
-                                              : parameter_base + lowered.index;
+                        parameter_base += static_cast<uint32_t>(module.abi.functions[j].params.size());
+                    const uint32_t target =
+                        lowered.interaction == semantic::InteractionKind::RETURN ? i : parameter_base + lowered.index;
                     for (const auto &contract : module.abi.contracts)
                         if (static_cast<uint32_t>(contract.target) == static_cast<uint32_t>(lowered.interaction)
                             && contract.target_index == target) {
@@ -231,7 +230,7 @@ bool lower(const ir::Module &module, ir::LoweringResult &result, diagnostics::Di
     for (const auto &exposed : module.semantic.exposed) {
         ir::LoweredExposedType lowered;
         lowered.semantic = exposed.type;
-        lowered.name = exposed.qualified_name;
+        lowered.name = exposed.qualified;
         lowered.symbol = exposed.symbol;
         lowered.has_constructor = exposed.has_constructor;
         lowered.opaque = exposed.opaque;
@@ -244,21 +243,21 @@ bool lower(const ir::Module &module, ir::LoweringResult &result, diagnostics::Di
                     break;
                 }
         if (abi_type == nullptr)
-            if (const auto found = abi_types.find(normalize_name(exposed.qualified_name)); found != abi_types.end())
+            if (const auto found = abi_types.find(normalize_name(exposed.qualified)); found != abi_types.end())
                 abi_type = found->second.first;
 
         if (abi_type == nullptr) {
-            lowered.status = ir::LoweringStatus::rejected;
-            lowered.reason = ir::LoweringReason::missing_abi_type;
+            lowered.status = ir::LoweringStatus::REJECTED;
+            lowered.reason = ir::LoweringReason::MISSING_ABI_TYPE;
             report(diagnostics, options, "lowering_exposed_missing_type",
-                "no ABI type for exposed capability: " + exposed.qualified_name);
+                "no ABI type for exposed capability: " + exposed.qualified);
             result.exposed.push_back(std::move(lowered));
             continue;
         }
 
         lowered.abi = abi_type->id;
-        lowered.status = ir::LoweringStatus::lowered;
-        lowered.reason = ir::LoweringReason::ok;
+        lowered.status = ir::LoweringStatus::LOWERED;
+        lowered.reason = ir::LoweringReason::OK;
 
         const auto find_function = [&](Hash128 signature) -> const Function * {
             if (signature.lo == 0 && signature.hi == 0) return nullptr;
@@ -269,20 +268,20 @@ bool lower(const ir::Module &module, ir::LoweringResult &result, diagnostics::Di
         if (const Function *create = find_function(exposed.create); create != nullptr)
             lowered.create = create->signature;
         else if (exposed.has_constructor) {
-            lowered.status = ir::LoweringStatus::rejected;
-            lowered.reason = ir::LoweringReason::missing_abi_function;
+            lowered.status = ir::LoweringStatus::REJECTED;
+            lowered.reason = ir::LoweringReason::MISSING_ABI_FUNCTION;
             report(diagnostics, options, "lowering_exposed_missing_constructor",
-                "exposed capability has no create thunk: " + exposed.qualified_name);
+                "exposed capability has no create thunk: " + exposed.qualified);
         }
         if (const Function *destroy = find_function(exposed.destroy); destroy != nullptr)
             lowered.destroy = destroy->signature;
 
         for (const auto &method : exposed.methods) {
             if (find_function(method.abi_signature) == nullptr) {
-                lowered.status = ir::LoweringStatus::rejected;
-                lowered.reason = ir::LoweringReason::missing_abi_function;
+                lowered.status = ir::LoweringStatus::REJECTED;
+                lowered.reason = ir::LoweringReason::MISSING_ABI_FUNCTION;
                 report(diagnostics, options, "lowering_exposed_missing_method",
-                    "exposed capability has no thunk for method: " + exposed.qualified_name + "::" + method.name);
+                    "exposed capability has no thunk for method: " + exposed.qualified + "::" + method.name);
                 continue;
             }
             ir::LoweredExposedMethod lowered_method;
@@ -302,8 +301,8 @@ bool lower(const ir::Module &module, ir::LoweringResult &result, diagnostics::Di
         for (const auto &type : module.abi.types) {
             if (!(type.id == instance.result)) continue;
             lowered.abi_type = type.id;
-            lowered.status = ir::LoweringStatus::lowered;
-            lowered.reason = ir::LoweringReason::ok;
+            lowered.status = ir::LoweringStatus::LOWERED;
+            lowered.reason = ir::LoweringReason::OK;
             found = true;
             break;
         }
@@ -311,15 +310,15 @@ bool lower(const ir::Module &module, ir::LoweringResult &result, diagnostics::Di
             for (const auto &function : module.abi.functions) {
                 if (!(function.signature == instance.result)) continue;
                 lowered.abi_function = function.signature;
-                lowered.status = ir::LoweringStatus::lowered;
-                lowered.reason = ir::LoweringReason::ok;
+                lowered.status = ir::LoweringStatus::LOWERED;
+                lowered.reason = ir::LoweringReason::OK;
                 found = true;
                 break;
             }
         }
         if (!found) {
-            lowered.status = ir::LoweringStatus::rejected;
-            lowered.reason = ir::LoweringReason::template_not_materialized;
+            lowered.status = ir::LoweringStatus::REJECTED;
+            lowered.reason = ir::LoweringReason::TEMPLATE_NOT_MATERIALIZED;
             report(diagnostics, options, "lowering_template_not_materialized",
                 "template instance has no materialized ABI entity");
         }
@@ -333,4 +332,4 @@ bool lower_pass(ir::Module &module, diagnostics::DiagnosticList &diagnostics) {
     return lower(module, module.lowering, diagnostics, {});
 }
 
-}   // namespace amc::pass
+}   // namespace skl::amc::pass

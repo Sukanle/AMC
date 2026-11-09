@@ -15,14 +15,14 @@
  */
 #include "SKL/AMC/Tool/MCP.h"
 
-namespace amc::mcp {
+namespace skl::amc::mcp {
 
-using namespace amc::util;
+using namespace skl::amc::util;
 
 // --- tools ---------------------------------------------------------------
 
 amc::Json tool_get_module(const amc::Json &args, std::string &error) {
-    amc::AbiModule module;
+    amc::ABIModule module;
     if (!load_module(args, module, error)) return amc::Json();
     amc::Json result = amc::Json::object();
     result.set("package", module.package_name);
@@ -49,7 +49,7 @@ amc::Json tool_get_module(const amc::Json &args, std::string &error) {
 }
 
 amc::Json tool_list_types(const amc::Json &args, std::string &error) {
-    amc::AbiModule module;
+    amc::ABIModule module;
     if (!load_module(args, module, error)) return amc::Json();
     amc::Json types = amc::Json::array();
     for (size_t i = 0; i < module.types.size(); ++i) {
@@ -72,7 +72,7 @@ amc::Json tool_list_types(const amc::Json &args, std::string &error) {
 }
 
 amc::Json tool_get_type(const amc::Json &args, std::string &error) {
-    amc::AbiModule module;
+    amc::ABIModule module;
     if (!load_module(args, module, error)) return amc::Json();
     std::string needle = arg_string(args, "name");
     if (needle.empty()) needle = arg_string(args, "id");
@@ -94,7 +94,7 @@ amc::Json tool_get_type(const amc::Json &args, std::string &error) {
 }
 
 amc::Json tool_get_function(const amc::Json &args, std::string &error) {
-    amc::AbiModule module;
+    amc::ABIModule module;
     if (!load_module(args, module, error)) return amc::Json();
     const std::string needle = arg_string(args, "name");
     if (needle.empty()) {
@@ -112,7 +112,7 @@ amc::Json tool_get_function(const amc::Json &args, std::string &error) {
 }
 
 amc::Json tool_compare_abi(const amc::Json &args, std::string &error) {
-    amc::AbiModule module, other;
+    amc::ABIModule module, other;
     if (!load_module(args, module, error)) return amc::Json();
     const std::string other_path = arg_string(args, "other");
     if (other_path.empty()) {
@@ -147,7 +147,7 @@ amc::Json type_summary(const amc::Type &type) {
 //                        module against every other indexed module and report
 //                        which ones stay layout-compatible.
 amc::Json tool_find_compatible(const amc::Json &args, std::string &error) {
-    amc::AbiModule module;
+    amc::ABIModule module;
     if (!load_module(args, module, error)) return amc::Json();
     const std::string needle = arg_string(args, "name");
     const std::string other_path = arg_string(args, "other");
@@ -200,7 +200,7 @@ amc::Json tool_find_compatible(const amc::Json &args, std::string &error) {
         return result;
     }
 
-    amc::AbiModule other;
+    amc::ABIModule other;
     std::string read_error;
     if (!amc::read_abix(other_path, other, read_error)) {
         error = "cannot read '" + other_path + "': " + read_error;
@@ -230,7 +230,7 @@ amc::Json tool_find_compatible(const amc::Json &args, std::string &error) {
 }
 
 amc::Json tool_list_functions(const amc::Json &args, std::string &error) {
-    amc::AbiModule module;
+    amc::ABIModule module;
     if (!load_module(args, module, error)) return amc::Json();
     amc::Json functions = amc::Json::array();
     for (size_t i = 0; i < module.functions.size(); ++i) {
@@ -246,7 +246,7 @@ amc::Json tool_list_functions(const amc::Json &args, std::string &error) {
         item.set("calling_convention", static_cast<long long>(function.calling_convention));
         item.set("calling_convention_name", function_calling_convention_name(function.calling_convention));
         item.set("flags", static_cast<long long>(function.flags));
-        item.set("parameter_count", static_cast<long long>(function.parameters.size()));
+        item.set("parameter_count", static_cast<long long>(function.params.size()));
         functions.push_back(std::move(item));
     }
     amc::Json result = amc::Json::object();
@@ -257,7 +257,7 @@ amc::Json tool_list_functions(const amc::Json &args, std::string &error) {
 }
 
 amc::Json tool_get_layout(const amc::Json &args, std::string &error) {
-    amc::AbiModule module;
+    amc::ABIModule module;
     if (!load_module(args, module, error)) return amc::Json();
     std::string needle = arg_string(args, "name");
     if (needle.empty()) needle = arg_string(args, "id");
@@ -297,7 +297,7 @@ amc::Json tool_get_layout(const amc::Json &args, std::string &error) {
 }
 
 amc::Json tool_resolve_type(const amc::Json &args, std::string &error) {
-    amc::AbiModule module;
+    amc::ABIModule module;
     if (!load_module(args, module, error)) return amc::Json();
     std::string needle = arg_string(args, "name");
     if (needle.empty()) needle = arg_string(args, "id");
@@ -570,4 +570,4 @@ amc::Json tools_catalogue() {
     return tools;
 }
 
-}   // namespace amc::mcp
+}   // namespace skl::amc::mcp

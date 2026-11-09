@@ -20,7 +20,7 @@
 #include "SKL/AMC/IR/Module.h"
 #include "SKL/AMC/Pass/Pass.h"
 
-namespace amc::pass {
+namespace skl::amc::pass {
 
 // A3: ABI validation is a pass, not a frontend/backend responsibility.
 bool verify_abi(ir::Module &module, Context &context, diagnostics::DiagnosticList &diagnostics);
@@ -29,6 +29,6 @@ bool verify_abi(ir::Module &module, Context &context, diagnostics::DiagnosticLis
 // consistency rule the backends apply, moved ahead of projection/emission.
 bool verify_lowering(ir::Module &module, Context &context, diagnostics::DiagnosticList &diagnostics);
 
-}   // namespace amc::pass
+}   // namespace skl::amc::pass
 
 #endif   // AMC_PASS_VERIFY_H

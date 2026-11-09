@@ -1,6 +1,6 @@
 #pragma once
 
-namespace amc_m8 {
+namespace skl::amc_m8 {
 
 using Count = unsigned;
 
@@ -21,4 +21,4 @@ struct IntBox : Box<int> {};
 
 __attribute__((cdecl)) int cdecl_fn(int value);
 
-}   // namespace amc_m8
+}   // namespace skl::amc_m8

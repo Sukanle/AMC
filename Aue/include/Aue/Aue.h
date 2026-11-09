@@ -34,7 +34,7 @@ extern "C" {
 #include <stddef.h>
 #include <stdint.h>
 
-namespace aue {
+namespace skl::aue {
 
 // A Lua-callable native function: returns the number of results pushed.
 using Function = int (*)(lua_State *state);
@@ -49,15 +49,15 @@ struct Entry {
 // set is deliberately small: unsupported fields stay inaccessible rather than
 // silently guessing a layout.
 enum class FieldKind : uint32_t {
-    integer_signed,
-    integer_unsigned,
-    floating,
-    boolean,
-    pointer,
-    record,
-    array,
-    opaque,
-    unknown,
+    INTEGER_SIGNED,
+    INTEGER_UNSIGNED,
+    FLOATING,
+    BOOLEAN,
+    POINTER,
+    RECORD,
+    ARRAY,
+    OPAQUE,
+    UNKNOWN,
 };
 
 // One field of a record type, expressed as an offset into the native object.
@@ -73,7 +73,7 @@ struct Field {
     uint32_t count = 0;
     uint32_t stride = 0;
     // Array scalar element descriptor (used when type_index is not set).
-    FieldKind element_kind = FieldKind::unknown;
+    FieldKind element_kind = FieldKind::UNKNOWN;
     uint32_t element_size = 0;
 };
 
@@ -107,9 +107,9 @@ struct Contract {
 // plan's design principle is that the level is chosen at compile time and the
 // runtime may only *downgrade*, never upgrade.
 enum class Level : uint32_t {
-    l0 = 0,   // Default: direct C binding (golden reference)
-    l1 = 1,   // Meta: __index contract dispatch
-    l2 = 2,   // Native: VM inline dispatch (reserved)
+    L0 = 0,   // Default: direct C binding (golden reference)
+    L1 = 1,   // Meta: __index contract dispatch
+    L2 = 2,   // Native: VM inline dispatch (reserved)
 };
 
 // Highest level compiled into this build. L2 is an opt-in native-dispatch
@@ -118,7 +118,7 @@ enum class Level : uint32_t {
 #if defined(AUE_ENABLE_L2)
 constexpr Level compiled_level = Level::l2;
 #elif defined(AUE_ENABLE_L1)
-constexpr Level compiled_level = Level::l1;
+constexpr Level compiled_level = Level::L1;
 #else
 constexpr Level compiled_level = Level::l0;
 #endif
@@ -159,6 +159,6 @@ void register_type_destroy(lua_State *state, const char *type_name, Destroy dest
 void register_counter_types(lua_State *state);
 const Contract &counter_contract();
 
-}   // namespace aue
+}   // namespace skl::aue
 
 #endif

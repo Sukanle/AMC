@@ -18,7 +18,7 @@ using SetFn = int32_t (*)(void *, int32_t);
 using LiveFn = int32_t (*)(void);
 
 struct HostState {
-    amc::test::lease::HostLeaseRegistry modules;
+    skl::amc::test::lease::HostLeaseRegistry modules;
     abix_lease_api api;
     std::mutex registry_mutex;
     abix_lease_registry *registry = nullptr;

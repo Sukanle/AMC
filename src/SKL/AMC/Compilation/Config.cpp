@@ -15,7 +15,7 @@
  */
 #include "SKL/AMC/Compilation/Config.h"
 
-namespace amc::compilation {
+namespace skl::amc::compilation {
 
 bool parse_exports(const toml::table &table, std::vector<ExportSpec> &exports, std::string &error) {
     const auto *entries = table["export"].as_array();
@@ -39,7 +39,7 @@ bool parse_exports(const toml::table &table, std::vector<ExportSpec> &exports, s
     return true;
 }
 
-void apply_target_and_layout(const toml::table &config, AbiModule &module) {
+void apply_target_and_layout(const toml::table &config, ABIModule &module) {
     if (const auto *target = config["target"].as_table()) {
         if (auto value = (*target)["arch"].value<int64_t>()) module.arch = static_cast<uint32_t>(*value);
         if (auto value = (*target)["os"].value<int64_t>()) module.os = static_cast<uint32_t>(*value);
@@ -52,4 +52,4 @@ void apply_target_and_layout(const toml::table &config, AbiModule &module) {
     recompute_layout_hashes(module);
 }
 
-}   // namespace amc::compilation
+}   // namespace skl::amc::compilation

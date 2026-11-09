@@ -17,9 +17,9 @@
 
 #include "SKL/AMC/Lang/Lang.h"   // IWYU pragma: keep
 
-namespace amc::lang::rust {
+namespace skl::amc::lang::rust {
 
 // Rust source + `.abic.toml` -> ABIX IR.
 int run_frontend(const char *config_path, const char *output_path);
 
-}   // namespace amc::lang::rust
+}   // namespace skl::amc::lang::rust

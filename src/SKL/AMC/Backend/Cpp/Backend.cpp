@@ -25,7 +25,7 @@
 
 #include <string>
 
-namespace amc::lang::cpp {
+namespace skl::amc::lang::cpp {
 
 namespace backend = backend::cpp;
 
@@ -41,7 +41,7 @@ int run_backend(const char *input, const char *output) {
         fmt::print(stderr, "{}\n", e);
         return 1;
     }
-    amc::AbiModule m = std::move(artifact.abi);
+    amc::ABIModule m = std::move(artifact.abi);
     amc::ir::LoweringResult lowering = std::move(artifact.lowering);
     std::string lowering_error;
     if (!amc::ir::apply_lowering_contracts(lowering, m, lowering_error)) {
@@ -68,4 +68,4 @@ int run_backend(const char *input, const char *output) {
     return 0;
 }
 
-}   // namespace amc::lang::cpp
+}   // namespace skl::amc::lang::cpp

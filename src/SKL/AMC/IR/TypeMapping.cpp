@@ -15,10 +15,10 @@
  */
 #include "SKL/AMC/IR/TypeMapping.h"
 
-namespace amc::ir {
+namespace skl::amc::ir {
 
-bool build_type_mapping(const AbiModule &source, const AbiModule &target, AbiModule &report, std::string &error) {
+bool build_type_mapping(const ABIModule &source, const ABIModule &target, ABIModule &report, std::string &error) {
     return amc::build_compatibility(source, target, report, error);
 }
 
-}   // namespace amc::ir
+}   // namespace skl::amc::ir

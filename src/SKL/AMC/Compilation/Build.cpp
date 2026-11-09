@@ -39,7 +39,7 @@
 
 #include "SKL/AMC/Compilation/Cache.h"
 
-namespace amc::compilation {
+namespace skl::amc::compilation {
 namespace fs = std::filesystem;
 using amc::util::fail;
 using amc::util::read_error_category;
@@ -50,7 +50,7 @@ namespace {
 // Resolve the `[[owned]]` ownership declarations against the frontend module:
 // map each declared value type and its create/destroy entry points to their
 // stable TypeID / signature hashes before projection.
-bool resolve_ownership(const toml::table &config, amc::AbiModule &module, std::string &error) {
+bool resolve_ownership(const toml::table &config, amc::ABIModule &module, std::string &error) {
     const auto *owned = config["owned"].as_array();
     if (!owned) return true;
     const auto find_type = [&](const std::string &name) -> const amc::Type * {
@@ -106,23 +106,23 @@ bool resolve_ownership(const toml::table &config, amc::AbiModule &module, std::s
 }
 
 amc::OwnershipMode parse_ownership_mode(const std::string &mode) {
-    if (mode == "borrowed" || mode == "borrow") return amc::OwnershipMode::borrowed;
-    if (mode == "owned") return amc::OwnershipMode::owned;
-    if (mode == "copy") return amc::OwnershipMode::copy;
-    return amc::OwnershipMode::unspecified;
+    if (mode == "borrowed" || mode == "borrow") return amc::OwnershipMode::BORROWED;
+    if (mode == "owned") return amc::OwnershipMode::OWNED;
+    if (mode == "copy") return amc::OwnershipMode::COPY;
+    return amc::OwnershipMode::UNSPECIFIED;
 }
 
 // Resolve `[[contract]]` declarations into per-interaction ownership records:
 // the mode of a function's return value and of its positional parameters, and
 // the release entry point of an `owned` return.
-bool resolve_contracts(const toml::table &config, amc::AbiModule &module, std::string &error) {
+bool resolve_contracts(const toml::table &config, amc::ABIModule &module, std::string &error) {
     const auto *contracts = config["contract"].as_array();
     if (!contracts) return true;
     std::vector<uint32_t> parameter_base(module.functions.size(), 0);
     uint32_t running = 0;
     for (size_t i = 0; i < module.functions.size(); ++i) {
         parameter_base[i] = running;
-        running += static_cast<uint32_t>(module.functions[i].parameters.size());
+        running += static_cast<uint32_t>(module.functions[i].params.size());
     }
     const auto function_index = [&](const std::string &name) -> int {
         for (size_t i = 0; i < module.functions.size(); ++i)
@@ -146,7 +146,7 @@ bool resolve_contracts(const toml::table &config, amc::AbiModule &module, std::s
         const std::string returns = (*table)["returns"].value_or("");
         if (!returns.empty()) {
             amc::OwnershipContract contract;
-            contract.target = amc::OwnershipTarget::return_value;
+            contract.target = amc::OwnershipTarget::RETURN;
             contract.target_index = static_cast<uint32_t>(index);
             contract.mode = parse_ownership_mode(returns);
             const std::string release = (*table)["release"].value_or("");
@@ -158,7 +158,7 @@ bool resolve_contracts(const toml::table &config, amc::AbiModule &module, std::s
                 }
                 contract.release = module.functions[static_cast<size_t>(release_index)].signature;
             }
-            if (contract.mode == amc::OwnershipMode::owned && release.empty()) {
+            if (contract.mode == amc::OwnershipMode::OWNED && release.empty()) {
                 error = "[[contract]] owned return requires a release function: " + function_name;
                 return false;
             }
@@ -172,12 +172,12 @@ bool resolve_contracts(const toml::table &config, amc::AbiModule &module, std::s
                     ++position;
                     continue;
                 }
-                if (position >= function.parameters.size()) {
+                if (position >= function.params.size()) {
                     error = "[[contract]] has more params than " + function_name + " declares";
                     return false;
                 }
                 amc::OwnershipContract contract;
-                contract.target = amc::OwnershipTarget::parameter;
+                contract.target = amc::OwnershipTarget::PARAM;
                 contract.target_index = parameter_base[static_cast<size_t>(index)] + static_cast<uint32_t>(position);
                 contract.mode = parse_ownership_mode(mode);
                 module.contracts.push_back(contract);
@@ -227,7 +227,7 @@ bool parse_error_domain(const toml::table &table, const std::string &function, u
 // is accepted verbatim so a future/unknown condition keeps its numeric identity.
 bool parse_condition_node(const toml::node *node, int32_t &condition) {
     if (node == nullptr) {
-        condition = static_cast<int32_t>(amc::GenericCondition::unknown);
+        condition = static_cast<int32_t>(amc::GenericCondition::UNKNOWN);
         return true;
     }
     if (const auto value = node->value<int64_t>()) {
@@ -255,7 +255,7 @@ bool parse_error_condition(
 
 // Resolve `[[error-set]]` declarations into named code tables. The set identity
 // is a hash of its name; codes are appended to the module-wide code table.
-bool resolve_error_sets(const toml::table &config, amc::AbiModule &module, std::string &error) {
+bool resolve_error_sets(const toml::table &config, amc::ABIModule &module, std::string &error) {
     const auto *sets = config["error-set"].as_array();
     if (!sets) return true;
     for (auto &&entry : *sets) {
@@ -323,7 +323,7 @@ bool resolve_error_sets(const toml::table &config, amc::AbiModule &module, std::
 
 // Resolve `[[error]]` declarations into per-function error-boundary records.
 bool auto_link_rust_error_set(const amc::semantic::SemanticModule &semantic, const std::string &function_name,
-    amc::ErrorContract &contract, amc::AbiModule &module) {
+    amc::ErrorContract &contract, amc::ABIModule &module) {
     if (contract.error_set.lo != 0 || contract.error_set.hi != 0) return true;
     const amc::semantic::RustError *matched = nullptr;
     for (const auto &candidate : semantic.rust.errors) {
@@ -352,7 +352,7 @@ bool auto_link_rust_error_set(const amc::semantic::SemanticModule &semantic, con
         created.id = amc::error_set_identity(matched->name);
         created.name = matched->name;
         created.domain = contract.domain;
-        created.condition = static_cast<int32_t>(amc::GenericCondition::unknown);
+        created.condition = static_cast<int32_t>(amc::GenericCondition::UNKNOWN);
         created.code_begin = static_cast<uint32_t>(module.error_codes.size());
         for (const auto &variant : matched->variants) {
             int64_t value = 0;
@@ -366,7 +366,7 @@ bool auto_link_rust_error_set(const amc::semantic::SemanticModule &semantic, con
             code.set_id = created.id;
             code.name = variant.name;
             code.value = static_cast<int32_t>(value);
-            code.condition = static_cast<int32_t>(amc::GenericCondition::unknown);
+            code.condition = static_cast<int32_t>(amc::GenericCondition::UNKNOWN);
             module.error_codes.push_back(std::move(code));
             ++created.code_count;
         }
@@ -377,7 +377,7 @@ bool auto_link_rust_error_set(const amc::semantic::SemanticModule &semantic, con
     return true;
 }
 
-bool resolve_errors(const toml::table &config, amc::AbiModule &module, const amc::semantic::SemanticModule &semantic,
+bool resolve_errors(const toml::table &config, amc::ABIModule &module, const amc::semantic::SemanticModule &semantic,
     std::string &error) {
     if (!resolve_error_sets(config, module, error)) return false;
     const auto *errors = config["error"].as_array();
@@ -419,12 +419,12 @@ bool resolve_errors(const toml::table &config, amc::AbiModule &module, const amc
             contract.error_set = found->id;
         }
         const std::string status = (*table)["status"].value_or(std::string("return"));
-        contract.status_source = status == "parameter" ? amc::StatusSource::parameter : amc::StatusSource::return_value;
+        contract.status_source = status == "parameter" ? amc::StatusSource::PARAMETER : amc::StatusSource::RETURN_VALUE;
         contract.success_value = (*table)["success"].value_or(int64_t{0});
         const int64_t value = (*table)["value"].value_or(int64_t{-1});
         contract.value_parameter = value < 0 ? UINT32_MAX : static_cast<uint32_t>(value);
         if (contract.value_parameter != UINT32_MAX
-            && contract.value_parameter >= module.functions[static_cast<size_t>(index)].parameters.size()) {
+            && contract.value_parameter >= module.functions[static_cast<size_t>(index)].params.size()) {
             error = "[[error]] value parameter is out of range: " + function_name;
             return false;
         }
@@ -449,7 +449,7 @@ bool resolve_errors(const toml::table &config, amc::AbiModule &module, const amc
 //   interface = "IRenderer"
 //   type = "Renderer"
 //   methods = ["Renderer_draw", "Renderer_resize"]
-bool resolve_interfaces(const toml::table &config, amc::AbiModule &module, std::string &error) {
+bool resolve_interfaces(const toml::table &config, amc::ABIModule &module, std::string &error) {
     const auto *interfaces = config["interface"].as_array();
     if (interfaces) {
         for (auto &&entry : *interfaces) {
@@ -492,7 +492,7 @@ bool resolve_interfaces(const toml::table &config, amc::AbiModule &module, std::
                 method.name = function->name;
                 method.signature = function->signature;
                 method.return_type = function->return_type;
-                method.parameters = function->parameters;
+                method.parameters = function->params;
                 method.slot = record.method_count;
                 module.interface_methods.push_back(std::move(method));
                 ++record.method_count;
@@ -615,8 +615,8 @@ std::vector<std::string> parse_makefile_dependencies(const std::string &text) {
 // is an interaction-level fact: lowering links it to the ABI signature and the
 // parameter index once, so each backend consumes the result instead of
 // re-resolving names.
-void attach_semantic_ownership(amc::AbiModule &module, amc::semantic::SemanticModule &semantic) {
-    const auto semantic_id = [&](amc::Hash128 signature) -> amc::semantic::SemanticFunctionId {
+void attach_semantic_ownership(amc::ABIModule &module, amc::semantic::SemanticModule &semantic) {
+    const auto semantic_id = [&](amc::Hash128 signature) -> amc::semantic::SemanticFuncId {
         for (const auto &function : semantic.functions)
             if (function.abi_signature == signature) return function.id;
         return {};
@@ -625,49 +625,49 @@ void attach_semantic_ownership(amc::AbiModule &module, amc::semantic::SemanticMo
     uint32_t running = 0;
     for (size_t i = 0; i < module.functions.size(); ++i) {
         parameter_base[i] = running;
-        running += static_cast<uint32_t>(module.functions[i].parameters.size());
+        running += static_cast<uint32_t>(module.functions[i].params.size());
     }
     const auto function_for_parameter = [&](uint32_t target_index) -> int {
         for (size_t i = 0; i < module.functions.size(); ++i)
             if (target_index >= parameter_base[i]
-                && target_index < parameter_base[i] + module.functions[i].parameters.size())
+                && target_index < parameter_base[i] + module.functions[i].params.size())
                 return static_cast<int>(i);
         return -1;
     };
-    const auto duplicate = [&](const amc::semantic::SemanticOwnership &candidate) {
+    const auto duplicate = [&](const amc::semantic::SemanticOwner &candidate) {
         for (auto &existing : semantic.ownership)
             if (existing.function == candidate.function
                 && existing.interaction == candidate.interaction
                 && existing.index == candidate.index) {
                 if (!existing.release.valid()) existing.release = candidate.release;
-                if (existing.ownership == amc::semantic::OwnershipKind::unspecified)
+                if (existing.ownership == amc::semantic::OwnershipKind::UNSPECIFIED)
                     existing.ownership = candidate.ownership;
-                if (existing.lifetime == amc::semantic::LifetimeKind::unknown) existing.lifetime = candidate.lifetime;
+                if (existing.lifetime == amc::semantic::LifetimeKind::UNKNOWN) existing.lifetime = candidate.lifetime;
                 return true;
             }
         return false;
     };
 
     for (const auto &contract : module.contracts) {
-        amc::semantic::SemanticOwnership ownership;
+        amc::semantic::SemanticOwner ownership;
         uint32_t function_index = contract.target_index;
-        if (contract.target == amc::OwnershipTarget::parameter) {
+        if (contract.target == amc::OwnershipTarget::PARAM) {
             const int index = function_for_parameter(contract.target_index);
             if (index < 0) continue;
             function_index = static_cast<uint32_t>(index);
-            ownership.interaction = amc::semantic::InteractionKind::parameter;
+            ownership.interaction = amc::semantic::InteractionKind::PARAM;
             ownership.index = contract.target_index - parameter_base[function_index];
         } else {
-            ownership.interaction = amc::semantic::InteractionKind::return_value;
+            ownership.interaction = amc::semantic::InteractionKind::RETURN;
         }
         if (function_index >= module.functions.size()) continue;
         ownership.function = semantic_id(module.functions[function_index].signature);
         if (!ownership.function.valid()) continue;
         switch (contract.mode) {
-            case amc::OwnershipMode::borrowed: ownership.ownership = amc::semantic::OwnershipKind::borrowed; break;
-            case amc::OwnershipMode::owned:    ownership.ownership = amc::semantic::OwnershipKind::owned; break;
-            case amc::OwnershipMode::copy:     ownership.ownership = amc::semantic::OwnershipKind::transferred; break;
-            default:                           ownership.ownership = amc::semantic::OwnershipKind::unspecified; break;
+            case amc::OwnershipMode::BORROWED: ownership.ownership = amc::semantic::OwnershipKind::BORROWED; break;
+            case amc::OwnershipMode::OWNED:    ownership.ownership = amc::semantic::OwnershipKind::OWNED; break;
+            case amc::OwnershipMode::COPY:     ownership.ownership = amc::semantic::OwnershipKind::TRANSFERRED; break;
+            default:                           ownership.ownership = amc::semantic::OwnershipKind::UNSPECIFIED; break;
         }
         ownership.release = semantic_id(contract.release);
         if (!duplicate(ownership)) semantic.ownership.push_back(std::move(ownership));
@@ -676,12 +676,12 @@ void attach_semantic_ownership(amc::AbiModule &module, amc::semantic::SemanticMo
     // `[[owned]]` is a create/destroy pair. Record the create return value as an
     // owned interaction so the same lowering result carries the handle policy.
     for (const auto &record : module.owned) {
-        amc::semantic::SemanticOwnership ownership;
+        amc::semantic::SemanticOwner ownership;
         ownership.function = semantic_id(record.create);
         if (!ownership.function.valid()) continue;
-        ownership.interaction = amc::semantic::InteractionKind::return_value;
-        ownership.ownership = amc::semantic::OwnershipKind::owned;
-        ownership.lifetime = amc::semantic::LifetimeKind::caller;
+        ownership.interaction = amc::semantic::InteractionKind::RETURN;
+        ownership.ownership = amc::semantic::OwnershipKind::OWNED;
+        ownership.lifetime = amc::semantic::LifetimeKind::CALLER;
         ownership.release = semantic_id(record.destroy);
         if (!duplicate(ownership)) semantic.ownership.push_back(std::move(ownership));
     }
@@ -690,7 +690,7 @@ void attach_semantic_ownership(amc::AbiModule &module, amc::semantic::SemanticMo
 // Keep only the lowered entities that survive symbol projection. The lowering
 // sidecar describes the artifact it sits next to, not the whole frontend
 // module, so an unexported entity must not appear in `<artifact>.lowering`.
-amc::ir::LoweringResult project_lowering(const amc::ir::LoweringResult &lowering, const amc::AbiModule &projected) {
+amc::ir::LoweringResult project_lowering(const amc::ir::LoweringResult &lowering, const amc::ABIModule &projected) {
     std::set<std::pair<uint64_t, uint64_t>> types;
     std::set<std::pair<uint64_t, uint64_t>> functions;
     for (const auto &type : projected.types)
@@ -807,11 +807,11 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
             const auto *imports = config["import"].as_array();
             if (!imports || imports->size() != 1)
                 return fail(
-                    amc::ErrorCategory::config, "build", "MVP requires exactly one [[import]]", config_path.string());
+                    amc::ErrorCategory::CONFIG, "build", "MVP requires exactly one [[import]]", config_path.string());
             std::vector<amc::compilation::ExportSpec> exports;
             std::string error;
             if (!amc::compilation::parse_exports(config, exports, error))
-                return fail(amc::ErrorCategory::config, "build", error, config_path.string());
+                return fail(amc::ErrorCategory::CONFIG, "build", error, config_path.string());
             const auto *import_table = (*imports)[0].as_table();
             const std::string language =
                 import_table ? import_table->get("language")->value_or(std::string("cpp")) : "cpp";
@@ -826,7 +826,7 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
             fs::create_directories(temporary.parent_path(), ec);
             if (ec)
                 return fail(
-                    amc::ErrorCategory::io, "build", "cannot create build directory", base.string(), ec.message());
+                    amc::ErrorCategory::IO, "build", "cannot create build directory", base.string(), ec.message());
 
             // M3.4: reuse a cached frontend artifact when every input that can
             // change it is identical. The source digest covers the declared
@@ -918,14 +918,14 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
                 // back to running the frontend again instead of failing the build.
                 const auto cached = cache.lookup(cache_inputs, amc::LookupOptions{false, false});
                 cache.record_lookup(cached.status);
-                if (cached.status == amc::CacheStatus::hit) {
+                if (cached.status == amc::CacheStatus::HIT) {
                     std::string bytes;
                     bool reusable = false;
                     for (const auto &artifact : cached.artifacts)
                         if (artifact.name == "frontend.abix") {
                             if (!cache.read_artifact(cached, artifact.name, bytes, error)) break;
                             if (!write_bytes(temporary, bytes, error))
-                                return fail(amc::ErrorCategory::io, "cache", error, config_path.string());
+                                return fail(amc::ErrorCategory::IO, "cache", error, config_path.string());
                             reusable = true;
                         }
                     if (reusable) {
@@ -934,7 +934,7 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
                             if (artifact.name == "frontend.abix.semantic") {
                                 if (!cache.read_artifact(cached, artifact.name, bytes, error)) break;
                                 if (!write_bytes(semantic_temporary, bytes, error))
-                                    return fail(amc::ErrorCategory::io, "cache", error, config_path.string());
+                                    return fail(amc::ErrorCategory::IO, "cache", error, config_path.string());
                             }
                     }
                     error.clear();
@@ -942,24 +942,24 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
             }
             if (frontend_ran) {
                 if (!amc::compilation::dispatch_provider(frontend, "frontend", config_path, temporary, error))
-                    return fail(amc::ErrorCategory::provider, "frontend", error, config_path.string());
+                    return fail(amc::ErrorCategory::PROVIDER, "frontend", error, config_path.string());
             }
 
             amc::ir::Module artifact;
             if (!amc::ir::load_artifact(temporary.string(), artifact, error))
                 return fail(read_error_category(error), "read_artifact", error, temporary.string());
-            amc::AbiModule full = std::move(artifact.abi);
+            amc::ABIModule full = std::move(artifact.abi);
             amc::semantic::SemanticModule semantic = std::move(artifact.semantic);
             full.package_name = config["package"]["name"].value_or("cpp");
             full.package_version = config["package"]["version"].value_or("");
             if (!resolve_ownership(config, full, error))
-                return fail(amc::ErrorCategory::config, "build", error, config_path.string());
+                return fail(amc::ErrorCategory::CONFIG, "build", error, config_path.string());
             if (!resolve_contracts(config, full, error))
-                return fail(amc::ErrorCategory::config, "build", error, config_path.string());
+                return fail(amc::ErrorCategory::CONFIG, "build", error, config_path.string());
             if (!resolve_errors(config, full, semantic, error))
-                return fail(amc::ErrorCategory::config, "build", error, config_path.string());
+                return fail(amc::ErrorCategory::CONFIG, "build", error, config_path.string());
             if (!resolve_interfaces(config, full, error))
-                return fail(amc::ErrorCategory::config, "build", error, config_path.string());
+                return fail(amc::ErrorCategory::CONFIG, "build", error, config_path.string());
             amc::compilation::apply_target_and_layout(config, full);
 
             // M4.2: read the frontend semantic sidecar, complete any missing ABI
@@ -975,7 +975,7 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
             if (!fs::exists(semantic_temporary)
                 && (!semantic.types.empty() || !semantic.functions.empty() || !semantic.records.empty())) {
                 if (!amc::semantic::write_semantic_json(semantic, semantic_temporary.string(), error))
-                    return fail(amc::ErrorCategory::io, "semantic", error, semantic_temporary.string());
+                    return fail(amc::ErrorCategory::IO, "semantic", error, semantic_temporary.string());
             }
             amc::ir::Module lowering_module;
             lowering_module.abi = full;
@@ -984,7 +984,7 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
             if (!amc::pass::run_default_pipeline(lowering_module, lowering_diagnostics)) {
                 std::string message = "pass pipeline failed";
                 if (!lowering_diagnostics.empty()) message = lowering_diagnostics.front().message;
-                return fail(amc::ErrorCategory::validation, "pass", message, config_path.string());
+                return fail(amc::ErrorCategory::VALIDATION, "pass", message, config_path.string());
             }
             amc::ir::LoweringResult lowering = std::move(lowering_module.lowering);
 
@@ -1014,7 +1014,7 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
                         }
                     if (!found) {
                         error = "[[instantiate]] contract references an unknown concrete type: " + as;
-                        return fail(amc::ErrorCategory::config, "build", error, config_path.string());
+                        return fail(amc::ErrorCategory::CONFIG, "build", error, config_path.string());
                     }
                     // Instantiation request identity: template + canonical args +
                     // target + frontend. Not the concrete ABI identity.
@@ -1039,7 +1039,7 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
                         element_id = amc::find_type_id_by_spelling(full, element_name);
                         if (element_id == amc::Hash128{}) {
                             error = "[[instantiate]] element type not found: " + element_name;
-                            return fail(amc::ErrorCategory::config, "build", error, config_path.string());
+                            return fail(amc::ErrorCategory::CONFIG, "build", error, config_path.string());
                         }
                     }
                     const bool mutable_view = (*table)["mutable"].value_or(false);
@@ -1056,9 +1056,9 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
                         result = amc::evaluate_callback(full, type_id);
                     else {
                         error = "unsupported ABIX-STD contract: " + selected_contract;
-                        return fail(amc::ErrorCategory::config, "build", error, config_path.string());
+                        return fail(amc::ErrorCategory::CONFIG, "build", error, config_path.string());
                     }
-                    if (result.status == static_cast<uint32_t>(amc::LoweringStatus::direct)) {
+                    if (result.status == static_cast<uint32_t>(amc::LoweringStatus::DIRECT)) {
                         bool replaced = false;
                         for (auto &entry2 : canonical)
                             if (entry2.first == result.kind) {
@@ -1070,17 +1070,17 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
                     results.push_back(result);
                 }
                 for (auto &result : results) {
-                    if (result.status == static_cast<uint32_t>(amc::LoweringStatus::unsupported)) {
+                    if (result.status == static_cast<uint32_t>(amc::LoweringStatus::UNSUPPORTED)) {
                         error = "an instantiation does not satisfy its ABIX-STD contract";
-                        return fail(amc::ErrorCategory::validation, "build", error, config_path.string());
+                        return fail(amc::ErrorCategory::VALIDATION, "build", error, config_path.string());
                     }
-                    if (result.status == static_cast<uint32_t>(amc::LoweringStatus::needs_adapter)) {
+                    if (result.status == static_cast<uint32_t>(amc::LoweringStatus::NEEDS_ADAPTER)) {
                         amc::Hash128 target{};
                         for (const auto &entry2 : canonical)
                             if (entry2.first == result.kind) target = entry2.second;
                         if (target == amc::Hash128{}) {
                             error = "an ABIX-STD adapter requires a direct canonical instantiation";
-                            return fail(amc::ErrorCategory::validation, "build", error, config_path.string());
+                            return fail(amc::ErrorCategory::VALIDATION, "build", error, config_path.string());
                         }
                         result.contract_type = target;
                     }
@@ -1098,15 +1098,15 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
                     const amc::Hash128 source = amc::find_type_id_by_spelling(full, type_name);
                     if (source == amc::Hash128{}) {
                         error = "[[view]] references an unknown type: " + type_name;
-                        return fail(amc::ErrorCategory::config, "build", error, config_path.string());
+                        return fail(amc::ErrorCategory::CONFIG, "build", error, config_path.string());
                     }
                     amc::Hash128 target{};
                     for (const auto &entry2 : canonical)
-                        if (entry2.first == static_cast<uint32_t>(amc::LoweringKind::sequence_view))
+                        if (entry2.first == static_cast<uint32_t>(amc::LoweringKind::SEQUENCE_VIEW))
                             target = entry2.second;
                     if (target == amc::Hash128{}) {
                         error = "[[view]] needs a direct sequence-view instantiation to target";
-                        return fail(amc::ErrorCategory::config, "build", error, config_path.string());
+                        return fail(amc::ErrorCategory::CONFIG, "build", error, config_path.string());
                     }
                     const std::string data_name = (*table)["data_accessor"].value_or("");
                     const std::string size_name = (*table)["size_accessor"].value_or("");
@@ -1117,15 +1117,15 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
                     }
                     if (data_signature == amc::Hash128{} || size_signature == amc::Hash128{}) {
                         error = "[[view]] accessors not found: " + data_name + " / " + size_name;
-                        return fail(amc::ErrorCategory::config, "build", error, config_path.string());
+                        return fail(amc::ErrorCategory::CONFIG, "build", error, config_path.string());
                     }
                     full.view_adapters.push_back({source, target, data_signature, size_signature});
                     amc::LoweringResult lowering;
                     lowering.type_id = source;
                     lowering.contract_type = target;
-                    lowering.kind = static_cast<uint32_t>(amc::LoweringKind::sequence_view);
-                    lowering.status = static_cast<uint32_t>(amc::LoweringStatus::needs_adapter);
-                    lowering.reason = static_cast<uint32_t>(amc::LoweringReason::layout);
+                    lowering.kind = static_cast<uint32_t>(amc::LoweringKind::SEQUENCE_VIEW);
+                    lowering.status = static_cast<uint32_t>(amc::LoweringStatus::NEEDS_ADAPTER);
+                    lowering.reason = static_cast<uint32_t>(amc::LoweringReason::LAYOUT);
                     full.lowerings.push_back(lowering);
                 }
             }
@@ -1140,7 +1140,7 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
                     const amc::Hash128 source = amc::find_type_id_by_spelling(full, type_name);
                     if (source == amc::Hash128{}) {
                         error = "[[contract-type]] references an unknown type: " + type_name;
-                        return fail(amc::ErrorCategory::config, "build", error, config_path.string());
+                        return fail(amc::ErrorCategory::CONFIG, "build", error, config_path.string());
                     }
                     amc::LoweringResult result;
                     if (contract == "callback" || contract == "abix-std.callback")
@@ -1149,11 +1149,11 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
                         result = amc::evaluate_opaque(full, source);
                     else {
                         error = "unsupported ABIX-STD contract: " + contract;
-                        return fail(amc::ErrorCategory::config, "build", error, config_path.string());
+                        return fail(amc::ErrorCategory::CONFIG, "build", error, config_path.string());
                     }
-                    if (result.status == static_cast<uint32_t>(amc::LoweringStatus::unsupported)) {
+                    if (result.status == static_cast<uint32_t>(amc::LoweringStatus::UNSUPPORTED)) {
                         error = "a contract type does not satisfy its ABIX-STD contract";
-                        return fail(amc::ErrorCategory::validation, "build", error, config_path.string());
+                        return fail(amc::ErrorCategory::VALIDATION, "build", error, config_path.string());
                     }
                     full.lowerings.push_back(result);
                 }
@@ -1168,7 +1168,7 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
                     const amc::Hash128 source = amc::find_type_id_by_spelling(full, type_name);
                     if (source == amc::Hash128{}) {
                         error = "[[range]] references an unknown type: " + type_name;
-                        return fail(amc::ErrorCategory::config, "build", error, config_path.string());
+                        return fail(amc::ErrorCategory::CONFIG, "build", error, config_path.string());
                     }
                     const std::string size_name = (*table)["size_accessor"].value_or("");
                     const std::string at_name = (*table)["at_accessor"].value_or("");
@@ -1179,15 +1179,15 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
                     }
                     if (size_signature == amc::Hash128{} || at_signature == amc::Hash128{}) {
                         error = "[[range]] accessors not found: " + size_name + " / " + at_name;
-                        return fail(amc::ErrorCategory::config, "build", error, config_path.string());
+                        return fail(amc::ErrorCategory::CONFIG, "build", error, config_path.string());
                     }
                     full.range_adapters.push_back({source, size_signature, at_signature});
                     amc::LoweringResult lowering;
                     lowering.type_id = source;
                     lowering.contract_type = source;
-                    lowering.kind = static_cast<uint32_t>(amc::LoweringKind::range);
-                    lowering.status = static_cast<uint32_t>(amc::LoweringStatus::needs_adapter);
-                    lowering.reason = static_cast<uint32_t>(amc::LoweringReason::layout);
+                    lowering.kind = static_cast<uint32_t>(amc::LoweringKind::RANGE);
+                    lowering.status = static_cast<uint32_t>(amc::LoweringStatus::NEEDS_ADAPTER);
+                    lowering.reason = static_cast<uint32_t>(amc::LoweringReason::LAYOUT);
                     full.lowerings.push_back(lowering);
                 }
             }
@@ -1195,27 +1195,27 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
                 const fs::path output = spec.output.is_absolute() ? spec.output : base / spec.output;
                 fs::create_directories(output.parent_path(), ec);
                 if (ec)
-                    return fail(amc::ErrorCategory::io, "build", "cannot create export directory", output.string(),
+                    return fail(amc::ErrorCategory::IO, "build", "cannot create export directory", output.string(),
                         ec.message());
-                amc::AbiModule projected;
+                amc::ABIModule projected;
                 if (!amc::project_symbols(full, spec.symbols, projected, error))
-                    return fail(amc::ErrorCategory::validation, "project_symbols", error, config_path.string());
+                    return fail(amc::ErrorCategory::VALIDATION, "project_symbols", error, config_path.string());
                 if (!amc::write_abix(projected, output.string(), error))
-                    return fail(amc::ErrorCategory::io, "write_abix", error, output.string());
+                    return fail(amc::ErrorCategory::IO, "write_abix", error, output.string());
                 // AI-PM: emit the `.abix.meta` sidecar for symbol-server/CI indexing.
                 if (!write_abix_meta(projected, output, error))
-                    return fail(amc::ErrorCategory::io, "write_abix_meta", error, output.string() + ".meta");
+                    return fail(amc::ErrorCategory::IO, "write_abix_meta", error, output.string() + ".meta");
                 // The semantic sidecar describes template declarations and
                 // instances. It is not part of the ABI artifact, so it is
                 // copied verbatim next to each exported artifact.
                 if (fs::exists(semantic_temporary)
                     && !copy_file(semantic_temporary, fs::path(output.string() + ".semantic"), error))
-                    return fail(amc::ErrorCategory::io, "semantic", error, output.string() + ".semantic");
+                    return fail(amc::ErrorCategory::IO, "semantic", error, output.string() + ".semantic");
                 // The lowered contract is sidecar data: backends consume it when
                 // present and fall back to the ABI view when it is absent.
                 const amc::ir::LoweringResult projected_lowering = project_lowering(lowering, projected);
                 if (!amc::ir::write_lowering_json(projected_lowering, output.string() + ".lowering", error))
-                    return fail(amc::ErrorCategory::io, "lowering", error, output.string() + ".lowering");
+                    return fail(amc::ErrorCategory::IO, "lowering", error, output.string() + ".lowering");
             }
             // Populate the cache with the frontend artifact and its full
             // dependency closure, so a later build with unchanged inputs can
@@ -1267,10 +1267,10 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
             fs::remove(semantic_temporary, ec);
             return 0;
         } catch (const toml::parse_error &error) {
-            return fail(amc::ErrorCategory::config, "build", std::string(error.description()), config_path.string());
+            return fail(amc::ErrorCategory::CONFIG, "build", std::string(error.description()), config_path.string());
         }
     }
     return usage_error(command + ": unsupported subcommand");
 }
 
-}   // namespace amc::compilation
+}   // namespace skl::amc::compilation

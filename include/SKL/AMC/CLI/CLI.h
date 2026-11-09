@@ -26,7 +26,7 @@
 
 namespace fs = std::filesystem;
 
-namespace amc::cli {
+namespace skl::amc::cli {
 
 // The unified error envelope is shared with the other AMC executables.
 using amc::util::fail;
@@ -49,6 +49,6 @@ int cmd_generate(char **args, int arg_count, const fs::path &provider);
 int cmd_frontend(char **args, int arg_count, const fs::path &provider);
 int cmd_inspect(char **args, int arg_count);
 
-}   // namespace amc::cli
+}   // namespace skl::amc::cli
 
 #endif   // AMC_CLI_H

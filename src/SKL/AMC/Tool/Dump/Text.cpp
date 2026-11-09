@@ -25,11 +25,11 @@
 #include <string>
 #include <vector>
 
-namespace amc::dump {
+namespace skl::amc::dump {
 
-using namespace amc::util;
+using namespace skl::amc::util;
 
-void write_text(const amc::AbiModule &module, std::string &output) {
+void write_text(const amc::ABIModule &module, std::string &output) {
     output +=
         "artifact: format_version=4 hash_algorithm=0 sections="
         "strings,identity,target,types,fields,functions,parameters,symbols,hash_descriptor,hash_table,"
@@ -96,7 +96,7 @@ void write_text(const amc::AbiModule &module, std::string &output) {
             output += " array_count=";
             output += fmt::to_string(type.array_count);
         }
-        if (type.kind == amc::TypeKind::primitive) {
+        if (type.kind == amc::TypeKind::PRIMITIVE) {
             const uint32_t width = (type.primitive_abi & amc::primitive_width_mask) >> amc::primitive_width_shift;
             output += " primitive_abi={kind=";
             output += primitive_kind_name(type.primitive_abi);
@@ -149,8 +149,8 @@ void write_text(const amc::AbiModule &module, std::string &output) {
         output += " flags=";
         output += fmt::to_string(function.flags);
         output += '\n';
-        for (size_t p = 0; p < function.parameters.size(); ++p) {
-            const auto &parameter = function.parameters[p];
+        for (size_t p = 0; p < function.params.size(); ++p) {
+            const auto &parameter = function.params[p];
             output += "    (";
             output += fmt::to_string(p);
             output += ") ";
@@ -172,8 +172,8 @@ void write_text(const amc::AbiModule &module, std::string &output) {
         output += "] ";
         output += symbol.name;
         output += " kind=";
-        output += (symbol.kind == amc::SymbolKind::type    ? "type"
-                   : symbol.kind == amc::SymbolKind::field ? "field"
+        output += (symbol.kind == amc::SymbolKind::TYPE    ? "type"
+                   : symbol.kind == amc::SymbolKind::FIELD ? "field"
                                                            : "function");
         output += " target_index=";
         output += fmt::to_string(symbol.target_index);
@@ -238,7 +238,7 @@ void write_text(const amc::AbiModule &module, std::string &output) {
 }
 
 void write_diff_text(
-    const amc::AbiModule &source, const amc::AbiModule &target, const amc::AbiModule &report, std::string &output) {
+    const amc::ABIModule &source, const amc::ABIModule &target, const amc::ABIModule &report, std::string &output) {
     output += "diff:\n  source: ";
     output += source.package_name;
     output += " abi=";
@@ -252,7 +252,7 @@ void write_diff_text(
 }
 
 void write_diff_json(
-    const amc::AbiModule &source, const amc::AbiModule &target, const amc::AbiModule &report, std::string &output) {
+    const amc::ABIModule &source, const amc::ABIModule &target, const amc::ABIModule &report, std::string &output) {
     output += "{\n  \"source\": {\"package\": ";
     json_string(output, source.package_name);
     output += ", \"abi_hash\": ";
@@ -266,4 +266,4 @@ void write_diff_json(
     output += "}\n";
 }
 
-}   // namespace amc::dump
+}   // namespace skl::amc::dump

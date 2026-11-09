@@ -23,7 +23,7 @@
 #include <filesystem>
 #include <vector>
 
-namespace amc::compilation {
+namespace skl::amc::compilation {
 
 // A0 contract: CLI, MCP, LSP and SDK call this API instead of implementing
 // their own configure/frontend/pass/backend sequence.
@@ -47,6 +47,6 @@ public:
     virtual Result compile(const Request &request) = 0;
 };
 
-}   // namespace amc::compilation
+}   // namespace skl::amc::compilation
 
 #endif   // AMC_COMPILATION_COMPILATION_H

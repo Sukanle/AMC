@@ -1,8 +1,8 @@
 #pragma once
 
-namespace amc_map {
+namespace skl::amc_map {
 struct MapConv {
     long a;
     double b;
 };
-}   // namespace amc_map
+}   // namespace skl::amc_map

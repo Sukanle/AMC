@@ -37,14 +37,14 @@
 
 #include <fmt/format.h>
 
-namespace amc::mcp {
+namespace skl::amc::mcp {
 
 // An artifact loaded once at startup. A knowledge base is just a list of these,
 // so cross-module queries stay a matter of iterating the index rather than
 // re-parsing files.
 struct IndexedModule {
     std::string path;
-    amc::AbiModule module;
+    amc::ABIModule module;
 };
 
 extern std::string g_default_module;
@@ -56,7 +56,7 @@ std::string arg_string(const amc::Json &args, const char *key);
 
 bool json_from_string(const std::string &text, amc::Json &out, std::string &error);
 
-bool load_module(const amc::Json &args, amc::AbiModule &module, std::string &error);
+bool load_module(const amc::Json &args, amc::ABIModule &module, std::string &error);
 
 // --- tools ---------------------------------------------------------------
 
@@ -90,6 +90,6 @@ void respond(amc::Json response);
 amc::Json tool_call_result(amc::Json structured, bool is_error);
 void handle_request(const amc::Json &request);
 
-}   // namespace amc::mcp
+}   // namespace skl::amc::mcp
 
 #endif   // AMC_MCP_MCP_H

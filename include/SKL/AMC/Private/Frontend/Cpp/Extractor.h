@@ -23,11 +23,11 @@
 #include <unordered_map>
 #include <vector>
 
-namespace amc::lang::frontend::cpp {
+namespace skl::amc::lang::frontend::cpp {
 
 class Extractor : public clang::RecursiveASTVisitor<Extractor> {
 public:
-    Extractor(clang::ASTContext &c, const std::set<std::string> &wanted, amc::AbiModule &m,
+    Extractor(clang::ASTContext &c, const std::set<std::string> &wanted, amc::ABIModule &m,
         const std::vector<amc::lang::AdaptDecl> &a, std::vector<NativeAdapt> &out, amc::semantic::SemanticModule &s);
     bool VisitRecordDecl(clang::RecordDecl *d);
     bool VisitEnumDecl(clang::EnumDecl *d);
@@ -41,7 +41,7 @@ public:
 private:
     clang::ASTContext &ctx;
     const std::set<std::string> &wanted;
-    amc::AbiModule &module;
+    amc::ABIModule &module;
     const std::vector<amc::lang::AdaptDecl> &adapts;
     std::vector<NativeAdapt> &adaptations;
     amc::semantic::SemanticModule &semantic;
@@ -49,7 +49,7 @@ private:
     std::unordered_map<std::string, amc::semantic::SemanticTypeId> semantic_type_ids;
     std::unordered_map<const clang::TemplateDecl *, amc::semantic::TemplateDeclId> semantic_templates;
     std::set<amc::semantic::SemanticTypeId> semantic_type_records;
-    std::set<amc::semantic::TemplateInstanceId> semantic_instances;
+    std::set<amc::semantic::TemplateInstId> semantic_instances;
     // Dedup keyed by ABI descriptor, so spellings that share an ABI (e.g.
     // `long` / `long long`) collapse onto one type record with one TypeID.
     std::unordered_map<std::string, amc::Hash128> primitive_ids;
@@ -67,11 +67,11 @@ private:
 
     amc::semantic::SemanticTypeId semantic_type_id(clang::QualType type);
 
-    static amc::semantic::InstantiationOrigin instantiation_origin(clang::TemplateSpecializationKind kind);
+    static amc::semantic::InstOrigin instantiation_origin(clang::TemplateSpecializationKind kind);
 
-    static void append_argument_key(std::string &out, const amc::semantic::TemplateArgument &argument);
+    static void append_argument_key(std::string &out, const amc::semantic::TemplateArg &argument);
 
-    amc::semantic::TemplateArgument convert_argument(const clang::TemplateArgument &argument);
+    amc::semantic::TemplateArg convert_argument(const clang::TemplateArgument &argument);
 
     amc::semantic::TemplateDeclId ensure_template_decl(clang::TemplateDecl *decl);
 
@@ -115,4 +115,4 @@ private:
     void add_function(clang::FunctionDecl *d);
 };
 
-}   // namespace amc::lang::frontend::cpp
+}   // namespace skl::amc::lang::frontend::cpp

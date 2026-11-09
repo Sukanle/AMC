@@ -15,9 +15,9 @@
  */
 #include "SKL/AMC/Tool/MCP.h"
 
-namespace amc::mcp {
+namespace skl::amc::mcp {
 
-using namespace amc::util;
+using namespace skl::amc::util;
 
 std::string g_default_module;
 std::vector<IndexedModule> g_index;
@@ -41,7 +41,7 @@ bool json_from_string(const std::string &text, amc::Json &out, std::string &erro
     return true;
 }
 
-bool load_module(const amc::Json &args, amc::AbiModule &module, std::string &error) {
+bool load_module(const amc::Json &args, amc::ABIModule &module, std::string &error) {
     std::string path = arg_string(args, "module");
     if (path.empty()) path = g_default_module;
     if (path.empty() && !g_index.empty()) path = g_index.front().path;
@@ -60,4 +60,4 @@ bool load_module(const amc::Json &args, amc::AbiModule &module, std::string &err
     return true;
 }
 
-}   // namespace amc::mcp
+}   // namespace skl::amc::mcp

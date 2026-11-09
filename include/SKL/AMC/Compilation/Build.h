@@ -18,12 +18,12 @@
 
 #include <filesystem>
 
-namespace amc::compilation {
+namespace skl::amc::compilation {
 
 // `amc build` entry point. The CLI only parses/forwards arguments; the
 // compilation pipeline lives here.
 int build_command(char **args, int arg_count, const std::filesystem::path &provider);
 
-}   // namespace amc::compilation
+}   // namespace skl::amc::compilation
 
 #endif   // AMC_COMPILATION_BUILD_H

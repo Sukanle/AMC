@@ -19,7 +19,7 @@
 
 #include <cctype>
 
-namespace amc::lang::backend::cpp {
+namespace skl::amc::lang::backend::cpp {
 
 std::string cpp_name(std::string s) { return amc::backend::sanitize_identifier(s); }
 
@@ -50,20 +50,20 @@ std::string cpp_string(const std::string &value) { return amc::backend::escape_s
 
 std::string hex_u64(uint64_t value) { return amc::backend::hex_u64_ull(value); }
 
-std::string cpp_type_of(const amc::AbiModule &m, amc::Hash128 id) {
+std::string cpp_type_of(const amc::ABIModule &m, amc::Hash128 id) {
     if (id.lo == 0 && id.hi == 0) return "void";
     for (const auto &type : m.types)
         if (type.id == id) return type.name == "_Bool" ? std::string("bool") : type.name;
     return "void";
 }
 
-bool type_is_pointer(const amc::AbiModule &m, amc::Hash128 id) {
+bool type_is_pointer(const amc::ABIModule &m, amc::Hash128 id) {
     for (const auto &type : m.types)
-        if (type.id == id) return type.kind == amc::TypeKind::pointer;
+        if (type.id == id) return type.kind == amc::TypeKind::POINTER;
     return false;
 }
 
-bool interface_has_handle_methods(const amc::AbiModule &m, const amc::InterfaceRecord &record) {
+bool interface_has_handle_methods(const amc::ABIModule &m, const amc::InterfaceRecord &record) {
     if (record.method_count == 0) return false;
     for (uint32_t i = 0; i < record.method_count; ++i) {
         const auto &method = m.interface_methods[record.method_begin + i];
@@ -78,4 +78,4 @@ bool interface_has_handle_methods(const amc::AbiModule &m, const amc::InterfaceR
     return true;
 }
 
-}   // namespace amc::lang::backend::cpp
+}   // namespace skl::amc::lang::backend::cpp

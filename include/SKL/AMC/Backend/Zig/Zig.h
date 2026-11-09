@@ -20,7 +20,7 @@
 
 #include <string>
 
-namespace amc::lang::zig {
+namespace skl::amc::lang::zig {
 
 // ABIX IR -> Zig projection (`extern` types + extern functions + metadata region).
 int run_backend(const char *input, const char *output);
@@ -30,6 +30,6 @@ int run_backend(const char *input, const char *output);
 std::string primitive_zig_type(uint32_t primitive_abi);
 
 // Render the Zig projection for a module. Exposed for tests.
-std::string generate_projection(const amc::AbiModule &module, const amc::ir::LoweringResult *lowering = nullptr);
+std::string generate_projection(const amc::ABIModule &module, const amc::ir::LoweringResult *lowering = nullptr);
 
-}   // namespace amc::lang::zig
+}   // namespace skl::amc::lang::zig

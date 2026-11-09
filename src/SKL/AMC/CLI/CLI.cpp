@@ -19,7 +19,7 @@
 
 #include <fmt/format.h>
 
-namespace amc::cli {
+namespace skl::amc::cli {
 
 void print_usage() {
     fmt::print(stderr,
@@ -49,4 +49,4 @@ void print_usage() {
         "  --error-format text|json   structured error envelope (default text)\n");
 }
 
-}   // namespace amc::cli
+}   // namespace skl::amc::cli

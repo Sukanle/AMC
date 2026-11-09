@@ -20,13 +20,13 @@
 #include "SKL/AMC/IR/Module.h"
 #include "SKL/AMC/Pass/Pass.h"
 
-namespace amc::pass {
+namespace skl::amc::pass {
 
 // A3: semantic validation is a pass. It checks that record/function/ownership
 // references resolve inside the semantic model before lowering attaches them to
 // ABI entities.
 bool verify_semantic(ir::Module &module, Context &context, diagnostics::DiagnosticList &diagnostics);
 
-}   // namespace amc::pass
+}   // namespace skl::amc::pass
 
 #endif   // AMC_PASS_SEMANTIC_H

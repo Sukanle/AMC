@@ -22,7 +22,7 @@
 
 #include <string>
 
-namespace amc {
+namespace skl::amc {
 
 // AI-P1: render an ABI module as an LLM-friendly context document.
 //
@@ -38,12 +38,12 @@ namespace amc {
 // Stream the context document directly to `out`. These overloads avoid
 // materializing the complete document in memory; the string versions above are
 // thin wrappers for callers that need a single value.
-void context_to_llm(const AbiModule &module, bool include_names, llvm::raw_ostream &out);
-void context_to_json(const AbiModule &module, bool include_names, llvm::raw_ostream &out);
+void context_to_llm(const ABIModule &module, bool include_names, llvm::raw_ostream &out);
+void context_to_json(const ABIModule &module, bool include_names, llvm::raw_ostream &out);
 
-std::string context_to_llm(const AbiModule &module, bool include_names);
-std::string context_to_json(const AbiModule &module, bool include_names);
+std::string context_to_llm(const ABIModule &module, bool include_names);
+std::string context_to_json(const ABIModule &module, bool include_names);
 
-}   // namespace amc
+}   // namespace skl::amc
 
 #endif

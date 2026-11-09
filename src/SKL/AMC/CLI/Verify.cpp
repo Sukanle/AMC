@@ -34,12 +34,12 @@
 #include <fmt/format.h>
 
 namespace fs = std::filesystem;
-using amc::util::fail;
-using amc::util::g_error_format;
-using amc::util::read_error_category;
-using amc::util::usage_error;
+using skl::amc::util::fail;
+using skl::amc::util::g_error_format;
+using skl::amc::util::read_error_category;
+using skl::amc::util::usage_error;
 
-namespace amc::cli {
+namespace skl::amc::cli {
 
 int cmd_verify(char **args, int arg_count, const fs::path &provider) {
     const std::string command = args[1];
@@ -74,7 +74,7 @@ int cmd_verify(char **args, int arg_count, const fs::path &provider) {
             // Two-file form: amc verify <contract.abix> <implementation.abix>
             if (positionals.size() != 2)
                 return usage_error("verify expects <contract.abix> <implementation.abix> or -c <file>.abic.toml");
-            amc::AbiModule contract, implementation;
+            amc::ABIModule contract, implementation;
             std::string error;
             if (!amc::load_module_source(positionals[0], contract, error))
                 return fail(read_error_category(error), "read_abix", error, positionals[0]);
@@ -85,7 +85,7 @@ int cmd_verify(char **args, int arg_count, const fs::path &provider) {
             context.strict = false;
             amc::diagnostics::DiagnosticList compatibility_diagnostics;
             if (!amc::pass::compare_modules(contract, implementation, result, context, compatibility_diagnostics))
-                return fail(amc::ErrorCategory::internal, "verify", error);
+                return fail(amc::ErrorCategory::INTERNAL, "verify", error);
             result.contract_path = positionals[0];
             result.implementation_path = positionals[1];
             if (diagnostics)
@@ -107,11 +107,11 @@ int cmd_verify(char **args, int arg_count, const fs::path &provider) {
             const auto *imports = config["import"].as_array();
             if (!imports || imports->size() != 1)
                 return fail(
-                    amc::ErrorCategory::config, "verify", "MVP requires exactly one [[import]]", config_path.string());
+                    amc::ErrorCategory::CONFIG, "verify", "MVP requires exactly one [[import]]", config_path.string());
             std::vector<amc::compilation::ExportSpec> exports;
             std::string error;
             if (!amc::compilation::parse_exports(config, exports, error))
-                return fail(amc::ErrorCategory::config, "verify", error, config_path.string());
+                return fail(amc::ErrorCategory::CONFIG, "verify", error, config_path.string());
             const auto *import_table = (*imports)[0].as_table();
             const std::string language =
                 import_table ? import_table->get("language")->value_or(std::string("cpp")) : "cpp";
@@ -124,11 +124,11 @@ int cmd_verify(char **args, int arg_count, const fs::path &provider) {
             fs::create_directories(temporary.parent_path(), ec);
             if (ec)
                 return fail(
-                    amc::ErrorCategory::io, "verify", "cannot create build directory", base.string(), ec.message());
+                    amc::ErrorCategory::IO, "verify", "cannot create build directory", base.string(), ec.message());
             if (!amc::compilation::dispatch_provider(frontend, "frontend", config_path, temporary, error))
-                return fail(amc::ErrorCategory::provider, "frontend", error, config_path.string());
+                return fail(amc::ErrorCategory::PROVIDER, "frontend", error, config_path.string());
 
-            amc::AbiModule full;
+            amc::ABIModule full;
             if (!amc::read_abix(temporary.string(), full, error))
                 return fail(read_error_category(error), "read_abix", error, temporary.string());
             full.package_name = config["package"]["name"].value_or("cpp");
@@ -144,17 +144,17 @@ int cmd_verify(char **args, int arg_count, const fs::path &provider) {
                 const fs::path reference = spec.output.is_absolute() ? spec.output : base / spec.output;
                 if (!fs::exists(reference)) {
                     fs::remove(temporary, ec);
-                    return fail(amc::ErrorCategory::io, "verify", "reference contract artifact not found",
+                    return fail(amc::ErrorCategory::IO, "verify", "reference contract artifact not found",
                         reference.string(), "build the contract before verifying");
                 }
-                amc::AbiModule projected;
+                amc::ABIModule projected;
                 if (!amc::project_symbols(full, spec.symbols, projected, error))
-                    return fail(amc::ErrorCategory::validation, "project_symbols", error, config_path.string());
+                    return fail(amc::ErrorCategory::VALIDATION, "project_symbols", error, config_path.string());
                 const fs::path fresh = base / ".amc" / fmt::format("verify-{}-{}.abix", process_suffix, index);
                 if (!amc::write_abix(projected, fresh.string(), error))
-                    return fail(amc::ErrorCategory::io, "write_abix", error, fresh.string());
+                    return fail(amc::ErrorCategory::IO, "write_abix", error, fresh.string());
 
-                amc::AbiModule contract;
+                amc::ABIModule contract;
                 if (!amc::read_abix(reference.string(), contract, error))
                     return fail(read_error_category(error), "read_abix", error, reference.string());
                 amc::VerifyResult result;
@@ -162,7 +162,7 @@ int cmd_verify(char **args, int arg_count, const fs::path &provider) {
                 context.strict = false;
                 amc::diagnostics::DiagnosticList compatibility_diagnostics;
                 if (!amc::pass::compare_modules(contract, projected, result, context, compatibility_diagnostics))
-                    return fail(amc::ErrorCategory::internal, "verify", error);
+                    return fail(amc::ErrorCategory::INTERNAL, "verify", error);
                 result.contract_path = reference.string();
                 result.implementation_path = config_path.string() + " (regenerated)";
                 consistent = consistent && result.consistent;
@@ -186,7 +186,7 @@ int cmd_verify(char **args, int arg_count, const fs::path &provider) {
                                              : amc::verify_report_to_text(results));
             return consistent ? 0 : 1;
         } catch (const toml::parse_error &error) {
-            return fail(amc::ErrorCategory::config, "verify", std::string(error.description()), config_path.string());
+            return fail(amc::ErrorCategory::CONFIG, "verify", std::string(error.description()), config_path.string());
         }
     }
     return usage_error(command + ": unsupported subcommand");
@@ -196,8 +196,8 @@ namespace {
 
 const char *target_status_name(amc::TargetVerificationStatus status) {
     switch (status) {
-        case amc::TargetVerificationStatus::compatible:   return "compatible";
-        case amc::TargetVerificationStatus::incompatible: return "incompatible";
+        case amc::TargetVerificationStatus::COMPATIBLE:   return "compatible";
+        case amc::TargetVerificationStatus::INCOMPATIBLE: return "incompatible";
         default:                                          return "unverifiable";
     }
 }
@@ -271,17 +271,17 @@ int cmd_target(char **args, int arg_count) {
         return usage_error("target expects <file.abix|binary> [--expect arch=..,os=..] [--format text|json]");
     if (format != "text" && format != "json") return usage_error("target --format must be text or json");
 
-    amc::AbiModule module;
+    amc::ABIModule module;
     std::string error;
     if (!amc::load_module_source(input.string(), module, error))
         return fail(read_error_category(error), "read_abix", error, input.string());
     amc::MetadataOptions options;
     std::vector<uint8_t> region;
     if (!amc::build_metadata_region(module, options, region, error))
-        return fail(amc::ErrorCategory::internal, "target", error, input.string());
+        return fail(amc::ErrorCategory::INTERNAL, "target", error, input.string());
     amc::TargetDescription target;
     if (!amc::read_target_description(region, target, error))
-        return fail(amc::ErrorCategory::internal, "target", error, input.string());
+        return fail(amc::ErrorCategory::INTERNAL, "target", error, input.string());
 
     if (expect.empty()) {
         if (format == "json")
@@ -301,10 +301,10 @@ int cmd_target(char **args, int arg_count) {
 
     amc::AbiVerificationReport report;
     if (!amc::verify_abi(region, parse_expectation(expect), report, error))
-        return fail(amc::ErrorCategory::internal, "target", error, input.string());
-    const bool incompatible = report.platform == amc::TargetVerificationStatus::incompatible
-                           || report.layout == amc::TargetVerificationStatus::incompatible
-                           || report.calling_convention == amc::TargetVerificationStatus::incompatible;
+        return fail(amc::ErrorCategory::INTERNAL, "target", error, input.string());
+    const bool incompatible = report.platform == amc::TargetVerificationStatus::INCOMPATIBLE
+                           || report.layout == amc::TargetVerificationStatus::INCOMPATIBLE
+                           || report.calling_convention == amc::TargetVerificationStatus::INCOMPATIBLE;
     if (format == "json") {
         std::string reasons;
         for (const auto &reason : report.reasons) {
@@ -325,4 +325,4 @@ int cmd_target(char **args, int arg_count) {
     return incompatible ? 1 : 0;
 }
 
-}   // namespace amc::cli
+}   // namespace skl::amc::cli

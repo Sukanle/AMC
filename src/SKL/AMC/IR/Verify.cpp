@@ -21,7 +21,7 @@
 
 #include <fmt/format.h>
 
-namespace amc {
+namespace skl::amc {
 namespace {
 
 using TypeKey = std::pair<uint64_t, uint64_t>;
@@ -37,21 +37,21 @@ using TypeMap = std::map<TypeKey, const Type *>;
 using FieldMap = std::map<TypeKey, std::vector<const Field *>>;
 using FunctionMap = std::map<TypeKey, std::vector<const Function *>>;
 
-TypeMap index_types(const AbiModule &module) {
+TypeMap index_types(const ABIModule &module) {
     TypeMap map;
     for (const auto &type : module.types)
         map[key(type.id)] = &type;
     return map;
 }
 
-FieldMap index_fields(const AbiModule &module) {
+FieldMap index_fields(const ABIModule &module) {
     FieldMap map;
     for (const auto &field : module.fields)
         map[key(field.owner_type)].push_back(&field);
     return map;
 }
 
-FunctionMap index_functions(const AbiModule &module) {
+FunctionMap index_functions(const ABIModule &module) {
     FunctionMap map;
     for (const auto &function : module.functions)
         map[key(function.owner_type)].push_back(&function);
@@ -80,7 +80,7 @@ void compare_type(const Type &contract, const Type &implementation, const FieldM
     if (!(contract.layout_hash == implementation.layout_hash)
         || contract.size != implementation.size
         || contract.align != implementation.align)
-        add_change(result, ChangeKind::layout_changed, contract.name, {}, layout_detail(contract, implementation));
+        add_change(result, ChangeKind::LAYOUT_CHANGED, contract.name, {}, layout_detail(contract, implementation));
 
     const auto &contract_owned =
         contract_fields.count(key(contract.id)) ? contract_fields.at(key(contract.id)) : std::vector<const Field *>{};
@@ -91,42 +91,42 @@ void compare_type(const Type &contract, const Type &implementation, const FieldM
     for (const auto *field : contract_owned) {
         const Field *match = find_field(implementation_owned, field->name);
         if (!match) {
-            add_change(result, ChangeKind::field_removed, contract.name, field->name, "field removed");
+            add_change(result, ChangeKind::FIELD_REMOVED, contract.name, field->name, "field removed");
             continue;
         }
         if (match->offset != field->offset)
-            add_change(result, ChangeKind::field_offset_changed, contract.name, field->name,
+            add_change(result, ChangeKind::FIELD_OFFSET_CHANGED, contract.name, field->name,
                 fmt::format("offset {} -> {}", field->offset, match->offset));
         if (!(match->type_id == field->type_id))
-            add_change(result, ChangeKind::field_type_changed, contract.name, field->name,
+            add_change(result, ChangeKind::FIELD_TYPE_CHANGED, contract.name, field->name,
                 fmt::format("type {} -> {}", hash_string(field->type_id), hash_string(match->type_id)));
     }
     for (const auto *field : implementation_owned)
         if (!find_field(contract_owned, field->name))
-            add_change(result, ChangeKind::field_added, contract.name, field->name, "field added");
+            add_change(result, ChangeKind::FIELD_ADDED, contract.name, field->name, "field added");
 }
 
 void compare_function(const Function &contract, const Function &match, VerifyResult &result) {
     if (contract.calling_convention != match.calling_convention) {
-        add_change(result, ChangeKind::calling_convention_changed, match.name, match.name,
+        add_change(result, ChangeKind::CALLING_CONVENTION_CHANGED, match.name, match.name,
             fmt::format("calling convention {} -> {}", contract.calling_convention, match.calling_convention));
     }
     if (!(contract.signature == match.signature)) {
-        add_change(result, ChangeKind::function_signature_changed,
+        add_change(result, ChangeKind::FUNCTION_SIGNATURE_CHANGED,
             match.owner_type == Hash128{} ? std::string{} : match.name, match.name,
             fmt::format("signature {} -> {}", hash_string(contract.signature), hash_string(match.signature)));
         return;
     }
-    if (contract.parameters.size() != match.parameters.size()) {
-        add_change(result, ChangeKind::function_parameter_changed, {}, match.name,
-            fmt::format("parameter count {} -> {}", contract.parameters.size(), match.parameters.size()));
+    if (contract.params.size() != match.params.size()) {
+        add_change(result, ChangeKind::FUNCTION_PARAMETER_CHANGED, {}, match.name,
+            fmt::format("parameter count {} -> {}", contract.params.size(), match.params.size()));
         return;
     }
-    for (size_t i = 0; i < contract.parameters.size(); ++i) {
-        if (!(contract.parameters[i].type_id == match.parameters[i].type_id)) {
-            add_change(result, ChangeKind::function_parameter_changed, {}, match.name,
-                fmt::format("parameter {} type {} -> {}", i, hash_string(contract.parameters[i].type_id),
-                    hash_string(match.parameters[i].type_id)));
+    for (size_t i = 0; i < contract.params.size(); ++i) {
+        if (!(contract.params[i].type_id == match.params[i].type_id)) {
+            add_change(result, ChangeKind::FUNCTION_PARAMETER_CHANGED, {}, match.name,
+                fmt::format("parameter {} type {} -> {}", i, hash_string(contract.params[i].type_id),
+                    hash_string(match.params[i].type_id)));
             return;
         }
     }
@@ -138,19 +138,19 @@ std::string function_key(const Function &function) {
 
 const char *ownership_mode_name(OwnershipMode mode) {
     switch (mode) {
-        case OwnershipMode::unspecified: return "unspecified";
-        case OwnershipMode::borrowed:    return "borrowed";
-        case OwnershipMode::owned:       return "owned";
-        case OwnershipMode::copy:        return "copy";
+        case OwnershipMode::UNSPECIFIED: return "unspecified";
+        case OwnershipMode::BORROWED:    return "borrowed";
+        case OwnershipMode::OWNED:       return "owned";
+        case OwnershipMode::COPY:        return "copy";
     }
     return "unknown";
 }
 
 const char *status_source_name(StatusSource source) {
     switch (source) {
-        case StatusSource::return_value: return "return_value";
-        case StatusSource::parameter:    return "parameter";
-        case StatusSource::return_field: return "return_field";
+        case StatusSource::RETURN_VALUE: return "return_value";
+        case StatusSource::PARAMETER:    return "parameter";
+        case StatusSource::RETURN_FIELD: return "return_field";
     }
     return "unknown";
 }
@@ -161,8 +161,8 @@ struct InteractionEntry {
 };
 
 bool ownership_key(
-    const AbiModule &module, const OwnershipContract &contract, std::string &key, std::string &function) {
-    if (contract.target == OwnershipTarget::return_value) {
+    const ABIModule &module, const OwnershipContract &contract, std::string &key, std::string &function) {
+    if (contract.target == OwnershipTarget::RETURN) {
         if (contract.target_index >= module.functions.size()) return false;
         function = module.functions[contract.target_index].name;
         key = function_key(module.functions[contract.target_index]) + ":return";
@@ -170,7 +170,7 @@ bool ownership_key(
     }
     uint32_t base = 0;
     for (const auto &candidate : module.functions) {
-        const uint32_t count = static_cast<uint32_t>(candidate.parameters.size());
+        const uint32_t count = static_cast<uint32_t>(candidate.params.size());
         if (contract.target_index < base + count) {
             function = candidate.name;
             key = function_key(candidate) + ":param:" + std::to_string(contract.target_index - base);
@@ -181,7 +181,7 @@ bool ownership_key(
     return false;
 }
 
-std::map<std::string, InteractionEntry> index_ownership(const AbiModule &module) {
+std::map<std::string, InteractionEntry> index_ownership(const ABIModule &module) {
     std::map<std::string, InteractionEntry> entries;
     for (const auto &contract : module.contracts) {
         std::string key;
@@ -197,7 +197,7 @@ struct ErrorEntry {
     const ErrorContract *contract = nullptr;
 };
 
-std::map<std::string, ErrorEntry> index_errors(const AbiModule &module) {
+std::map<std::string, ErrorEntry> index_errors(const ABIModule &module) {
     std::map<std::string, ErrorEntry> entries;
     for (const auto &contract : module.errors) {
         if (contract.function_index >= module.functions.size()) continue;
@@ -207,33 +207,33 @@ std::map<std::string, ErrorEntry> index_errors(const AbiModule &module) {
     return entries;
 }
 
-void compare_contracts(const AbiModule &contract, const AbiModule &implementation, VerifyResult &result) {
+void compare_contracts(const ABIModule &contract, const ABIModule &implementation, VerifyResult &result) {
     const auto contract_ownership = index_ownership(contract);
     const auto implementation_ownership = index_ownership(implementation);
     for (const auto &[key, entry] : contract_ownership) {
         const auto found = implementation_ownership.find(key);
         if (found == implementation_ownership.end()) {
-            add_change(result, ChangeKind::ownership_changed, {}, entry.function, "ownership contract removed");
+            add_change(result, ChangeKind::OWNERSHIP_CHANGED, {}, entry.function, "ownership contract removed");
             continue;
         }
         const auto &before = *entry.contract;
         const auto &after = *found->second.contract;
         if (before.mode != after.mode || !(before.release == after.release) || before.flags != after.flags) {
-            add_change(result, ChangeKind::ownership_changed, {}, entry.function,
+            add_change(result, ChangeKind::OWNERSHIP_CHANGED, {}, entry.function,
                 fmt::format("mode {} -> {}, release {} -> {}", ownership_mode_name(before.mode),
                     ownership_mode_name(after.mode), hash_string(before.release), hash_string(after.release)));
         }
     }
     for (const auto &[key, entry] : implementation_ownership)
         if (contract_ownership.find(key) == contract_ownership.end())
-            add_change(result, ChangeKind::ownership_changed, {}, entry.function, "ownership contract added");
+            add_change(result, ChangeKind::OWNERSHIP_CHANGED, {}, entry.function, "ownership contract added");
 
     const auto contract_errors = index_errors(contract);
     const auto implementation_errors = index_errors(implementation);
     for (const auto &[key, entry] : contract_errors) {
         const auto found = implementation_errors.find(key);
         if (found == implementation_errors.end()) {
-            add_change(result, ChangeKind::error_boundary_changed, {}, entry.function, "error boundary removed");
+            add_change(result, ChangeKind::ERROR_BOUNDARY_CHANGED, {}, entry.function, "error boundary removed");
             continue;
         }
         const auto &before = *entry.contract;
@@ -245,7 +245,7 @@ void compare_contracts(const AbiModule &contract, const AbiModule &implementatio
             || before.domain != after.domain
             || before.condition != after.condition
             || before.flags != after.flags) {
-            add_change(result, ChangeKind::error_boundary_changed, {}, entry.function,
+            add_change(result, ChangeKind::ERROR_BOUNDARY_CHANGED, {}, entry.function,
                 fmt::format("status {} -> {}, success {} -> {}, value parameter {} -> {}, domain {:#x} -> {:#x}, "
                             "condition {} -> {}",
                     status_source_name(before.status_source), status_source_name(after.status_source),
@@ -257,40 +257,40 @@ void compare_contracts(const AbiModule &contract, const AbiModule &implementatio
     }
     for (const auto &[key, entry] : implementation_errors)
         if (contract_errors.find(key) == contract_errors.end())
-            add_change(result, ChangeKind::error_boundary_changed, {}, entry.function, "error boundary added");
+            add_change(result, ChangeKind::ERROR_BOUNDARY_CHANGED, {}, entry.function, "error boundary added");
 }
 
 }   // namespace
 
 const char *change_kind_name(ChangeKind kind) {
     switch (kind) {
-        case ChangeKind::type_added:                 return "type_added";
-        case ChangeKind::type_removed:               return "type_removed";
-        case ChangeKind::layout_changed:             return "layout_changed";
-        case ChangeKind::field_added:                return "field_added";
-        case ChangeKind::field_removed:              return "field_removed";
-        case ChangeKind::field_offset_changed:       return "field_offset_changed";
-        case ChangeKind::field_type_changed:         return "field_type_changed";
-        case ChangeKind::function_added:             return "function_added";
-        case ChangeKind::function_removed:           return "function_removed";
-        case ChangeKind::function_signature_changed: return "function_signature_changed";
-        case ChangeKind::function_parameter_changed: return "function_parameter_changed";
-        case ChangeKind::calling_convention_changed: return "calling_convention_changed";
-        case ChangeKind::ownership_changed:          return "ownership_changed";
-        case ChangeKind::error_boundary_changed:     return "error_boundary_changed";
-        case ChangeKind::interface_changed:          return "interface_changed";
+        case ChangeKind::TYPE_ADDED:                 return "type_added";
+        case ChangeKind::TYPE_REMOVED:               return "type_removed";
+        case ChangeKind::LAYOUT_CHANGED:             return "layout_changed";
+        case ChangeKind::FIELD_ADDED:                return "field_added";
+        case ChangeKind::FIELD_REMOVED:              return "field_removed";
+        case ChangeKind::FIELD_OFFSET_CHANGED:       return "field_offset_changed";
+        case ChangeKind::FIELD_TYPE_CHANGED:         return "field_type_changed";
+        case ChangeKind::FUNCTION_ADDED:             return "function_added";
+        case ChangeKind::FUNCTION_REMOVED:           return "function_removed";
+        case ChangeKind::FUNCTION_SIGNATURE_CHANGED: return "function_signature_changed";
+        case ChangeKind::FUNCTION_PARAMETER_CHANGED: return "function_parameter_changed";
+        case ChangeKind::CALLING_CONVENTION_CHANGED: return "calling_convention_changed";
+        case ChangeKind::OWNERSHIP_CHANGED:          return "ownership_changed";
+        case ChangeKind::ERROR_BOUNDARY_CHANGED:     return "error_boundary_changed";
+        case ChangeKind::INTERFACE_CHANGED:          return "interface_changed";
     }
     return "unknown";
 }
 
-std::map<TypeKey, const InterfaceRecord *> index_interfaces(const AbiModule &module) {
+std::map<TypeKey, const InterfaceRecord *> index_interfaces(const ABIModule &module) {
     std::map<TypeKey, const InterfaceRecord *> entries;
     for (const auto &record : module.interfaces)
         entries.emplace(key(record.id), &record);
     return entries;
 }
 
-const InterfaceMethod *find_interface_method(const AbiModule &module, const InterfaceRecord &record, uint32_t slot) {
+const InterfaceMethod *find_interface_method(const ABIModule &module, const InterfaceRecord &record, uint32_t slot) {
     for (uint32_t i = 0; i < record.method_count; ++i) {
         const auto &method = module.interface_methods[record.method_begin + i];
         if (method.slot == slot) return &method;
@@ -298,22 +298,22 @@ const InterfaceMethod *find_interface_method(const AbiModule &module, const Inte
     return nullptr;
 }
 
-void compare_interfaces(const AbiModule &contract, const AbiModule &implementation, VerifyResult &result) {
+void compare_interfaces(const ABIModule &contract, const ABIModule &implementation, VerifyResult &result) {
     const auto contract_interfaces = index_interfaces(contract);
     const auto implementation_interfaces = index_interfaces(implementation);
     for (const auto &[id, record] : contract_interfaces) {
         const auto found = implementation_interfaces.find(id);
         if (found == implementation_interfaces.end()) {
             add_change(
-                result, ChangeKind::interface_changed, record->name, {}, "interface missing from implementation");
+                result, ChangeKind::INTERFACE_CHANGED, record->name, {}, "interface missing from implementation");
             continue;
         }
         if (record->version != found->second->version) {
-            add_change(result, ChangeKind::interface_changed, record->name, {},
+            add_change(result, ChangeKind::INTERFACE_CHANGED, record->name, {},
                 fmt::format("version {} -> {}", record->version, found->second->version));
         }
         if (record->method_count != found->second->method_count) {
-            add_change(result, ChangeKind::interface_changed, record->name, {},
+            add_change(result, ChangeKind::INTERFACE_CHANGED, record->name, {},
                 fmt::format("method count {} -> {}", record->method_count, found->second->method_count));
             continue;
         }
@@ -321,18 +321,18 @@ void compare_interfaces(const AbiModule &contract, const AbiModule &implementati
             const auto &before = contract.interface_methods[record->method_begin + i];
             const auto *after = find_interface_method(implementation, *found->second, before.slot);
             if (after == nullptr || !(before.signature == after->signature)) {
-                add_change(result, ChangeKind::interface_changed, record->name, before.name,
+                add_change(result, ChangeKind::INTERFACE_CHANGED, record->name, before.name,
                     after == nullptr ? "method slot missing" : "method signature changed");
             }
         }
     }
     for (const auto &[id, record] : implementation_interfaces)
         if (!contract_interfaces.count(id))
-            add_change(result, ChangeKind::interface_changed, record->name, {}, "interface added to implementation");
+            add_change(result, ChangeKind::INTERFACE_CHANGED, record->name, {}, "interface added to implementation");
 }
 
 bool verify_modules(
-    const AbiModule &contract, const AbiModule &implementation, VerifyResult &result, std::string &error) {
+    const ABIModule &contract, const ABIModule &implementation, VerifyResult &result, std::string &error) {
     (void)error;
     result = VerifyResult{};
     result.package = contract.package_name;
@@ -348,14 +348,14 @@ bool verify_modules(
     for (const auto &type : contract.types) {
         const auto it = implementation_types.find(key(type.id));
         if (it == implementation_types.end()) {
-            add_change(result, ChangeKind::type_removed, type.name, {}, "type missing from implementation");
+            add_change(result, ChangeKind::TYPE_REMOVED, type.name, {}, "type missing from implementation");
             continue;
         }
         compare_type(type, *it->second, contract_fields, implementation_fields, result);
     }
     for (const auto &type : implementation.types)
         if (!contract_types.count(key(type.id)))
-            add_change(result, ChangeKind::type_added, type.name, {}, "type not present in contract");
+            add_change(result, ChangeKind::TYPE_ADDED, type.name, {}, "type not present in contract");
 
     const auto compare_function_set = [&](const std::vector<const Function *> &contracts,
                                           const std::vector<const Function *> &matches, const std::string &owner_name) {
@@ -373,7 +373,7 @@ bool verify_modules(
             const auto match = implementation_by_name.find(contract_function->name);
             if (match == implementation_by_name.end()) {
                 add_change(
-                    result, ChangeKind::function_removed, owner_name, contract_function->name, "function removed");
+                    result, ChangeKind::FUNCTION_REMOVED, owner_name, contract_function->name, "function removed");
                 continue;
             }
             compare_function(*contract_function, *match->second, result);
@@ -381,7 +381,7 @@ bool verify_modules(
         for (const auto *implementation_function : matches)
             if (contract_by_name.find(implementation_function->name) == contract_by_name.end())
                 add_change(
-                    result, ChangeKind::function_added, owner_name, implementation_function->name, "function added");
+                    result, ChangeKind::FUNCTION_ADDED, owner_name, implementation_function->name, "function added");
     };
 
     // Compare every owner that appears in either module.
@@ -455,4 +455,4 @@ std::string verify_report_to_json(const std::vector<VerifyResult> &results, bool
     return out;
 }
 
-}   // namespace amc
+}   // namespace skl::amc

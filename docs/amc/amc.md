@@ -251,13 +251,13 @@ With `--typed`, it also emits an `abix::adapter<Source, Target>` specialization 
 
 ```cpp
 #define ABIX_ADAPTER_TYPED 1
-#include "amc_generated.hpp"   // amc_generated::ns_Foo_ABIX
+#include "amc_generated.hpp"   // skl::amc::generated::ns_Foo_ABIX
 #include "adapter_foo.hpp"
-abix::adapter<amc_generated::ns_Foo_v2_ABIX,
-              amc_generated::ns_Foo_v2_ABIX>::apply(&v2, &v1);
+abix::adapter<skl::amc::generated::ns_Foo_v2_ABIX,
+              skl::amc::generated::ns_Foo_v2_ABIX>::apply(&v2, &v1);
 ```
 
-`--typed-namespace <ns>` overrides the projection namespace (default `amc_generated`).
+`--typed-namespace <ns>` overrides the projection namespace (default `skl::amc::generated`).
 
 `--shim` emits the adapter as a translation unit with a C ABI, so it can be compiled into a standalone shim shared library:
 

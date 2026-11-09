@@ -39,7 +39,7 @@
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/raw_ostream.h>
 
-namespace amc::lang::rust {
+namespace skl::amc::lang::rust {
 namespace {
 
 // Thin wrapper over `fmt::memory_buffer` so the emit helpers read like a file
@@ -176,7 +176,7 @@ bool spelling_has_qualifier(const std::string &spelling, const std::string &qual
 // Identifies a type by TypeID so references can be resolved without a hash map.
 class Projector {
 public:
-    explicit Projector(const amc::AbiModule &module, const amc::ir::LoweringResult *lowering)
+    explicit Projector(const amc::ABIModule &module, const amc::ir::LoweringResult *lowering)
         : m(module)
         , lowering(lowering) {
         names.reserve(m.types.size());
@@ -190,7 +190,7 @@ public:
         // Spelling -> type index for value types only. Pointers are excluded so
         // a pointee lookup cannot resolve back to a pointer.
         for (size_t i = 0; i < m.types.size(); ++i)
-            if (m.types[i].kind != amc::TypeKind::pointer)
+            if (m.types[i].kind != amc::TypeKind::POINTER)
                 by_spelling.emplace(normalise_type_spelling(m.types[i].name), static_cast<int>(i));
     }
 
@@ -216,8 +216,8 @@ public:
         const int index = index_of(id);
         if (index < 0) return "core::ffi::c_void";
         const auto &type = m.types[static_cast<size_t>(index)];
-        if (type.kind == amc::TypeKind::primitive) return primitive_rust_type(type);
-        if (type.kind == amc::TypeKind::pointer) return pointer_rust_type(type);
+        if (type.kind == amc::TypeKind::PRIMITIVE) return primitive_rust_type(type);
+        if (type.kind == amc::TypeKind::POINTER) return pointer_rust_type(type);
         return names[static_cast<size_t>(index)];
     }
 
@@ -276,12 +276,12 @@ public:
         return base.empty() || base == "()" ? std::string("core::ffi::c_void") : base;
     }
 
-    const amc::AbiModule &m;
+    const amc::ABIModule &m;
 
     const amc::ir::LoweredExposedType *exposed_for(amc::Hash128 type_id) const {
         if (lowering == nullptr) return nullptr;
         for (const auto &record : lowering->exposed)
-            if (record.abi == type_id && record.status == amc::ir::LoweringStatus::lowered) return &record;
+            if (record.abi == type_id && record.status == amc::ir::LoweringStatus::LOWERED) return &record;
         return nullptr;
     }
 
@@ -307,10 +307,11 @@ public:
         const int return_index = index_of(function.return_type);
         if (return_index < 0) return false;
         const amc::Type &result = m.types[static_cast<size_t>(return_index)];
-        const bool returns_void = result.kind == amc::TypeKind::primitive
-                               && (result.primitive_abi & 0xffu) == static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
+        const bool returns_void =
+            result.kind == amc::TypeKind::PRIMITIVE
+            && (result.primitive_abi & 0xffu) == static_cast<uint32_t>(amc::PrimitiveABIKind::AMC_VOID);
         if (!returns_void && !is_safe_value(function.return_type)) return false;
-        for (const auto &parameter : function.parameters)
+        for (const auto &parameter : function.params)
             if (!is_safe_value(parameter.type_id)) return false;
         return true;
     }
@@ -323,14 +324,14 @@ private:
         if ((type.flags & amc::type_opaque) != 0) return false;
         if (!seen.emplace(id.lo, id.hi).second) return true;
         switch (type.kind) {
-            case amc::TypeKind::primitive:
-                return (type.primitive_abi & 0xffu) != static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
-            case amc::TypeKind::enumeration: return true;
-            case amc::TypeKind::record:
+            case amc::TypeKind::PRIMITIVE:
+                return (type.primitive_abi & 0xffu) != static_cast<uint32_t>(amc::PrimitiveABIKind::AMC_VOID);
+            case amc::TypeKind::ENUM: return true;
+            case amc::TypeKind::RECORD:
                 for (uint32_t i = 0; i < type.field_count; ++i)
                     if (!is_safe_value_impl(m.fields[type.field_begin + i].type_id, seen)) return false;
                 return true;
-            case amc::TypeKind::alias:
+            case amc::TypeKind::ALIAS:
                 if (type.field_count == 0) return false;
                 return is_safe_value_impl(m.fields[type.field_begin].type_id, seen);
             default: return false;
@@ -462,16 +463,16 @@ void emit_type(Output &o, const Projector &p, const amc::Type &type) {
         return;
     }
     switch (type.kind) {
-        case amc::TypeKind::record:      emit_record(o, p, type); break;
-        case amc::TypeKind::enumeration: emit_enumeration(o, p, type); break;
-        case amc::TypeKind::alias:       emit_alias(o, p, type); break;
-        case amc::TypeKind::pointer:
+        case amc::TypeKind::RECORD: emit_record(o, p, type); break;
+        case amc::TypeKind::ENUM:   emit_enumeration(o, p, type); break;
+        case amc::TypeKind::ALIAS:  emit_alias(o, p, type); break;
+        case amc::TypeKind::POINTER:
             o.print("pub type {} = {};\n", p.name_of(type.id), p.pointer_rust_type(type));
             break;
-        case amc::TypeKind::array:          emit_opaque(o, p, type); break;
-        case amc::TypeKind::namespace_type: break;
-        case amc::TypeKind::primitive:      break;
-        case amc::TypeKind::function:       break;
+        case amc::TypeKind::ARRAY:     emit_opaque(o, p, type); break;
+        case amc::TypeKind::NAMESPACE: break;
+        case amc::TypeKind::PRIMITIVE: break;
+        case amc::TypeKind::FUNC:      break;
     }
 }
 
@@ -505,8 +506,8 @@ void emit_functions(Output &o, const Projector &p) {
     o.print("#[doc(hidden)]\npub mod raw {{\n    use super::*;\n");
     for (const auto *function : free_functions) {
         Signature signature;
-        for (size_t i = 0; i < function->parameters.size(); ++i) {
-            const auto &parameter = function->parameters[i];
+        for (size_t i = 0; i < function->params.size(); ++i) {
+            const auto &parameter = function->params[i];
             const std::string parameter_name =
                 parameter.name.empty() ? fmt::format("arg{}", i) : rust_field_ident(parameter.name);
             if (i != 0) {
@@ -518,9 +519,9 @@ void emit_functions(Output &o, const Projector &p) {
         }
         const int return_index = p.index_of(function->return_type);
         signature.returns_void = return_index >= 0
-                              && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::primitive
+                              && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::PRIMITIVE
                               && (p.m.types[static_cast<size_t>(return_index)].primitive_abi & 0xffu)
-                                     == static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
+                                     == static_cast<uint32_t>(amc::PrimitiveABIKind::AMC_VOID);
         signature.safe = p.is_safe_function(*function);
         if (linkable) o.print("    #[cfg_attr(abix_link, link(name = {}))]\n", rust_string(library));
         if (signature.returns_void)
@@ -572,7 +573,7 @@ void emit_owned(Output &o, const Projector &p) {
         const int index = p.index_of(record.type_id);
         if (index < 0) continue;
         const amc::Type &type = p.m.types[static_cast<size_t>(index)];
-        if (type.kind != amc::TypeKind::record) continue;
+        if (type.kind != amc::TypeKind::RECORD) continue;
         const amc::Function *destroy = p.function_by_signature(record.destroy);
         if (!destroy) continue;
         const amc::Function *create = p.function_by_signature(record.create);
@@ -586,8 +587,8 @@ void emit_owned(Output &o, const Projector &p) {
         o.print("    }}\n");
         if (create) {
             std::string params, args;
-            for (size_t i = 0; i < create->parameters.size(); ++i) {
-                const auto &parameter = create->parameters[i];
+            for (size_t i = 0; i < create->params.size(); ++i) {
+                const auto &parameter = create->params[i];
                 const std::string parameter_name =
                     parameter.name.empty() ? fmt::format("arg{}", i) : rust_field_ident(parameter.name);
                 if (i != 0) {
@@ -612,7 +613,7 @@ void emit_owned(Output &o, const Projector &p) {
         if (const auto *exposed = p.exposed_for(record.type_id)) {
             for (const auto &method : exposed->methods) {
                 const amc::Function *function = p.function_by_signature(method.abi);
-                if (function == nullptr || function->parameters.empty()) continue;
+                if (function == nullptr || function->params.empty()) continue;
                 const std::string method_name = rust_field_ident(method.name);
                 if (method_name == "create"
                     || method_name == "destroy"
@@ -622,8 +623,8 @@ void emit_owned(Output &o, const Projector &p) {
                     || method_name == "into_raw")
                     continue;
                 std::string params, args;
-                for (size_t i = 1; i < function->parameters.size(); ++i) {
-                    const auto &parameter = function->parameters[i];
+                for (size_t i = 1; i < function->params.size(); ++i) {
+                    const auto &parameter = function->params[i];
                     const std::string parameter_name =
                         parameter.name.empty() ? fmt::format("arg{}", i - 1) : rust_field_ident(parameter.name);
                     params += fmt::format(", {}: {}", parameter_name, p.field_type(parameter.type_id));
@@ -631,9 +632,9 @@ void emit_owned(Output &o, const Projector &p) {
                 }
                 const int return_index = p.index_of(function->return_type);
                 const bool returns_void = return_index >= 0
-                                       && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::primitive
+                                       && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::PRIMITIVE
                                        && (p.m.types[static_cast<size_t>(return_index)].primitive_abi & 0xffu)
-                                              == static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
+                                              == static_cast<uint32_t>(amc::PrimitiveABIKind::AMC_VOID);
                 if (returns_void)
                     o.print("    pub fn {}(&mut self{}) {{ amc_ffi!({}(self.ptr{})); }}\n", method_name, params,
                         rust_ident(function->name), args);
@@ -727,9 +728,9 @@ void emit_interface_proxies(Output &o, const Projector &p) {
                 params += ", " + p.field_type(method->parameters[i].type_id);
             const int return_index = p.index_of(method->return_type);
             const bool returns_void = return_index >= 0
-                                   && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::primitive
+                                   && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::PRIMITIVE
                                    && (p.m.types[static_cast<size_t>(return_index)].primitive_abi & 0xffu)
-                                          == static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
+                                          == static_cast<uint32_t>(amc::PrimitiveABIKind::AMC_VOID);
             o.print("    {}: unsafe extern \"C\" fn({}){},\n", rust_field_ident(method->name), params,
                 returns_void ? "" : " -> " + p.field_type(method->return_type));
         }
@@ -778,9 +779,9 @@ void emit_interface_proxies(Output &o, const Projector &p) {
                 params += ", " + p.field_type(method->parameters[i].type_id);
             const int return_index = p.index_of(method->return_type);
             const bool returns_void = return_index >= 0
-                                   && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::primitive
+                                   && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::PRIMITIVE
                                    && (p.m.types[static_cast<size_t>(return_index)].primitive_abi & 0xffu)
-                                          == static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
+                                          == static_cast<uint32_t>(amc::PrimitiveABIKind::AMC_VOID);
             o.print(
                 "            {}: core::mem::transmute::<usize, unsafe extern \"C\" fn({}){}>(entries[Self::{}_SLOT as "
                 "usize]),\n",
@@ -803,9 +804,9 @@ void emit_interface_proxies(Output &o, const Projector &p) {
             }
             const int return_index = p.index_of(method->return_type);
             const bool returns_void = return_index >= 0
-                                   && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::primitive
+                                   && p.m.types[static_cast<size_t>(return_index)].kind == amc::TypeKind::PRIMITIVE
                                    && (p.m.types[static_cast<size_t>(return_index)].primitive_abi & 0xffu)
-                                          == static_cast<uint32_t>(amc::PrimitiveAbiKind::void_);
+                                          == static_cast<uint32_t>(amc::PrimitiveABIKind::AMC_VOID);
             if (returns_void)
                 o.print("    pub fn {}(&self{}) {{ unsafe {{ (self.{})(self.object{}) }} }}\n",
                     rust_field_ident(method->name), params.empty() ? "" : ", " + params, rust_field_ident(method->name),
@@ -819,14 +820,14 @@ void emit_interface_proxies(Output &o, const Projector &p) {
     }
 }
 
-const amc::ErrorSet *find_error_set(const amc::AbiModule &module, amc::Hash128 id) {
+const amc::ErrorSet *find_error_set(const amc::ABIModule &module, amc::Hash128 id) {
     if (id.lo == 0 && id.hi == 0) return nullptr;
     for (const auto &set : module.error_sets)
         if (set.id == id) return &set;
     return nullptr;
 }
 
-const amc::ErrorCode *find_error_code(const amc::AbiModule &module, const amc::ErrorSet &set, int32_t value) {
+const amc::ErrorCode *find_error_code(const amc::ABIModule &module, const amc::ErrorSet &set, int32_t value) {
     for (uint32_t i = 0; i < set.code_count; ++i) {
         const auto &code = module.error_codes[set.code_begin + i];
         if (code.value == value) return &code;
@@ -884,13 +885,13 @@ void emit_errors(Output &o, const Projector &p) {
         const std::string function_rust = rust_ident(function.name);
         const amc::ErrorSet *set = find_error_set(p.m, record.error_set);
         const std::string error_type = set != nullptr ? pascal_ident(set->name) : pascal_ident(function.name) + "Error";
-        if (record.status_source == amc::StatusSource::return_field) {
+        if (record.status_source == amc::StatusSource::RETURN_FIELD) {
             // A Result return: the status and value are fields of the returned
             // record, so no out-parameter is involved.
             const int result_index = p.index_of(function.return_type);
             if (result_index < 0) continue;
             const amc::Type &result = p.m.types[static_cast<size_t>(result_index)];
-            if (result.kind != amc::TypeKind::record) continue;
+            if (result.kind != amc::TypeKind::RECORD) continue;
             if (record.status_parameter >= result.field_count || record.value_parameter >= result.field_count) continue;
             const amc::Field &status_field = p.m.fields[result.field_begin + record.status_parameter];
             const amc::Field &value_field = p.m.fields[result.field_begin + record.value_parameter];
@@ -900,8 +901,8 @@ void emit_errors(Output &o, const Projector &p) {
             const std::string value_access = rust_field_ident(value_field.name);
 
             std::string params, call_args;
-            for (size_t i = 0; i < function.parameters.size(); ++i) {
-                const auto &parameter = function.parameters[i];
+            for (size_t i = 0; i < function.params.size(); ++i) {
+                const auto &parameter = function.params[i];
                 const std::string parameter_name =
                     parameter.name.empty() ? fmt::format("arg{}", i) : rust_field_ident(parameter.name);
                 if (i != 0) {
@@ -927,20 +928,20 @@ void emit_errors(Output &o, const Projector &p) {
             o.print("    }} else {{\n        Err({}(result.{}))\n    }}\n}}\n", error_type, status_access);
             continue;
         }
-        if (record.status_source != amc::StatusSource::return_value) continue;   // return-value status only
+        if (record.status_source != amc::StatusSource::RETURN_VALUE) continue;   // return-value status only
         if (record.value_parameter == UINT32_MAX) continue;
-        if (record.value_parameter >= function.parameters.size()) continue;
-        const int value_index = p.index_of(function.parameters[record.value_parameter].type_id);
+        if (record.value_parameter >= function.params.size()) continue;
+        const int value_index = p.index_of(function.params[record.value_parameter].type_id);
         if (value_index < 0) continue;
         const amc::Type &value_type = p.m.types[static_cast<size_t>(value_index)];
-        if (value_type.kind != amc::TypeKind::pointer) continue;
+        if (value_type.kind != amc::TypeKind::POINTER) continue;
         const std::string value_rust = p.pointer_pointee_rust(value_type);
         const std::string status_rust = p.field_type(function.return_type);
 
         std::string params, call_args;
-        for (size_t i = 0; i < function.parameters.size(); ++i) {
+        for (size_t i = 0; i < function.params.size(); ++i) {
             const bool is_value = (i == record.value_parameter);
-            const auto &parameter = function.parameters[i];
+            const auto &parameter = function.params[i];
             const std::string parameter_name =
                 parameter.name.empty() ? fmt::format("arg{}", i) : rust_field_ident(parameter.name);
             if (!call_args.empty()) call_args += ", ";
@@ -976,7 +977,7 @@ void emit_errors(Output &o, const Projector &p) {
 // A successful instantiation is not by itself a contract match.
 void emit_lowerings(Output &o, const Projector &p) {
     for (const auto &record : p.m.lowerings) {
-        if (record.status != static_cast<uint32_t>(amc::LoweringStatus::needs_adapter)) continue;
+        if (record.status != static_cast<uint32_t>(amc::LoweringStatus::NEEDS_ADAPTER)) continue;
         const int concrete = p.index_of(record.type_id);
         const int canonical = p.index_of(record.contract_type);
         if (concrete < 0 || canonical < 0) continue;
@@ -1044,7 +1045,7 @@ void emit_range_adapters(Output &o, const Projector &p) {
 void emit_abi_checks(Output &o, const Projector &p) {
     bool any = false;
     for (const auto &type : p.m.types) {
-        if (type.kind != amc::TypeKind::record || type.name.empty()) continue;
+        if (type.kind != amc::TypeKind::RECORD || type.name.empty()) continue;
         if (!is_projectable_name(type.name)) continue;
         if (!is_rust_identifier(p.name_of(type.id))) continue;
         if (!any) {
@@ -1067,7 +1068,7 @@ void emit_abi_checks(Output &o, const Projector &p) {
     }
 }
 
-bool emit_metadata_region(Output &o, const amc::AbiModule &m, std::string &error) {
+bool emit_metadata_region(Output &o, const amc::ABIModule &m, std::string &error) {
     amc::MetadataOptions options;
     std::vector<uint8_t> region;
     if (!amc::build_metadata_region(m, options, region, error)) return false;
@@ -1097,19 +1098,19 @@ std::string primitive_rust_type(const amc::Type &type) {
 std::string primitive_rust_type(uint32_t primitive_abi) {
     const uint32_t kind = primitive_abi & 0xffu;
     const uint32_t width = (primitive_abi & amc::primitive_width_mask) >> amc::primitive_width_shift;
-    switch (static_cast<amc::PrimitiveAbiKind>(kind)) {
-        case amc::PrimitiveAbiKind::void_:          return "()";
-        case amc::PrimitiveAbiKind::bool_:          return "bool";
-        case amc::PrimitiveAbiKind::char_signed:
-        case amc::PrimitiveAbiKind::char_unsigned:  return "core::ffi::c_char";
-        case amc::PrimitiveAbiKind::schar:          return "core::ffi::c_schar";
-        case amc::PrimitiveAbiKind::uchar:          return "core::ffi::c_uchar";
-        case amc::PrimitiveAbiKind::char8:          return "u8";
-        case amc::PrimitiveAbiKind::char16:         return "u16";
-        case amc::PrimitiveAbiKind::char32:         return "u32";
-        case amc::PrimitiveAbiKind::wchar_signed:   return width == 2 ? "i16" : "i32";
-        case amc::PrimitiveAbiKind::wchar_unsigned: return width == 2 ? "u16" : "u32";
-        case amc::PrimitiveAbiKind::sint:
+    switch (static_cast<amc::PrimitiveABIKind>(kind)) {
+        case amc::PrimitiveABIKind::AMC_VOID:           return "()";
+        case amc::PrimitiveABIKind::AMC_BOOL:           return "bool";
+        case amc::PrimitiveABIKind::AMC_CHAR_SIGNED:
+        case amc::PrimitiveABIKind::AMC_CHAR_UNSIGNED:  return "core::ffi::c_char";
+        case amc::PrimitiveABIKind::AMC_SCHAR:          return "core::ffi::c_schar";
+        case amc::PrimitiveABIKind::AMC_UCHAR:          return "core::ffi::c_uchar";
+        case amc::PrimitiveABIKind::AMC_CHAR8:          return "u8";
+        case amc::PrimitiveABIKind::AMC_CHAR16:         return "u16";
+        case amc::PrimitiveABIKind::AMC_CHAR32:         return "u32";
+        case amc::PrimitiveABIKind::AMC_WCHAR_SIGNED:   return width == 2 ? "i16" : "i32";
+        case amc::PrimitiveABIKind::AMC_WCHAR_UNSIGNED: return width == 2 ? "u16" : "u32";
+        case amc::PrimitiveABIKind::AMC_SINT:
             switch (width) {
                 case 1:  return "i8";
                 case 2:  return "i16";
@@ -1118,7 +1119,7 @@ std::string primitive_rust_type(uint32_t primitive_abi) {
                 case 4:
                 default: return "core::ffi::c_int";
             }
-        case amc::PrimitiveAbiKind::uint:
+        case amc::PrimitiveABIKind::AMC_UINT:
             switch (width) {
                 case 1:  return "u8";
                 case 2:  return "u16";
@@ -1127,26 +1128,26 @@ std::string primitive_rust_type(uint32_t primitive_abi) {
                 case 4:
                 default: return "core::ffi::c_uint";
             }
-        case amc::PrimitiveAbiKind::floating: {
+        case amc::PrimitiveABIKind::AMC_FLOAT: {
             switch (static_cast<amc::FloatFormat>(
                 (primitive_abi & amc::primitive_format_mask) >> amc::primitive_format_shift)) {
-                case amc::FloatFormat::ieee32:            return "core::ffi::c_float";
-                case amc::FloatFormat::ieee64:            return "core::ffi::c_double";
-                case amc::FloatFormat::ieee16:            return "u16";
-                case amc::FloatFormat::bf16:              return "u16";
-                case amc::FloatFormat::ieee128:           return "u128";
-                case amc::FloatFormat::x87_80:            return "u128";
-                case amc::FloatFormat::ppc_double_double: return "u128";
-                case amc::FloatFormat::none:
+                case amc::FloatFormat::IEEE32:            return "core::ffi::c_float";
+                case amc::FloatFormat::IEEE64:            return "core::ffi::c_double";
+                case amc::FloatFormat::IEEE16:            return "u16";
+                case amc::FloatFormat::BF16:              return "u16";
+                case amc::FloatFormat::IEEE128:           return "u128";
+                case amc::FloatFormat::X87_80:            return "u128";
+                case amc::FloatFormat::PPC_DOUBLE_DOUBLE: return "u128";
+                case amc::FloatFormat::NONE:
                 default:                                  return "core::ffi::c_double";
             }
         }
-        case amc::PrimitiveAbiKind::none:
-        default:                          return "core::ffi::c_void";
+        case amc::PrimitiveABIKind::AMC_NONE:
+        default:                              return "core::ffi::c_void";
     }
 }
 
-std::string generate_projection(const amc::AbiModule &module, const amc::ir::LoweringResult *lowering) {
+std::string generate_projection(const amc::ABIModule &module, const amc::ir::LoweringResult *lowering) {
     Projector projector(module, lowering);
     fmt::memory_buffer buffer;
     Output o{buffer};
@@ -1206,7 +1207,7 @@ int run_backend(const char *input, const char *output) {
         fmt::print(stderr, "{}\n", error);
         return 1;
     }
-    amc::AbiModule module = std::move(artifact.abi);
+    amc::ABIModule module = std::move(artifact.abi);
     amc::ir::LoweringResult lowering = std::move(artifact.lowering);
     std::string lowering_error;
     if (!amc::ir::apply_lowering_contracts(lowering, module, lowering_error)) {
@@ -1236,4 +1237,4 @@ int run_backend(const char *input, const char *output) {
     return 0;
 }
 
-}   // namespace amc::lang::rust
+}   // namespace skl::amc::lang::rust

@@ -21,7 +21,7 @@
 
 #include "SKL/AMC/Core/Core.h"
 
-namespace amc::util {
+namespace skl::amc::util {
 
 // Human-readable renderings of the numeric target/function enums, shared by
 // `amc-dump` and `amc-mcp` so both agree on the spelling.
@@ -36,6 +36,6 @@ const char *primitive_kind_name(uint32_t kind);
 const char *float_format_name(uint32_t format);
 const char *map_opcode_name(amc::MapOpcode opcode);
 
-}   // namespace amc::util
+}   // namespace skl::amc::util
 
 #endif   // AMC_UTIL_NAMES_H

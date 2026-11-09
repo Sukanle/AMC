@@ -26,7 +26,7 @@
 
 #include <fmt/format.h>
 
-namespace amc {
+namespace skl::amc {
 namespace {
 
 // Fixed wire offsets into the manifest.  Serialization is written field by
@@ -114,7 +114,7 @@ MetadataID metadata_content_id(const uint8_t *data, size_t size) {
 }
 
 bool build_metadata_region(
-    const AbiModule &module, const MetadataOptions &options, std::vector<uint8_t> &region, std::string &error) {
+    const ABIModule &module, const MetadataOptions &options, std::vector<uint8_t> &region, std::string &error) {
     error.clear();
 
     // --- names ---------------------------------------------------------
@@ -140,9 +140,9 @@ bool build_metadata_region(
         function_names[i] = add_name(module.functions[i].name);
     std::vector<std::vector<uint32_t>> parameter_names(module.functions.size());
     for (size_t f = 0; f < module.functions.size(); ++f) {
-        parameter_names[f].resize(module.functions[f].parameters.size());
-        for (size_t p = 0; p < module.functions[f].parameters.size(); ++p)
-            parameter_names[f][p] = add_name(module.functions[f].parameters[p].name);
+        parameter_names[f].resize(module.functions[f].params.size());
+        for (size_t p = 0; p < module.functions[f].params.size(); ++p)
+            parameter_names[f][p] = add_name(module.functions[f].params[p].name);
     }
     std::vector<uint32_t> symbol_names(module.symbols.size());
     for (size_t i = 0; i < module.symbols.size(); ++i)
@@ -191,17 +191,17 @@ bool build_metadata_region(
         record.calling_convention = function.calling_convention;
         record.flags = function.flags;
         record.parameter_begin = parameter_begin;
-        record.parameter_count = static_cast<uint32_t>(function.parameters.size());
+        record.parameter_count = static_cast<uint32_t>(function.params.size());
         record.name_offset = function_names[f];
         append_record(desc, &record, sizeof(record));
         parameter_begin += record.parameter_count;
     }
     for (size_t f = 0; f < module.functions.size(); ++f) {
         const auto &function = module.functions[f];
-        for (size_t p = 0; p < function.parameters.size(); ++p) {
+        for (size_t p = 0; p < function.params.size(); ++p) {
             MetadataParameterRecord record{};
-            record.type_id = function.parameters[p].type_id;
-            record.flags = function.parameters[p].flags;
+            record.type_id = function.params[p].type_id;
+            record.flags = function.params[p].flags;
             record.name_offset = parameter_names[f][p];
             append_record(desc, &record, sizeof(record));
         }
@@ -484,8 +484,8 @@ bool build_metadata_region(
         metadata_content_id(region.data() + desc_offset, static_cast<size_t>(region.size() - desc_offset));
 
     uint32_t flags = 0;
-    if (options.include_names) flags |= metadata_flag_value(MetadataFlag::has_names);
-    if (options.include_hash_index) flags |= metadata_flag_value(MetadataFlag::has_hash_index);
+    if (options.include_names) flags |= metadata_flag_value(MetadataFlag::HAS_NAMES);
+    if (options.include_hash_index) flags |= metadata_flag_value(MetadataFlag::HAS_HASH_INDEX);
 
     write_u32(region, kOffsetMagic, metadata_magic);
     write_u16(region, kOffsetVersionMajor, options.version_major);
@@ -557,8 +557,8 @@ bool read_metadata_header(const uint8_t *data, size_t size, MetadataHeader &head
         return false;
     }
 
-    const bool has_hash_index = (header.flags & metadata_flag_value(MetadataFlag::has_hash_index)) != 0;
-    const bool has_names = (header.flags & metadata_flag_value(MetadataFlag::has_names)) != 0;
+    const bool has_hash_index = (header.flags & metadata_flag_value(MetadataFlag::HAS_HASH_INDEX)) != 0;
+    const bool has_names = (header.flags & metadata_flag_value(MetadataFlag::HAS_NAMES)) != 0;
     if (has_hash_index) {
         if (header.hash_offset != header.desc_offset + header.desc_size
             || header.hash_size != static_cast<uint64_t>(header.type_count) * sizeof(MetadataHashRecord)
@@ -638,14 +638,14 @@ std::string metadata_header_to_json(const MetadataHeader &header) {
         "}}}}"
         "}}\n",
         header.version_major, header.version_minor, header.flags,
-        header.flags & metadata_flag_value(MetadataFlag::has_names),
-        header.flags & metadata_flag_value(MetadataFlag::has_hash_index), hash_string(header.build_id),
+        header.flags & metadata_flag_value(MetadataFlag::HAS_NAMES),
+        header.flags & metadata_flag_value(MetadataFlag::HAS_HASH_INDEX), hash_string(header.build_id),
         hash_string(header.metadata_id), header.hash_algorithm, header.hash_version, header.type_count,
         header.field_count, header.function_count, header.parameter_count, header.symbol_count, header.desc_offset,
         header.desc_size, header.hash_offset, header.hash_size, header.names_offset, header.names_size);
 }
 
-std::string metadata_meta_document(const AbiModule &module, const MetadataHeader &header) {
+std::string metadata_meta_document(const ABIModule &module, const MetadataHeader &header) {
     return fmt::format(
         "[metadata]\n"
         "build_id = \"{}\"\n"
@@ -667,19 +667,19 @@ std::string metadata_meta_document(const AbiModule &module, const MetadataHeader
         "abi_hash = \"{}\"\n",
         hash_string(header.build_id), hash_string(header.metadata_id), header.version_major, header.hash_algorithm,
         header.hash_version, header.type_count, header.field_count, header.function_count, header.parameter_count,
-        header.symbol_count, header.flags & metadata_flag_value(MetadataFlag::has_names),
-        header.flags & metadata_flag_value(MetadataFlag::has_hash_index), json_escape(module.package_name),
+        header.symbol_count, header.flags & metadata_flag_value(MetadataFlag::HAS_NAMES),
+        header.flags & metadata_flag_value(MetadataFlag::HAS_HASH_INDEX), json_escape(module.package_name),
         json_escape(module.package_version), hash_string(abi_hash(module)));
 }
 
-bool module_from_region(const uint8_t *data, size_t size, AbiModule &module, std::string &error) {
+bool module_from_region(const uint8_t *data, size_t size, ABIModule &module, std::string &error) {
     error.clear();
-    module = AbiModule{};
+    module = ABIModule{};
     MetadataHeader header;
     if (!read_metadata_header(data, size, header, error)) return false;
 
     const auto name_at = [&](uint32_t offset) -> std::string {
-        if ((header.flags & metadata_flag_value(MetadataFlag::has_names)) == 0) return {};
+        if ((header.flags & metadata_flag_value(MetadataFlag::HAS_NAMES)) == 0) return {};
         if (offset == 0) return {};
         const uint64_t begin = header.names_offset + offset;
         if (begin >= size) return {};
@@ -763,7 +763,7 @@ bool module_from_region(const uint8_t *data, size_t size, AbiModule &module, std
         const auto &range = ranges[i];
         const uint32_t begin = std::min(range.begin, static_cast<uint32_t>(parameters.size()));
         const uint32_t end = std::min(begin + range.count, static_cast<uint32_t>(parameters.size()));
-        module.functions[i].parameters.assign(parameters.begin() + begin, parameters.begin() + end);
+        module.functions[i].params.assign(parameters.begin() + begin, parameters.begin() + end);
     }
 
     module.symbols.reserve(header.symbol_count);
@@ -780,7 +780,7 @@ bool module_from_region(const uint8_t *data, size_t size, AbiModule &module, std
     return true;
 }
 
-bool module_from_region(const std::vector<uint8_t> &region, AbiModule &module, std::string &error) {
+bool module_from_region(const std::vector<uint8_t> &region, ABIModule &module, std::string &error) {
     return module_from_region(region.data(), region.size(), module, error);
 }
 
@@ -880,7 +880,7 @@ bool read_ownership_contracts(
     for (uint32_t i = 0; i < count; ++i) {
         MetadataOwnershipRecord record{};
         memcpy(&record, records + static_cast<size_t>(i) * sizeof(record), sizeof(record));
-        if (record.target_kind > 1 || record.mode > static_cast<uint32_t>(OwnershipMode::copy)) {
+        if (record.target_kind > 1 || record.mode > static_cast<uint32_t>(OwnershipMode::COPY)) {
             error = "invalid ownership contract record";
             return false;
         }
@@ -927,7 +927,7 @@ bool read_error_contracts(
     for (uint32_t i = 0; i < count; ++i) {
         MetadataErrorRecord record{};
         memcpy(&record, records + static_cast<size_t>(i) * sizeof(record), sizeof(record));
-        if (record.status_source > static_cast<uint32_t>(StatusSource::return_field) || record.domain == 0) {
+        if (record.status_source > static_cast<uint32_t>(StatusSource::RETURN_FIELD) || record.domain == 0) {
             error = "invalid error contract record";
             return false;
         }
@@ -982,9 +982,9 @@ bool read_lowering_contracts(
             error = "lowering contract type index is out of range";
             return false;
         }
-        if (record.kind > static_cast<uint32_t>(LoweringKind::opaque)
-            || record.status > static_cast<uint32_t>(LoweringStatus::unsupported)
-            || record.reason > static_cast<uint32_t>(LoweringReason::layout)) {
+        if (record.kind > static_cast<uint32_t>(LoweringKind::OPAQUE)
+            || record.status > static_cast<uint32_t>(LoweringStatus::UNSUPPORTED)
+            || record.reason > static_cast<uint32_t>(LoweringReason::LAYOUT)) {
             error = "invalid lowering contract record";
             return false;
         }
@@ -1351,7 +1351,7 @@ bool verify_target_abi(
     TargetDescription target;
     if (!read_target_description(data, size, target, error)) return false;
     if (!target.present) {
-        out.status = TargetVerificationStatus::unverifiable;
+        out.status = TargetVerificationStatus::UNVERIFIABLE;
         out.reasons.push_back("region carries no target description");
         return true;
     }
@@ -1382,7 +1382,7 @@ bool verify_target_abi(
         for (uint32_t i = 0; i < header.type_count; ++i) {
             MetadataTypeRecord record{};
             memcpy(&record, base + static_cast<size_t>(i) * sizeof(record), sizeof(record));
-            if (record.kind == static_cast<uint32_t>(TypeKind::pointer) && record.size != pointer_bytes) {
+            if (record.kind == static_cast<uint32_t>(TypeKind::POINTER) && record.size != pointer_bytes) {
                 incompatible = true;
                 out.reasons.push_back("a pointer type is not pointer-sized");
                 break;
@@ -1391,11 +1391,11 @@ bool verify_target_abi(
     }
 
     if (incompatible)
-        out.status = TargetVerificationStatus::incompatible;
+        out.status = TargetVerificationStatus::INCOMPATIBLE;
     else if (unverifiable)
-        out.status = TargetVerificationStatus::unverifiable;
+        out.status = TargetVerificationStatus::UNVERIFIABLE;
     else
-        out.status = TargetVerificationStatus::compatible;
+        out.status = TargetVerificationStatus::COMPATIBLE;
     return true;
 }
 
@@ -1414,7 +1414,7 @@ bool verify_abi(const uint8_t *data, size_t size, const TargetExpectation &expec
     TargetDescription target;
     if (!read_target_description(data, size, target, error)) return false;
     if (!target.present) {
-        out.platform = TargetVerificationStatus::unverifiable;
+        out.platform = TargetVerificationStatus::UNVERIFIABLE;
         out.reasons.push_back("no target description");
     } else {
         bool incompatible = false, unverifiable = false;
@@ -1433,9 +1433,9 @@ bool verify_abi(const uint8_t *data, size_t size, const TargetExpectation &expec
         compare(expected.target_abi, target.target_abi, "abi");
         compare(expected.pointer_bits, target.pointer_bits, "pointer width");
         compare(expected.endianness, target.endianness, "endianness");
-        out.platform = incompatible ? TargetVerificationStatus::incompatible
-                     : unverifiable ? TargetVerificationStatus::unverifiable
-                                    : TargetVerificationStatus::compatible;
+        out.platform = incompatible ? TargetVerificationStatus::INCOMPATIBLE
+                     : unverifiable ? TargetVerificationStatus::UNVERIFIABLE
+                                    : TargetVerificationStatus::COMPATIBLE;
     }
 
     // --- layout consistency (region-internal) ---
@@ -1465,7 +1465,7 @@ bool verify_abi(const uint8_t *data, size_t size, const TargetExpectation &expec
         for (uint32_t i = 0; i < header.type_count; ++i) {
             MetadataTypeRecord record{};
             memcpy(&record, base + static_cast<size_t>(i) * sizeof(record), sizeof(record));
-            if (record.kind != static_cast<uint32_t>(TypeKind::pointer)) continue;
+            if (record.kind != static_cast<uint32_t>(TypeKind::POINTER)) continue;
             if (pointer_bytes == 0)
                 unverifiable = true;
             else if (record.size != pointer_bytes) {
@@ -1489,15 +1489,15 @@ bool verify_abi(const uint8_t *data, size_t size, const TargetExpectation &expec
                 break;
             }
         }
-        out.layout = incompatible ? TargetVerificationStatus::incompatible
-                   : unverifiable ? TargetVerificationStatus::unverifiable
-                                  : TargetVerificationStatus::compatible;
+        out.layout = incompatible ? TargetVerificationStatus::INCOMPATIBLE
+                   : unverifiable ? TargetVerificationStatus::UNVERIFIABLE
+                                  : TargetVerificationStatus::COMPATIBLE;
     }
 
     // --- calling convention ---
     {
         if (header.function_count == 0) {
-            out.calling_convention = TargetVerificationStatus::unverifiable;
+            out.calling_convention = TargetVerificationStatus::UNVERIFIABLE;
             out.reasons.push_back("no functions to verify");
         } else {
             const uint8_t *fn_base = data
@@ -1514,13 +1514,13 @@ bool verify_abi(const uint8_t *data, size_t size, const TargetExpectation &expec
                     incompatible = true;
             }
             if (incompatible) {
-                out.calling_convention = TargetVerificationStatus::incompatible;
+                out.calling_convention = TargetVerificationStatus::INCOMPATIBLE;
                 out.reasons.push_back("calling convention mismatch");
             } else if (missing) {
-                out.calling_convention = TargetVerificationStatus::unverifiable;
+                out.calling_convention = TargetVerificationStatus::UNVERIFIABLE;
                 out.reasons.push_back("a function has no calling convention");
             } else {
-                out.calling_convention = TargetVerificationStatus::compatible;
+                out.calling_convention = TargetVerificationStatus::COMPATIBLE;
             }
         }
     }
@@ -1532,7 +1532,7 @@ bool verify_abi(const std::vector<uint8_t> &region, const TargetExpectation &exp
     return verify_abi(region.data(), region.size(), expected, out, error);
 }
 
-bool load_module_source(const std::string &path, AbiModule &module, std::string &error) {
+bool load_module_source(const std::string &path, ABIModule &module, std::string &error) {
     error.clear();
     std::ifstream input(path, std::ios::binary);
     if (!input) {
@@ -1548,4 +1548,4 @@ bool load_module_source(const std::string &path, AbiModule &module, std::string 
     return read_abix(path, module, error);
 }
 
-}   // namespace amc
+}   // namespace skl::amc

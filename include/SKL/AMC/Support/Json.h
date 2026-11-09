@@ -25,7 +25,7 @@
 
 #include "ljson/json.h"
 
-namespace amc {
+namespace skl::amc {
 
 class Json {
 public:
@@ -34,12 +34,12 @@ public:
     using Object = std::vector<Member>;
 
     enum class Type {
-        null,
-        boolean,
-        number,
-        string,
-        array,
-        object
+        NULL_,
+        BOOLEAN,
+        NUMBER,
+        STRING,
+        ARRAY,
+        OBJECT,
     };
 
     Json();
@@ -111,6 +111,6 @@ private:
 
 bool parse_json(std::string_view text, Json &value, std::string &error);
 
-}   // namespace amc
+}   // namespace skl::amc
 
 #endif

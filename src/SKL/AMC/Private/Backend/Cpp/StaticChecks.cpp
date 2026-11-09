@@ -22,7 +22,7 @@
 #include <cstdint>
 #include <string>
 
-namespace amc::lang::backend::cpp {
+namespace skl::amc::lang::backend::cpp {
 
 void Emit::static_checks(const char *output) {
     // ABI check header (AI-P2 clangd integration): compile-time ABI assertions
@@ -62,11 +62,11 @@ void Emit::static_checks(const char *output) {
         if (!is_cpp_qualified_name(type.name)) continue;
         const std::string id = fmt::format("{}_ABIX", cpp_name(type.name));
         check.print(
-            "static_assert(sizeof({0}) == ::amc_generated::{1}::size, "
+            "static_assert(sizeof({0}) == ::skl::amc::generated::{1}::size, "
             "\"ABIX ABI check: size mismatch for {0}\");\n",
             type.name, id);
         check.print(
-            "static_assert(alignof({0}) == ::amc_generated::{1}::align, "
+            "static_assert(alignof({0}) == ::skl::amc::generated::{1}::align, "
             "\"ABIX ABI check: align mismatch for {0}\");\n",
             type.name, id);
         // An exposed type is opaque and may hold private members, for which
@@ -77,7 +77,7 @@ void Emit::static_checks(const char *output) {
             if (!is_cpp_identifier(field.name)) continue;
             if ((field.flags & amc::field_bitfield) != 0) continue;
             check.print(
-                "static_assert(offsetof({0}, {2}) == ::amc_generated::{1}::{2}_offset, "
+                "static_assert(offsetof({0}, {2}) == ::skl::amc::generated::{1}::{2}_offset, "
                 "\"ABIX ABI check: offset mismatch for {0}::{2}\");\n",
                 type.name, id, field.name);
             const uint32_t width = field_type_size(field.type_id);
@@ -90,4 +90,4 @@ void Emit::static_checks(const char *output) {
     }
 }
 
-}   // namespace amc::lang::backend::cpp
+}   // namespace skl::amc::lang::backend::cpp

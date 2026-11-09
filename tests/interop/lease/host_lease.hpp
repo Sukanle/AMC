@@ -24,7 +24,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace amc::test::lease {
+namespace skl::amc::test::lease {
 
 class HostLeaseRegistry {
 public:
@@ -73,6 +73,6 @@ private:
     std::vector<Registry *> _registries;
 };
 
-}   // namespace amc::test::lease
+}   // namespace skl::amc::test::lease
 
 #endif   // AMC_TESTS_INTEROP_LEASE_HOST_LEASE_HPP

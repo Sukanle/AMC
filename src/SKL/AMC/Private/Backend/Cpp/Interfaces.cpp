@@ -21,7 +21,7 @@
 #include <string>
 #include <vector>
 
-namespace amc::lang::backend::cpp {
+namespace skl::amc::lang::backend::cpp {
 
 void Emit::contract(const amc::InterfaceRecord &record) {
     const std::string name = cpp_name(record.name);
@@ -138,4 +138,4 @@ void Emit::interfaces() {
         contract(record);
 }
 
-}   // namespace amc::lang::backend::cpp
+}   // namespace skl::amc::lang::backend::cpp

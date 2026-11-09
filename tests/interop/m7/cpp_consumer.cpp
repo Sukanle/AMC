@@ -23,19 +23,21 @@ int main() {
     assert(l3_session_emit(session, 7) == 0);
     assert(total == 7);
 
-    auto ok = amc_generated::l3_session_div_result(session, 10, 2);
+    auto ok = skl::amc::generated::l3_session_div_result(session, 10, 2);
     assert(ok && ok.value == 5);
-    auto err = amc_generated::l3_session_div_result(session, 10, 0);
+    auto err = skl::amc::generated::l3_session_div_result(session, 10, 0);
     assert(!err && err.error.value == 1);
-    assert(std::string(amc_generated::M7Errors::name(err.error.value)) == "div_zero");
+    assert(std::string(skl::amc::generated::M7Errors::name(err.error.value)) == "div_zero");
 
     ::skl::abix::poly::InterfaceMethod methods[] = {
-        {amc_generated::L3SessionOpsTraits::signatures[0], ::skl::abix::poly::interface_entry(&get_adapter), 0, 0},
-        {amc_generated::L3SessionOpsTraits::signatures[1], ::skl::abix::poly::interface_entry(&set_adapter), 1, 0}
+        {skl::amc::generated::L3SessionOpsTraits::signatures[0], ::skl::abix::poly::interface_entry(&get_adapter), 0,
+         0},
+        {skl::amc::generated::L3SessionOpsTraits::signatures[1], ::skl::abix::poly::interface_entry(&set_adapter), 1,
+         0}
     };
-    amc_generated::L3SessionOps proxy;
-    assert(proxy.bind_methods(
-               amc_generated::L3SessionOpsTraits::id, amc_generated::L3SessionOpsTraits::version, methods, 2, session)
+    skl::amc::generated::L3SessionOps proxy;
+    assert(proxy.bind_methods(skl::amc::generated::L3SessionOpsTraits::id,
+               skl::amc::generated::L3SessionOpsTraits::version, methods, 2, session)
            == ::skl::abix::poly::InterfaceStatus::ok);
     assert(proxy.l3_session_set(9) == 0);
     assert(proxy.l3_session_get() == 9);

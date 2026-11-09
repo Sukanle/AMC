@@ -19,10 +19,10 @@
 
 int main() {
     skl::abix::runtime::Registry<128> registry;
-    if (registry.register_module(amc_generated::amc_module) != skl::abix::runtime::RegisterStatus::ok) return 1;
-    return registry.type_of<amc::AbiModule>()
-                && registry.type_of<amc::MapOperation>()
-                && registry.type_of<amc::CompatibilityRecord>()
+    if (registry.register_module(skl::amc::generated::amc_module) != skl::abix::runtime::RegisterStatus::ok) return 1;
+    return registry.type_of<skl::amc::ABIModule>()
+                && registry.type_of<skl::amc::MapOperation>()
+                && registry.type_of<skl::amc::CompatibilityRecord>()
              ? 0
              : 2;
 }

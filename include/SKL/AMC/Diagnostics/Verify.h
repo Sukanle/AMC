@@ -18,19 +18,19 @@
 
 #include "SKL/AMC/Diagnostics/Diagnostics.h"
 
-namespace amc {
+namespace skl::amc {
 
-struct AbiModule;
+struct ABIModule;
 struct VerifyResult;
 
-}   // namespace amc
+}   // namespace skl::amc
 
-namespace amc::diagnostics {
+namespace skl::amc::diagnostics {
 
 // Converts ABI compatibility drift into the shared diagnostic model. Source
 // locations come from the contract's Source Origin records when available.
-DiagnosticList from_verify_result(const AbiModule &contract, const VerifyResult &result);
+DiagnosticList from_verify_result(const ABIModule &contract, const VerifyResult &result);
 
-}   // namespace amc::diagnostics
+}   // namespace skl::amc::diagnostics
 
 #endif   // AMC_DIAGNOSTICS_VERIFY_H

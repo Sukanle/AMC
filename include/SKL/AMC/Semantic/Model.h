@@ -30,7 +30,111 @@
 //
 // The model is populated from Clang; AMC never re-implements template argument
 // deduction, overload resolution, SFINAE, constraints or constexpr evaluation.
-namespace amc::semantic {
+namespace skl::amc::semantic {
+
+enum class DeclarationKind : uint32_t {
+    NAMESPACE,
+    RECORD,
+    ENUM,
+    FIELD,
+    FUNC,
+    METHOD,
+    CREATE,
+    DESTORY,
+    TEMPLATE,
+    CONCEPT,
+    TYPEDEF,
+    VARIABLE,
+};
+
+enum class SemanticTypeKind : uint32_t {
+    BUILTIN,
+    POINTER,
+    LVREF,   // lvalue reference,
+    RVREF,   // rvalue reference,
+    ARRAY,
+    RECORD,
+    ENUM,
+    FUNC,
+    MEMPTR,     // member pointer
+    TEMPARAM,   // template parameter
+    TEMINST,    // template instance
+    DEPEND,
+    UNKNOWN,
+};
+
+// Ownership is an interaction-level property, not a type property. STL mapping
+// is one source of these facts; it never defines lifetime on its own.
+enum class OwnershipKind : uint32_t {
+    UNSPECIFIED,
+    BORROWED,
+    OWNED,
+    SHARED,
+    OPAQUE,
+    TRANSFERRED,
+};
+
+enum class LifetimeKind : uint32_t {
+    UNKNOWN,
+    STATIC,
+    CALLER,
+    OWNER,
+    SCOPE,
+};
+
+enum class InteractionKind : uint32_t {
+    PARAM,
+    RETURN,
+};
+
+enum class SemanticFuncKind : uint32_t {
+    FREE,
+    MEMBER,
+    CREATE,
+    DESTORY,
+    OPETATOR,
+    CONVERSION,
+};
+
+enum class TemplateTypeKind : uint32_t {
+    FUNC,
+    CLASS,
+    ALIAS,
+    VARIABLE
+};
+
+enum class TemplateParamKind : uint32_t {
+    TYPE,
+    NON,
+    TEMPLATE,   // template template
+};
+
+enum class TemplateArgKind : uint32_t {
+    TYPE,
+    INTEGRAL,
+    TEMPLATE,
+    PACK,
+    OTHER,
+};
+
+enum class InstOrigin : uint32_t {
+    IMPLICIT_COMPILER,   // Clang already instantiated
+    EXPLICIT_SOURCE,     // explicit instantiation in source
+    AMC_REQUESTED,       // AMC generated TU
+    CONFIG_REQUESTED,    // [[instantiate]]
+};
+
+enum class ValueCategory : uint32_t {
+    VALUE,
+    LVALUE,
+    XVALUE,
+};
+
+enum class Mutability : uint32_t {
+    IMMUTABLE,
+    MUTABLE,
+};
+
 
 // Strongly typed identities. The tag prevents mixing a semantic type id with a
 // function or template id while keeping the underlying 128-bit key shared with
@@ -54,46 +158,15 @@ struct TemplateDeclTag;
 struct TemplateInstanceTag;
 
 using SemanticTypeId = Id<SemanticTypeTag>;
-using SemanticFunctionId = Id<SemanticFunctionTag>;
+using SemanticFuncId = Id<SemanticFunctionTag>;
 using TemplateDeclId = Id<TemplateDeclTag>;
-using TemplateInstanceId = Id<TemplateInstanceTag>;
+using TemplateInstId = Id<TemplateInstanceTag>;
 
 struct SourceLocation {
     std::string file;
     uint32_t line = 0;
     uint32_t column = 0;
     uint32_t offset = 0;
-};
-
-enum class DeclarationKind : uint32_t {
-    namespace_,
-    record,
-    enumeration,
-    field,
-    function,
-    method,
-    constructor,
-    destructor,
-    template_,
-    concept_,
-    typedef_,
-    variable
-};
-
-enum class SemanticTypeKind : uint32_t {
-    builtin,
-    pointer,
-    lvalue_reference,
-    rvalue_reference,
-    array,
-    record,
-    enumeration,
-    function,
-    member_pointer,
-    template_parameter,
-    template_instance,
-    dependent,
-    unknown
 };
 
 struct Qualifiers {
@@ -106,40 +179,21 @@ struct Qualifiers {
     }
 };
 
-enum class ValueCategory : uint32_t {
-    value,
-    lvalue,
-    xvalue
-};
-
 struct SemanticType {
     SemanticTypeId id{};
-    SemanticTypeKind kind = SemanticTypeKind::unknown;
-    std::string qualified_name;   // canonical, source-level
+    SemanticTypeKind kind = SemanticTypeKind::UNKNOWN;
+    std::string qualified;   // canonical, source-level
     Qualifiers qualifiers;
     SemanticTypeId canonical{};   // canonical semantic type id
     SemanticTypeId element{};     // pointee / element / underlying
-    TemplateInstanceId template_instance{};
+    TemplateInstId template_inst{};
     Hash128 abi_type{};   // direct ABI TypeID link (written by the frontend)
     SourceLocation source;
     uint32_t flags = 0;
 };
 
-enum class TemplateKind : uint32_t {
-    function,
-    class_,
-    alias,
-    variable
-};
-
-enum class TemplateParameterKind : uint32_t {
-    type,
-    non_type,
-    template_template
-};
-
-struct TemplateParameter {
-    TemplateParameterKind kind = TemplateParameterKind::type;
+struct TemplateParam {
+    TemplateParamKind kind = TemplateParamKind::TYPE;
     uint32_t index = 0;
     std::string name;
     Hash128 default_argument{};      // zero when absent
@@ -149,31 +203,16 @@ struct TemplateParameter {
 
 struct TemplateDecl {
     TemplateDeclId id{};
-    TemplateKind kind = TemplateKind::function;
+    TemplateTypeKind kind = TemplateTypeKind::FUNC;
     std::string qualified_name;
-    std::vector<TemplateParameter> parameters;
+    std::vector<TemplateParam> parameters;
     std::string requires_source;   // source text for diagnostics
     Hash128 requires_hash{};       // normalized requires clause
     SourceLocation source;
 };
 
-enum class InstantiationOrigin : uint32_t {
-    implicit_compiler,   // Clang already instantiated
-    explicit_source,     // explicit instantiation in source
-    amc_requested,       // AMC generated TU
-    config_requested     // [[instantiate]]
-};
-
-enum class TemplateArgumentKind : uint32_t {
-    type,
-    integral,
-    template_,
-    pack,
-    other
-};
-
-struct TemplateArgument {
-    TemplateArgumentKind kind = TemplateArgumentKind::type;
+struct TemplateArg {
+    TemplateArgKind kind = TemplateArgKind::TYPE;
     SemanticTypeId type{};
     int64_t value = 0;
     TemplateDeclId template_decl{};
@@ -186,51 +225,42 @@ struct ConstraintResult {
     std::string reason;
 };
 
-struct TemplateInstance {
-    TemplateInstanceId id{};
+struct TemplateInst {
+    TemplateInstId id{};
     TemplateDeclId declaration{};
-    std::vector<TemplateArgument> arguments;
-    InstantiationOrigin origin = InstantiationOrigin::implicit_compiler;
+    std::vector<TemplateArg> args;
+    InstOrigin origin = InstOrigin::IMPLICIT_COMPILER;
     ConstraintResult constraint;
     Hash128 result{};   // SemanticTypeId or SemanticFunctionId
     bool is_explicit_specialization = false;
     SourceLocation source;
 };
 
-enum class SemanticFunctionKind : uint32_t {
-    free_function,
-    member_function,
-    constructor,
-    destructor,
-    operator_,
-    conversion
-};
-
-struct SemanticParameter {
+struct SemanticParam {
     std::string name;
     SemanticTypeId type{};
-    ValueCategory category = ValueCategory::value;
+    ValueCategory category = ValueCategory::VALUE;
     std::string default_value;
     bool is_variadic = false;
 };
 
-struct SemanticFunction {
-    SemanticFunctionId id{};
-    SemanticFunctionKind kind = SemanticFunctionKind::free_function;
-    std::string qualified_name;
-    std::string unqualified_name;
+struct SemanticFunc {
+    SemanticFuncId id{};
+    SemanticFuncKind kind = SemanticFuncKind::FREE;
+    std::string qualified;
+    std::string unqualified;
     SemanticTypeId owner{};   // zero for free functions
     SemanticTypeId return_type{};
-    std::vector<SemanticParameter> parameters;
+    std::vector<SemanticParam> params;
     Qualifiers qualifiers;
-    ValueCategory ref_qualifier = ValueCategory::value;
+    ValueCategory ref_qualifier = ValueCategory::VALUE;
     bool is_variadic = false;
     bool is_noexcept = false;
     bool is_static = false;
     bool is_virtual = false;
     bool is_constexpr = false;
     bool is_template_primary = false;
-    TemplateInstanceId template_instance{};
+    TemplateInstId template_instance{};
     Hash128 abi_signature{};   // direct ABI signature link (written by the frontend)
     ConstraintResult constraint;
     SourceLocation source;
@@ -239,7 +269,7 @@ struct SemanticFunction {
 struct SemanticBase {
     SemanticTypeId type{};
     uint32_t bit_offset = 0;
-    Visibility visibility = Visibility::none;
+    Visibility visibility = Visibility::NONE;
     bool is_virtual = false;
 };
 
@@ -248,7 +278,7 @@ struct SemanticField {
     SemanticTypeId type{};
     uint32_t bit_offset = 0;
     uint32_t bit_width = 0;   // 0 = not a bitfield
-    Visibility visibility = Visibility::none;
+    Visibility visibility = Visibility::NONE;
     bool is_static = false;
     bool is_mutable = false;
 };
@@ -263,44 +293,15 @@ struct SemanticRecord {
     SourceLocation source;
 };
 
-// Ownership is an interaction-level property, not a type property. STL mapping
-// is one source of these facts; it never defines lifetime on its own.
-enum class OwnershipKind : uint32_t {
-    unspecified,
-    borrowed,
-    owned,
-    shared,
-    opaque,
-    transferred
-};
-
-enum class LifetimeKind : uint32_t {
-    unknown,
-    static_,
-    caller,
-    owner,
-    scope
-};
-
-enum class Mutability : uint32_t {
-    immutable,
-    mutable_
-};
-
-enum class InteractionKind : uint32_t {
-    parameter,
-    return_value
-};
-
-struct SemanticOwnership {
-    SemanticFunctionId function{};
-    InteractionKind interaction = InteractionKind::parameter;
+struct SemanticOwner {
+    SemanticFuncId function{};
+    InteractionKind interaction = InteractionKind::PARAM;
     uint32_t index = 0;   // parameter index; ignored for return values
-    OwnershipKind ownership = OwnershipKind::unspecified;
-    LifetimeKind lifetime = LifetimeKind::unknown;
-    Mutability mutability = Mutability::immutable;
-    SemanticFunctionId release{};   // semantic release entry, zero when absent
-    std::string invalidation;       // source/contract note
+    OwnershipKind ownership = OwnershipKind::UNSPECIFIED;
+    LifetimeKind lifetime = LifetimeKind::UNKNOWN;
+    Mutability mutability = Mutability::IMMUTABLE;
+    SemanticFuncId release{};   // semantic release entry, zero when absent
+    std::string invalidation;   // source/contract note
 };
 
 // One method of an automatically exposed type. `abi_signature` is the direct
@@ -318,7 +319,7 @@ struct ExposedMethod {
 struct ExposedType {
     SemanticTypeId type{};
     Hash128 abi_type{};   // direct ABI TypeID link
-    std::string qualified_name;
+    std::string qualified;
     std::string symbol;
     Hash128 create{};    // ABI create thunk signature, zero when absent
     Hash128 destroy{};   // ABI destroy thunk signature, zero when absent
@@ -330,7 +331,7 @@ struct ExposedType {
 // Rust-specific semantic facts. These are language extensions, not ABI facts:
 // generics, trait declarations/impls, error enums, lifetimes, trait objects and
 // async functions. The ABI mapping remains a separate lowering decision.
-struct RustGenericParameter {
+struct RustGenericParam {
     uint32_t index = 0;
     std::string name;
     std::string kind;   // type | const | lifetime
@@ -342,7 +343,7 @@ struct RustGeneric {
     std::string name;
     std::string path;
     std::string kind;   // type | function | trait | item
-    std::vector<RustGenericParameter> parameters;
+    std::vector<RustGenericParam> params;
     std::vector<std::string> where_clause;
     std::vector<std::string> instances;
 };
@@ -359,7 +360,7 @@ struct RustTraitMethod {
     std::string return_type;
     bool has_receiver = false;
     bool required = false;
-    std::vector<RustTraitParameter> parameters;
+    std::vector<RustTraitParameter> params;
 };
 
 struct RustAssociatedType {
@@ -376,14 +377,14 @@ struct RustTrait {
     std::string self_type;
     std::string trait_ref;
     bool negative = false;
-    std::vector<RustGenericParameter> parameters;
+    std::vector<RustGenericParam> params;
     std::vector<std::string> where_clause;
     std::vector<std::string> supertraits;
     std::vector<RustAssociatedType> associated_types;
     std::vector<RustTraitMethod> methods;
 };
 
-struct RustErrorVariant {
+struct RustErrorVar {
     std::string name;
     std::string discriminant;
     std::string payload;
@@ -394,7 +395,7 @@ struct RustError {
     std::string name;
     std::string path;
     std::string kind;   // enum | record | primitive
-    std::vector<RustErrorVariant> variants;
+    std::vector<RustErrorVar> variants;
     std::vector<std::string> functions;
 };
 
@@ -405,14 +406,14 @@ struct RustLifetime {
     std::vector<std::string> bounds;
 };
 
-struct RustTraitObject {
+struct RustTraitObj {
     std::string owner;
     std::string context;   // parameter | return | field | alias
     std::string type;
     std::vector<std::string> traits;
 };
 
-struct RustAsyncFunction {
+struct RustAsyncFunc {
     std::string id;
     std::string path;
     std::string name;
@@ -424,8 +425,8 @@ struct RustSemantic {
     std::vector<RustTrait> traits;
     std::vector<RustError> errors;
     std::vector<RustLifetime> lifetimes;
-    std::vector<RustTraitObject> trait_objects;
-    std::vector<RustAsyncFunction> async_functions;
+    std::vector<RustTraitObj> trait_objects;
+    std::vector<RustAsyncFunc> async_functions;
 };
 
 struct SemanticModule {
@@ -434,14 +435,14 @@ struct SemanticModule {
     uint32_t rules_version = 1;
     std::vector<SemanticType> types;
     std::vector<SemanticRecord> records;
-    std::vector<SemanticFunction> functions;
+    std::vector<SemanticFunc> functions;
     std::vector<TemplateDecl> templates;
-    std::vector<TemplateInstance> instances;
-    std::vector<SemanticOwnership> ownership;
+    std::vector<TemplateInst> instances;
+    std::vector<SemanticOwner> ownership;
     std::vector<ExposedType> exposed;
     RustSemantic rust;
 };
 
-}   // namespace amc::semantic
+}   // namespace skl::amc::semantic
 
 #endif   // AMC_SEMANTIC_MODEL_H

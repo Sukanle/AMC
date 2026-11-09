@@ -34,9 +34,9 @@ namespace {
 using Clock = std::chrono::steady_clock;
 
 enum class Mode {
-    l0,
-    l1,
-    l2
+    L0,
+    L1,
+    L2,
 };
 
 volatile int64_t g_sink = 0;
@@ -47,7 +47,7 @@ double call_nanoseconds(lua_State *state, Mode mode, bool force_index, int itera
     const auto start = Clock::now();
     for (int i = 0; i < iterations; ++i) {
         lua_getglobal(state, "counter");
-        if (mode == Mode::l1 && force_index) {
+        if (mode == Mode::L1 && force_index) {
             // Invalidate the memoized binding so __index runs again.
             lua_pushstring(state, "get");
             lua_pushnil(state);
@@ -150,11 +150,11 @@ bool prepare(Mode mode, lua_State **out) {
     lua_State *state = luaL_newstate();
     if (state == nullptr) return false;
     luaL_openlibs(state);
-    aue::register_counter_types(state);
+    skl::aue::register_counter_types(state);
     switch (mode) {
-        case Mode::l0: aue::register_direct(state, aue::counter_contract()); break;
-        case Mode::l1: aue::register_meta(state, aue::counter_contract()); break;
-        case Mode::l2: aue::register_native(state, aue::counter_contract()); break;
+        case Mode::L0: skl::aue::register_direct(state, skl::aue::counter_contract()); break;
+        case Mode::L1: skl::aue::register_meta(state, skl::aue::counter_contract()); break;
+        case Mode::L2: skl::aue::register_native(state, skl::aue::counter_contract()); break;
     }
     lua_setglobal(state, "counter");
 
@@ -178,14 +178,14 @@ int main() {
     constexpr int kIterations = 200'000;
 
     lua_State *l0 = nullptr, *l1 = nullptr;
-    if (!prepare(Mode::l0, &l0) || !prepare(Mode::l1, &l1)) {
+    if (!prepare(Mode::L0, &l0) || !prepare(Mode::L1, &l1)) {
         fmt::print(stderr, "abix-bench: could not initialise the Lua state\n");
         return 1;
     }
 
-    const double l0_call = call_nanoseconds(l0, Mode::l0, false, kIterations);
-    const double l1_call_warm = call_nanoseconds(l1, Mode::l1, false, kIterations);
-    const double l1_call_cold = call_nanoseconds(l1, Mode::l1, true, kIterations);
+    const double l0_call = call_nanoseconds(l0, Mode::L0, false, kIterations);
+    const double l1_call_warm = call_nanoseconds(l1, Mode::L1, false, kIterations);
+    const double l1_call_cold = call_nanoseconds(l1, Mode::L1, true, kIterations);
     const double field_get = field_nanoseconds(l1, kIterations);
     const double field_set = field_set_nanoseconds(l1, kIterations);
     const double child_access = child_nanoseconds(l1, kIterations / 4);

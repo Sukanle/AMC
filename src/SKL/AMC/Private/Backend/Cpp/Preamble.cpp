@@ -20,7 +20,7 @@
 #include "SKL/AMC/Core/Core.h"
 #include "SKL/AMC/Core/Generated.h"
 
-namespace amc::lang::backend::cpp {
+namespace skl::amc::lang::backend::cpp {
 
 int Emit::preamble(std::string &error) {
     _o.print("#pragma once\n");
@@ -53,4 +53,4 @@ int Emit::preamble(std::string &error) {
     return 0;
 }
 
-}   // namespace amc::lang::backend::cpp
+}   // namespace skl::amc::lang::backend::cpp

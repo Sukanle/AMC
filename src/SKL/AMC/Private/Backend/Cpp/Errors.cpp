@@ -21,7 +21,7 @@
 #include <stdint.h>
 #include <set>
 #include <string>
-namespace amc::lang::backend::cpp {
+namespace skl::amc::lang::backend::cpp {
 namespace {
 std::string parameter_name(const amc::Parameter &parameter, size_t index) {
     return parameter.name.empty() ? fmt::format("arg{}", index) : cpp_name(parameter.name);
@@ -112,7 +112,7 @@ void Emit::error_boundaries() {
         std::string value_type, status_type;
         std::string status_access, value_access;
         std::string params, call_args;
-        if (record.status_source == amc::StatusSource::return_field) {
+        if (record.status_source == amc::StatusSource::RETURN_FIELD) {
             const amc::Type *result = find_type(function.return_type);
             if (result == nullptr
                 || record.status_parameter >= result->field_count
@@ -124,22 +124,22 @@ void Emit::error_boundaries() {
             status_type = cpp_type_of(_m, status_field.type_id);
             status_access = cpp_name(status_field.name);
             value_access = cpp_name(value_field.name);
-            for (size_t i = 0; i < function.parameters.size(); ++i) {
+            for (size_t i = 0; i < function.params.size(); ++i) {
                 if (i != 0) {
                     params += ", ";
                     call_args += ", ";
                 }
-                const std::string name = parameter_name(function.parameters[i], i);
-                params += cpp_type_of(_m, function.parameters[i].type_id) + " " + name;
+                const std::string name = parameter_name(function.params[i], i);
+                params += cpp_type_of(_m, function.params[i].type_id) + " " + name;
                 call_args += name;
             }
-        } else if (record.status_source == amc::StatusSource::return_value) {
-            if (record.value_parameter == UINT32_MAX || record.value_parameter >= function.parameters.size()) continue;
-            const amc::Hash128 value_id = pointee_of(function.parameters[record.value_parameter].type_id);
+        } else if (record.status_source == amc::StatusSource::RETURN_VALUE) {
+            if (record.value_parameter == UINT32_MAX || record.value_parameter >= function.params.size()) continue;
+            const amc::Hash128 value_id = pointee_of(function.params[record.value_parameter].type_id);
             if (value_id.lo == 0 && value_id.hi == 0) continue;
             value_type = cpp_type_of(_m, value_id);
             status_type = cpp_type_of(_m, function.return_type);
-            for (size_t i = 0; i < function.parameters.size(); ++i) {
+            for (size_t i = 0; i < function.params.size(); ++i) {
                 if (i == record.value_parameter) {
                     call_args += (call_args.empty() ? "" : ", ") + std::string("&value");
                     continue;
@@ -148,8 +148,8 @@ void Emit::error_boundaries() {
                     params += ", ";
                     call_args += ", ";
                 }
-                const std::string name = parameter_name(function.parameters[i], i);
-                params += cpp_type_of(_m, function.parameters[i].type_id) + " " + name;
+                const std::string name = parameter_name(function.params[i], i);
+                params += cpp_type_of(_m, function.params[i].type_id) + " " + name;
                 call_args += name;
             }
         } else
@@ -160,18 +160,18 @@ void Emit::error_boundaries() {
         const std::string error_type = error_set != nullptr ? cpp_name(error_set->name) : status_type;
         _o.print("\n// Typed error boundary for `{}`.\n", function.name);
         _o.print("inline Result<{}, {}> {}_result({}) {{\n", value_type, error_type, function.name, params);
-        if (record.status_source == amc::StatusSource::return_value) _o.print("    {} value{{}};\n", value_type);
-        if (record.status_source == amc::StatusSource::return_field)
+        if (record.status_source == amc::StatusSource::RETURN_VALUE) _o.print("    {} value{{}};\n", value_type);
+        if (record.status_source == amc::StatusSource::RETURN_FIELD)
             _o.print("    auto raw = {}({});\n", function.name, call_args);
         else
             _o.print("    auto status = {}({});\n", function.name, call_args);
-        if (record.status_source == amc::StatusSource::return_field)
+        if (record.status_source == amc::StatusSource::RETURN_FIELD)
             _o.print("    if (raw.{} == static_cast<{}>({})) return {{true, raw.{}, {{}}}};\n", status_access,
                 status_type, record.success_value, value_access);
         else
             _o.print("    if (status == static_cast<{}>({})) return {{true, value, {{}}}};\n", status_type,
                 record.success_value);
-        if (record.status_source == amc::StatusSource::return_field)
+        if (record.status_source == amc::StatusSource::RETURN_FIELD)
             _o.print("    return {{false, {{}}, {}(raw.{})}};\n", error_type, status_access);
         else
             _o.print("    return {{false, {{}}, {}(status)}};\n", error_type);
@@ -179,4 +179,4 @@ void Emit::error_boundaries() {
     }
 }
 
-}   // namespace amc::lang::backend::cpp
+}   // namespace skl::amc::lang::backend::cpp

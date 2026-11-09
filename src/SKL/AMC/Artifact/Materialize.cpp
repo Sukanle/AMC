@@ -16,14 +16,14 @@
 #include "SKL/AMC/Artifact/Materialize.h"
 #include "SKL/AMC/Artifact/Metadata.h"
 
-namespace amc {
+namespace skl::amc {
 namespace {
 
 skl::abix::Hash128 to_model(Hash128 value) { return {value.lo, value.hi}; }
 
 }   // namespace
 
-bool MaterializedModule::build(const AbiModule &module, std::string &error) {
+bool MaterializedModule::build(const ABIModule &module, std::string &error) {
     error.clear();
     name = module.package_name.empty() ? std::string("abix_module") : module.package_name;
     version = module.package_version;
@@ -39,7 +39,7 @@ bool MaterializedModule::build(const AbiModule &module, std::string &error) {
     std::vector<uint32_t> parameter_begin(module.functions.size(), 0);
     for (size_t i = 0; i < module.functions.size(); ++i) {
         parameter_begin[i] = static_cast<uint32_t>(parameters.size());
-        for (const auto &parameter : module.functions[i].parameters) {
+        for (const auto &parameter : module.functions[i].params) {
             const skl::abix::metadata::ParameterDescriptor metadata_parameter{
                 to_model(parameter.type_id), parameter.flags};
             parameters.push_back(metadata_parameter);
@@ -61,10 +61,10 @@ bool MaterializedModule::build(const AbiModule &module, std::string &error) {
     for (size_t i = 0; i < module.functions.size(); ++i) {
         const auto &function = module.functions[i];
         const skl::abix::metadata::ParameterDescriptor *parameter_base =
-            function.parameters.empty() ? nullptr : parameters.data() + parameter_begin[i];
+            function.params.empty() ? nullptr : parameters.data() + parameter_begin[i];
         const skl::abix::metadata::FunctionDescriptor metadata_function{parameter_base, to_model(function.signature),
-            to_model(function.return_type), static_cast<uint32_t>(function.parameters.size()),
-            function.calling_convention, function.flags};
+            to_model(function.return_type), static_cast<uint32_t>(function.params.size()), function.calling_convention,
+            function.flags};
         functions.push_back(metadata_function);
     }
 
@@ -108,7 +108,7 @@ bool MaterializedModule::build(const AbiModule &module, std::string &error) {
 }
 
 bool MaterializedModule::build_from_region(const uint8_t *data, size_t size, std::string &error) {
-    AbiModule module;
+    ABIModule module;
     if (!module_from_region(data, size, module, error)) return false;
     return build(module, error);
 }
@@ -117,4 +117,4 @@ bool MaterializedModule::build_from_region(const std::vector<uint8_t> &region, s
     return build_from_region(region.data(), region.size(), error);
 }
 
-}   // namespace amc
+}   // namespace skl::amc

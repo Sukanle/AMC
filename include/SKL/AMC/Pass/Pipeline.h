@@ -20,7 +20,7 @@
 #include "SKL/AMC/IR/Module.h"
 #include "SKL/AMC/Pass/Pass.h"
 
-namespace amc::pass {
+namespace skl::amc::pass {
 
 struct PipelineOptions {
     bool verify_artifact = true;
@@ -39,6 +39,6 @@ Pipeline make_pipeline(const PipelineOptions &options);
 bool run_default_pipeline(
     ir::Module &module, diagnostics::DiagnosticList &diagnostics, const PipelineOptions &options = {});
 
-}   // namespace amc::pass
+}   // namespace skl::amc::pass
 
 #endif   // AMC_PASS_PIPELINE_H

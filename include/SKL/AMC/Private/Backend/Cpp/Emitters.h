@@ -21,8 +21,8 @@
 #include <optional>
 #include <llvm/ADT/StringRef.h>
 
-namespace amc {
-struct AbiModule;
+namespace skl::amc {
+struct ABIModule;
 struct ErrorSet;
 struct Hash128;
 struct Function;
@@ -31,9 +31,9 @@ namespace ir {
 struct LoweringResult;
 struct LoweredExposedType;
 }   // namespace ir
-}   // namespace amc
+}   // namespace skl::amc
 
-namespace amc::lang::backend::cpp {
+namespace skl::amc::lang::backend::cpp {
 
 // Emitters share the same status convention as `backend`: 0 on success, 1 on a
 // reported error (message already stored in `error`), or
@@ -42,7 +42,7 @@ namespace amc::lang::backend::cpp {
 // Includes, warning banner and the CodeIn prologue.
 class Emit {
 public:
-    Emit(fmt::ostream &o, const amc::AbiModule &m)
+    Emit(fmt::ostream &o, const amc::ABIModule &m)
         : _o(o)
         , _m(m) {}
 
@@ -87,6 +87,6 @@ private:
     void maps();
 
     fmt::ostream &_o;
-    const amc::AbiModule &_m;
+    const amc::ABIModule &_m;
 };
-}   // namespace amc::lang::backend::cpp
+}   // namespace skl::amc::lang::backend::cpp

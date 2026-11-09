@@ -1,8 +1,8 @@
 #include "SKL/AMC/Private/Frontend/Cpp/Extractor.h"
 
-namespace amc::lang::frontend::cpp {
+namespace skl::amc::lang::frontend::cpp {
 
-Extractor::Extractor(clang::ASTContext &c, const std::set<std::string> &wanted, amc::AbiModule &m,
+Extractor::Extractor(clang::ASTContext &c, const std::set<std::string> &wanted, amc::ABIModule &m,
     const std::vector<amc::lang::AdaptDecl> &a, std::vector<NativeAdapt> &out, amc::semantic::SemanticModule &s)
     : ctx(c)
     , wanted(wanted)
@@ -134,17 +134,17 @@ amc::Hash128 Extractor::source_hash(clang::SourceRange range, uint64_t domain) c
 }
 
 amc::semantic::SemanticTypeKind Extractor::semantic_type_kind(clang::QualType type) {
-    if (type->isLValueReferenceType()) return amc::semantic::SemanticTypeKind::lvalue_reference;
-    if (type->isRValueReferenceType()) return amc::semantic::SemanticTypeKind::rvalue_reference;
-    if (type->isPointerType()) return amc::semantic::SemanticTypeKind::pointer;
-    if (type->isArrayType()) return amc::semantic::SemanticTypeKind::array;
-    if (type->isFunctionType()) return amc::semantic::SemanticTypeKind::function;
-    if (type->isMemberPointerType()) return amc::semantic::SemanticTypeKind::member_pointer;
-    if (type->isRecordType()) return amc::semantic::SemanticTypeKind::record;
-    if (type->isEnumeralType()) return amc::semantic::SemanticTypeKind::enumeration;
-    if (type->isBuiltinType()) return amc::semantic::SemanticTypeKind::builtin;
-    if (type->isDependentType()) return amc::semantic::SemanticTypeKind::dependent;
-    return amc::semantic::SemanticTypeKind::unknown;
+    if (type->isLValueReferenceType()) return amc::semantic::SemanticTypeKind::LVREF;
+    if (type->isRValueReferenceType()) return amc::semantic::SemanticTypeKind::RVREF;
+    if (type->isPointerType()) return amc::semantic::SemanticTypeKind::POINTER;
+    if (type->isArrayType()) return amc::semantic::SemanticTypeKind::ARRAY;
+    if (type->isFunctionType()) return amc::semantic::SemanticTypeKind::FUNC;
+    if (type->isMemberPointerType()) return amc::semantic::SemanticTypeKind::MEMPTR;
+    if (type->isRecordType()) return amc::semantic::SemanticTypeKind::RECORD;
+    if (type->isEnumeralType()) return amc::semantic::SemanticTypeKind::ENUM;
+    if (type->isBuiltinType()) return amc::semantic::SemanticTypeKind::BUILTIN;
+    if (type->isDependentType()) return amc::semantic::SemanticTypeKind::DEPEND;
+    return amc::semantic::SemanticTypeKind::UNKNOWN;
 }
 
 amc::semantic::SemanticTypeId Extractor::semantic_type_id(clang::QualType type) {
@@ -153,11 +153,11 @@ amc::semantic::SemanticTypeId Extractor::semantic_type_id(clang::QualType type) 
     qualifiers.is_const = type.isConstQualified();
     qualifiers.is_volatile = type.isVolatileQualified();
     qualifiers.is_restrict = type.isRestrictQualified();
-    amc::semantic::ValueCategory category = amc::semantic::ValueCategory::value;
+    amc::semantic::ValueCategory category = amc::semantic::ValueCategory::VALUE;
     if (type->isLValueReferenceType())
-        category = amc::semantic::ValueCategory::lvalue;
+        category = amc::semantic::ValueCategory::LVALUE;
     else if (type->isRValueReferenceType())
-        category = amc::semantic::ValueCategory::xvalue;
+        category = amc::semantic::ValueCategory::XVALUE;
     const std::string spelling = canonical.getAsString();
     const std::string key = spelling
                           + (qualifiers.is_const ? "|c" : "")
@@ -182,7 +182,7 @@ amc::semantic::SemanticTypeId Extractor::semantic_type_id(clang::QualType type) 
         amc::semantic::SemanticType record;
         record.id = id;
         record.kind = kind;
-        record.qualified_name = spelling;
+        record.qualified = spelling;
         record.qualifiers = qualifiers;
         record.element = element;
         semantic.types.push_back(std::move(record));
@@ -190,17 +190,17 @@ amc::semantic::SemanticTypeId Extractor::semantic_type_id(clang::QualType type) 
     return id;
 }
 
-amc::semantic::InstantiationOrigin Extractor::instantiation_origin(clang::TemplateSpecializationKind kind) {
+amc::semantic::InstOrigin Extractor::instantiation_origin(clang::TemplateSpecializationKind kind) {
     switch (kind) {
         case clang::TSK_ExplicitSpecialization:
         case clang::TSK_ExplicitInstantiationDeclaration:
-        case clang::TSK_ExplicitInstantiationDefinition:  return amc::semantic::InstantiationOrigin::explicit_source;
-        case clang::TSK_ImplicitInstantiation:            return amc::semantic::InstantiationOrigin::implicit_compiler;
-        default:                                          return amc::semantic::InstantiationOrigin::implicit_compiler;
+        case clang::TSK_ExplicitInstantiationDefinition:  return amc::semantic::InstOrigin::EXPLICIT_SOURCE;
+        case clang::TSK_ImplicitInstantiation:            return amc::semantic::InstOrigin::IMPLICIT_COMPILER;
+        default:                                          return amc::semantic::InstOrigin::IMPLICIT_COMPILER;
     }
 }
 
-void Extractor::append_argument_key(std::string &out, const amc::semantic::TemplateArgument &argument) {
+void Extractor::append_argument_key(std::string &out, const amc::semantic::TemplateArg &argument) {
     out += std::to_string(static_cast<uint32_t>(argument.kind));
     out += ":";
     out += std::to_string(argument.type.value.lo);
@@ -219,29 +219,29 @@ void Extractor::append_argument_key(std::string &out, const amc::semantic::Templ
     out += ";";
 }
 
-amc::semantic::TemplateArgument Extractor::convert_argument(const clang::TemplateArgument &argument) {
-    amc::semantic::TemplateArgument out;
+amc::semantic::TemplateArg Extractor::convert_argument(const clang::TemplateArgument &argument) {
+    amc::semantic::TemplateArg out;
     switch (argument.getKind()) {
         case clang::TemplateArgument::Type:
-            out.kind = amc::semantic::TemplateArgumentKind::type;
+            out.kind = amc::semantic::TemplateArgKind::TYPE;
             out.type = semantic_type_id(argument.getAsType());
             break;
         case clang::TemplateArgument::Integral:
-            out.kind = amc::semantic::TemplateArgumentKind::integral;
+            out.kind = amc::semantic::TemplateArgKind::INTEGRAL;
             out.value = argument.getAsIntegral().getSExtValue();
             break;
         case clang::TemplateArgument::Template:
-            out.kind = amc::semantic::TemplateArgumentKind::template_;
+            out.kind = amc::semantic::TemplateArgKind::TEMPLATE;
             if (auto *decl = argument.getAsTemplate().getAsTemplateDecl())
                 out.template_decl = ensure_template_decl(decl);
             break;
         case clang::TemplateArgument::TemplateExpansion:
-            out.kind = amc::semantic::TemplateArgumentKind::pack;
+            out.kind = amc::semantic::TemplateArgKind::PACK;
             if (auto *decl = argument.getAsTemplateOrTemplatePattern().getAsTemplateDecl())
                 out.template_decl = ensure_template_decl(decl);
             break;
         case clang::TemplateArgument::Pack: {
-            out.kind = amc::semantic::TemplateArgumentKind::pack;
+            out.kind = amc::semantic::TemplateArgKind::PACK;
             std::string key;
             for (const auto &child : argument.pack_elements()) {
                 const auto converted = convert_argument(child);
@@ -250,7 +250,7 @@ amc::semantic::TemplateArgument Extractor::convert_argument(const clang::Templat
             out.canonical = amc::hash_text(key, 0x5041434bULL);
             break;
         }
-        default: out.kind = amc::semantic::TemplateArgumentKind::other; break;
+        default: out.kind = amc::semantic::TemplateArgKind::OTHER; break;
     }
     return out;
 }
@@ -260,8 +260,8 @@ amc::semantic::TemplateDeclId Extractor::ensure_template_decl(clang::TemplateDec
     if (found != semantic_templates.end()) return found->second;
 
     amc::semantic::TemplateDecl record;
-    record.kind = llvm::isa<clang::ClassTemplateDecl>(decl) ? amc::semantic::TemplateKind::class_
-                                                            : amc::semantic::TemplateKind::function;
+    record.kind = llvm::isa<clang::ClassTemplateDecl>(decl) ? amc::semantic::TemplateTypeKind::CLASS
+                                                            : amc::semantic::TemplateTypeKind::FUNC;
     record.qualified_name = decl->getQualifiedNameAsString();
     if (const clang::TemplateParameterList *parameters = decl->getTemplateParameters()) {
         if (const clang::Expr *require = parameters->getRequiresClause())
@@ -270,11 +270,11 @@ amc::semantic::TemplateDeclId Extractor::ensure_template_decl(clang::TemplateDec
             record.requires_hash = amc::hash_text(record.requires_source, 0x52455153ULL);
         for (unsigned i = 0; i < parameters->size(); ++i) {
             const clang::NamedDecl *parameter = parameters->getParam(i);
-            amc::semantic::TemplateParameter out;
+            amc::semantic::TemplateParam out;
             out.index = i;
             out.name = parameter->getNameAsString();
             if (auto *type = llvm::dyn_cast<clang::TemplateTypeParmDecl>(parameter)) {
-                out.kind = amc::semantic::TemplateParameterKind::type;
+                out.kind = amc::semantic::TemplateParamKind::TYPE;
                 if (type->hasDefaultArgument())
                     out.default_argument = source_hash(type->getDefaultArgument().getSourceRange(), 0x44454641ULL);
                 if (type->hasTypeConstraint()) {
@@ -286,11 +286,11 @@ amc::semantic::TemplateDeclId Extractor::ensure_template_decl(clang::TemplateDec
                     }
                 }
             } else if (auto *non_type = llvm::dyn_cast<clang::NonTypeTemplateParmDecl>(parameter)) {
-                out.kind = amc::semantic::TemplateParameterKind::non_type;
+                out.kind = amc::semantic::TemplateParamKind::NON;
                 if (non_type->hasDefaultArgument())
                     out.default_argument = source_hash(non_type->getDefaultArgument().getSourceRange(), 0x44454641ULL);
             } else if (auto *template_parameter = llvm::dyn_cast<clang::TemplateTemplateParmDecl>(parameter)) {
-                out.kind = amc::semantic::TemplateParameterKind::template_template;
+                out.kind = amc::semantic::TemplateParamKind::TEMPLATE;
                 if (template_parameter->hasDefaultArgument())
                     out.default_argument =
                         source_hash(template_parameter->getDefaultArgument().getSourceRange(), 0x44454641ULL);
@@ -312,13 +312,13 @@ void Extractor::record_template_instance(clang::TemplateDecl *decl, llvm::ArrayR
     clang::TemplateSpecializationKind kind, clang::NamedDecl *instantiated) {
     if (decl == nullptr) return;
     const amc::semantic::TemplateDeclId declaration = ensure_template_decl(decl);
-    std::vector<amc::semantic::TemplateArgument> semantic_arguments;
-    std::vector<amc::semantic::TemplateArgumentKey> keys;
+    std::vector<amc::semantic::TemplateArg> semantic_arguments;
+    std::vector<amc::semantic::TemplateArgKey> keys;
     semantic_arguments.reserve(arguments.size());
     keys.reserve(arguments.size());
     for (const auto &argument : arguments) {
         auto converted = convert_argument(argument);
-        amc::semantic::TemplateArgumentKey key;
+        amc::semantic::TemplateArgKey key;
         key.kind = converted.kind;
         key.type = converted.type;
         key.value = converted.value;
@@ -332,10 +332,10 @@ void Extractor::record_template_instance(clang::TemplateDecl *decl, llvm::ArrayR
         declaration, keys, explicit_specialization, amc::semantic::semantic_rules_version);
     if (!semantic_instances.insert(instance).second) return;
 
-    amc::semantic::TemplateInstance record;
+    amc::semantic::TemplateInst record;
     record.id = instance;
     record.declaration = declaration;
-    record.arguments = std::move(semantic_arguments);
+    record.args = std::move(semantic_arguments);
     record.origin = instantiation_origin(kind);
     record.is_explicit_specialization = explicit_specialization;
     record.constraint.evaluated = false;
@@ -345,22 +345,22 @@ void Extractor::record_template_instance(clang::TemplateDecl *decl, llvm::ArrayR
 
     if (instantiated != nullptr) {
         if (auto *specialization = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(instantiated)) {
-            record.result = amc::semantic::semantic_type_identity(amc::semantic::SemanticTypeKind::template_instance,
-                specialization->getQualifiedNameAsString(), {}, amc::semantic::ValueCategory::value, {}, {}, instance,
+            record.result = amc::semantic::semantic_type_identity(amc::semantic::SemanticTypeKind::TEMINST,
+                specialization->getQualifiedNameAsString(), {}, amc::semantic::ValueCategory::VALUE, {}, {}, instance,
                 amc::semantic::semantic_rules_version)
                                 .value;
         } else if (auto *function = llvm::dyn_cast<clang::FunctionDecl>(instantiated)) {
-            amc::semantic::SemanticFunctionKind function_kind = amc::semantic::SemanticFunctionKind::free_function;
+            auto function_kind = amc::semantic::SemanticFuncKind::FREE;
             amc::semantic::SemanticTypeId owner;
             if (auto *method = llvm::dyn_cast<clang::CXXMethodDecl>(function)) {
                 if (llvm::isa<clang::CXXConstructorDecl>(method))
-                    function_kind = amc::semantic::SemanticFunctionKind::constructor;
+                    function_kind = amc::semantic::SemanticFuncKind::CREATE;
                 else if (llvm::isa<clang::CXXDestructorDecl>(method))
-                    function_kind = amc::semantic::SemanticFunctionKind::destructor;
+                    function_kind = amc::semantic::SemanticFuncKind::DESTORY;
                 else if (llvm::isa<clang::CXXConversionDecl>(method))
-                    function_kind = amc::semantic::SemanticFunctionKind::conversion;
+                    function_kind = amc::semantic::SemanticFuncKind::CONVERSION;
                 else
-                    function_kind = amc::semantic::SemanticFunctionKind::member_function;
+                    function_kind = amc::semantic::SemanticFuncKind::MEMBER;
                 owner = semantic_type_id(ctx.getCanonicalTagType(method->getParent()));
             }
             std::vector<amc::semantic::SemanticTypeId> parameters;
@@ -368,7 +368,7 @@ void Extractor::record_template_instance(clang::TemplateDecl *decl, llvm::ArrayR
             for (const auto *parameter : function->parameters())
                 parameters.push_back(semantic_type_id(parameter->getType()));
             record.result = amc::semantic::semantic_function_identity(function_kind, owner, function->getNameAsString(),
-                parameters, {}, amc::semantic::ValueCategory::value, instance, amc::semantic::semantic_rules_version)
+                parameters, {}, amc::semantic::ValueCategory::VALUE, instance, amc::semantic::semantic_rules_version)
                                 .value;
         }
     }
@@ -389,7 +389,7 @@ void Extractor::add_namespaces(const clang::NamedDecl *d) {
         if (ids.count(e)) continue;
         amc::Type t;
         t.name = e;
-        t.kind = amc::TypeKind::namespace_type;
+        t.kind = amc::TypeKind::NAMESPACE;
         t.id = amc::hash_text(t.name, 0x54595045);
         t.size = t.align = 1;
         ids.emplace(t.name, t.id);
@@ -462,7 +462,7 @@ amc::Hash128 Extractor::add_type(clang::QualType qt) {
         const std::string type_name = alias_named ? original : s;
         amc::Type t;
         t.name = type_name;
-        t.kind = amc::TypeKind::record;
+        t.kind = amc::TypeKind::RECORD;
         t.id = amc::hash_text(type_name, 0x54595045);
         t.size = 1;
         t.align = 1;
@@ -508,7 +508,7 @@ amc::Hash128 Extractor::add_type(clang::QualType qt) {
         }
         amc::Type t;
         t.name = opaque_name;
-        t.kind = amc::TypeKind::record;
+        t.kind = amc::TypeKind::RECORD;
         t.id = amc::hash_text(opaque_name, 0x54595045);
         t.size = 1;
         t.align = 1;
@@ -527,7 +527,7 @@ amc::Hash128 Extractor::add_type(clang::QualType qt) {
     t.name = s;
     t.size = uint32_t(ctx.getTypeSize(qt) / 8);
     t.align = uint32_t(ctx.getTypeAlign(qt) / 8);
-    t.kind = amc::TypeKind::primitive;
+    t.kind = amc::TypeKind::PRIMITIVE;
     // Primitives are identified by their ABI descriptor, not their spelling,
     // so that ABI-equal types (long/long long, ...) share one TypeID and the
     // abstract C kind (double, long double) is preserved for target-dependent
@@ -550,7 +550,7 @@ amc::Hash128 Extractor::add_type(clang::QualType qt) {
     clang::QualType pointee_type;
     bool is_pointer = false;
     if (const auto *p = qt->getAs<clang::PointerType>()) {
-        t.kind = amc::TypeKind::pointer;
+        t.kind = amc::TypeKind::POINTER;
         t.name = p->getPointeeType().getAsString() + "*";
         t.size = ctx.getTypeSize(qt) / 8;
         t.align = ctx.getTypeAlign(qt) / 8;
@@ -558,7 +558,7 @@ amc::Hash128 Extractor::add_type(clang::QualType qt) {
         pointee_type = p->getPointeeType();
     }
     if (const auto *a = llvm::dyn_cast<clang::ConstantArrayType>(qt.getTypePtr())) {
-        t.kind = amc::TypeKind::array;
+        t.kind = amc::TypeKind::ARRAY;
         t.array_count = uint32_t(a->getSize().getZExtValue());
     }
     ids[s] = t.id;
@@ -575,10 +575,10 @@ amc::Hash128 Extractor::add_type(clang::QualType qt) {
 
 uint32_t Extractor::access_flags(clang::AccessSpecifier access) {
     switch (access) {
-        case clang::AS_public:    return amc::visibility_flags(amc::Visibility::public_);
-        case clang::AS_protected: return amc::visibility_flags(amc::Visibility::protected_);
-        case clang::AS_private:   return amc::visibility_flags(amc::Visibility::private_);
-        case clang::AS_none:      return amc::visibility_flags(amc::Visibility::none);
+        case clang::AS_public:    return amc::visibility_flags(amc::Visibility::PUBLIC);
+        case clang::AS_protected: return amc::visibility_flags(amc::Visibility::PROTECTED);
+        case clang::AS_private:   return amc::visibility_flags(amc::Visibility::PRIVATE);
+        case clang::AS_none:      return amc::visibility_flags(amc::Visibility::NONE);
     }
     return 0;
 }
@@ -603,7 +603,7 @@ void Extractor::add_record(clang::CXXRecordDecl *d, const std::string &forced_na
     add_namespaces(d);
     amc::Type t;
     t.name = record_name;
-    t.kind = amc::TypeKind::record;
+    t.kind = amc::TypeKind::RECORD;
     if (d->getDescribedClassTemplate()) t.flags |= amc::type_template_primary;
     t.id = amc::hash_text(t.name, 0x54595045);
     auto &l = ctx.getASTRecordLayout(d);
@@ -674,7 +674,7 @@ void Extractor::add_enum(clang::EnumDecl *d) {
     if (ids.count(name(d)) != 0) return;
     amc::Type t;
     t.name = name(d);
-    t.kind = amc::TypeKind::enumeration;
+    t.kind = amc::TypeKind::ENUM;
     t.id = amc::hash_text(t.name, 0x54595045);
     t.size = uint32_t(ctx.getTypeSize(d->getIntegerType()) / 8);
     t.align = uint32_t(ctx.getTypeAlign(d->getIntegerType()) / 8);
@@ -705,7 +705,7 @@ void Extractor::add_alias(clang::TypedefNameDecl *d) {
     }
     amc::Type t;
     t.name = alias_name;
-    t.kind = amc::TypeKind::alias;
+    t.kind = amc::TypeKind::ALIAS;
     t.id = amc::hash_text(t.name, 0x54595045);
     // Guard against incomplete underlying types (an uninstantiated template
     // must not be queried for its layout).
@@ -765,7 +765,7 @@ amc::Hash128 Extractor::register_native_type(const std::string &record_name) {
     if (found != ids.end()) return found->second;
     amc::Type t;
     t.name = record_name;
-    t.kind = amc::TypeKind::record;
+    t.kind = amc::TypeKind::RECORD;
     t.id = amc::hash_text(record_name, 0x54595045);
     t.size = t.align = 1;
     ids.emplace(record_name, t.id);
@@ -776,41 +776,41 @@ amc::Hash128 Extractor::register_native_type(const std::string &record_name) {
 bool Extractor::detect_native(
     clang::QualType qt, const amc::lang::AdaptDecl *&decl, NativeKind &kind, clang::QualType &element) {
     decl = nullptr;
-    kind = NativeKind::none;
+    kind = NativeKind::NONE;
     const bool lvalue_ref = qt->isLValueReferenceType();
     if (lvalue_ref && !qt.getNonReferenceType().isConstQualified()) return false;
     const clang::QualType value = qt.getNonReferenceType().getUnqualifiedType();
     const auto *record = value->getAsCXXRecordDecl();
     if (record == nullptr) return false;
     const std::string qualified = record->getQualifiedNameAsString();
-    NativeKind candidate = NativeKind::none;
+    NativeKind candidate = NativeKind::NONE;
     if (qualified == "std::basic_string")
-        candidate = NativeKind::string;
+        candidate = NativeKind::STRING;
     else if (qualified == "std::basic_string_view")
-        candidate = NativeKind::string_view;
+        candidate = NativeKind::STRING_VIEW;
     else if (qualified == "std::vector")
-        candidate = NativeKind::vector;
+        candidate = NativeKind::VECTOR;
     else if (qualified == "std::span")
-        candidate = NativeKind::span;
+        candidate = NativeKind::SPAN;
     else
         return false;
     const auto *spec = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(record);
     if (spec == nullptr) return false;
     const auto &args = spec->getTemplateArgs();
     if (args.size() < 1 || args[0].getKind() != clang::TemplateArgument::Type) return false;
-    if (candidate == NativeKind::string || candidate == NativeKind::string_view) {
+    if (candidate == NativeKind::STRING || candidate == NativeKind::STRING_VIEW) {
         // The code unit must be C `char`; the boundary view is UTF-8 bytes.
         const clang::QualType unit = args[0].getAsType().getUnqualifiedType();
         if (!unit->isCharType() || ctx.getTypeSize(unit) != 8) return false;
         element = unit;
     } else {
         const clang::QualType value_type = args[0].getAsType();
-        if (candidate == NativeKind::span && !value_type.isConstQualified()) return false;
+        if (candidate == NativeKind::SPAN && !value_type.isConstQualified()) return false;
         element = value_type.getUnqualifiedType();
     }
     for (const auto &adapt : adapts) {
         if (native_kind_of(adapt.native) != candidate) continue;
-        if ((candidate == NativeKind::vector || candidate == NativeKind::span)
+        if ((candidate == NativeKind::VECTOR || candidate == NativeKind::SPAN)
             && !element_matches(adapt.element, element))
             continue;
         decl = &adapt;
@@ -850,7 +850,7 @@ void Extractor::add_function(clang::FunctionDecl *d) {
         amc::Parameter q;
         q.name = p->getNameAsString();
         const amc::lang::AdaptDecl *decl = nullptr;
-        NativeKind kind = NativeKind::none;
+        NativeKind kind = NativeKind::NONE;
         clang::QualType element;
         if (detect_native(p->getType(), decl, kind, element)) {
             NativeAdapt adapt;
@@ -864,10 +864,10 @@ void Extractor::add_function(clang::FunctionDecl *d) {
         } else {
             q.type_id = add_type(p->getType());
         }
-        f.parameters.push_back(q);
+        f.params.push_back(q);
     }
     f.signature = amc::signature_hash(f);
     module.functions.push_back(std::move(f));
 }
 
-}   // namespace amc::lang::frontend::cpp
+}   // namespace skl::amc::lang::frontend::cpp

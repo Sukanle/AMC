@@ -21,7 +21,7 @@
 #include <string_view>
 #include <vector>
 
-namespace amc {
+namespace skl::amc {
 
 // AI-PS: the ABIX Symbol Server (local cache).
 //
@@ -68,6 +68,6 @@ bool fetch_symbol(const std::string &root, std::string_view key, std::vector<uin
 // `$ABIX_SYMBOL_STORE`, else `$HOME/.abix/symbols`.
 std::string default_symbol_store_root();
 
-}   // namespace amc
+}   // namespace skl::amc
 
 #endif

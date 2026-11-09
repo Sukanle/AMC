@@ -19,7 +19,7 @@
 
 #include <fmt/format.h>
 
-namespace amc::backend {
+namespace skl::amc::backend {
 
 std::string hex_u64(uint64_t value) { return fmt::format("0x{:x}", value); }
 
@@ -57,4 +57,4 @@ std::string escape_string_literal(std::string_view value) {
     return result;
 }
 
-}   // namespace amc::backend
+}   // namespace skl::amc::backend

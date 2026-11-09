@@ -20,7 +20,7 @@
 
 #include <fmt/format.h>
 
-namespace amc::pass {
+namespace skl::amc::pass {
 namespace {
 
 struct IdKey {
@@ -39,7 +39,7 @@ IdKey key(amc::Hash128 value) { return {value.lo, value.hi}; }
 
 IdKey key(amc::semantic::SemanticTypeId value) { return key(value.value); }
 
-IdKey key(amc::semantic::SemanticFunctionId value) { return key(value.value); }
+IdKey key(amc::semantic::SemanticFuncId value) { return key(value.value); }
 
 bool add_error(diagnostics::DiagnosticList &diagnostics, std::string message) {
     diagnostics::add_error(diagnostics, "semantic_invalid", "pass", std::move(message));
@@ -66,7 +66,7 @@ bool verify_semantic(ir::Module &module, Context &context, diagnostics::Diagnost
         if (id.valid() && types.count(key(id)) == 0) return add_error(diagnostics, "unknown semantic type: " + what);
         return true;
     };
-    const auto require_function = [&](amc::semantic::SemanticFunctionId id, const std::string &what) {
+    const auto require_function = [&](amc::semantic::SemanticFuncId id, const std::string &what) {
         if (id.valid() && functions.count(key(id)) == 0)
             return add_error(diagnostics, "unknown semantic function: " + what);
         return true;
@@ -80,18 +80,18 @@ bool verify_semantic(ir::Module &module, Context &context, diagnostics::Diagnost
             if (!require_type(field.type, "field " + field.name)) return false;
     }
     for (const auto &function : module.semantic.functions) {
-        if (!require_type(function.owner, "function owner " + function.qualified_name)) return false;
-        if (!require_type(function.return_type, "function return " + function.qualified_name)) return false;
-        for (const auto &parameter : function.parameters)
-            if (!require_type(parameter.type, "function parameter " + function.qualified_name)) return false;
+        if (!require_type(function.owner, "function owner " + function.qualified)) return false;
+        if (!require_type(function.return_type, "function return " + function.qualified)) return false;
+        for (const auto &parameter : function.params)
+            if (!require_type(parameter.type, "function parameter " + function.qualified)) return false;
     }
     for (const auto &ownership : module.semantic.ownership) {
         if (!require_function(ownership.function, "ownership function")) return false;
         if (!require_function(ownership.release, "ownership release")) return false;
     }
     for (const auto &exposed : module.semantic.exposed)
-        if (!require_type(exposed.type, "exposed type " + exposed.qualified_name)) return false;
+        if (!require_type(exposed.type, "exposed type " + exposed.qualified)) return false;
     return true;
 }
 
-}   // namespace amc::pass
+}   // namespace skl::amc::pass

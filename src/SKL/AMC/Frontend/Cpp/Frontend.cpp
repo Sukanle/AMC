@@ -49,14 +49,14 @@
 #include <string>
 #include <vector>
 
-namespace amc::lang::cpp {
+namespace skl::amc::lang::cpp {
 namespace {
 
 namespace frontend = frontend::cpp;
 
 class Consumer : public clang::ASTConsumer {
 public:
-    Consumer(const std::set<std::string> &w, amc::AbiModule &m, const std::vector<amc::lang::AdaptDecl> &a,
+    Consumer(const std::set<std::string> &w, amc::ABIModule &m, const std::vector<amc::lang::AdaptDecl> &a,
         std::vector<frontend::NativeAdapt> &out, amc::semantic::SemanticModule &s)
         : wanted(w)
         , module(m)
@@ -71,14 +71,14 @@ public:
 
 private:
     const std::set<std::string> &wanted;
-    amc::AbiModule &module;
+    amc::ABIModule &module;
     const std::vector<amc::lang::AdaptDecl> &adapts;
     std::vector<frontend::NativeAdapt> &adaptations;
     amc::semantic::SemanticModule &semantic;
 };
 class Action : public clang::ASTFrontendAction {
 public:
-    Action(const std::set<std::string> &w, amc::AbiModule &m, const std::vector<amc::lang::AdaptDecl> &a,
+    Action(const std::set<std::string> &w, amc::ABIModule &m, const std::vector<amc::lang::AdaptDecl> &a,
         std::vector<frontend::NativeAdapt> &out, amc::semantic::SemanticModule &s)
         : wanted(w)
         , module(m)
@@ -91,14 +91,14 @@ public:
 
 private:
     const std::set<std::string> &wanted;
-    amc::AbiModule &module;
+    amc::ABIModule &module;
     const std::vector<amc::lang::AdaptDecl> &adapts;
     std::vector<frontend::NativeAdapt> &adaptations;
     amc::semantic::SemanticModule &semantic;
 };
 class Factory : public clang::tooling::FrontendActionFactory {
 public:
-    Factory(const std::set<std::string> &w, amc::AbiModule &m, const std::vector<amc::lang::AdaptDecl> &a,
+    Factory(const std::set<std::string> &w, amc::ABIModule &m, const std::vector<amc::lang::AdaptDecl> &a,
         std::vector<frontend::NativeAdapt> &out, amc::semantic::SemanticModule &s)
         : wanted(w)
         , module(m)
@@ -111,7 +111,7 @@ public:
 
 private:
     const std::set<std::string> &wanted;
-    amc::AbiModule &module;
+    amc::ABIModule &module;
     const std::vector<amc::lang::AdaptDecl> &adapts;
     std::vector<frontend::NativeAdapt> &adaptations;
     amc::semantic::SemanticModule &semantic;
@@ -178,7 +178,7 @@ int run_frontend(const char *config_path, const char *output_path) {
         for (const auto &method : expose.methods)
             wanted.insert(expose.type + "::" + method);
     }
-    amc::AbiModule module;
+    amc::ABIModule module;
     module.package_name = "cpp";
     amc::semantic::SemanticModule semantic;
     semantic.package_name = "cpp";
@@ -290,4 +290,4 @@ int run_frontend(const char *config_path, const char *output_path) {
     }
     return EXIT_SUCCESS;
 }
-}   // namespace amc::lang::cpp
+}   // namespace skl::amc::lang::cpp

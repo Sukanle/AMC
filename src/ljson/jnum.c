@@ -14,11 +14,13 @@
 #if defined(__GNUC__) || defined(__clang__)
 #  define UNUSED_ATTR __attribute__((unused))
 #  define FALLTHROUGH_ATTR __attribute__((fallthrough))
+#  define INLINE_ATTR __attribute__((always_inline))
 #  define likely(cond) __builtin_expect(!!(cond), 1)
 #  define unlikely(cond) __builtin_expect(!!(cond), 0)
 #else
 #  define UNUSED_ATTR
 #  define FALLTHROUGH_ATTR
+#  define INLINE_ATTR
 #  define likely(cond) (cond)
 #  define unlikely(cond) (cond)
 #endif
@@ -130,382 +132,79 @@ static inline u64x2_t u128_mul(uint64_t x, uint64_t y) {
     return ret;
 }
 
+// clang-format off
 static const char ch_100_lut[200] = {
-    '0',
-    '0',
-    '0',
-    '1',
-    '0',
-    '2',
-    '0',
-    '3',
-    '0',
-    '4',
-    '0',
-    '5',
-    '0',
-    '6',
-    '0',
-    '7',
-    '0',
-    '8',
-    '0',
-    '9',
-    '1',
-    '0',
-    '1',
-    '1',
-    '1',
-    '2',
-    '1',
-    '3',
-    '1',
-    '4',
-    '1',
-    '5',
-    '1',
-    '6',
-    '1',
-    '7',
-    '1',
-    '8',
-    '1',
-    '9',
-    '2',
-    '0',
-    '2',
-    '1',
-    '2',
-    '2',
-    '2',
-    '3',
-    '2',
-    '4',
-    '2',
-    '5',
-    '2',
-    '6',
-    '2',
-    '7',
-    '2',
-    '8',
-    '2',
-    '9',
-    '3',
-    '0',
-    '3',
-    '1',
-    '3',
-    '2',
-    '3',
-    '3',
-    '3',
-    '4',
-    '3',
-    '5',
-    '3',
-    '6',
-    '3',
-    '7',
-    '3',
-    '8',
-    '3',
-    '9',
-    '4',
-    '0',
-    '4',
-    '1',
-    '4',
-    '2',
-    '4',
-    '3',
-    '4',
-    '4',
-    '4',
-    '5',
-    '4',
-    '6',
-    '4',
-    '7',
-    '4',
-    '8',
-    '4',
-    '9',
-    '5',
-    '0',
-    '5',
-    '1',
-    '5',
-    '2',
-    '5',
-    '3',
-    '5',
-    '4',
-    '5',
-    '5',
-    '5',
-    '6',
-    '5',
-    '7',
-    '5',
-    '8',
-    '5',
-    '9',
-    '6',
-    '0',
-    '6',
-    '1',
-    '6',
-    '2',
-    '6',
-    '3',
-    '6',
-    '4',
-    '6',
-    '5',
-    '6',
-    '6',
-    '6',
-    '7',
-    '6',
-    '8',
-    '6',
-    '9',
-    '7',
-    '0',
-    '7',
-    '1',
-    '7',
-    '2',
-    '7',
-    '3',
-    '7',
-    '4',
-    '7',
-    '5',
-    '7',
-    '6',
-    '7',
-    '7',
-    '7',
-    '8',
-    '7',
-    '9',
-    '8',
-    '0',
-    '8',
-    '1',
-    '8',
-    '2',
-    '8',
-    '3',
-    '8',
-    '4',
-    '8',
-    '5',
-    '8',
-    '6',
-    '8',
-    '7',
-    '8',
-    '8',
-    '8',
-    '9',
-    '9',
-    '0',
-    '9',
-    '1',
-    '9',
-    '2',
-    '9',
-    '3',
-    '9',
-    '4',
-    '9',
-    '5',
-    '9',
-    '6',
-    '9',
-    '7',
-    '9',
-    '8',
-    '9',
-    '9',
+    '0','0','0','1','0','2','0','3','0','4','0','5','0','6','0','7','0','8','0','9',
+    '1','0','1','1','1','2','1','3','1','4','1','5','1','6','1','7','1','8','1','9',
+    '2','0','2','1','2','2','2','3','2','4','2','5','2','6','2','7','2','8','2','9',
+    '3','0','3','1','3','2','3','3','3','4','3','5','3','6','3','7','3','8','3','9',
+    '4','0','4','1','4','2','4','3','4','4','4','5','4','6','4','7','4','8','4','9',
+    '5','0','5','1','5','2','5','3','5','4','5','5','5','6','5','7','5','8','5','9',
+    '6','0','6','1','6','2','6','3','6','4','6','5','6','6','6','7','6','8','6','9',
+    '7','0','7','1','7','2','7','3','7','4','7','5','7','6','7','7','7','8','7','9',
+    '8','0','8','1','8','2','8','3','8','4','8','5','8','6','8','7','8','8','8','9',
+    '9','0','9','1','9','2','9','3','9','4','9','5','9','6','9','7','9','8','9','9',
 };
 
 static const uint8_t tz_100_lut[100] = {
-    2,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    1,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    1,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    1,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    1,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    1,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    1,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    1,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    1,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    1,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
+    2, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 };
+// clang-format on
 
-static inline int32_t fill_t_4_digits(char *buffer, uint32_t digits, int32_t *ptz) {
-    char *s = buffer;
-    uint32_t q = FAST_DIV100(digits);
-    uint32_t r = digits - q * 100;
-
-    memcpy(s, &ch_100_lut[q << 1], 2);
-    memcpy(s + 2, &ch_100_lut[r << 1], 2);
-    *ptz = r ? tz_100_lut[r] : tz_100_lut[q] + 2;
-    return 4;
-}
-
-static inline int32_t fill_t_8_digits(char *buffer, uint32_t digits, int32_t *ptz) {
+static inline void fill_t_4_digits(char *buffer, uint32_t num, int32_t *ptz) {
     char *s = buffer;
 
-    if (digits < 10'000) {
+    if (!num) {
+        *ptz += 4;
         memset(s, '0', 4);
-        fill_t_4_digits(s + 4, digits, ptz);
     } else {
-        uint32_t q = FAST_DIV10000(digits);
-        uint32_t r = digits - q * 10'000;
+        uint32_t q = FAST_DIV100(num);
+        uint32_t r = num - q * 100;
 
-        fill_t_4_digits(s, q, ptz);
-        if (!r) {
-            *ptz += 4;
-            memset(s + 4, '0', 4);
-        } else {
-            fill_t_4_digits(s + 4, r, ptz);
-        }
+        *ptz = r ? tz_100_lut[r] : tz_100_lut[q] + 2;
+        memcpy(s, &ch_100_lut[q << 1], 2);
+        memcpy(s + 2, &ch_100_lut[r << 1], 2);
     }
-
-    return 8;
 }
 
-static inline int32_t fill_t_16_digits(char *buffer, uint64_t digits, int32_t *ptz) {
+static inline void fill_t_8_digits(char *buffer, uint32_t num, int32_t *ptz) {
     char *s = buffer;
 
-    if (digits < 100'000'000llu) {
+    if (!num) {
+        *ptz += 8;
         memset(s, '0', 8);
-        fill_t_8_digits(s + 8, (uint32_t)digits, ptz);
     } else {
-        uint32_t q = (uint32_t)(digits / 100'000'000);
-        uint32_t r = (uint32_t)(digits - (uint64_t)q * 100'000'000);
-
-        fill_t_8_digits(s, q, ptz);
-        if (!r) {
-            *ptz += 8;
-            memset(s + 8, '0', 8);
-        } else {
-            fill_t_8_digits(s + 8, r, ptz);
-        }
+        uint32_t q = FAST_DIV10000(num);
+        uint32_t r = num - q * 10'000;
+        fill_t_4_digits(s, q, ptz);
+        fill_t_4_digits(s + 4, r, ptz);
     }
-
-    return 16;
 }
 
-static inline int32_t fill_1_4_digits(char *buffer, uint32_t digits, int32_t *ptz) {
+static inline int32_t fill_1_4_digits(char *buffer, uint32_t num, int32_t *ptz) {
     char *s = buffer;
 
-    if (digits < 100) {
-        if (digits >= 10) {
-            *ptz = tz_100_lut[digits];
-            memcpy(s, &ch_100_lut[digits << 1], 2);
+    if (num < 100) {
+        if (num >= 10) {
+            *ptz = tz_100_lut[num];
+            memcpy(s, &ch_100_lut[num << 1], 2);
             s += 2;
         } else {
             *ptz = 0;
-            *s++ = digits + '0';
+            *s++ = num + '0';
         }
     } else {
-        uint32_t q = FAST_DIV100(digits);
-        uint32_t r = digits - q * 100;
+        uint32_t q = FAST_DIV100(num);
+        uint32_t r = num - q * 100;
 
         if (q >= 10) {
             *ptz = tz_100_lut[q];
@@ -516,82 +215,62 @@ static inline int32_t fill_1_4_digits(char *buffer, uint32_t digits, int32_t *pt
             *s++ = q + '0';
         }
 
-        if (!r) {
-            *ptz += 2;
-            memset(s, '0', 2);
-            s += 2;
-        } else {
-            *ptz = tz_100_lut[r];
-            memcpy(s, &ch_100_lut[r << 1], 2);
-            s += 2;
-        }
+        *ptz = r ? tz_100_lut[r] : *ptz + 2;
+        memcpy(s, &ch_100_lut[r << 1], 2);
+        s += 2;
     }
 
     return (int32_t)(s - buffer);
 }
 
-static inline int32_t fill_1_8_digits(char *buffer, uint32_t digits, int32_t *ptz) {
+INLINE_ATTR
+static inline int32_t fill_1_16_digits(char *buffer, uint64_t num) {
     char *s = buffer;
+    int32_t tz = 0;
 
-    if (digits < 10'000) {
-        return fill_1_4_digits(s, digits, ptz);
-    } else {
-        uint32_t q = FAST_DIV10000(digits);
-        uint32_t r = digits - q * 10'000;
-
-        s += fill_1_4_digits(s, q, ptz);
-        if (!r) {
-            *ptz += 4;
-            memset(s, '0', 4);
+    uint32_t q = (uint32_t)(num >= 100'000'000llu ? (num / 100'000'000u) : num);
+    {
+        uint32_t q0 = q >= 10'000u ? FAST_DIV10000(q) : q;
+        s += fill_1_4_digits(s, q0, &tz);
+        if (q >= 10'000u) {
+            uint32_t r0 = q - q0 * 10'000;
+            fill_t_4_digits(s, r0, &tz);
             s += 4;
-        } else {
-            s += fill_t_4_digits(s, r, ptz);
         }
+    }
+
+    if (num >= 100'000'000llu) {
+        uint32_t r = (uint32_t)(num - (uint64_t)q * 100'000'000u);
+        fill_t_8_digits(s, r, &tz);
+        s += 8;
     }
 
     return (int32_t)(s - buffer);
 }
 
-static inline int32_t fill_1_16_digits(char *buffer, uint64_t digits, int32_t *ptz) {
-    char *s = buffer;
-
-    if (digits < 100'000'000llu) {
-        return fill_1_8_digits(s, (uint32_t)digits, ptz);
-    } else {
-        uint32_t q = (uint32_t)(digits / 100'000'000);
-        uint32_t r = (uint32_t)(digits - (uint64_t)q * 100'000'000);
-
-        s += fill_1_8_digits(s, q, ptz);
-        if (!r) {
-            *ptz += 8;
-            memset(s, '0', 8);
-            s += 8;
-        } else {
-            s += fill_t_8_digits(s, r, ptz);
-        }
+static inline int32_t fill_1_20_digits(char *buffer, uint64_t num) {
+    int32_t tz = 0;
+    if (num < 10'000'000'000'000'000llu) {
+        return fill_1_16_digits(buffer, num);
     }
 
-    return (int32_t)(s - buffer);
-}
-
-static inline int32_t fill_1_20_digits(char *buffer, uint64_t digits, int32_t *ptz) {
     char *s = buffer;
+    uint32_t q = (uint32_t)(num / 10'000'000'000'000'000llu);
+    uint64_t r = (num - (uint64_t)q * 10'000'000'000'000'000llu);
 
-    if (digits < 10'000'000'000'000'000llu) {
-        return fill_1_16_digits(s, digits, ptz);
+    s += fill_1_4_digits(s, q, &tz);
+    if (!r) {
+        memset(s, '0', 16);
     } else {
-        uint32_t q = (uint32_t)(digits / 10'000'000'000'000'000llu);
-        uint64_t r = (digits - (uint64_t)q * 10'000'000'000'000'000llu);
-
-        s += fill_1_4_digits(s, q, ptz);
-        if (!r) {
-            *ptz += 16;
-            memset(s, '0', 16);
-            s += 16;
-        } else {
-            s += fill_t_16_digits(s, r, ptz);
+        uint32_t rq = 0, rr = (uint32_t)r;
+        if (r >= 100'000'000) {
+            rq = (uint32_t)(r / 100'000'000);
+            rr = (uint32_t)(r - (uint64_t)rq * 100'000'000);
         }
+        fill_t_8_digits(s, rq, &tz);
+        fill_t_8_digits(s + 8, rr, &tz);
     }
+    s += 16;
 
     return (int32_t)(s - buffer);
 }
@@ -613,28 +292,27 @@ int jnum_itoa(int32_t num, char *buffer) {
         n = num;
     }
 
-    if (n < 100'000'000) {
-        s += fill_1_8_digits(s, n, &tz);
+    if (n < 100'000'000u) {
+        uint32_t q0 = n >= 10'000u ? FAST_DIV10000(n) : n;
+        s += fill_1_4_digits(s, q0, &tz);
+        if (n >= 10'000u) {
+            uint32_t r0 = n - q0 * 10'000;
+            fill_t_4_digits(s, r0, &tz);
+            s += 4;
+        }
     } else {
         uint32_t q = (uint32_t)(((uint64_t)n * 1'441'151'881) >> 57); /* n / 100000000 */
         uint32_t r = n - q * 100'000'000;
 
         if (q >= 10) {
-            tz = tz_100_lut[q];
             memcpy(s, &ch_100_lut[q << 1], 2);
             s += 2;
         } else {
-            tz = 0;
             *s++ = q + '0';
         }
 
-        if (!r) {
-            tz += 8;
-            memset(s, '0', 8);
-            s += 8;
-        } else {
-            s += fill_t_8_digits(s, r, &tz);
-        }
+        fill_t_8_digits(s, r, &tz);
+        s += 8;
     }
 
     *s = '\0';
@@ -644,7 +322,6 @@ int jnum_itoa(int32_t num, char *buffer) {
 int jnum_ltoa(int64_t num, char *buffer) {
     char *s = buffer;
     uint64_t n = 0;
-    int32_t tz = 0;
 
     if (num == 0) {
         memcpy(s, "0", 2);
@@ -658,7 +335,7 @@ int jnum_ltoa(int64_t num, char *buffer) {
         n = num;
     }
 
-    s += fill_1_20_digits(s, n, &tz);
+    s += fill_1_20_digits(s, n);
 
     *s = '\0';
     return (int)(s - buffer);
@@ -1094,71 +771,18 @@ static const int8_t pow10_exp_lut[POW10_LUT_MAX_IDX - POW10_LUT_MIN_IDX + 1] = {
     -46, -47, -47, -47, -47, -47, -48, -48, -48, -48, -48, -49, -49, -49, -49, -49, -50, -50, -50};
 #endif
 
-static inline int32_t fill_significand(char *buffer, uint64_t digits, int32_t *ptz) {
-    char *s = buffer;
-
-    uint32_t q = (uint32_t)(digits / 100'000'000);
-    uint32_t r = (uint32_t)(digits - (uint64_t)q * 100'000'000);
-
-#if USING_SMALL_LUT
-    if (q < 10'000) {
-        s += fill_t_4_digits(s, q, ptz);
-    } else
-#endif
-    {
-        uint32_t q1 = FAST_DIV10000(q);
-        uint32_t r1 = q - q1 * 10'000;
-        if (q1 < 100) {
-            if (q1 >= 10) {
-                *ptz = tz_100_lut[q1];
-                memcpy(s, &ch_100_lut[q1 << 1], 2);
-                s += 2;
-            } else {
-                *ptz = 0;
-                *s++ = q1 + '0';
-            }
-        } else {
-            uint32_t q2 = FAST_DIV100(q1);
-            uint32_t r2 = q1 - q2 * 100;
-
-            *ptz = tz_100_lut[r2];
-            *s++ = q2 + '0';
-            memcpy(s, &ch_100_lut[r2 << 1], 2);
-            s += 2;
-        }
-
-        if (!r1) {
-            *ptz += 4;
-            memset(s, '0', 4);
-            s += 4;
-        } else {
-            s += fill_t_4_digits(s, r1, ptz);
-        }
-    }
-
-    if (!r) {
-        *ptz += 8;
-        memset(s, '0', 8);
-        s += 8;
-    } else {
-        s += fill_t_8_digits(s, r, ptz);
-    }
-
-    return (int32_t)(s - buffer);
-}
-
 static inline int32_t ldouble_convert(diy_fp_t *v, char *buffer, int32_t *vnum_digits) {
 #if USING_SMALL_LUT
     const uint8_t s_lut[8] = {8, 9, 10, 3, 4, 5, 6, 7};
-    int32_t s = s_lut[v->e & 0x7];
-    v->f = (v->f << s) + ((uint64_t)1 << (s - 1));
-    v->e -= s;
+    int32_t shift = s_lut[v->e & 0x7];
+    v->f = (v->f << shift) + ((uint64_t)1 << (shift - 1));
+    v->e -= shift;
     v->e >>= 3;
 #else
     const uint8_t s_lut[4] = {8, 9, 6, 7};
-    int32_t s = s_lut[v->e & 0x3];
-    v->f = (v->f << s) + ((uint64_t)1 << (s - 1));
-    v->e -= s;
+    int32_t shift = s_lut[v->e & 0x3];
+    v->f = (v->f << shift) + ((uint64_t)1 << (shift - 1));
+    v->e -= shift;
     v->e >>= 2;
 #endif
 
@@ -1171,34 +795,84 @@ static inline int32_t ldouble_convert(diy_fp_t *v, char *buffer, int32_t *vnum_d
 
     v->e -= exp10;
     v->f = u128_mul(pow10, v->f).hi;
-    uint32_t delta = (uint32_t)(pow10 >> (64 - s));
-    uint32_t remainder = 0;
-    uint64_t orig = v->f;
+    uint32_t delta = (uint32_t)(pow10 >> (64 - shift));
+    int32_t tz = 0;
+    char *s = buffer;
 
-    v->f = orig / 10'000;
-    remainder = (uint32_t)(orig - v->f * 10'000);
-    v->e += 4;
+    uint64_t q = (v->f / 10'000);
+    uint32_t r = (uint32_t)(v->f - q * 10'000);
+    uint32_t q0 = (uint32_t)(q / 100'000'000);
+    uint32_t r0 = (uint32_t)(q - (uint64_t)q0 * 100'000'000);
 
-    int32_t num_digits, trailing_zeros;
-    num_digits = fill_significand(buffer, v->f, &trailing_zeros);
-    *vnum_digits = num_digits - trailing_zeros;
-
-    if (remainder > delta) {
-        uint32_t q = FAST_DIV100(remainder);
-        uint32_t r = remainder - q * 100;
-        char *tails = buffer + num_digits;
-
-        memcpy(tails, &ch_100_lut[q << 1], 2);
-        memcpy(tails + 2, &ch_100_lut[r << 1], 2);
-        trailing_zeros = ((uint32_t)(tails[1] - '0') * 100 + r <= delta)
-                           ? 3
-                           : ((r <= delta) ? 2 : (((uint32_t)(tails[3] - '0') <= delta) ? 1 : 0));
-        v->e -= 4 - trailing_zeros;
-        num_digits += 4 - trailing_zeros;
-        *vnum_digits = num_digits;
+    uint32_t q1, r1;
+#if USING_SMALL_LUT
+    if (q0 < 10'000u) {
+        tz = 0;
+        r1 = (uint32_t)q0;
+    } else
+#endif
+    {
+        q1 = FAST_DIV10000(q0);
+        r1 = q0 - q1 * 10'000;
+        if (q1 < 100) {
+            if (q1 >= 10) {
+                tz = tz_100_lut[q1];
+                memcpy(s, &ch_100_lut[q1 << 1], 2);
+                s += 2;
+            } else {
+                tz = 0;
+                *s++ = q1 + '0';
+            }
+        } else {
+            uint32_t q2 = FAST_DIV100(q1);
+            uint32_t r2 = q1 - q2 * 100;
+            tz = tz_100_lut[r2];
+            *s++ = q2 + '0';
+            memcpy(s, &ch_100_lut[r2 << 1], 2);
+            s += 2;
+        }
     }
 
-    return num_digits;
+    if (delta >= r) {
+        v->e += 4;
+        if (r1 + r0 == 0) {
+            v->e += 12;
+        } else {
+            fill_t_4_digits(s, r1, &tz);
+            s += 4;
+
+            if (r0 == 0) {
+                v->e += 8;
+            } else {
+                uint32_t q2 = FAST_DIV10000(r0);
+                uint32_t r2 = r0 - q2 * 10'000;
+                fill_t_4_digits(s, q2, &tz);
+                s += 4;
+
+                if (r2 == 0) {
+                    v->e += 4;
+                } else {
+                    fill_t_4_digits(s, r2, &tz);
+                    s += 4;
+                }
+            }
+        }
+    } else {
+        fill_t_4_digits(s, r1, &tz);
+        fill_t_8_digits(s + 4, r0, &tz);
+        s += 12;
+
+        uint32_t q2 = FAST_DIV100(r);
+        uint32_t r2 = r - q2 * 100;
+
+        memcpy(s, &ch_100_lut[q2 << 1], 2);
+        memcpy(s + 2, &ch_100_lut[r2 << 1], 2);
+        tz = ((uint32_t)(s[1] - '0') * 100 + r2 <= delta) ? 3 : ((r2 <= delta) ? 2 : ((uint32_t)(s[3] - '0') <= delta));
+        s += 4;
+    }
+
+    *vnum_digits = (int32_t)(s - buffer) - tz;
+    return (int32_t)(s - buffer);
 }
 
 /*
@@ -1252,62 +926,108 @@ static inline int32_t ldouble_convert_n(diy_fp_t *v, char *buffer, int32_t *vnum
         v->f = u128_mul(v->f, MIM_POW10_LARGE_M).hi;
     }
 
-    uint64_t orig = v->f;
-    uint64_t remainder;
-    v->f = orig / 100;
-    remainder = orig - v->f * 100;
+    int32_t tz = 0;
+    char *s = buffer;
+    uint64_t q = v->f / 100;
+    uint32_t r = (uint32_t)(v->f - q * 100);
 
-    if (v->f == 0) {
+    if (q == 0) {
         v->e += 1;
-        remainder = ch_100_lut[remainder << 1] - '0';
+        *s++ = ch_100_lut[r << 1];
     } else {
-        if (remainder <= MIM_POW10_DELTA) {
+        if (r <= MIM_POW10_DELTA) {
             v->e += 2;
-            remainder = 0;
+            r = 0;
         } else {
             v->e += 1;
-            remainder = ch_100_lut[remainder << 1] - '0';
+            r = ch_100_lut[r << 1] - '0';
+        }
+
+        if ((q >= 100'000'000llu)) {
+            uint32_t q0 = (uint32_t)(q / 100'000'000u);
+            uint32_t r0 = (uint32_t)(q - (uint64_t)q0 * 100'000'000u);
+            int32_t ae = 0;
+            if (q0 >= 10'000u) {
+                uint32_t q1 = FAST_DIV10000(q0);
+                uint32_t r1 = q0 - q1 * 10'000;
+                s += fill_1_4_digits(s, q1, &tz);
+                if (r1 + r0 + r == 0) {
+                    ae = 4;
+                } else {
+                    fill_t_4_digits(s, r1, &tz);
+                    s += 4;
+                }
+            } else {
+                s += fill_1_4_digits(s, q0, &tz);
+            }
+
+            if (r0 + r == 0) {
+                v->e += 8 + ae;
+            } else {
+                uint32_t q2 = FAST_DIV10000(r0);
+                uint32_t r2 = r0 - q2 * 10'000;
+                fill_t_4_digits(s, q2, &tz);
+                s += 4;
+                if (r2 + r == 0) {
+                    v->e += 4;
+                } else {
+                    fill_t_4_digits(s, r2, &tz);
+                    s += 4;
+                }
+            }
+        } else {
+            uint32_t q0 = (uint32_t)q;
+            if (q0 >= 10'000u) {
+                uint32_t q1 = FAST_DIV10000(q0);
+                uint32_t r1 = q0 - q1 * 10'000;
+                s += fill_1_4_digits(s, q1, &tz);
+                if (r1 + r == 0) {
+                    v->e += 4;
+                } else {
+                    fill_t_4_digits(s, r1, &tz);
+                    s += 4;
+                }
+            } else {
+                s += fill_1_4_digits(s, q0, &tz);
+            }
+        }
+
+        if (r) {
+            *s++ = (char)(r + '0');
+            tz = 0;
         }
     }
 
-    int32_t num_digits = 0, trailing_zeros = 0;
-    if (v->f) {
-        num_digits = fill_1_16_digits(buffer, v->f, &trailing_zeros);
-    }
-    if (remainder) {
-        buffer[num_digits++] = (char)(remainder + '0');
-        trailing_zeros = 0;
-    }
-    *vnum_digits = num_digits - trailing_zeros;
-    return num_digits;
+    *vnum_digits = (int32_t)(s - buffer) - tz;
+    return (int32_t)(s - buffer);
 }
 
 static inline int32_t fill_exponent(int32_t K, char *buffer) {
-    int32_t i = 0, k = 0;
+    char *s = buffer;
 
     if (K < 0) {
-        buffer[i++] = '-';
+        *s++ = '-';
         K = -K;
     } else {
-        buffer[i++] = '+';
+        *s++ = '+';
     }
 
     if (K < 100) {
         if (K < 10) {
-            buffer[i++] = '0' + K;
+            *s++ = '0' + K;
         } else {
-            memcpy(&buffer[i], &ch_100_lut[K << 1], 2);
-            i += 2;
+            memcpy(s, &ch_100_lut[K << 1], 2);
+            s += 2;
         }
     } else {
-        k = FAST_DIV100(K);
-        K -= k * 100;
-        buffer[i++] = '0' + k;
-        memcpy(&buffer[i], &ch_100_lut[K << 1], 2);
-        i += 2;
+        uint32_t q = FAST_DIV100(K);
+        uint32_t r = K - q * 100;
+        *s++ = '0' + q;
+        memcpy(s, &ch_100_lut[r << 1], 2);
+        s += 2;
     }
 
-    return i;
+    return (int32_t)(s - buffer);
 }
 
 static inline char *ldouble_format(char *buffer, int32_t num_digits, int32_t vnum_digits, int32_t decimal_point) {
@@ -1430,15 +1150,13 @@ int jnum_dtoa(double num, char *buffer) {
 
             if (v.e >= -DP_SIGNIFICAND_SIZE && v.e <= 0 && (v.f & (((uint64_t)1 << -v.e) - 1)) == 0) {
                 /* small integer. */
-                int32_t tz, n;
-                n = fill_1_16_digits(s, v.f >> -v.e, &tz);
+                int32_t n = fill_1_16_digits(s, v.f >> -v.e);
                 memcpy(s + n, ".0", 3);
                 return n + 2 + signbit;
             }
             if (v.e > 0 && v.e <= (63 - DP_SIGNIFICAND_SIZE)) {
                 /* big integer. */
-                int32_t tz, n;
-                n = fill_1_20_digits(s, v.f << v.e, &tz);
+                int32_t n = fill_1_20_digits(s, v.f << v.e);
                 memcpy(s + n, ".0", 3);
                 return n + 2 + signbit;
             }
@@ -1921,71 +1639,65 @@ static inline double ldouble_rconvert(uint64_t f, int32_t e) {
 }
 
 #define IS_DIGIT(c) ((c) >= '0' && (c) <= '9')
+#define X10_DIGIT(v) (((v) << 3) + ((v) << 1))   // v * 10
 
 #if JNUM_MANUAL_LOOP_UNFOLD
-static inline const char *_parse_19_digits(const char *str, uint64_t *value) {
-    const char *s = str;
-    uint64_t m = *value;
-
+INLINE_ATTR
+static inline const char *_parse_ge16_digits(const char *s, uint64_t *val, int max) {
+    const char *t = s;
+    uint64_t m = *val;
     do {
-        if (!IS_DIGIT(*s)) break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s)) break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s)) break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s)) break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
 
-        if (!IS_DIGIT(*s)) break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s)) break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s)) break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s)) break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
 
-        if (!IS_DIGIT(*s)) break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s)) break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s)) break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s)) break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
 
-        if (!IS_DIGIT(*s)) break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s)) break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s)) break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s)) break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
+        if (!IS_DIGIT(*t)) break;
+        m = X10_DIGIT(m) + (*t++ - '0');
 
-        if (!IS_DIGIT(*s)) break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s)) break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
-        if (!IS_DIGIT(*s)) break;
-        m = (m << 3) + (m << 1) + (*s++ - '0');
+        while (IS_DIGIT(*t) && ((int)(t - s) < max)) {
+            m = X10_DIGIT(m) + (*t++ - '0');
+        }
     } while (0);
 
-    *value = m;
-    return s;
+    *val = m;
+    return t;
 }
 #endif
 
 int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *value) {
     const char *s = str, *t = NULL;
+    int32_t max = 0, dmax = 0;
     int32_t eneg = 0, e = 0, k = 0, i = 0;
     uint64_t neg = 0, m = 0;
-#if JNUM_MANUAL_LOOP_UNFOLD
-    uint64_t n = 0;
-#else
-    int32_t idx = 0, max = 0;
-#endif
 
     switch (*s) {
         case '-': neg = 1; FALLTHROUGH_ATTR;
@@ -2013,12 +1725,18 @@ int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *value) {
     /* ---------- Parse integer ---------- */
     while (*s == '0')
         ++s;
+
 #if JNUM_MANUAL_LOOP_UNFOLD
-    t = _parse_19_digits(s, &m);
+    t = _parse_ge16_digits(s, &m, 19);
 #else
     t = s;
-    for (idx = 0; IS_DIGIT(*t) && (idx < 19); ++idx) {
-        m = (m << 3) + (m << 1) + (*t++ - '0');
+    while (1) {
+        if ((t - s == 18) || !IS_DIGIT(t[0]) || !IS_DIGIT(t[1])) break;
+        m = m * 100 + (t[0] - '0') * 10 + (t[1] - '0');
+        t += 2;
+    }
+    if (IS_DIGIT(*t)) {
+        m = X10_DIGIT(m) + (*t++ - '0');
     }
 #endif
     k = (int)(t - s);
@@ -2035,38 +1753,31 @@ int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *value) {
                 }
             }
 
-#if JNUM_MANUAL_LOOP_UNFOLD
-            n = m;
-            t = _parse_19_digits(s, &m);
-            if (k + (int)(t - s) < 20 && !IS_DIGIT(*t)) {
-                k += (int)(t - s);
-                i -= (int)(t - s);
-                s = t;
-            } else {
-                m = n;
-                while (IS_DIGIT(*s) && (k != 19)) {
-                    m = (m << 3) + (m << 1) + (*s++ - '0');
-                    ++k;
-                    --i;
-                }
-                while (IS_DIGIT(*s))
-                    ++s;
-            }
-#else
-            t = s;
             max = 19 - k;
-            for (idx = 0; IS_DIGIT(*t) && (idx < max); ++idx) {
-                m = (m << 3) + (m << 1) + (*t++ - '0');
+#if JNUM_MANUAL_LOOP_UNFOLD
+            if (max >= 16) {
+                t = _parse_ge16_digits(s, &m, max);
+            } else
+#endif
+            {
+                t = s;
+                dmax = max & 0xfe;
+                while (1) {
+                    if ((int)(t - s) == dmax || !IS_DIGIT(t[0]) || !IS_DIGIT(t[1])) break;
+                    m = m * 100 + (t[0] - '0') * 10 + (t[1] - '0');
+                    t += 2;
+                }
+                if (IS_DIGIT(*t) && ((int)(t - s) < max)) {
+                    m = X10_DIGIT(m) + (*t++ - '0');
+                }
             }
-            k += (int)(t - s);
-            i -= (int)(t - s);
+            dmax = (int)(t - s);
+            k += dmax;
+            i -= dmax;
             s = t;
 
-            if (unlikely(IS_DIGIT(*s))) {
-                while (IS_DIGIT(*s))
-                    ++s;
-            }
-#endif
+            while (IS_DIGIT(*s))
+                ++s;
             break;
 
         case '0':
@@ -2114,13 +1825,13 @@ int jnum_parse_num(const char *str, jnum_type_t *type, jnum_value_t *value) {
 
         do {
             if (!IS_DIGIT(*s)) break;
-            e = (e << 3) + (e << 1) + (*s++ - '0');
+            e = X10_DIGIT(e) + (*s++ - '0');
             if (!IS_DIGIT(*s)) break;
-            e = (e << 3) + (e << 1) + (*s++ - '0');
+            e = X10_DIGIT(e) + (*s++ - '0');
             if (!IS_DIGIT(*s)) break;
-            e = (e << 3) + (e << 1) + (*s++ - '0');
+            e = X10_DIGIT(e) + (*s++ - '0');
             if (!IS_DIGIT(*s)) break;
-            e = (e << 3) + (e << 1) + (*s++ - '0');
+            e = X10_DIGIT(e) + (*s++ - '0');
             while (IS_DIGIT(*s))
                 ++s;
         } while (0);

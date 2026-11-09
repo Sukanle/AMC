@@ -23,7 +23,7 @@
 
 #include "SKL/AMC/Core/Core.h"
 
-namespace amc {
+namespace skl::amc {
 
 // M3.4: the instantiation request cache.
 //
@@ -113,11 +113,11 @@ struct CacheDependency {
 };
 
 enum class CacheStatus : uint32_t {
-    hit = 0,
-    miss,               // no entry for this build key
-    corrupted,          // an entry exists but an artifact digest failed
-    invalid_manifest,   // an entry exists but the manifest is malformed
-    schema_mismatch,    // an entry exists for a different schema/protocol version
+    HIT = 0,
+    MISS,               // no entry for this build key
+    CORRUPTED,          // an entry exists but an artifact digest failed
+    INVALID_MANIFEST,   // an entry exists but the manifest is malformed
+    SCHEMA_MISMATCH,    // an entry exists for a different schema/protocol version
 };
 
 const char *cache_status_name(CacheStatus status);
@@ -146,7 +146,7 @@ struct LookupOptions {
 };
 
 struct CacheLookup {
-    CacheStatus status = CacheStatus::miss;
+    CacheStatus status = CacheStatus::MISS;
     std::string reason;   // e.g. "source_digest_changed"
     Hash128 build_key{};
     std::string entry;                           // entry file (may not exist on miss)
@@ -248,6 +248,6 @@ private:
     std::string _root;
 };
 
-}   // namespace amc
+}   // namespace skl::amc
 
 #endif   // AMC_CACHE_H

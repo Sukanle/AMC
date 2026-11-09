@@ -41,34 +41,35 @@ namespace {
 
 using Clock = std::chrono::steady_clock;
 
-amc::AbiModule make_module(size_t count) {
-    amc::AbiModule module;
+skl::amc::ABIModule make_module(size_t count) {
+    skl::amc::ABIModule module;
     module.package_name = "multifile_perf";
     module.package_version = "1.0";
 
-    amc::Type int_type;
+    skl::amc::Type int_type;
     int_type.name = "int";
-    int_type.kind = amc::TypeKind::primitive;
-    int_type.id = amc::hash_text("int", 0x54595045ULL);
+    int_type.kind = skl::amc::TypeKind::PRIMITIVE;
+    int_type.id = skl::amc::hash_text("int", 0x54595045ULL);
     int_type.size = 4;
     int_type.align = 4;
-    int_type.primitive_abi = amc::primitive_abi(4, amc::PrimitiveAbiKind::sint, amc::FloatFormat::none, true);
+    int_type.primitive_abi =
+        skl::amc::primitive_abi(4, skl::amc::PrimitiveABIKind::AMC_SINT, skl::amc::FloatFormat::NONE, true);
     module.types.push_back(int_type);
 
     module.types.reserve(count + 1);
     module.fields.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         const std::string name = "multifile::R" + std::to_string(i);
-        amc::Type type;
+        skl::amc::Type type;
         type.name = name;
-        type.kind = amc::TypeKind::record;
-        type.id = amc::hash_text(name, 0x54595045ULL);
+        type.kind = skl::amc::TypeKind::RECORD;
+        type.id = skl::amc::hash_text(name, 0x54595045ULL);
         type.size = 4;
         type.align = 4;
         type.field_begin = static_cast<uint32_t>(module.fields.size());
         type.field_count = 1;
 
-        amc::Field field;
+        skl::amc::Field field;
         field.owner_type = type.id;
         field.name = "value";
         field.type_id = int_type.id;
@@ -80,18 +81,18 @@ amc::AbiModule make_module(size_t count) {
     module.functions.reserve(count);
     for (size_t i = 0; i < count; ++i) {
         const std::string name = "multifile::fn" + std::to_string(i);
-        amc::Function function;
+        skl::amc::Function function;
         function.name = name;
-        function.signature = amc::hash_text(name + ":signature", 0x5349474eULL);
+        function.signature = skl::amc::hash_text(name + ":signature", 0x5349474eULL);
         function.return_type = int_type.id;
-        amc::Parameter parameter;
+        skl::amc::Parameter parameter;
         parameter.name = "value";
         parameter.type_id = int_type.id;
-        function.parameters.push_back(std::move(parameter));
+        function.params.push_back(std::move(parameter));
         module.functions.push_back(std::move(function));
     }
 
-    amc::recompute_layout_hashes(module);
+    skl::amc::recompute_layout_hashes(module);
     return module;
 }
 
@@ -107,13 +108,13 @@ public:
         fs::remove_all(directory);
         fs::create_directories(directory);
 
-        const amc::AbiModule module = make_module(1'000);
+        const skl::amc::ABIModule module = make_module(1'000);
         paths.clear();
         paths.reserve(files);
         std::string error;
         for (size_t i = 0; i < files; ++i) {
             const fs::path path = directory / ("file" + std::to_string(i) + ".abix");
-            if (!amc::write_abix(module, path.string(), error)) throw std::runtime_error("write_abix: " + error);
+            if (!skl::amc::write_abix(module, path.string(), error)) throw std::runtime_error("write_abix: " + error);
             paths.push_back(path.string());
         }
         pool = std::make_unique<llvm::DefaultThreadPool>();
@@ -132,15 +133,15 @@ public:
 };
 
 BENCHMARK_DEFINE_F(MultifileFixture, SequentialAbiLoad)(benchmark::State &state) {
-    amc::ir::LoadOptions options;
+    skl::amc::ir::LoadOptions options;
     options.semantic = false;
     options.lowering = false;
     for (auto _ : state) {
         size_t types = 0;
         for (const auto &path : paths) {
-            amc::ir::Module loaded;
+            skl::amc::ir::Module loaded;
             std::string error;
-            if (!amc::ir::load_artifact(path, loaded, error, options))
+            if (!skl::amc::ir::load_artifact(path, loaded, error, options))
                 throw std::runtime_error("load_artifact: " + error);
             types += loaded.abi.types.size();
         }
@@ -151,10 +152,10 @@ BENCHMARK_DEFINE_F(MultifileFixture, SequentialAbiLoad)(benchmark::State &state)
 BENCHMARK_REGISTER_F(MultifileFixture, SequentialAbiLoad)->Arg(1)->Arg(2)->Arg(4)->Arg(8)->Arg(16)->UseRealTime();
 
 BENCHMARK_DEFINE_F(MultifileFixture, ParallelAbiLoad)(benchmark::State &state) {
-    amc::ir::LoadOptions options;
+    skl::amc::ir::LoadOptions options;
     options.semantic = false;
     options.lowering = false;
-    std::vector<amc::ir::Module> loaded(paths.size());
+    std::vector<skl::amc::ir::Module> loaded(paths.size());
     std::vector<std::string> errors(paths.size());
     for (auto _ : state) {
         for (auto &module : loaded)
@@ -163,7 +164,7 @@ BENCHMARK_DEFINE_F(MultifileFixture, ParallelAbiLoad)(benchmark::State &state) {
             error.clear();
         for (size_t i = 0; i < paths.size(); ++i) {
             pool->async([&, i] {
-                if (!amc::ir::load_artifact(paths[i], loaded[i], errors[i], options))
+                if (!skl::amc::ir::load_artifact(paths[i], loaded[i], errors[i], options))
                     errors[i] = "load_artifact: " + errors[i];
             });
         }

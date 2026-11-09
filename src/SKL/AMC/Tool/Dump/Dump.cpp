@@ -26,9 +26,6 @@
 #include <string>
 #include <vector>
 
-using namespace amc::dump;
-using namespace amc::util;
-
 namespace {
 void print_usage() {
     fmt::print(stderr,
@@ -40,20 +37,27 @@ void print_usage() {
 }   // namespace
 
 int main(int argc, char **argv) {
+    // using namespace skl::amc::dump;
+    // using namespace skl::amc::util;
+
     std::vector<std::string> filtered;
     filtered.emplace_back(argc > 0 ? argv[0] : "amc-dump");
     for (int i = 1; i < argc; ++i) {
         const std::string argument = argv[i];
         if (argument == "--error-format") {
-            if (i + 1 >= argc) return fail(amc::ErrorCategory::usage, "options", "--error-format requires a value");
-            if (!amc::parse_error_format(argv[++i], g_error_format))
-                return fail(amc::ErrorCategory::usage, "options", "--error-format must be text or json");
+            if (i + 1 >= argc)
+                return skl::amc::util::fail(
+                    skl::amc::ErrorCategory::USAGE, "options", "--error-format requires a value");
+            if (!skl::amc::parse_error_format(argv[++i], skl::amc::util::g_error_format))
+                return skl::amc::util::fail(
+                    skl::amc::ErrorCategory::USAGE, "options", "--error-format must be text or json");
             continue;
         }
         const std::string error_prefix = "--error-format=";
         if (argument.rfind(error_prefix, 0) == 0) {
-            if (!amc::parse_error_format(argument.substr(error_prefix.size()), g_error_format))
-                return fail(amc::ErrorCategory::usage, "options", "--error-format must be text or json");
+            if (!skl::amc::parse_error_format(argument.substr(error_prefix.size()), skl::amc::util::g_error_format))
+                return skl::amc::util::fail(
+                    skl::amc::ErrorCategory::USAGE, "options", "--error-format must be text or json");
             continue;
         }
         filtered.push_back(argument);
@@ -73,45 +77,48 @@ int main(int argc, char **argv) {
     }
 
     if (diff) {
-        amc::AbiModule source, target, report;
+        skl::amc::ABIModule source, target, report;
         std::string error;
-        if (!amc::read_abix(args[2], source, error))
-            return fail(read_error_category(error), "read_abix", error, args[2]);
-        if (!amc::read_abix(args[3], target, error))
-            return fail(read_error_category(error), "read_abix", error, args[3]);
-        if (!amc::ir::build_type_mapping(source, target, report, error))
-            return fail(amc::ErrorCategory::compatibility, "build_compatibility", error);
+        if (!skl::amc::read_abix(args[2], source, error))
+            return skl::amc::util::fail(skl::amc::util::read_error_category(error), "read_abix", error, args[2]);
+        if (!skl::amc::read_abix(args[3], target, error))
+            return skl::amc::util::fail(skl::amc::util::read_error_category(error), "read_abix", error, args[3]);
+        if (!skl::amc::ir::build_type_mapping(source, target, report, error))
+            return skl::amc::util::fail(skl::amc::ErrorCategory::COMPATIBILITY, "build_compatibility", error);
         std::string text;
         if (!json) {
-            write_diff_text(source, target, report, text);
+            skl::amc::dump::write_diff_text(source, target, report, text);
             fmt::print("{}", text);
             return 0;
         }
-        write_diff_json(source, target, report, text);
+        skl::amc::dump::write_diff_json(source, target, report, text);
         try {
             auto output = fmt::output_file(args[5]);
             output.print("{}", text);
         } catch (const std::exception &e) {
-            return fail(amc::ErrorCategory::io, "amc-dump", "cannot write JSON output", args[5], e.what());
+            return skl::amc::util::fail(
+                skl::amc::ErrorCategory::IO, "amc-dump", "cannot write JSON output", args[5], e.what());
         }
         return 0;
     }
 
-    amc::AbiModule module;
+    skl::amc::ABIModule module;
     std::string error;
-    if (!amc::read_abix(args[1], module, error)) return fail(read_error_category(error), "read_abix", error, args[1]);
+    if (!skl::amc::read_abix(args[1], module, error))
+        return skl::amc::util::fail(skl::amc::util::read_error_category(error), "read_abix", error, args[1]);
     std::string text;
     if (!json) {
-        write_text(module, text);
+        skl::amc::dump::write_text(module, text);
         fmt::print("{}", text);
         return 0;
     }
-    write_json(module, text);
+    skl::amc::dump::write_json(module, text);
     try {
         auto output = fmt::output_file(args[3]);
         output.print("{}", text);
     } catch (const std::exception &e) {
-        return fail(amc::ErrorCategory::io, "amc-dump", "cannot write JSON output", args[3], e.what());
+        return skl::amc::util::fail(
+            skl::amc::ErrorCategory::IO, "amc-dump", "cannot write JSON output", args[3], e.what());
     }
     return 0;
 }

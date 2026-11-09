@@ -32,12 +32,12 @@
 #include <fmt/os.h>
 
 namespace fs = std::filesystem;
-using amc::util::fail;
-using amc::util::g_error_format;
-using amc::util::read_error_category;
-using amc::util::usage_error;
+using skl::amc::util::fail;
+using skl::amc::util::g_error_format;
+using skl::amc::util::read_error_category;
+using skl::amc::util::usage_error;
 
-namespace amc::cli {
+namespace skl::amc::cli {
 
 namespace {
 void write_bytes(const fs::path &path, const std::vector<uint8_t> &bytes, const char *stage, int &rc) {
@@ -46,13 +46,13 @@ void write_bytes(const fs::path &path, const std::vector<uint8_t> &bytes, const 
     try {
         std::ofstream out(path, std::ios::binary | std::ios::trunc);
         if (!out) {
-            rc = fail(amc::ErrorCategory::io, stage, "cannot write output", path.string());
+            rc = fail(amc::ErrorCategory::IO, stage, "cannot write output", path.string());
             return;
         }
         out.write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-        if (!out.good()) rc = fail(amc::ErrorCategory::io, stage, "cannot write output", path.string());
+        if (!out.good()) rc = fail(amc::ErrorCategory::IO, stage, "cannot write output", path.string());
     } catch (const std::exception &e) {
-        rc = fail(amc::ErrorCategory::io, stage, "cannot write output", path.string(), e.what());
+        rc = fail(amc::ErrorCategory::IO, stage, "cannot write output", path.string(), e.what());
     }
 }
 }   // namespace
@@ -100,7 +100,7 @@ int cmd_metadata(char **args, int arg_count) {
             if (format != "text" && format != "json" && format != "bin")
                 return usage_error("metadata --verify --format must be text or json");
             std::ifstream file(input, std::ios::binary);
-            if (!file) return fail(amc::ErrorCategory::io, "metadata", "cannot open input", input.string());
+            if (!file) return fail(amc::ErrorCategory::IO, "metadata", "cannot open input", input.string());
             std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
             std::vector<uint8_t> region;
             std::string error;
@@ -108,13 +108,13 @@ int cmd_metadata(char **args, int arg_count) {
             // embeds it in the `.abix.metadata` section.
             if (from_elf_flag || amc::is_binary(bytes.data(), bytes.size())) {
                 if (!amc::find_binary_section(bytes.data(), bytes.size(), ".abix.metadata", region, error))
-                    return fail(amc::ErrorCategory::format, "metadata", error, input.string());
+                    return fail(amc::ErrorCategory::FORMAT, "metadata", error, input.string());
             } else {
                 region = std::move(bytes);
             }
             amc::MetadataHeader header;
             if (!amc::read_metadata_header(region, header, error) || !amc::verify_metadata_region(region, error))
-                return fail(amc::ErrorCategory::validation, "verify_metadata", error, input.string());
+                return fail(amc::ErrorCategory::VALIDATION, "verify_metadata", error, input.string());
             if (format == "json") {
                 fmt::print("{}", amc::metadata_header_to_json(header));
             } else {
@@ -129,17 +129,17 @@ int cmd_metadata(char **args, int arg_count) {
             if (format != "bin" && format != "json")
                 return usage_error("metadata --from-elf supports --format bin or json");
             std::ifstream file(input, std::ios::binary);
-            if (!file) return fail(amc::ErrorCategory::io, "metadata", "cannot open input", input.string());
+            if (!file) return fail(amc::ErrorCategory::IO, "metadata", "cannot open input", input.string());
             std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
             std::vector<uint8_t> region;
             std::string error;
             if (!amc::find_binary_section(bytes.data(), bytes.size(), ".abix.metadata", region, error))
-                return fail(amc::ErrorCategory::format, "metadata", error, input.string());
+                return fail(amc::ErrorCategory::FORMAT, "metadata", error, input.string());
             amc::MetadataHeader header;
             if (!amc::read_metadata_header(region, header, error))
-                return fail(amc::ErrorCategory::format, "read_metadata_header", error, input.string());
+                return fail(amc::ErrorCategory::FORMAT, "read_metadata_header", error, input.string());
             if (!amc::verify_metadata_region(region, error))
-                return fail(amc::ErrorCategory::validation, "verify_metadata", error, input.string());
+                return fail(amc::ErrorCategory::VALIDATION, "verify_metadata", error, input.string());
             if (format == "json") {
                 fmt::print("{}", amc::metadata_header_to_json(header));
                 return 0;
@@ -156,7 +156,7 @@ int cmd_metadata(char **args, int arg_count) {
         if (format != "bin" && format != "meta" && format != "json")
             return usage_error("metadata --format must be bin, meta or json");
 
-        amc::AbiModule module;
+        amc::ABIModule module;
         std::string error;
         if (!amc::load_module_source(input.string(), module, error))
             return fail(read_error_category(error), "read_abix", error, input.string());
@@ -167,10 +167,10 @@ int cmd_metadata(char **args, int arg_count) {
         options.include_hash_index = include_hash_index;
         std::vector<uint8_t> region;
         if (!amc::build_metadata_region(module, options, region, error))
-            return fail(amc::ErrorCategory::internal, "build_metadata_region", error, input.string());
+            return fail(amc::ErrorCategory::INTERNAL, "build_metadata_region", error, input.string());
         amc::MetadataHeader header;
         if (!amc::read_metadata_header(region, header, error))
-            return fail(amc::ErrorCategory::internal, "read_metadata_header", error, input.string());
+            return fail(amc::ErrorCategory::INTERNAL, "read_metadata_header", error, input.string());
 
         if (format == "bin") {
             if (output.empty()) {
@@ -192,11 +192,11 @@ int cmd_metadata(char **args, int arg_count) {
             auto file = fmt::output_file(output.string());
             file.print("{}", rendered);
         } catch (const std::exception &e) {
-            return fail(amc::ErrorCategory::io, "metadata", "cannot write output", output.string(), e.what());
+            return fail(amc::ErrorCategory::IO, "metadata", "cannot write output", output.string(), e.what());
         }
         return 0;
     }
     return usage_error(command + ": unsupported subcommand");
 }
 
-}   // namespace amc::cli
+}   // namespace skl::amc::cli

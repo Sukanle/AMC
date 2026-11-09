@@ -30,12 +30,12 @@
 #include <fmt/os.h>
 
 namespace fs = std::filesystem;
-using amc::util::fail;
-using amc::util::g_error_format;
-using amc::util::read_error_category;
-using amc::util::usage_error;
+using skl::amc::util::fail;
+using skl::amc::util::g_error_format;
+using skl::amc::util::read_error_category;
+using skl::amc::util::usage_error;
 
-namespace amc::cli {
+namespace skl::amc::cli {
 
 int cmd_adapter(char **args, int arg_count) {
     const std::string command = args[1];
@@ -71,7 +71,7 @@ int cmd_adapter(char **args, int arg_count) {
         if (source_path.empty() || target_path.empty())
             return usage_error("adapter requires <source.abix> <target.abix> [-o <file>]");
 
-        amc::AbiModule source, target, report;
+        amc::ABIModule source, target, report;
         std::string error;
         if (!amc::load_module_source(source_path.string(), source, error))
             return fail(read_error_category(error), "read_abix", error, source_path.string());
@@ -82,10 +82,10 @@ int cmd_adapter(char **args, int arg_count) {
         amc::diagnostics::DiagnosticList diagnostics;
         if (!amc::pass::build_compatibility_report(source, target, report, context, diagnostics)) {
             const std::string message = diagnostics.empty() ? error : diagnostics.front().message;
-            return fail(amc::ErrorCategory::compatibility, "build_compatibility", message);
+            return fail(amc::ErrorCategory::COMPATIBILITY, "build_compatibility", message);
         }
         const std::string text = amc::generate_adapter(source, target, report, options, error);
-        if (!error.empty()) return fail(amc::ErrorCategory::compatibility, "adapter", error, source_path.string());
+        if (!error.empty()) return fail(amc::ErrorCategory::COMPATIBILITY, "adapter", error, source_path.string());
         if (output.empty()) {
             fmt::print("{}", text);
             return 0;
@@ -95,17 +95,17 @@ int cmd_adapter(char **args, int arg_count) {
             fs::create_directories(output.parent_path(), ec);
             if (ec)
                 return fail(
-                    amc::ErrorCategory::io, "adapter", "cannot create output directory", output.string(), ec.message());
+                    amc::ErrorCategory::IO, "adapter", "cannot create output directory", output.string(), ec.message());
         }
         try {
             auto file = fmt::output_file(output.string());
             file.print("{}", text);
         } catch (const std::exception &e) {
-            return fail(amc::ErrorCategory::io, "adapter", "cannot write output", output.string(), e.what());
+            return fail(amc::ErrorCategory::IO, "adapter", "cannot write output", output.string(), e.what());
         }
         return 0;
     }
     return usage_error(command + ": unsupported subcommand");
 }
 
-}   // namespace amc::cli
+}   // namespace skl::amc::cli

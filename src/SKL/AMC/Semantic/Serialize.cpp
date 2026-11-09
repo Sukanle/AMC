@@ -27,7 +27,7 @@
 
 #include <fmt/format.h>
 
-namespace amc::semantic {
+namespace skl::amc::semantic {
 namespace {
 
 constexpr std::string_view semantic_schema = "amc.semantic/2";
@@ -61,103 +61,111 @@ Hash128 hash_from_hex(const std::string &text) {
 }
 
 const char *type_kind_name(SemanticTypeKind kind) {
+    using case_enum_type = decltype(kind);
     switch (kind) {
-        case SemanticTypeKind::builtin:            return "builtin";
-        case SemanticTypeKind::pointer:            return "pointer";
-        case SemanticTypeKind::lvalue_reference:   return "lvalue_reference";
-        case SemanticTypeKind::rvalue_reference:   return "rvalue_reference";
-        case SemanticTypeKind::array:              return "array";
-        case SemanticTypeKind::record:             return "record";
-        case SemanticTypeKind::enumeration:        return "enumeration";
-        case SemanticTypeKind::function:           return "function";
-        case SemanticTypeKind::member_pointer:     return "member_pointer";
-        case SemanticTypeKind::template_parameter: return "template_parameter";
-        case SemanticTypeKind::template_instance:  return "template_instance";
-        case SemanticTypeKind::dependent:          return "dependent";
-        case SemanticTypeKind::unknown:            return "unknown";
+        case case_enum_type::BUILTIN:  return "builtin";
+        case case_enum_type::POINTER:  return "pointer";
+        case case_enum_type::LVREF:    return "lvalue_reference";
+        case case_enum_type::RVREF:    return "rvalue_reference";
+        case case_enum_type::ARRAY:    return "array";
+        case case_enum_type::RECORD:   return "record";
+        case case_enum_type::ENUM:     return "enumeration";
+        case case_enum_type::FUNC:     return "function";
+        case case_enum_type::MEMPTR:   return "member_pointer";
+        case case_enum_type::TEMPARAM: return "template_parameter";
+        case case_enum_type::TEMINST:  return "template_instance";
+        case case_enum_type::DEPEND:   return "dependent";
+        case case_enum_type::UNKNOWN:  return "unknown";
     }
     return "unknown";
 }
 
-const char *template_kind_name(TemplateKind kind) {
+const char *template_kind_name(TemplateTypeKind kind) {
+    using case_enum_type = decltype(kind);
     switch (kind) {
-        case TemplateKind::function: return "function";
-        case TemplateKind::class_:   return "class";
-        case TemplateKind::alias:    return "alias";
-        case TemplateKind::variable: return "variable";
+        case case_enum_type::FUNC:     return "function";
+        case case_enum_type::CLASS:    return "class";
+        case case_enum_type::ALIAS:    return "alias";
+        case case_enum_type::VARIABLE: return "variable";
     }
     return "function";
 }
 
-const char *parameter_kind_name(TemplateParameterKind kind) {
+const char *parameter_kind_name(TemplateParamKind kind) {
+    using case_enum_type = decltype(kind);
     switch (kind) {
-        case TemplateParameterKind::type:              return "type";
-        case TemplateParameterKind::non_type:          return "non_type";
-        case TemplateParameterKind::template_template: return "template_template";
+        case case_enum_type::TYPE:     return "type";
+        case case_enum_type::NON:      return "non_type";
+        case case_enum_type::TEMPLATE: return "template_template";
     }
     return "type";
 }
 
-const char *argument_kind_name(TemplateArgumentKind kind) {
+const char *argument_kind_name(TemplateArgKind kind) {
+    using case_enum_type = decltype(kind);
     switch (kind) {
-        case TemplateArgumentKind::type:      return "type";
-        case TemplateArgumentKind::integral:  return "integral";
-        case TemplateArgumentKind::template_: return "template";
-        case TemplateArgumentKind::pack:      return "pack";
-        case TemplateArgumentKind::other:     return "other";
+        case case_enum_type::TYPE:     return "type";
+        case case_enum_type::INTEGRAL: return "integral";
+        case case_enum_type::TEMPLATE: return "template";
+        case case_enum_type::PACK:     return "pack";
+        case case_enum_type::OTHER:    return "other";
     }
     return "other";
 }
 
-const char *origin_name(InstantiationOrigin origin) {
+const char *origin_name(InstOrigin origin) {
+    using case_enum_type = decltype(origin);
     switch (origin) {
-        case InstantiationOrigin::implicit_compiler: return "implicit_compiler";
-        case InstantiationOrigin::explicit_source:   return "explicit_source";
-        case InstantiationOrigin::amc_requested:     return "amc_requested";
-        case InstantiationOrigin::config_requested:  return "config_requested";
+        case case_enum_type::IMPLICIT_COMPILER: return "implicit_compiler";
+        case case_enum_type::EXPLICIT_SOURCE:   return "explicit_source";
+        case case_enum_type::AMC_REQUESTED:     return "amc_requested";
+        case case_enum_type::CONFIG_REQUESTED:  return "config_requested";
     }
     return "implicit_compiler";
 }
 
-const char *function_kind_name(SemanticFunctionKind kind) {
+const char *function_kind_name(SemanticFuncKind kind) {
+    using case_enum_type = decltype(kind);
     switch (kind) {
-        case SemanticFunctionKind::free_function:   return "free_function";
-        case SemanticFunctionKind::member_function: return "member_function";
-        case SemanticFunctionKind::constructor:     return "constructor";
-        case SemanticFunctionKind::destructor:      return "destructor";
-        case SemanticFunctionKind::operator_:       return "operator";
-        case SemanticFunctionKind::conversion:      return "conversion";
+        case case_enum_type::FREE:       return "free_function";
+        case case_enum_type::MEMBER:     return "member_function";
+        case case_enum_type::CREATE:     return "constructor";
+        case case_enum_type::DESTORY:    return "destructor";
+        case case_enum_type::OPETATOR:   return "operator";
+        case case_enum_type::CONVERSION: return "conversion";
     }
     return "free_function";
 }
 
 const char *ownership_kind_name(OwnershipKind kind) {
+    using case_enum_type = decltype(kind);
     switch (kind) {
-        case OwnershipKind::unspecified: return "unspecified";
-        case OwnershipKind::borrowed:    return "borrowed";
-        case OwnershipKind::owned:       return "owned";
-        case OwnershipKind::shared:      return "shared";
-        case OwnershipKind::opaque:      return "opaque";
-        case OwnershipKind::transferred: return "transferred";
+        case case_enum_type::UNSPECIFIED: return "unspecified";
+        case case_enum_type::BORROWED:    return "borrowed";
+        case case_enum_type::OWNED:       return "owned";
+        case case_enum_type::SHARED:      return "shared";
+        case case_enum_type::OPAQUE:      return "opaque";
+        case case_enum_type::TRANSFERRED: return "transferred";
     }
     return "unspecified";
 }
 
 const char *lifetime_kind_name(LifetimeKind kind) {
+    using case_enum_type = decltype(kind);
     switch (kind) {
-        case LifetimeKind::unknown: return "unknown";
-        case LifetimeKind::static_: return "static";
-        case LifetimeKind::caller:  return "caller";
-        case LifetimeKind::owner:   return "owner";
-        case LifetimeKind::scope:   return "scope";
+        case case_enum_type::UNKNOWN: return "unknown";
+        case case_enum_type::STATIC:  return "static";
+        case case_enum_type::CALLER:  return "caller";
+        case case_enum_type::OWNER:   return "owner";
+        case case_enum_type::SCOPE:   return "scope";
     }
     return "unknown";
 }
 
-const char *mutability_name(Mutability value) { return value == Mutability::mutable_ ? "mutable" : "immutable"; }
+const char *mutability_name(Mutability value) { return value == Mutability::MUTABLE ? "mutable" : "immutable"; }
 
 const char *interaction_name(InteractionKind kind) {
-    return kind == InteractionKind::return_value ? "return_value" : "parameter";
+    return kind == InteractionKind::RETURN ? "return_value" : "parameter";
 }
 
 Json source_json(const SourceLocation &source) {
@@ -168,7 +176,7 @@ Json source_json(const SourceLocation &source) {
     return value;
 }
 
-Json parameter_json(const TemplateParameter &parameter) {
+Json parameter_json(const TemplateParam &parameter) {
     Json value = Json::object();
     value.set("kind", parameter_kind_name(parameter.kind));
     value.set("index", static_cast<long long>(parameter.index));
@@ -181,84 +189,84 @@ Json parameter_json(const TemplateParameter &parameter) {
     return value;
 }
 
-Json argument_json(const TemplateArgument &argument) {
+Json argument_json(const TemplateArg &argument) {
     Json value = Json::object();
     value.set("kind", argument_kind_name(argument.kind));
     if (argument.type.valid()) value.set("type", id_hex(argument.type.value));
-    if (argument.kind == TemplateArgumentKind::integral) value.set("value", static_cast<long long>(argument.value));
+    if (argument.kind == decltype(argument.kind)::INTEGRAL) value.set("value", static_cast<long long>(argument.value));
     if (argument.template_decl.valid()) value.set("template_decl", id_hex(argument.template_decl.value));
     if (argument.canonical.lo != 0 || argument.canonical.hi != 0) value.set("canonical", id_hex(argument.canonical));
     return value;
 }
 
 SemanticTypeKind parse_type_kind(const std::string &name) {
-    if (name == "builtin") return SemanticTypeKind::builtin;
-    if (name == "pointer") return SemanticTypeKind::pointer;
-    if (name == "lvalue_reference") return SemanticTypeKind::lvalue_reference;
-    if (name == "rvalue_reference") return SemanticTypeKind::rvalue_reference;
-    if (name == "array") return SemanticTypeKind::array;
-    if (name == "record") return SemanticTypeKind::record;
-    if (name == "enumeration") return SemanticTypeKind::enumeration;
-    if (name == "function") return SemanticTypeKind::function;
-    if (name == "member_pointer") return SemanticTypeKind::member_pointer;
-    if (name == "template_parameter") return SemanticTypeKind::template_parameter;
-    if (name == "template_instance") return SemanticTypeKind::template_instance;
-    if (name == "dependent") return SemanticTypeKind::dependent;
-    return SemanticTypeKind::unknown;
+    if (name == "builtin") return SemanticTypeKind::BUILTIN;
+    if (name == "pointer") return SemanticTypeKind::POINTER;
+    if (name == "lvalue_reference") return SemanticTypeKind::LVREF;
+    if (name == "rvalue_reference") return SemanticTypeKind::RVREF;
+    if (name == "array") return SemanticTypeKind::ARRAY;
+    if (name == "record") return SemanticTypeKind::RECORD;
+    if (name == "enumeration") return SemanticTypeKind::ENUM;
+    if (name == "function") return SemanticTypeKind::FUNC;
+    if (name == "member_pointer") return SemanticTypeKind::MEMPTR;
+    if (name == "template_parameter") return SemanticTypeKind::TEMPARAM;
+    if (name == "template_instance") return SemanticTypeKind::TEMINST;
+    if (name == "dependent") return SemanticTypeKind::DEPEND;
+    return SemanticTypeKind::UNKNOWN;
 }
 
-TemplateKind parse_template_kind(const std::string &name) {
-    if (name == "class") return TemplateKind::class_;
-    if (name == "alias") return TemplateKind::alias;
-    if (name == "variable") return TemplateKind::variable;
-    return TemplateKind::function;
+TemplateTypeKind parse_template_kind(const std::string &name) {
+    if (name == "class") return TemplateTypeKind::CLASS;
+    if (name == "alias") return TemplateTypeKind::ALIAS;
+    if (name == "variable") return TemplateTypeKind::VARIABLE;
+    return TemplateTypeKind::FUNC;
 }
 
-TemplateParameterKind parse_parameter_kind(const std::string &name) {
-    if (name == "non_type") return TemplateParameterKind::non_type;
-    if (name == "template_template") return TemplateParameterKind::template_template;
-    return TemplateParameterKind::type;
+TemplateParamKind parse_parameter_kind(const std::string &name) {
+    if (name == "non_type") return TemplateParamKind::NON;
+    if (name == "template_template") return TemplateParamKind::TEMPLATE;
+    return TemplateParamKind::TYPE;
 }
 
-TemplateArgumentKind parse_argument_kind(const std::string &name) {
-    if (name == "integral") return TemplateArgumentKind::integral;
-    if (name == "template") return TemplateArgumentKind::template_;
-    if (name == "pack") return TemplateArgumentKind::pack;
-    if (name == "other") return TemplateArgumentKind::other;
-    return TemplateArgumentKind::type;
+TemplateArgKind parse_argument_kind(const std::string &name) {
+    if (name == "integral") return TemplateArgKind::INTEGRAL;
+    if (name == "template") return TemplateArgKind::TEMPLATE;
+    if (name == "pack") return TemplateArgKind::PACK;
+    if (name == "other") return TemplateArgKind::OTHER;
+    return TemplateArgKind::TYPE;
 }
 
-InstantiationOrigin parse_origin(const std::string &name) {
-    if (name == "explicit_source") return InstantiationOrigin::explicit_source;
-    if (name == "amc_requested") return InstantiationOrigin::amc_requested;
-    if (name == "config_requested") return InstantiationOrigin::config_requested;
-    return InstantiationOrigin::implicit_compiler;
+InstOrigin parse_origin(const std::string &name) {
+    if (name == "explicit_source") return InstOrigin::EXPLICIT_SOURCE;
+    if (name == "amc_requested") return InstOrigin::AMC_REQUESTED;
+    if (name == "config_requested") return InstOrigin::CONFIG_REQUESTED;
+    return InstOrigin::IMPLICIT_COMPILER;
 }
 
-SemanticFunctionKind parse_function_kind(const std::string &name) {
-    if (name == "member_function") return SemanticFunctionKind::member_function;
-    if (name == "constructor") return SemanticFunctionKind::constructor;
-    if (name == "destructor") return SemanticFunctionKind::destructor;
-    if (name == "operator") return SemanticFunctionKind::operator_;
-    if (name == "conversion") return SemanticFunctionKind::conversion;
-    return SemanticFunctionKind::free_function;
+SemanticFuncKind parse_function_kind(const std::string &name) {
+    if (name == "member_function") return SemanticFuncKind::MEMBER;
+    if (name == "constructor") return SemanticFuncKind::CREATE;
+    if (name == "destructor") return SemanticFuncKind::DESTORY;
+    if (name == "operator") return SemanticFuncKind::OPETATOR;
+    if (name == "conversion") return SemanticFuncKind::CONVERSION;
+    return SemanticFuncKind::FREE;
 }
 
 OwnershipKind parse_ownership_kind(const std::string &name) {
-    if (name == "borrowed") return OwnershipKind::borrowed;
-    if (name == "owned") return OwnershipKind::owned;
-    if (name == "shared") return OwnershipKind::shared;
-    if (name == "opaque") return OwnershipKind::opaque;
-    if (name == "transferred") return OwnershipKind::transferred;
-    return OwnershipKind::unspecified;
+    if (name == "borrowed") return OwnershipKind::BORROWED;
+    if (name == "owned") return OwnershipKind::OWNED;
+    if (name == "shared") return OwnershipKind::SHARED;
+    if (name == "opaque") return OwnershipKind::OPAQUE;
+    if (name == "transferred") return OwnershipKind::TRANSFERRED;
+    return OwnershipKind::UNSPECIFIED;
 }
 
 LifetimeKind parse_lifetime_kind(const std::string &name) {
-    if (name == "static") return LifetimeKind::static_;
-    if (name == "caller") return LifetimeKind::caller;
-    if (name == "owner") return LifetimeKind::owner;
-    if (name == "scope") return LifetimeKind::scope;
-    return LifetimeKind::unknown;
+    if (name == "static") return LifetimeKind::STATIC;
+    if (name == "caller") return LifetimeKind::CALLER;
+    if (name == "owner") return LifetimeKind::OWNER;
+    if (name == "scope") return LifetimeKind::SCOPE;
+    return LifetimeKind::UNKNOWN;
 }
 
 SourceLocation parse_source(const Json *node) {
@@ -300,7 +308,7 @@ Json string_array_json(const std::vector<std::string> &values) {
     return array;
 }
 
-Json rust_generic_parameters_json(const std::vector<RustGenericParameter> &parameters) {
+Json rust_generic_parameters_json(const std::vector<RustGenericParam> &parameters) {
     Json array = Json::array();
     for (const auto &parameter : parameters) {
         Json value = Json::object();
@@ -322,7 +330,7 @@ Json rust_trait_method_json(const RustTraitMethod &method) {
     value.set("has_receiver", method.has_receiver);
     value.set("required", method.required);
     Json parameters = Json::array();
-    for (const auto &parameter : method.parameters) {
+    for (const auto &parameter : method.params) {
         Json item = Json::object();
         item.set("name", parameter.name);
         item.set("type", parameter.type);
@@ -342,7 +350,7 @@ void append_rust_json(Json &root, const RustSemantic &rust) {
         value.set("name", generic.name);
         value.set("path", generic.path);
         value.set("kind", generic.kind);
-        value.set("parameters", rust_generic_parameters_json(generic.parameters));
+        value.set("parameters", rust_generic_parameters_json(generic.params));
         value.set("where_clause", string_array_json(generic.where_clause));
         value.set("instances", string_array_json(generic.instances));
         generics.push_back(std::move(value));
@@ -359,7 +367,7 @@ void append_rust_json(Json &root, const RustSemantic &rust) {
         if (!trait.self_type.empty()) value.set("self_type", trait.self_type);
         if (!trait.trait_ref.empty()) value.set("trait", trait.trait_ref);
         value.set("negative", trait.negative);
-        value.set("parameters", rust_generic_parameters_json(trait.parameters));
+        value.set("parameters", rust_generic_parameters_json(trait.params));
         value.set("where_clause", string_array_json(trait.where_clause));
         value.set("supertraits", string_array_json(trait.supertraits));
         Json associated = Json::array();
@@ -444,11 +452,11 @@ std::vector<std::string> read_string_array(const Json &value, const char *key) {
     return out;
 }
 
-std::vector<RustGenericParameter> read_rust_generic_parameters(const Json &value) {
-    std::vector<RustGenericParameter> out;
+std::vector<RustGenericParam> read_rust_generic_parameters(const Json &value) {
+    std::vector<RustGenericParam> out;
     if (const Json *array = field(value, "parameters"); array != nullptr && array->is_array()) {
         for (const auto &item : array->items()) {
-            RustGenericParameter parameter;
+            RustGenericParam parameter;
             parameter.index = static_cast<uint32_t>(number_field(item, "index"));
             parameter.name = string_field(item, "name");
             parameter.kind = string_field(item, "kind");
@@ -459,25 +467,24 @@ std::vector<RustGenericParameter> read_rust_generic_parameters(const Json &value
     return out;
 }
 
-void read_rust_json(const Json &root, RustSemantic &rust) {
-    const Json *section = field(root, "rust");
-    if (section == nullptr || !section->is_object()) return;
-
-    if (const Json *generics = field(*section, "generics"); generics != nullptr && generics->is_array()) {
+void rust_generic(const Json &section, RustSemantic &rust) {
+    if (const Json *generics = field(section, "generics"); generics != nullptr && generics->is_array()) {
         for (const auto &value : generics->items()) {
             RustGeneric generic;
             generic.id = string_field(value, "id");
             generic.name = string_field(value, "name");
             generic.path = string_field(value, "path");
             generic.kind = string_field(value, "kind");
-            generic.parameters = read_rust_generic_parameters(value);
+            generic.params = read_rust_generic_parameters(value);
             generic.where_clause = read_string_array(value, "where_clause");
             generic.instances = read_string_array(value, "instances");
             rust.generics.push_back(std::move(generic));
         }
     }
+}
 
-    if (const Json *traits = field(*section, "traits"); traits != nullptr && traits->is_array()) {
+void rust_traits(const Json &section, RustSemantic &rust) {
+    if (const Json *traits = field(section, "traits"); traits != nullptr && traits->is_array()) {
         for (const auto &value : traits->items()) {
             RustTrait trait;
             trait.id = string_field(value, "id");
@@ -487,7 +494,7 @@ void read_rust_json(const Json &root, RustSemantic &rust) {
             trait.self_type = string_field(value, "self_type");
             trait.trait_ref = string_field(value, "trait");
             trait.negative = bool_field(value, "negative");
-            trait.parameters = read_rust_generic_parameters(value);
+            trait.params = read_rust_generic_parameters(value);
             trait.where_clause = read_string_array(value, "where_clause");
             trait.supertraits = read_string_array(value, "supertraits");
             if (const Json *associated = field(value, "associated_types");
@@ -515,7 +522,7 @@ void read_rust_json(const Json &root, RustSemantic &rust) {
                             RustTraitParameter entry;
                             entry.name = string_field(parameter, "name");
                             entry.type = string_field(parameter, "type");
-                            method.parameters.push_back(std::move(entry));
+                            method.params.push_back(std::move(entry));
                         }
                     }
                     trait.methods.push_back(std::move(method));
@@ -524,8 +531,11 @@ void read_rust_json(const Json &root, RustSemantic &rust) {
             rust.traits.push_back(std::move(trait));
         }
     }
+}
 
-    if (const Json *errors = field(*section, "errors"); errors != nullptr && errors->is_array()) {
+void rust_errors(const Json &section, RustSemantic &rust) {
+
+    if (const Json *errors = field(section, "errors"); errors != nullptr && errors->is_array()) {
         for (const auto &value : errors->items()) {
             RustError error;
             error.id = string_field(value, "id");
@@ -534,7 +544,7 @@ void read_rust_json(const Json &root, RustSemantic &rust) {
             error.kind = string_field(value, "kind");
             if (const Json *variants = field(value, "variants"); variants != nullptr && variants->is_array()) {
                 for (const auto &item : variants->items()) {
-                    RustErrorVariant variant;
+                    RustErrorVar variant;
                     variant.name = string_field(item, "name");
                     variant.discriminant = string_field(item, "discriminant");
                     variant.payload = string_field(item, "payload");
@@ -545,8 +555,11 @@ void read_rust_json(const Json &root, RustSemantic &rust) {
             rust.errors.push_back(std::move(error));
         }
     }
+}
 
-    if (const Json *lifetimes = field(*section, "lifetimes"); lifetimes != nullptr && lifetimes->is_array()) {
+void rust_lifetime(const Json &section, RustSemantic &rust) {
+
+    if (const Json *lifetimes = field(section, "lifetimes"); lifetimes != nullptr && lifetimes->is_array()) {
         for (const auto &value : lifetimes->items()) {
             RustLifetime lifetime;
             lifetime.owner = string_field(value, "owner");
@@ -556,10 +569,13 @@ void read_rust_json(const Json &root, RustSemantic &rust) {
             rust.lifetimes.push_back(std::move(lifetime));
         }
     }
+}
 
-    if (const Json *objects = field(*section, "trait_objects"); objects != nullptr && objects->is_array()) {
+void rust_traits_obj(const Json &section, RustSemantic &rust) {
+
+    if (const Json *objects = field(section, "trait_objects"); objects != nullptr && objects->is_array()) {
         for (const auto &value : objects->items()) {
-            RustTraitObject object;
+            RustTraitObj object;
             object.owner = string_field(value, "owner");
             object.context = string_field(value, "context");
             object.type = string_field(value, "type");
@@ -567,10 +583,13 @@ void read_rust_json(const Json &root, RustSemantic &rust) {
             rust.trait_objects.push_back(std::move(object));
         }
     }
+}
 
-    if (const Json *functions = field(*section, "async_functions"); functions != nullptr && functions->is_array()) {
+void rust_async(const Json &section, RustSemantic &rust) {
+
+    if (const Json *functions = field(section, "async_functions"); functions != nullptr && functions->is_array()) {
         for (const auto &value : functions->items()) {
-            RustAsyncFunction function;
+            RustAsyncFunc function;
             function.id = string_field(value, "id");
             function.path = string_field(value, "path");
             function.name = string_field(value, "name");
@@ -578,6 +597,17 @@ void read_rust_json(const Json &root, RustSemantic &rust) {
             rust.async_functions.push_back(std::move(function));
         }
     }
+}
+
+void read_rust_json(const Json &root, RustSemantic &rust) {
+    const Json *section = field(root, "rust");
+    if (section == nullptr || !section->is_object()) return;
+
+    rust_generic(*section, rust);
+    rust_traits(*section, rust);
+    rust_errors(*section, rust);
+    rust_lifetime(*section, rust);
+    rust_traits_obj(*section, rust);
 }
 
 }   // namespace
@@ -594,12 +624,12 @@ bool write_semantic_json(const SemanticModule &module, const std::string &path, 
         Json value = Json::object();
         value.set("id", id_hex(type.id.value));
         value.set("kind", type_kind_name(type.kind));
-        value.set("name", type.qualified_name);
+        value.set("name", type.qualified);
         value.set("const", type.qualifiers.is_const);
         value.set("volatile", type.qualifiers.is_volatile);
         if (type.canonical.valid()) value.set("canonical", id_hex(type.canonical.value));
         if (type.element.valid()) value.set("element", id_hex(type.element.value));
-        if (type.template_instance.valid()) value.set("template_instance", id_hex(type.template_instance.value));
+        if (type.template_inst.valid()) value.set("template_instance", id_hex(type.template_inst.value));
         if (type.abi_type.lo != 0 || type.abi_type.hi != 0) value.set("abi_type", id_hex(type.abi_type));
         types.push_back(std::move(value));
     }
@@ -645,8 +675,8 @@ bool write_semantic_json(const SemanticModule &module, const std::string &path, 
         Json value = Json::object();
         value.set("id", id_hex(function.id.value));
         value.set("kind", function_kind_name(function.kind));
-        value.set("name", function.qualified_name);
-        value.set("unqualified_name", function.unqualified_name);
+        value.set("name", function.qualified);
+        value.set("unqualified_name", function.unqualified);
         if (function.owner.valid()) value.set("owner", id_hex(function.owner.value));
         if (function.return_type.valid()) value.set("return_type", id_hex(function.return_type.value));
         value.set("variadic", function.is_variadic);
@@ -660,7 +690,7 @@ bool write_semantic_json(const SemanticModule &module, const std::string &path, 
         if (function.abi_signature.lo != 0 || function.abi_signature.hi != 0)
             value.set("abi_signature", id_hex(function.abi_signature));
         Json parameters = Json::array();
-        for (const auto &parameter : function.parameters) {
+        for (const auto &parameter : function.params) {
             Json item = Json::object();
             item.set("name", parameter.name);
             item.set("type", id_hex(parameter.type.value));
@@ -711,7 +741,7 @@ bool write_semantic_json(const SemanticModule &module, const std::string &path, 
         Json value = Json::object();
         if (record.type.valid()) value.set("type", id_hex(record.type.value));
         if (record.abi_type.lo != 0 || record.abi_type.hi != 0) value.set("abi_type", id_hex(record.abi_type));
-        value.set("name", record.qualified_name);
+        value.set("name", record.qualified);
         value.set("symbol", record.symbol);
         value.set("constructor", record.has_constructor);
         value.set("opaque", record.opaque);
@@ -741,7 +771,7 @@ bool write_semantic_json(const SemanticModule &module, const std::string &path, 
         value.set("explicit_specialization", instance.is_explicit_specialization);
         if (instance.result.lo != 0 || instance.result.hi != 0) value.set("result", id_hex(instance.result));
         Json arguments = Json::array();
-        for (const auto &argument : instance.arguments)
+        for (const auto &argument : instance.args)
             arguments.push_back(argument_json(argument));
         value.set("arguments", std::move(arguments));
         Json constraint = Json::object();
@@ -807,12 +837,12 @@ bool read_semantic_json(const std::string &path, SemanticModule &module, std::st
             SemanticType type;
             type.id = SemanticTypeId{hash_field(value, "id")};
             type.kind = parse_type_kind(string_field(value, "kind"));
-            type.qualified_name = string_field(value, "name");
+            type.qualified = string_field(value, "name");
             type.qualifiers.is_const = bool_field(value, "const");
             type.qualifiers.is_volatile = bool_field(value, "volatile");
             type.canonical = SemanticTypeId{hash_field(value, "canonical")};
             type.element = SemanticTypeId{hash_field(value, "element")};
-            type.template_instance = TemplateInstanceId{hash_field(value, "template_instance")};
+            type.template_inst = TemplateInstId{hash_field(value, "template_instance")};
             type.abi_type = hash_field(value, "abi_type");
             module.types.push_back(std::move(type));
         }
@@ -855,11 +885,11 @@ bool read_semantic_json(const std::string &path, SemanticModule &module, std::st
 
     if (const Json *functions = field(root, "functions"); functions != nullptr && functions->is_array()) {
         for (const auto &value : functions->items()) {
-            SemanticFunction function;
-            function.id = SemanticFunctionId{hash_field(value, "id")};
+            SemanticFunc function;
+            function.id = SemanticFuncId{hash_field(value, "id")};
             function.kind = parse_function_kind(string_field(value, "kind"));
-            function.qualified_name = string_field(value, "name");
-            function.unqualified_name = string_field(value, "unqualified_name");
+            function.qualified = string_field(value, "name");
+            function.unqualified = string_field(value, "unqualified_name");
             function.owner = SemanticTypeId{hash_field(value, "owner")};
             function.return_type = SemanticTypeId{hash_field(value, "return_type")};
             function.is_variadic = bool_field(value, "variadic");
@@ -868,17 +898,17 @@ bool read_semantic_json(const std::string &path, SemanticModule &module, std::st
             function.is_virtual = bool_field(value, "virtual");
             function.is_constexpr = bool_field(value, "constexpr");
             function.is_template_primary = bool_field(value, "template_primary");
-            function.template_instance = TemplateInstanceId{hash_field(value, "template_instance")};
+            function.template_instance = TemplateInstId{hash_field(value, "template_instance")};
             function.abi_signature = hash_field(value, "abi_signature");
             if (const Json *parameters = field(value, "parameters"); parameters != nullptr && parameters->is_array()) {
                 for (const auto &item : parameters->items()) {
-                    SemanticParameter parameter;
+                    SemanticParam parameter;
                     parameter.name = string_field(item, "name");
                     parameter.type = SemanticTypeId{hash_field(item, "type")};
                     parameter.category = static_cast<ValueCategory>(number_field(item, "category"));
                     parameter.is_variadic = bool_field(item, "variadic");
                     parameter.default_value = string_field(item, "default");
-                    function.parameters.push_back(std::move(parameter));
+                    function.params.push_back(std::move(parameter));
                 }
             }
             function.source = parse_source(field(value, "source"));
@@ -888,16 +918,16 @@ bool read_semantic_json(const std::string &path, SemanticModule &module, std::st
 
     if (const Json *ownership = field(root, "ownership"); ownership != nullptr && ownership->is_array()) {
         for (const auto &value : ownership->items()) {
-            SemanticOwnership contract;
-            contract.function = SemanticFunctionId{hash_field(value, "function")};
-            contract.interaction = string_field(value, "interaction") == "return_value" ? InteractionKind::return_value
-                                                                                        : InteractionKind::parameter;
+            SemanticOwner contract;
+            contract.function = SemanticFuncId{hash_field(value, "function")};
+            contract.interaction =
+                string_field(value, "interaction") == "return_value" ? InteractionKind::RETURN : InteractionKind::PARAM;
             contract.index = static_cast<uint32_t>(number_field(value, "index"));
             contract.ownership = parse_ownership_kind(string_field(value, "ownership"));
             contract.lifetime = parse_lifetime_kind(string_field(value, "lifetime"));
             contract.mutability =
-                string_field(value, "mutability") == "mutable" ? Mutability::mutable_ : Mutability::immutable;
-            contract.release = SemanticFunctionId{hash_field(value, "release")};
+                string_field(value, "mutability") == "mutable" ? Mutability::MUTABLE : Mutability::IMMUTABLE;
+            contract.release = SemanticFuncId{hash_field(value, "release")};
             contract.invalidation = string_field(value, "invalidation");
             module.ownership.push_back(std::move(contract));
         }
@@ -908,7 +938,7 @@ bool read_semantic_json(const std::string &path, SemanticModule &module, std::st
             ExposedType record;
             record.type = SemanticTypeId{hash_field(value, "type")};
             record.abi_type = hash_field(value, "abi_type");
-            record.qualified_name = string_field(value, "name");
+            record.qualified = string_field(value, "name");
             record.symbol = string_field(value, "symbol");
             record.has_constructor = bool_field(value, "constructor");
             record.opaque = bool_field(value, "opaque");
@@ -937,7 +967,7 @@ bool read_semantic_json(const std::string &path, SemanticModule &module, std::st
             declaration.requires_hash = hash_field(value, "requires_hash");
             if (const Json *parameters = field(value, "parameters"); parameters != nullptr && parameters->is_array()) {
                 for (const auto &item : parameters->items()) {
-                    TemplateParameter parameter;
+                    TemplateParam parameter;
                     parameter.kind = parse_parameter_kind(string_field(item, "kind"));
                     parameter.index = static_cast<uint32_t>(number_field(item, "index"));
                     parameter.name = string_field(item, "name");
@@ -954,21 +984,21 @@ bool read_semantic_json(const std::string &path, SemanticModule &module, std::st
 
     if (const Json *instances = field(root, "instances"); instances != nullptr && instances->is_array()) {
         for (const auto &value : instances->items()) {
-            TemplateInstance instance;
-            instance.id = TemplateInstanceId{hash_field(value, "id")};
+            TemplateInst instance;
+            instance.id = TemplateInstId{hash_field(value, "id")};
             instance.declaration = TemplateDeclId{hash_field(value, "declaration")};
             instance.origin = parse_origin(string_field(value, "origin"));
             instance.is_explicit_specialization = bool_field(value, "explicit_specialization");
             instance.result = hash_field(value, "result");
             if (const Json *arguments = field(value, "arguments"); arguments != nullptr && arguments->is_array()) {
                 for (const auto &item : arguments->items()) {
-                    TemplateArgument argument;
+                    TemplateArg argument;
                     argument.kind = parse_argument_kind(string_field(item, "kind"));
                     argument.type = SemanticTypeId{hash_field(item, "type")};
                     argument.value = number_field(item, "value");
                     argument.template_decl = TemplateDeclId{hash_field(item, "template_decl")};
                     argument.canonical = hash_field(item, "canonical");
-                    instance.arguments.push_back(std::move(argument));
+                    instance.args.push_back(std::move(argument));
                 }
             }
             if (const Json *constraint = field(value, "constraint"); constraint != nullptr) {
@@ -985,4 +1015,4 @@ bool read_semantic_json(const std::string &path, SemanticModule &module, std::st
     return true;
 }
 
-}   // namespace amc::semantic
+}   // namespace skl::amc::semantic

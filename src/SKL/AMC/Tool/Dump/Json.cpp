@@ -25,9 +25,9 @@
 #include <string>
 #include <vector>
 
-namespace amc::dump {
+namespace skl::amc::dump {
 
-using namespace amc::util;
+using namespace skl::amc::util;
 
 void write_json_primitive_abi(const amc::Type &type, std::string &output) {
     const uint32_t width = (type.primitive_abi & amc::primitive_width_mask) >> amc::primitive_width_shift;
@@ -66,7 +66,7 @@ void write_json_operations(const std::vector<amc::MapOperation> &operations, std
     output += "]";
 }
 
-void write_json(const amc::AbiModule &module, std::string &output) {
+void write_json(const amc::ABIModule &module, std::string &output) {
     output += "{\n";
     indent(output, 1);
     output += "\"artifact\": {\"format_version\": 4, \"hash_algorithm\": 0, \"layout_encoding_version\": ";
@@ -151,7 +151,7 @@ void write_json(const amc::AbiModule &module, std::string &output) {
         output += ", \"array_count\": ";
         output += fmt::to_string(type.array_count);
         output += ", \"primitive_abi\": ";
-        if (type.kind == amc::TypeKind::primitive)
+        if (type.kind == amc::TypeKind::PRIMITIVE)
             write_json_primitive_abi(type, output);
         else
             output += "null";
@@ -198,8 +198,8 @@ void write_json(const amc::AbiModule &module, std::string &output) {
         output += ", \"flags\": ";
         output += fmt::to_string(function.flags);
         output += ", \"parameters\": [";
-        for (size_t p = 0; p < function.parameters.size(); ++p) {
-            const auto &parameter = function.parameters[p];
+        for (size_t p = 0; p < function.params.size(); ++p) {
+            const auto &parameter = function.params[p];
             if (p) output += ", ";
             output += "{\"name\": ";
             json_string(output, parameter.name);
@@ -222,8 +222,8 @@ void write_json(const amc::AbiModule &module, std::string &output) {
         output += "{\"name\": ";
         json_string(output, symbol.name);
         output += ", \"kind\": ";
-        json_string(output, symbol.kind == amc::SymbolKind::type    ? "type"
-                            : symbol.kind == amc::SymbolKind::field ? "field"
+        json_string(output, symbol.kind == amc::SymbolKind::TYPE    ? "type"
+                            : symbol.kind == amc::SymbolKind::FIELD ? "field"
                                                                     : "function");
         output += ", \"target_index\": ";
         output += fmt::to_string(symbol.target_index);
@@ -276,4 +276,4 @@ void write_json(const amc::AbiModule &module, std::string &output) {
     output += "]\n}\n";
 }
 
-}   // namespace amc::dump
+}   // namespace skl::amc::dump

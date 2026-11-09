@@ -22,7 +22,7 @@
 #include <string>
 #include <vector>
 
-namespace amc {
+namespace skl::amc {
 
 // AI-PM: ABIX Metadata Region.
 //
@@ -53,9 +53,9 @@ constexpr uint16_t metadata_version_minor = 0;
 constexpr size_t metadata_manifest_size = 128;
 
 enum class MetadataFlag : uint32_t {
-    none = 0,
-    has_names = 1U << 0,
-    has_hash_index = 1U << 1,
+    NONE = 0,
+    HAS_NAMES = 1U << 0,
+    HAS_HASH_INDEX = 1U << 1,
 };
 
 constexpr uint32_t metadata_flag_value(MetadataFlag flag) { return static_cast<uint32_t>(flag); }
@@ -343,19 +343,19 @@ static_assert(sizeof(MetadataExtensionEntry) == 24, "MetadataExtensionEntry wire
 struct MetadataOwnershipContract {
     uint32_t target_kind = 0;   // 0 = parameter, 1 = return value
     uint32_t target_index = 0;
-    OwnershipMode mode = OwnershipMode::unspecified;
+    OwnershipMode mode = OwnershipMode::UNSPECIFIED;
     uint32_t release_function = UINT32_MAX;   // function table index, or UINT32_MAX
 };
 
 // A decoded error-boundary contract.
 struct MetadataErrorContract {
     uint32_t function_index = 0;
-    StatusSource status_source = StatusSource::return_value;
+    StatusSource status_source = StatusSource::RETURN_VALUE;
     uint32_t status_parameter = UINT32_MAX;
     int64_t success_value = 0;
     uint32_t value_parameter = UINT32_MAX;
     uint64_t domain = 0;
-    int32_t condition = static_cast<int32_t>(GenericCondition::unknown);
+    int32_t condition = static_cast<int32_t>(GenericCondition::UNKNOWN);
     Hash128 error_set{};
 };
 
@@ -363,9 +363,9 @@ struct MetadataErrorContract {
 struct MetadataLoweringContract {
     uint32_t type_index = 0;
     uint32_t contract_index = 0;
-    LoweringKind kind = LoweringKind::sequence_view;
-    LoweringStatus status = LoweringStatus::unsupported;
-    LoweringReason reason = LoweringReason::ok;
+    LoweringKind kind = LoweringKind::SEQUENCE_VIEW;
+    LoweringStatus status = LoweringStatus::UNSUPPORTED;
+    LoweringReason reason = LoweringReason::OK;
     uint32_t pointer_field = UINT32_MAX;
     uint32_t length_field = UINT32_MAX;
 };
@@ -494,9 +494,9 @@ bool read_layout_encoding(const std::vector<uint8_t> &region, uint32_t &version,
 //   unverifiable — evidence is missing (no target description, or the region
 //                  leaves a checked fact unknown); never reported as compatible
 enum class TargetVerificationStatus : uint32_t {
-    compatible = 0,
-    incompatible = 1,
-    unverifiable = 2,
+    COMPATIBLE = 0,
+    INCOMPATIBLE = 1,
+    UNVERIFIABLE = 2,
 };
 struct TargetExpectation {
     uint32_t arch = 0;
@@ -507,7 +507,7 @@ struct TargetExpectation {
     uint32_t calling_convention = 0;   // 0 = do not check
 };
 struct TargetVerification {
-    TargetVerificationStatus status = TargetVerificationStatus::unverifiable;
+    TargetVerificationStatus status = TargetVerificationStatus::UNVERIFIABLE;
     std::vector<std::string> reasons;
 };
 bool verify_target_abi(
@@ -521,9 +521,9 @@ bool verify_target_abi(
 // (for example real field offsets in a compiled object) are NOT claimed here;
 // they belong to the build stage and are reported as unverifiable.
 struct AbiVerificationReport {
-    TargetVerificationStatus platform = TargetVerificationStatus::unverifiable;
-    TargetVerificationStatus layout = TargetVerificationStatus::unverifiable;
-    TargetVerificationStatus calling_convention = TargetVerificationStatus::unverifiable;
+    TargetVerificationStatus platform = TargetVerificationStatus::UNVERIFIABLE;
+    TargetVerificationStatus layout = TargetVerificationStatus::UNVERIFIABLE;
+    TargetVerificationStatus calling_convention = TargetVerificationStatus::UNVERIFIABLE;
     std::vector<std::string> reasons;
 };
 bool verify_abi(const uint8_t *data, size_t size, const TargetExpectation &expected, AbiVerificationReport &out,
@@ -541,7 +541,7 @@ struct MetadataOptions {
 
 // Serializes `module` into a complete Metadata Region.
 bool build_metadata_region(
-    const AbiModule &module, const MetadataOptions &options, std::vector<uint8_t> &region, std::string &error);
+    const ABIModule &module, const MetadataOptions &options, std::vector<uint8_t> &region, std::string &error);
 
 // Parses and validates the manifest and section bounds.  Does not verify the
 // content hash; call verify_metadata_region for that.
@@ -558,22 +558,22 @@ bool verify_metadata_region(const std::vector<uint8_t> &region, std::string &err
 // for callers that already have the desc+hash+names slice).
 MetadataID metadata_content_id(const uint8_t *data, size_t size);
 
-// Decodes a Metadata Region back into the in-memory AbiModule model — the
+// Decodes a Metadata Region back into the in-memory ABIModule model — the
 // offline parser the plan asks for. Names are recovered from the region's
 // names table when present; package/version/target are not part of the
 // manifest and therefore come back empty.
-bool module_from_region(const uint8_t *data, size_t size, AbiModule &module, std::string &error);
-bool module_from_region(const std::vector<uint8_t> &region, AbiModule &module, std::string &error);
+bool module_from_region(const uint8_t *data, size_t size, ABIModule &module, std::string &error);
+bool module_from_region(const std::vector<uint8_t> &region, ABIModule &module, std::string &error);
 
-// Loads an AbiModule from either a standalone `.abix` artifact or an ELF /
+// Loads an ABIModule from either a standalone `.abix` artifact or an ELF /
 // Mach-O binary that embeds a `.abix.metadata` region. This lets every consumer
 // (CLI, MCP server) accept `foo.abix`, `libfoo.so` and `foo.dylib`
 // interchangeably.
-bool load_module_source(const std::string &path, AbiModule &module, std::string &error);
+bool load_module_source(const std::string &path, ABIModule &module, std::string &error);
 
 std::string metadata_header_to_json(const MetadataHeader &header);
-std::string metadata_meta_document(const AbiModule &module, const MetadataHeader &header);
+std::string metadata_meta_document(const ABIModule &module, const MetadataHeader &header);
 
-}   // namespace amc
+}   // namespace skl::amc
 
 #endif

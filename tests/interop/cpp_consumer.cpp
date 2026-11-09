@@ -33,11 +33,12 @@ int main() {
 
     // Bind the same handle-shaped interface from the shared artifact.
     ::skl::abix::poly::InterfaceMethod scale_methods[] = {
-        {amc_generated::IVectorScaleTraits::signatures[0], ::skl::abix::poly::interface_entry(&scale_adapter), 0, 0}
+        {skl::amc::generated::IVectorScaleTraits::signatures[0], ::skl::abix::poly::interface_entry(&scale_adapter), 0,
+         0}
     };
-    amc_generated::IVectorScale scale;
-    assert(scale.bind_methods(amc_generated::IVectorScaleTraits::id, amc_generated::IVectorScaleTraits::version,
-               scale_methods, 1, &value)
+    skl::amc::generated::IVectorScale scale;
+    assert(scale.bind_methods(skl::amc::generated::IVectorScaleTraits::id,
+               skl::amc::generated::IVectorScaleTraits::version, scale_methods, 1, &value)
            == ::skl::abix::poly::InterfaceStatus::ok);
     assert(scale.demo_scale_handle(2.0) == 13.0);
 

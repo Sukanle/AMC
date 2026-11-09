@@ -24,7 +24,7 @@
 #include <utility>
 #include <vector>
 
-namespace amc::pass {
+namespace skl::amc::pass {
 
 // A0 contract: passes own validation and IR transformation. Frontends and
 // backends must not re-implement these checks. Passes mutate a working IR and
@@ -61,6 +61,6 @@ struct Pipeline {
     }
 };
 
-}   // namespace amc::pass
+}   // namespace skl::amc::pass
 
 #endif   // AMC_PASS_PASS_H

@@ -1,4 +1,4 @@
-namespace amc_generated {
+namespace skl::amc::generated {
 using TypeId = ::skl::abix::model::TypeId;
 using LayoutInfo = ::skl::abix::metadata::LayoutInfo;
 using FieldInfo = ::skl::abix::metadata::FieldDescriptor;
@@ -7,11 +7,11 @@ using FunctionInfo = ::skl::abix::metadata::FunctionDescriptor;
 using SymbolInfo = ::skl::abix::metadata::SymbolDescriptor;
 using ModuleInfo = ::skl::abix::metadata::ModuleDescriptor;
 enum class MapOpcode : uint8_t {
-    copy_field,
-    convert_int,
-    convert_float,
-    add_default,
-    skip_field,
+    COPY_FIELD,
+    CONVERT_INT,
+    CONVERT_FLOAT,
+    ADD_DEFAULT,
+    SKIP_FIELD,
 };
 struct MapOperation {
     MapOpcode opcode;

@@ -30,7 +30,7 @@
 
 #include "llvm/Support/MemoryBuffer.h"
 
-namespace amc {
+namespace skl::amc {
 namespace {
 
 namespace fs = std::filesystem;
@@ -437,80 +437,80 @@ struct EntryFile {
 };
 
 enum class EntryRead {
-    ok,
-    missing,     // no entry file for this key
-    malformed,   // an entry exists but its header/manifest is unusable
+    OK,
+    MISSING,     // no entry file for this key
+    MALFORMED,   // an entry exists but its header/manifest is unusable
 };
 
 EntryRead read_entry_file(const fs::path &file, EntryFile &out, std::string &error) {
     std::ifstream input(file, std::ios::binary);
     if (!input) {
         error = "cache entry is missing";
-        return EntryRead::missing;
+        return EntryRead::MISSING;
     }
     char header[kEntryHeaderSize];
     if (!input.read(header, static_cast<std::streamsize>(kEntryHeaderSize))) {
         error = "cache entry is truncated";
-        return EntryRead::malformed;
+        return EntryRead::MALFORMED;
     }
     if (memcmp(header, kEntryMagic, 8) != 0) {
         error = "cache entry magic is unknown";
-        return EntryRead::malformed;
+        return EntryRead::MALFORMED;
     }
     const uint32_t format = get_u32(header + 8);
     const uint32_t manifest_size = get_u32(header + 16);
     const uint32_t artifact_count = get_u32(header + 20);
     if (format != kEntryFormatVersion) {
         error = "cache entry format is unsupported";
-        return EntryRead::malformed;
+        return EntryRead::MALFORMED;
     }
     if (manifest_size == 0 || artifact_count > kEntryMaxArtifacts) {
         error = "cache entry header is malformed";
-        return EntryRead::malformed;
+        return EntryRead::MALFORMED;
     }
     const uint64_t table_size = 8ull * artifact_count;
     uint64_t body_size = 0;
     if (add_overflows(table_size, manifest_size, body_size)) {
         error = "cache entry header is malformed";
-        return EntryRead::malformed;
+        return EntryRead::MALFORMED;
     }
     std::string body(static_cast<size_t>(body_size), '\0');
     if (!input.read(body.data(), static_cast<std::streamsize>(body_size))) {
         error = "cache entry is truncated";
-        return EntryRead::malformed;
+        return EntryRead::MALFORMED;
     }
 
     std::vector<uint64_t> sizes(artifact_count, 0);
     uint64_t total = 0;
     if (add_overflows(kEntryHeaderSize, body_size, total)) {
         error = "cache entry header is malformed";
-        return EntryRead::malformed;
+        return EntryRead::MALFORMED;
     }
     const uint64_t payload_offset = total;
     for (uint32_t i = 0; i < artifact_count; ++i) {
         sizes[i] = get_u64(body.data() + 8ull * i);
         if (add_overflows(total, sizes[i], total)) {
             error = "cache entry header is malformed";
-            return EntryRead::malformed;
+            return EntryRead::MALFORMED;
         }
     }
 
     Manifest manifest;
-    if (!manifest_parse(body.substr(static_cast<size_t>(table_size)), manifest, error)) return EntryRead::malformed;
+    if (!manifest_parse(body.substr(static_cast<size_t>(table_size)), manifest, error)) return EntryRead::MALFORMED;
     if (manifest.artifacts.size() != artifact_count) {
         error = "cache entry manifest does not match its size table";
-        return EntryRead::malformed;
+        return EntryRead::MALFORMED;
     }
     std::error_code ec;
     const auto file_size = fs::file_size(file, ec);
     if (ec || static_cast<uint64_t>(file_size) != total) {
         error = "cache entry size does not match its header";
-        return EntryRead::malformed;
+        return EntryRead::MALFORMED;
     }
     out.manifest = std::move(manifest);
     out.sizes = std::move(sizes);
     out.payload_offset = payload_offset;
-    return EntryRead::ok;
+    return EntryRead::OK;
 }
 
 uint64_t artifact_offset(const EntryFile &entry, size_t index) {
@@ -653,11 +653,11 @@ Hash128 digest_text(const std::string &text, uint64_t domain) { return hash_text
 
 const char *cache_status_name(CacheStatus status) {
     switch (status) {
-        case CacheStatus::hit:              return "hit";
-        case CacheStatus::miss:             return "miss";
-        case CacheStatus::corrupted:        return "corrupted";
-        case CacheStatus::invalid_manifest: return "invalid_manifest";
-        case CacheStatus::schema_mismatch:  return "schema_mismatch";
+        case CacheStatus::HIT:              return "hit";
+        case CacheStatus::MISS:             return "miss";
+        case CacheStatus::CORRUPTED:        return "corrupted";
+        case CacheStatus::INVALID_MANIFEST: return "invalid_manifest";
+        case CacheStatus::SCHEMA_MISMATCH:  return "schema_mismatch";
     }
     return "unknown";
 }
@@ -727,7 +727,7 @@ bool InstantiationCache::store(const InstantiationBuildInputs &inputs,
     const auto equivalent = [&](const fs::path &path) {
         EntryFile existing;
         std::string ignored;
-        return read_entry_file(path, existing, ignored) == EntryRead::ok
+        return read_entry_file(path, existing, ignored) == EntryRead::OK
             && existing.manifest.build_key == manifest.build_key
             && same_dependencies(existing.manifest.dependencies, manifest.dependencies)
             && verify_entry_payload(path, existing, ignored);
@@ -816,7 +816,7 @@ CacheLookup InstantiationCache::lookup(const InstantiationBuildInputs &inputs, c
     // constructing an ifstream. Windows keeps the direct-open path because
     // CreateFile-based metadata operations are much more expensive there.
     if (!fs::exists(entry, ec)) {
-        result.status = CacheStatus::miss;
+        result.status = CacheStatus::MISS;
         result.reason = cache_reason_not_found;
     } else
 #endif
@@ -824,20 +824,20 @@ CacheLookup InstantiationCache::lookup(const InstantiationBuildInputs &inputs, c
         EntryFile file;
         std::string error;
         const EntryRead read = read_entry_file(entry, file, error);
-        if (read == EntryRead::missing) {
-            result.status = CacheStatus::miss;
+        if (read == EntryRead::MISSING) {
+            result.status = CacheStatus::MISS;
             result.reason = cache_reason_not_found;
-        } else if (read == EntryRead::malformed) {
-            result.status = CacheStatus::invalid_manifest;
+        } else if (read == EntryRead::MALFORMED) {
+            result.status = CacheStatus::INVALID_MANIFEST;
             result.reason = cache_reason_invalid_manifest;
         } else if (file.manifest.schema_version != instantiation_schema_version
                    || file.manifest.protocol_version != instantiation_protocol_version) {
-            result.status = CacheStatus::schema_mismatch;
+            result.status = CacheStatus::SCHEMA_MISMATCH;
             result.reason = file.manifest.schema_version != instantiation_schema_version
                               ? cache_reason_schema_version_changed
                               : cache_reason_protocol_version_changed;
         } else if (options.verify_artifacts && !verify_entry_payload(entry, file, error)) {
-            result.status = CacheStatus::corrupted;
+            result.status = CacheStatus::CORRUPTED;
             result.reason = cache_reason_corrupted_artifact;
         } else {
             // The entry is only reusable while every recorded dependency still
@@ -850,11 +850,11 @@ CacheLookup InstantiationCache::lookup(const InstantiationBuildInputs &inputs, c
                     break;
                 }
             if (!dependencies_ok) {
-                result.status = CacheStatus::miss;
+                result.status = CacheStatus::MISS;
                 result.reason = cache_reason_dependency_changed;
                 return result;
             }
-            result.status = CacheStatus::hit;
+            result.status = CacheStatus::HIT;
             result.reason = cache_reason_hit;
             result.artifacts = file.manifest.artifacts;
             result.dependencies = file.manifest.dependencies;
@@ -864,7 +864,7 @@ CacheLookup InstantiationCache::lookup(const InstantiationBuildInputs &inputs, c
     // Fast path: only the "entry not found" case needs the diagnostic scan.
     // Invalid manifests, corrupted entries, schema drift and dependency changes
     // already carry a precise status/reason.
-    if (!options.diagnose || result.status != CacheStatus::miss || result.reason != cache_reason_not_found)
+    if (!options.diagnose || result.status != CacheStatus::MISS || result.reason != cache_reason_not_found)
         return result;
 
     // Diagnose a miss against any same-template entry so incremental builds can
@@ -876,7 +876,7 @@ CacheLookup InstantiationCache::lookup(const InstantiationBuildInputs &inputs, c
         if (item.path().extension() != kEntrySuffix) continue;
         EntryFile other;
         std::string ignored;
-        if (read_entry_file(item.path(), other, ignored) != EntryRead::ok) continue;
+        if (read_entry_file(item.path(), other, ignored) != EntryRead::OK) continue;
         if (!(other.manifest.template_signature == desired_template)) continue;
         if (!(other.manifest.request_id == desired_request)) {
             result.reason = cache_reason_target_changed;
@@ -904,7 +904,7 @@ bool InstantiationCache::read_artifact(
     const CacheLookup &lookup, const std::string &name, std::string &out, std::string &error) const {
     error.clear();
     EntryFile file;
-    if (read_entry_file(fs::path(lookup.entry), file, error) != EntryRead::ok) return false;
+    if (read_entry_file(fs::path(lookup.entry), file, error) != EntryRead::OK) return false;
     for (size_t i = 0; i < file.manifest.artifacts.size(); ++i) {
         if (file.manifest.artifacts[i].name != name) continue;
         if (!read_entry_payload(fs::path(lookup.entry), file, i, out, error)) return false;
@@ -921,7 +921,7 @@ bool InstantiationCache::read_artifact(
 bool InstantiationCache::verify(const Hash128 &build_key, std::string &error) const {
     const fs::path entry = entry_file(build_key);
     EntryFile file;
-    if (read_entry_file(entry, file, error) != EntryRead::ok) return false;
+    if (read_entry_file(entry, file, error) != EntryRead::OK) return false;
     if (file.manifest.schema_version != instantiation_schema_version) {
         error = "artifact schema version mismatch";
         return false;
@@ -942,7 +942,7 @@ size_t InstantiationCache::verify_all(std::vector<std::string> &failures) const 
         ++checked;
         EntryFile file;
         std::string error;
-        if (read_entry_file(item.path(), file, error) != EntryRead::ok
+        if (read_entry_file(item.path(), file, error) != EntryRead::OK
             || !verify_entry_payload(item.path(), file, error))
             failures.push_back(item.path().filename().string() + ": " + error);
     }
@@ -980,7 +980,7 @@ size_t InstantiationCache::clear() const {
 
 void InstantiationCache::record_lookup(CacheStatus status) const {
     CacheCounters counters = read_counters(fs::path(_root));
-    if (status == CacheStatus::hit)
+    if (status == CacheStatus::HIT)
         ++counters.hits;
     else
         ++counters.misses;
@@ -1063,4 +1063,4 @@ PruneResult InstantiationCache::prune(const PruneOptions &options, bool dry_run)
     return result;
 }
 
-}   // namespace amc
+}   // namespace skl::amc

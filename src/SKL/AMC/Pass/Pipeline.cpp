@@ -20,7 +20,7 @@
 #include "SKL/AMC/Pass/Semantic.h"
 #include "SKL/AMC/Pass/Verify.h"
 
-namespace amc::pass {
+namespace skl::amc::pass {
 
 Pipeline make_default_pipeline() { return make_pipeline({}); }
 
@@ -44,4 +44,4 @@ bool run_default_pipeline(
     return pipeline.run(module, context, diagnostics);
 }
 
-}   // namespace amc::pass
+}   // namespace skl::amc::pass

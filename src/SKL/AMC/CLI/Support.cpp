@@ -27,7 +27,7 @@
 
 #include <fmt/format.h>
 
-namespace amc::cli {
+namespace skl::amc::cli {
 
 std::string json_quote(const std::string &value) { return "\"" + amc::json_escape(value) + "\""; }
 
@@ -86,7 +86,7 @@ std::string elf_meta_document(const std::string &key, const amc::MetadataHeader 
 
 // Editor-consumable ABI diagnostics: one `file:line:column: error: ...` line
 // per drift, using the contract artifact's Source Origin when available.
-std::string abi_diagnostics(const amc::AbiModule &reference, const amc::VerifyResult &result) {
+std::string abi_diagnostics(const amc::ABIModule &reference, const amc::VerifyResult &result) {
     std::string output;
     for (const auto &diagnostic : amc::diagnostics::from_verify_result(reference, result)) {
         if (!diagnostic.file.empty()) {
@@ -110,8 +110,8 @@ std::string abi_diagnostics(const amc::AbiModule &reference, const amc::VerifyRe
 }
 
 // Machine-readable form of the same ABI diagnostics (`amc.diagnostics/1`).
-std::string abi_diagnostics_json(const amc::AbiModule &reference, const amc::VerifyResult &result) {
+std::string abi_diagnostics_json(const amc::ABIModule &reference, const amc::VerifyResult &result) {
     return amc::diagnostics::diagnostics_to_json(amc::diagnostics::from_verify_result(reference, result));
 }
 
-}   // namespace amc::cli
+}   // namespace skl::amc::cli

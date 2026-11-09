@@ -22,7 +22,7 @@
 #include <string_view>
 #include <vector>
 
-namespace amc {
+namespace skl::amc {
 
 // Minimal, dependency-free reader for the custom sections that carry an ABIX
 // Metadata Region inside a compiled binary. It supports the three container
@@ -50,10 +50,10 @@ struct BinarySection {
 using ElfSection = BinarySection;
 
 enum class BinaryFormat {
-    unknown,
-    elf,
-    macho,
-    pe,
+    UNKNOWN,
+    ELF,
+    MACHO,
+    PE,
 };
 
 BinaryFormat detect_binary_format(const uint8_t *data, size_t size) noexcept;
@@ -96,6 +96,6 @@ bool find_macho_section(
 bool find_pe_section(
     const uint8_t *data, size_t size, std::string_view name, std::vector<uint8_t> &content, std::string &error);
 
-}   // namespace amc
+}   // namespace skl::amc
 
 #endif

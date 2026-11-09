@@ -20,15 +20,15 @@
 
 #include "SKL/AMC/Core/Core.h"
 
-namespace amc::dump {
+namespace skl::amc::dump {
 
-void write_json(const amc::AbiModule &module, std::string &output);
-void write_text(const amc::AbiModule &module, std::string &output);
+void write_json(const amc::ABIModule &module, std::string &output);
+void write_text(const amc::ABIModule &module, std::string &output);
 void write_diff_text(
-    const amc::AbiModule &source, const amc::AbiModule &target, const amc::AbiModule &report, std::string &output);
+    const amc::ABIModule &source, const amc::ABIModule &target, const amc::ABIModule &report, std::string &output);
 void write_diff_json(
-    const amc::AbiModule &source, const amc::AbiModule &target, const amc::AbiModule &report, std::string &output);
+    const amc::ABIModule &source, const amc::ABIModule &target, const amc::ABIModule &report, std::string &output);
 
-}   // namespace amc::dump
+}   // namespace skl::amc::dump
 
 #endif   // AMC_DUMP_H

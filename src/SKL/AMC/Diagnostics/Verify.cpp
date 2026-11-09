@@ -20,17 +20,17 @@
 
 #include <fmt/format.h>
 
-namespace amc::diagnostics {
+namespace skl::amc::diagnostics {
 
 namespace {
 
-const amc::Type *find_type(const AbiModule &contract, const std::string &name) {
+const amc::Type *find_type(const ABIModule &contract, const std::string &name) {
     for (const auto &type : contract.types)
         if (type.name == name) return &type;
     return nullptr;
 }
 
-void attach_source_origin(const AbiModule &contract, const std::string &type_name, Diagnostic &diagnostic) {
+void attach_source_origin(const ABIModule &contract, const std::string &type_name, Diagnostic &diagnostic) {
     if (type_name.empty()) return;
     const amc::Type *type = find_type(contract, type_name);
     if (type == nullptr) return;
@@ -60,12 +60,12 @@ std::string verify_message(const VerifyChange &change) {
 
 }   // namespace
 
-DiagnosticList from_verify_result(const AbiModule &contract, const VerifyResult &result) {
+DiagnosticList from_verify_result(const ABIModule &contract, const VerifyResult &result) {
     DiagnosticList diagnostics;
     diagnostics.reserve(result.changes.size());
     for (const auto &change : result.changes) {
         Diagnostic diagnostic;
-        diagnostic.severity = Severity::error;
+        diagnostic.severity = Severity::ERROR;
         diagnostic.code = "abi_" + std::string(amc::change_kind_name(change.kind));
         diagnostic.stage = "verify";
         diagnostic.message = verify_message(change);
@@ -75,4 +75,4 @@ DiagnosticList from_verify_result(const AbiModule &contract, const VerifyResult 
     return diagnostics;
 }
 
-}   // namespace amc::diagnostics
+}   // namespace skl::amc::diagnostics

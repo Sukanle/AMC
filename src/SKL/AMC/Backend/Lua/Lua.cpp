@@ -21,7 +21,7 @@
 
 #include <fmt/format.h>
 
-namespace amc {
+namespace skl::amc {
 namespace {
 
 std::string hash_literal(Hash128 value) { return fmt::format("0X{:016x}{:016x}", value.hi, value.lo); }
@@ -42,69 +42,69 @@ std::string cpp_string(const std::string &value) {
     return result + '"';
 }
 
-const Type *find_abi_type(const AbiModule &module, Hash128 id) {
+const Type *find_abi_type(const ABIModule &module, Hash128 id) {
     for (const auto &type : module.types)
         if (type.id == id) return &type;
     return nullptr;
 }
 
-const Type *find_abi_type(const AbiModule &module, const std::string &name) {
+const Type *find_abi_type(const ABIModule &module, const std::string &name) {
     for (const auto &type : module.types)
         if (type.name == name) return &type;
     return nullptr;
 }
 
 enum class EmittedFieldKind : uint32_t {
-    integer_signed,
-    integer_unsigned,
-    floating,
-    boolean,
-    pointer,
-    record,
-    array,
-    opaque,
-    unknown,
+    INTEGER_SIGNED,
+    INTEGER_UNSIGNED,
+    FLOATING,
+    BOOLEAN,
+    POINTER,
+    RECORD,
+    ARRAY,
+    OPAQUE,
+    UNKNOWN,
 };
 
 EmittedFieldKind field_kind(const Type &type) {
-    if (type.kind == TypeKind::pointer) return EmittedFieldKind::pointer;
-    if (type.kind == TypeKind::enumeration)
-        return (type.primitive_abi & primitive_signed_bit) != 0 ? EmittedFieldKind::integer_signed
-                                                                : EmittedFieldKind::integer_unsigned;
-    if (type.kind != TypeKind::primitive) return EmittedFieldKind::unknown;
+    if (type.kind == TypeKind::POINTER) return EmittedFieldKind::POINTER;
+    if (type.kind == TypeKind::ENUM)
+        return (type.primitive_abi & primitive_signed_bit) != 0 ? EmittedFieldKind::INTEGER_SIGNED
+                                                                : EmittedFieldKind::INTEGER_UNSIGNED;
+    if (type.kind != TypeKind::PRIMITIVE) return EmittedFieldKind::UNKNOWN;
 
-    switch (static_cast<PrimitiveAbiKind>(type.primitive_abi & 0xffu)) {
-        case PrimitiveAbiKind::bool_:          return EmittedFieldKind::boolean;
-        case PrimitiveAbiKind::floating:       return EmittedFieldKind::floating;
-        case PrimitiveAbiKind::sint:
-        case PrimitiveAbiKind::schar:
-        case PrimitiveAbiKind::char_signed:
-        case PrimitiveAbiKind::wchar_signed:   return EmittedFieldKind::integer_signed;
-        case PrimitiveAbiKind::uint:
-        case PrimitiveAbiKind::uchar:
-        case PrimitiveAbiKind::char_unsigned:
-        case PrimitiveAbiKind::char8:
-        case PrimitiveAbiKind::char16:
-        case PrimitiveAbiKind::char32:
-        case PrimitiveAbiKind::wchar_unsigned: return EmittedFieldKind::integer_unsigned;
-        default:                               break;
+    switch (static_cast<PrimitiveABIKind>(type.primitive_abi & 0xffu)) {
+        case PrimitiveABIKind::AMC_BOOL:           return EmittedFieldKind::BOOLEAN;
+        case PrimitiveABIKind::AMC_FLOAT:          return EmittedFieldKind::FLOATING;
+        case PrimitiveABIKind::AMC_SINT:
+        case PrimitiveABIKind::AMC_SCHAR:
+        case PrimitiveABIKind::AMC_CHAR_SIGNED:
+        case PrimitiveABIKind::AMC_WCHAR_SIGNED:   return EmittedFieldKind::INTEGER_SIGNED;
+        case PrimitiveABIKind::AMC_UINT:
+        case PrimitiveABIKind::AMC_UCHAR:
+        case PrimitiveABIKind::AMC_CHAR_UNSIGNED:
+        case PrimitiveABIKind::AMC_CHAR8:
+        case PrimitiveABIKind::AMC_CHAR16:
+        case PrimitiveABIKind::AMC_CHAR32:
+        case PrimitiveABIKind::AMC_WCHAR_UNSIGNED: return EmittedFieldKind::INTEGER_UNSIGNED;
+        default:                                   break;
     }
-    return EmittedFieldKind::unknown;
+    return EmittedFieldKind::UNKNOWN;
 }
 
 const char *field_kind_literal(EmittedFieldKind kind) {
     switch (kind) {
-        case EmittedFieldKind::integer_signed:   return "aue::FieldKind::integer_signed";
-        case EmittedFieldKind::integer_unsigned: return "aue::FieldKind::integer_unsigned";
-        case EmittedFieldKind::floating:         return "aue::FieldKind::floating";
-        case EmittedFieldKind::boolean:          return "aue::FieldKind::boolean";
-        case EmittedFieldKind::pointer:          return "aue::FieldKind::pointer";
-        case EmittedFieldKind::record:           return "aue::FieldKind::record";
-        case EmittedFieldKind::array:            return "aue::FieldKind::array";
-        case EmittedFieldKind::opaque:           return "aue::FieldKind::opaque";
-        case EmittedFieldKind::unknown:          return "aue::FieldKind::unknown";
+        case EmittedFieldKind::INTEGER_SIGNED:   return "skl::aue::FieldKind::INTEGER_SIGNED";
+        case EmittedFieldKind::INTEGER_UNSIGNED: return "skl::aue::FieldKind::INTEGER_UNSIGNED";
+        case EmittedFieldKind::FLOATING:         return "skl::aue::FieldKind::FLOATING";
+        case EmittedFieldKind::BOOLEAN:          return "skl::aue::FieldKind::BOOLEAN";
+        case EmittedFieldKind::POINTER:          return "skl::aue::FieldKind::POINTER";
+        case EmittedFieldKind::RECORD:           return "skl::aue::FieldKind::RECORD";
+        case EmittedFieldKind::ARRAY:            return "skl::aue::FieldKind::ARRAY";
+        case EmittedFieldKind::OPAQUE:           return "skl::aue::FieldKind::OPAQUE";
+        case EmittedFieldKind::UNKNOWN:          return "skl::aue::FieldKind::UNKNOWN";
     }
-    return "aue::FieldKind::unknown";
+    return "skl::aue::FieldKind::UNKNOWN";
 }
 
 }   // namespace
@@ -136,7 +136,7 @@ std::string lua_entry_name(std::string_view package, std::string_view name) {
     return std::string(name);
 }
 
-std::string generate_lua_contract(const AbiModule &module, std::string &error) {
+std::string generate_lua_contract(const ABIModule &module, std::string &error) {
     error.clear();
     const std::string package = module.package_name.empty() ? "abix_module" : module.package_name;
 
@@ -152,7 +152,7 @@ std::string generate_lua_contract(const AbiModule &module, std::string &error) {
     out += "#pragma once\n";
     out += "#include \"Aue/Aue.h\"\n";
     out += "\n";
-    out += "namespace amc_generated {\n";
+    out += "namespace skl::amc::generated {\n";
     out += "\n";
 
     for (const auto &function : module.functions) {
@@ -167,14 +167,14 @@ std::string generate_lua_contract(const AbiModule &module, std::string &error) {
     out += "\n";
 
     const size_t count = module.functions.empty() ? 1 : module.functions.size();
-    out += "inline const aue::Entry lua_entries[";
+    out += "inline const skl::aue::Entry lua_entries[";
     out += fmt::to_string(count);
     out += "] = {\n";
     for (const auto &function : module.functions) {
         out += "    {";
         out += cpp_string(lua_entry_name(package, function.name));
         out += ", ";
-        out += fmt::to_string(static_cast<uint32_t>(function.parameters.size()));
+        out += fmt::to_string(static_cast<uint32_t>(function.params.size()));
         out += ", ";
         out += lua_function_symbol(function.name);
         out += "},\n";
@@ -188,7 +188,7 @@ std::string generate_lua_contract(const AbiModule &module, std::string &error) {
     std::vector<size_t> record_types;
     for (size_t i = 0; i < module.types.size(); ++i) {
         const Type &type = module.types[i];
-        if (type.kind != TypeKind::record) continue;
+        if (type.kind != TypeKind::RECORD) continue;
         for (uint32_t j = 0; j < type.field_count; ++j) {
             const Field &field = module.fields[type.field_begin + j];
             if (field.owner_type == Hash128{} || field.owner_type == type.id) {
@@ -210,27 +210,27 @@ std::string generate_lua_contract(const AbiModule &module, std::string &error) {
             if (!(field.owner_type == Hash128{}) && !(field.owner_type == type.id)) continue;
             fields.push_back(&field);
         }
-        out += "inline const aue::Field lua_type_";
+        out += "inline const skl::aue::Field lua_type_";
         out += fmt::to_string(emitted);
         out += "_fields[] = {\n";
         for (const Field *field_ptr : fields) {
             const Field &field = *field_ptr;
             const Type *field_type = find_abi_type(module, field.type_id);
 
-            EmittedFieldKind kind = EmittedFieldKind::unknown;
+            EmittedFieldKind kind = EmittedFieldKind::UNKNOWN;
             uint32_t type_index = 0xFFFFFFFFu;
             uint32_t count = 0;
             uint32_t stride = 0;
-            EmittedFieldKind element_kind = EmittedFieldKind::unknown;
+            EmittedFieldKind element_kind = EmittedFieldKind::UNKNOWN;
             uint32_t element_size = 0;
 
             if (field_type != nullptr) {
-                if (field_type->kind == TypeKind::record && field_type->field_count > 0) {
-                    kind = EmittedFieldKind::record;
+                if (field_type->kind == TypeKind::RECORD && field_type->field_count > 0) {
+                    kind = EmittedFieldKind::RECORD;
                     const auto found = find_abi_type(module, field_type->name);
                     if (found != nullptr) type_index = record_index[static_cast<size_t>(found - module.types.data())];
-                } else if (field_type->kind == TypeKind::array) {
-                    kind = EmittedFieldKind::array;
+                } else if (field_type->kind == TypeKind::ARRAY) {
+                    kind = EmittedFieldKind::ARRAY;
                     count = field_type->array_count;
                     stride = count != 0 ? field_type->size / count : 0;
                     const size_t bracket = field_type->name.find('[');
@@ -239,8 +239,8 @@ std::string generate_lua_contract(const AbiModule &module, std::string &error) {
                     const Type *element = base.empty() ? nullptr : find_abi_type(module, base);
                     if (element != nullptr) {
                         element_size = element->size;
-                        if (element->kind == TypeKind::record && element->field_count > 0) {
-                            element_kind = EmittedFieldKind::record;
+                        if (element->kind == TypeKind::RECORD && element->field_count > 0) {
+                            element_kind = EmittedFieldKind::RECORD;
                             const auto found = find_abi_type(module, element->name);
                             if (found != nullptr)
                                 type_index = record_index[static_cast<size_t>(found - module.types.data())];
@@ -254,7 +254,7 @@ std::string generate_lua_contract(const AbiModule &module, std::string &error) {
                     kind = field_kind(*field_type);
                 }
             }
-            if (kind == EmittedFieldKind::unknown) kind = EmittedFieldKind::opaque;
+            if (kind == EmittedFieldKind::UNKNOWN) kind = EmittedFieldKind::OPAQUE;
 
             out += "    {";
             out += cpp_string(field.name);
@@ -280,7 +280,7 @@ std::string generate_lua_contract(const AbiModule &module, std::string &error) {
     }
 
     if (!record_types.empty()) {
-        out += "inline const aue::Type lua_types[] = {\n";
+        out += "inline const skl::aue::Type lua_types[] = {\n";
         for (size_t emitted = 0; emitted < record_types.size(); ++emitted) {
             const Type &type = module.types[record_types[emitted]];
             size_t owned_fields = 0;
@@ -303,7 +303,7 @@ std::string generate_lua_contract(const AbiModule &module, std::string &error) {
         out += "};\n\n";
     }
 
-    out += "inline const aue::Contract lua_contract = {\n";
+    out += "inline const skl::aue::Contract lua_contract = {\n";
     out += "    ";
     out += cpp_string(package);
     out += ",\n";
@@ -325,11 +325,11 @@ std::string generate_lua_contract(const AbiModule &module, std::string &error) {
     }
     out += "};\n";
     out += "\n";
-    out += "}  // namespace amc_generated\n";
+    out += "}  // namespace skl::amc::generated\n";
     return out;
 }
 
-std::string generate_lua_conformance(const AbiModule &module, std::string &error) {
+std::string generate_lua_conformance(const ABIModule &module, std::string &error) {
     error.clear();
     const std::string package = module.package_name.empty() ? "abix_module" : module.package_name;
     const std::string hash = hash_literal(abi_hash(module));
@@ -367,4 +367,4 @@ std::string generate_lua_conformance(const AbiModule &module, std::string &error
     return out;
 }
 
-}   // namespace amc
+}   // namespace skl::amc

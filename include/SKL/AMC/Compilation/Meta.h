@@ -21,11 +21,11 @@
 #include <filesystem>
 #include <string>
 
-namespace amc::compilation {
+namespace skl::amc::compilation {
 
 // Emit the `.abix.meta` sidecar used by symbol servers and CI indexing.
-bool write_abix_meta(const AbiModule &module, const std::filesystem::path &artifact, std::string &error);
+bool write_abix_meta(const ABIModule &module, const std::filesystem::path &artifact, std::string &error);
 
-}   // namespace amc::compilation
+}   // namespace skl::amc::compilation
 
 #endif   // AMC_COMPILATION_META_H

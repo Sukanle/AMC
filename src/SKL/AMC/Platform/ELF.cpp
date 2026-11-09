@@ -17,27 +17,27 @@
 
 #include "SKL/ABIX/Binary/BinaryImage.h"
 
-namespace amc {
+namespace skl::amc {
 namespace {
 
 namespace binary = skl::abix::binary;
 
 BinaryFormat map_format(binary::Format format) {
     switch (format) {
-        case binary::Format::elf:     return BinaryFormat::elf;
-        case binary::Format::macho:   return BinaryFormat::macho;
-        case binary::Format::pe:      return BinaryFormat::pe;
+        case binary::Format::elf:     return BinaryFormat::ELF;
+        case binary::Format::macho:   return BinaryFormat::MACHO;
+        case binary::Format::pe:      return BinaryFormat::PE;
         case binary::Format::unknown: break;
     }
-    return BinaryFormat::unknown;
+    return BinaryFormat::UNKNOWN;
 }
 
 binary::Format to_binary_format(BinaryFormat format) {
     switch (format) {
-        case BinaryFormat::elf:     return binary::Format::elf;
-        case BinaryFormat::macho:   return binary::Format::macho;
-        case BinaryFormat::pe:      return binary::Format::pe;
-        case BinaryFormat::unknown: break;
+        case BinaryFormat::ELF:     return binary::Format::elf;
+        case BinaryFormat::MACHO:   return binary::Format::macho;
+        case BinaryFormat::PE:      return binary::Format::pe;
+        case BinaryFormat::UNKNOWN: break;
     }
     return binary::Format::unknown;
 }
@@ -93,7 +93,7 @@ bool is_macho(const uint8_t *data, size_t size) noexcept { return binary::is_mac
 bool is_pe(const uint8_t *data, size_t size) noexcept { return binary::is_pe(data, size); }
 
 bool is_binary(const uint8_t *data, size_t size) noexcept {
-    return detect_binary_format(data, size) != BinaryFormat::unknown;
+    return detect_binary_format(data, size) != BinaryFormat::UNKNOWN;
 }
 
 std::string native_section_name(BinaryFormat format, std::string_view canonical) {
@@ -215,4 +215,4 @@ bool find_binary_section(
     return image.read_region(name, content, error);
 }
 
-}   // namespace amc
+}   // namespace skl::amc

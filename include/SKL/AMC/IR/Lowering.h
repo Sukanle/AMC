@@ -24,7 +24,7 @@
 #include <string>
 #include <vector>
 
-namespace amc::ir {
+namespace skl::amc::ir {
 
 // ABI identities. A type is identified by its stable TypeID; a function by its
 // ABI signature hash. These are deliberately separate from the semantic ids in
@@ -33,20 +33,20 @@ using AbiTypeId = Hash128;
 using AbiFunctionId = Hash128;
 
 enum class LoweringStatus : uint32_t {
-    lowered,   // a corresponding ABI entity exists
-    opaque,    // representable, but only as an opaque handle
-    rejected   // no safe ABI mapping
+    LOWERED,    // a corresponding ABI entity exists
+    OPAQUE,     // representable, but only as an OPAQUE handle
+    REJECTED,   // no safe ABI mapping
 };
 
 enum class LoweringReason : uint32_t {
-    ok = 0,
-    missing_abi_type,
-    missing_abi_function,
-    ambiguous_abi_function,
-    missing_semantic_record,
-    layout_unverified,
-    ownership_unresolved,
-    template_not_materialized
+    OK = 0,
+    MISSING_ABI_TYPE,
+    MISSING_ABI_FUNCTION,
+    AMBIGUOUS_ABI_FUNCTION,
+    MISSING_SEMANTIC_RECORD,
+    LAYOUT_UNVERIFIED,
+    OWNERSHIP_UNRESOLVED,
+    TEMPLATE_NOT_MATERIALIZED,
 };
 
 struct LoweredBase {
@@ -68,8 +68,8 @@ struct LoweredType {
     AbiTypeId abi{};
     uint32_t abi_index = UINT32_MAX;
     std::string name;
-    LoweringStatus status = LoweringStatus::rejected;
-    LoweringReason reason = LoweringReason::missing_abi_type;
+    LoweringStatus status = LoweringStatus::REJECTED;
+    LoweringReason reason = LoweringReason::MISSING_ABI_TYPE;
     uint32_t size = 0;
     uint32_t align = 0;
     Hash128 layout_hash{};
@@ -83,25 +83,25 @@ struct LoweredParameter {
 };
 
 struct LoweredFunction {
-    semantic::SemanticFunctionId semantic{};
+    semantic::SemanticFuncId semantic{};
     AbiFunctionId abi{};
     uint32_t abi_index = UINT32_MAX;
     std::string name;
-    LoweringStatus status = LoweringStatus::rejected;
-    LoweringReason reason = LoweringReason::missing_abi_function;
+    LoweringStatus status = LoweringStatus::REJECTED;
+    LoweringReason reason = LoweringReason::MISSING_ABI_FUNCTION;
     Hash128 signature{};
     AbiTypeId return_type{};
     std::vector<LoweredParameter> parameters;
 };
 
 struct LoweredOwnership {
-    semantic::SemanticFunctionId function{};
+    semantic::SemanticFuncId function{};
     AbiFunctionId abi{};
-    semantic::InteractionKind interaction = semantic::InteractionKind::parameter;
+    semantic::InteractionKind interaction = semantic::InteractionKind::PARAM;
     uint32_t index = 0;
-    semantic::OwnershipKind ownership = semantic::OwnershipKind::unspecified;
-    semantic::LifetimeKind lifetime = semantic::LifetimeKind::unknown;
-    semantic::Mutability mutability = semantic::Mutability::immutable;
+    semantic::OwnershipKind ownership = semantic::OwnershipKind::UNSPECIFIED;
+    semantic::LifetimeKind lifetime = semantic::LifetimeKind::UNKNOWN;
+    semantic::Mutability mutability = semantic::Mutability::IMMUTABLE;
     AbiFunctionId release{};
     bool matched_abi_contract = false;
 };
@@ -120,8 +120,8 @@ struct LoweredExposedType {
     AbiTypeId abi{};
     std::string name;
     std::string symbol;
-    LoweringStatus status = LoweringStatus::rejected;
-    LoweringReason reason = LoweringReason::missing_abi_type;
+    LoweringStatus status = LoweringStatus::REJECTED;
+    LoweringReason reason = LoweringReason::MISSING_ABI_TYPE;
     AbiFunctionId create{};
     AbiFunctionId destroy{};
     bool has_constructor = false;
@@ -130,12 +130,12 @@ struct LoweredExposedType {
 };
 
 struct LoweredTemplateInstance {
-    semantic::TemplateInstanceId instance{};
+    semantic::TemplateInstId instance{};
     Hash128 result{};
     AbiTypeId abi_type{};
     AbiFunctionId abi_function{};
-    LoweringStatus status = LoweringStatus::rejected;
-    LoweringReason reason = LoweringReason::template_not_materialized;
+    LoweringStatus status = LoweringStatus::REJECTED;
+    LoweringReason reason = LoweringReason::TEMPLATE_NOT_MATERIALIZED;
 };
 
 struct LoweringResult {
@@ -148,17 +148,17 @@ struct LoweringResult {
 
     [[nodiscard]] bool has_rejections() const {
         for (const auto &type : types)
-            if (type.status == LoweringStatus::rejected) return true;
+            if (type.status == LoweringStatus::REJECTED) return true;
         for (const auto &function : functions)
-            if (function.status == LoweringStatus::rejected) return true;
+            if (function.status == LoweringStatus::REJECTED) return true;
         for (const auto &exposed : exposed)
-            if (exposed.status == LoweringStatus::rejected) return true;
+            if (exposed.status == LoweringStatus::REJECTED) return true;
         for (const auto &instance : templates)
-            if (instance.status == LoweringStatus::rejected) return true;
+            if (instance.status == LoweringStatus::REJECTED) return true;
         return false;
     }
 };
 
-}   // namespace amc::ir
+}   // namespace skl::amc::ir
 
 #endif   // AMC_IR_LOWERING_H

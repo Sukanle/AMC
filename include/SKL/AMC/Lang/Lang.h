@@ -28,7 +28,7 @@
 // "backend"). The one-shot command line, the `.abic.toml` import config and the
 // JSONL IPC handshake are identical for all languages, so they live here; the
 // individual capability implementations stay in `AMC/src/Lang/<language>/`.
-namespace amc::lang {
+namespace skl::amc::lang {
 
 // Configuration parsed from the single `[[import]]` section of a `.abic.toml`.
 struct OwnedDecl {
@@ -195,4 +195,4 @@ int run_provider(int argc, char **argv, const Provider &provider);
 // JSONL IPC loop shared by every language provider.
 int ipc(const Provider &provider);
 
-}   // namespace amc::lang
+}   // namespace skl::amc::lang

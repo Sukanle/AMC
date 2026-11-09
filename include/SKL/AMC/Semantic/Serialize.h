@@ -20,7 +20,7 @@
 
 #include <string>
 
-namespace amc::semantic {
+namespace skl::amc::semantic {
 
 // Writes the semantic sidecar (`<artifact>.semantic`) as JSON. The sidecar is
 // not part of the stable ABI artifact: it carries template declarations,
@@ -32,6 +32,6 @@ bool write_semantic_json(const SemanticModule &module, const std::string &path, 
 // partially linked model.
 bool read_semantic_json(const std::string &path, SemanticModule &module, std::string &error);
 
-}   // namespace amc::semantic
+}   // namespace skl::amc::semantic
 
 #endif   // AMC_SEMANTIC_SERIALIZE_H

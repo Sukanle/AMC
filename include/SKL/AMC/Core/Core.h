@@ -20,10 +20,12 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <stdbool.h>
 
 #include "SKL/AMC/IR/Condition.h"
+#include "SKL/MICS/MICS.h"
 
-namespace amc {
+namespace skl::amc {
 
 struct Hash128 {
     uint64_t lo = 0, hi = 0;
@@ -31,14 +33,14 @@ struct Hash128 {
 bool operator==(Hash128 a, Hash128 b);
 
 enum class TypeKind : uint32_t {
-    primitive,
-    enumeration,
-    record,
-    pointer,
-    array,
-    function,
-    namespace_type,
-    alias,
+    PRIMITIVE,
+    ENUM,
+    RECORD,
+    POINTER,
+    ARRAY,
+    FUNC,
+    NAMESPACE,   // namespace type
+    ALIAS,
 };
 
 // A template primary has metadata useful for dependency closure, but it is not
@@ -60,22 +62,22 @@ constexpr uint32_t type_opaque = 2;
 // same spelling can differ across targets (aarch64/riscv `char` is unsigned,
 // x86/macOS `char` is signed). `char8_t`/`char16_t`/`char32_t` are always
 // unsigned and need no split.
-enum class PrimitiveAbiKind : uint32_t {
-    none = 0,
-    void_,
-    bool_,
-    char_signed,
-    char_unsigned,
-    schar,
-    uchar,
-    char8,
-    char16,
-    char32,
-    wchar_signed,
-    wchar_unsigned,
-    sint,
-    uint,
-    floating,
+enum class PrimitiveABIKind : uint32_t {
+    AMC_NONE = 0,
+    AMC_VOID,
+    AMC_BOOL,
+    AMC_CHAR_SIGNED,
+    AMC_CHAR_UNSIGNED,
+    AMC_SCHAR,
+    AMC_UCHAR,
+    AMC_CHAR8,
+    AMC_CHAR16,
+    AMC_CHAR32,
+    AMC_WCHAR_SIGNED,
+    AMC_WCHAR_UNSIGNED,
+    AMC_SINT,
+    AMC_UINT,
+    AMC_FLOAT,
 };
 
 constexpr uint32_t primitive_width_shift = 8;
@@ -86,18 +88,18 @@ constexpr uint32_t primitive_signed_bit = 1U << 24;
 
 // Floating-point format codes stored in `primitive_format`.
 enum class FloatFormat : uint32_t {
-    none = 0,
-    ieee16,
-    bf16,
-    ieee32,
-    ieee64,
-    ieee128,
-    x87_80,
-    ppc_double_double,
+    NONE = 0,
+    IEEE16,
+    BF16,
+    IEEE32,
+    IEEE64,
+    IEEE128,
+    X87_80,
+    PPC_DOUBLE_DOUBLE,
 };
 
 inline uint32_t primitive_abi(
-    uint32_t width, PrimitiveAbiKind kind, FloatFormat format = FloatFormat::none, bool is_signed = false) {
+    uint32_t width, PrimitiveABIKind kind, FloatFormat format = FloatFormat::NONE, bool is_signed = false) {
     return static_cast<uint32_t>(kind)
          | (width << primitive_width_shift)
          | (static_cast<uint32_t>(format) << primitive_format_shift)
@@ -113,22 +115,22 @@ constexpr uint32_t field_bit_offset_shift = 16;
 constexpr uint32_t field_bit_width_shift = 24;
 
 enum class Visibility : uint32_t {
-    public_ = 0,
-    protected_ = 1,
-    private_ = 2,
-    none = 3,
+    PUBLIC = 0,
+    PROTECTED = 1,
+    PRIVATE = 2,
+    NONE = 3,
 };
 constexpr uint32_t visibility_flags(Visibility value) { return static_cast<uint32_t>(value) << field_visibility_shift; }
 struct Type {
     std::string name;
-    TypeKind kind = TypeKind::primitive;
+    TypeKind kind = TypeKind::PRIMITIVE;
     Hash128 id{};
     Hash128 layout_hash{};
     uint32_t size = 0, align = 0, flags = 0;
     uint32_t field_begin = 0, field_count = 0;
     uint32_t array_count = 0;
     // Primitive ABI kind for `TypeKind::primitive` (0 = none); see
-    // `PrimitiveAbiKind` / `primitive_abi`. Kept out of `flags` so it stays a
+    // `PrimitiveABIKind` / `primitive_abi`. Kept out of `flags` so it stays a
     // first-class ABI fact rather than a bitmask.
     uint32_t primitive_abi = 0;
 };
@@ -148,33 +150,33 @@ struct Function {
     std::string name;
     Hash128 signature{};
     Hash128 return_type{};
-    std::vector<Parameter> parameters;
+    std::vector<Parameter> params;
     uint32_t calling_convention = 0, flags = 0;
 };
 enum class SymbolKind : uint32_t {
-    type,
-    field,
-    function,
+    TYPE,
+    FIELD,
+    FUNC,
 };
 struct Symbol {
     std::string name;
-    SymbolKind kind = SymbolKind::type;
+    SymbolKind kind = SymbolKind::TYPE;
     uint32_t target_index = 0;
 };
 enum class HashKind : uint32_t {
-    artifact,
-    type_id,
-    layout,
-    signature,
+    ARTIFACT,
+    TYPE_ID,
+    LAYOUT,
+    SIGNATURE,
 };
 enum class HashTargetKind : uint32_t {
-    module,
-    type,
-    function,
+    MODULE,
+    TYPE,
+    FUNC,
 };
 struct HashRecord {
-    HashKind kind = HashKind::artifact;
-    HashTargetKind target_kind = HashTargetKind::module;
+    HashKind kind = HashKind::ARTIFACT;
+    HashTargetKind target_kind = HashTargetKind::MODULE;
     uint32_t target_index = 0;
     uint32_t flags = 0;
     Hash128 value{};
@@ -186,26 +188,26 @@ struct HashDescriptor {
     uint32_t flags = 0;
 };
 enum class CompatibilityKind : uint32_t {
-    identical,
-    layout_compatible,
-    map_compatible,
-    incompatible,
+    IDENTICAL,
+    LAYOUT_COMP,
+    MAP_COMP,
+    INCOMP,
 };
 struct CompatibilityRecord {
     Hash128 source_type{}, target_type{};
-    CompatibilityKind kind = CompatibilityKind::incompatible;
+    CompatibilityKind kind = CompatibilityKind::INCOMP;
     uint32_t map_index = UINT32_MAX;
     uint32_t flags = 0;
 };
 enum class MapOpcode : uint8_t {
-    copy_field,
-    convert_int,
-    convert_float,
-    add_default,
-    skip_field,
+    COPY_FIELD,
+    CONVERT_INT,
+    CONVERT_FLOAT,
+    ADD_DEFAULT,
+    SKIP_FIELD,
 };
 struct MapOperation {
-    MapOpcode opcode = MapOpcode::skip_field;
+    MapOpcode opcode = MapOpcode::SKIP_FIELD;
     uint32_t source_field = UINT32_MAX, target_field = UINT32_MAX;
     uint32_t source_offset = 0, target_offset = 0, byte_count = 0;
     Hash128 auxiliary{};
@@ -232,10 +234,10 @@ struct SourceOrigin {
 //   owned       — the receiver takes ownership and must release via `release`
 //   copy        — independent data produced by an explicit copy
 enum class OwnershipMode : uint32_t {
-    unspecified = 0,
-    borrowed = 1,
-    owned = 2,
-    copy = 3,
+    UNSPECIFIED = 0,
+    BORROWED = 1,
+    OWNED = 2,
+    COPY = 3,
 };
 
 // Release policy: the entry points that create and release a value type. It is
@@ -249,41 +251,41 @@ struct OwnedType {
 
 // Which ABI interaction an ownership contract describes.
 enum class OwnershipTarget : uint32_t {
-    parameter = 0,
-    return_value = 1,
+    PARAM = 0,
+    RETURN = 1,
 };
 
 // One ownership contract: the declared mode of a parameter or return value,
 // plus the entry point that releases it when the mode is `owned`. It is a
 // contract, not a layout fact, so it never feeds the layout/ABI identity.
 struct OwnershipContract {
-    OwnershipTarget target = OwnershipTarget::parameter;
+    OwnershipTarget target = OwnershipTarget::PARAM;
     uint32_t target_index = 0;   // global parameter index, or function index for a return
-    OwnershipMode mode = OwnershipMode::unspecified;
+    OwnershipMode mode = OwnershipMode::UNSPECIFIED;
     Hash128 release{};   // release function signature (owned only), or zero
     uint32_t flags = 0;
 };
 
 // Where a function reports its status.
 enum class StatusSource : uint32_t {
-    return_value = 0,
-    parameter = 1,
+    RETURN_VALUE = 0,
+    PARAMETER = 1,
     // The return value is an aggregate carrying the status in one field and the
     // value in another (the ABIX-STD Result layout). `status_parameter` is the
     // status field index and `value_parameter` is the value field index within
     // the returned record, so a Result return binds to the error boundary
-    // without a separate out-parameter.
-    return_field = 2,
+    // without a separate out-PARAMETER.
+    RETURN_FIELD = 2,
 };
 
 // A named error set: the stable identity, optional domain, and the default
 // generic condition for the codes it contains. `code_begin`/`code_count` point
-// into `AbiModule::error_codes`.
+// into `ABIModule::error_codes`.
 struct ErrorSet {
     Hash128 id{};
     std::string name;
     uint64_t domain = 0;
-    int32_t condition = static_cast<int32_t>(GenericCondition::unknown);
+    int32_t condition = static_cast<int32_t>(GenericCondition::UNKNOWN);
     uint32_t flags = 0;
     uint32_t code_begin = 0;
     uint32_t code_count = 0;
@@ -295,7 +297,7 @@ struct ErrorCode {
     Hash128 set_id{};
     std::string name;
     int32_t value = 0;
-    int32_t condition = static_cast<int32_t>(GenericCondition::unknown);
+    int32_t condition = static_cast<int32_t>(GenericCondition::UNKNOWN);
     uint32_t flags = 0;
 };
 
@@ -312,7 +314,7 @@ inline constexpr uint64_t amc_error_domain = 0x1003000000000001ULL;
 // result instead of inspecting a bare integer. A contract, not a layout fact.
 struct ErrorContract {
     uint32_t function_index = 0;
-    StatusSource status_source = StatusSource::return_value;
+    StatusSource status_source = StatusSource::RETURN_VALUE;
     uint32_t status_parameter = UINT32_MAX;   // local parameter index, or the
                                               // status field index for return_field
     int64_t success_value = 0;                // status value that means success
@@ -320,7 +322,7 @@ struct ErrorContract {
                                               // index for return_field, or UINT32_MAX when the return
                                               // value itself is the value
     uint64_t domain = 0;                      // v2 error identity domain (required)
-    int32_t condition = static_cast<int32_t>(GenericCondition::unknown);   // EPCD GenericCondition
+    int32_t condition = static_cast<int32_t>(GenericCondition::UNKNOWN);   // EPCD GenericCondition
     Hash128 error_set{};                                                   // optional error-set identity (zero = none)
     uint32_t flags = 0;
 };
@@ -329,31 +331,31 @@ struct ErrorContract {
 // an ABIX-STD boundary contract. Instantiation and lowering are separate stages:
 // a successful instantiation does not by itself satisfy a contract.
 enum class LoweringKind : uint32_t {
-    sequence_view = 1,
-    string_view = 2,
-    optional = 3,
-    result = 4,
-    callback = 5,
-    range = 6,
-    opaque = 7,
+    SEQUENCE_VIEW = 1,
+    STRING_VIEW = 2,
+    OPTIONAL = 3,
+    RESULT = 4,
+    CALLBACK = 5,
+    RANGE = 6,
+    OPAQUE = 7,
 };
 enum class LoweringStatus : uint32_t {
-    direct = 0,          // the concrete type is already the boundary entity
-    needs_adapter = 1,   // compatible shape, but a thin adapter must be generated
-    unsupported = 2,     // cannot be lowered to the contract
+    DIRECT = 0,          // the concrete type is already the boundary entity
+    NEEDS_ADAPTER = 1,   // compatible shape, but a thin adapter must be generated
+    UNSUPPORTED = 2,     // cannot be lowered to the contract
 };
 // Why a lowering landed on its status. Recorded so tools can explain the
 // decision (amc check/diff, diagnostics, MCP/Agent) instead of only "incompatible".
 enum class LoweringReason : uint32_t {
-    ok = 0,
-    not_a_record,
-    field_count,           // not exactly two fields
-    missing_data,          // no pointer/contiguous-data field
-    missing_length,        // no unsigned length field
-    element_mismatch,      // pointee element differs from the declared element
-    mutability_mismatch,   // a mutable contract needs a non-const pointer
-    length_type,           // length is not an acceptable unsigned integer
-    layout,                // field order/offset/size differ from the canonical view
+    OK = 0,
+    NOT_A_RECORD,
+    FIELD_COUNT,           // not exactly two fields
+    MISSING_DATA,          // no pointer/contiguous-data field
+    MISSING_LENGHT,        // no unsigned length field
+    ELEMENT_MISMATCH,      // pointee element differs from the declared element
+    MUTABILITY_MISMATCH,   // a mutable contract needs a non-const pointer
+    LENGTH_TYPE,           // length is not an acceptable unsigned integer
+    LAYOUT,                // field order/offset/size differ from the canonical view
 };
 struct LoweringResult {
     Hash128 type_id{};                     // the concrete instantiated type
@@ -413,7 +415,7 @@ struct PointeeRef {
 //   * Implementation      — how one concrete type reaches each method.
 // Like ownership, these are contracts, not layout facts, so they never feed
 // the layout/ABI identity.
-constexpr uint32_t interface_method_virtual = 1;   // adapted from a native virtual method
+constexpr uint32_t INTERFACE_METHOD_VIRTUAL = 1;   // adapted from a native virtual method
 
 // One method contract inside an interface. Identity is (interface_id, slot);
 // `signature` is the method ABI hash and is validated independently of the
@@ -462,7 +464,7 @@ struct InterfaceImplementation {
     uint32_t flags = 0;
 };
 
-struct AbiModule {
+struct ABIModule {
     std::string package_name, package_version;
     uint32_t arch = 0, os = 0, target_abi = 0, compiler = 1, calling_convention = 0;
     // Layout identity rule recorded by the artifact. Currently always
@@ -511,11 +513,11 @@ Hash128 signature_hash(const Function &);
 // domain as ABIX's `model::canonical_layout_hash`.
 constexpr uint16_t canonical_layout_version = 1;
 constexpr uint64_t canonical_layout_domain = 0x4C41594F55545631ULL;   // "LAYOUTV1"
-std::vector<uint8_t> canonical_layout_encoding(const AbiModule &, const Type &, const std::vector<Field> &);
-Hash128 canonical_layout_hash(const AbiModule &, const Type &, const std::vector<Field> &);
+std::vector<uint8_t> canonical_layout_encoding(const ABIModule &, const Type &, const std::vector<Field> &);
+Hash128 canonical_layout_hash(const ABIModule &, const Type &, const std::vector<Field> &);
 // Recompute every type's LayoutHash with CLE v1 and mark the module as using
 // that rule. Call after the target facts are final.
-void recompute_layout_hashes(AbiModule &);
+void recompute_layout_hashes(ABIModule &);
 // The single definition of an interface identity: the canonical name, the
 // version and the ordered method signatures, hashed with `hash_text` over the
 // canonical form "ABIX-INTERFACE:" + name + ":" + version + per-slot
@@ -530,13 +532,13 @@ Hash128 interface_hash(const InterfaceRecord &, const std::vector<InterfaceMetho
 // The ABI signature hash of one interface method, derived the same way as a
 // function signature (name + return type + parameter types).
 Hash128 method_signature_hash(const InterfaceMethod &);
-std::vector<uint8_t> canonical_bytes(const AbiModule &);
-Hash128 abi_hash(const AbiModule &);
-std::vector<HashRecord> hash_table(const AbiModule &);
-bool build_compatibility(const AbiModule &, const AbiModule &, AbiModule &, std::string &error);
+std::vector<uint8_t> canonical_bytes(const ABIModule &);
+Hash128 abi_hash(const ABIModule &);
+std::vector<HashRecord> hash_table(const ABIModule &);
+bool build_compatibility(const ABIModule &, const ABIModule &, ABIModule &, std::string &error);
 const char *compatibility_name(CompatibilityKind);
-bool validate(const AbiModule &, std::string &error);
-bool project_symbols(const AbiModule &, const std::vector<std::string> &symbols, AbiModule &, std::string &error);
+bool validate(const ABIModule &, std::string &error);
+bool project_symbols(const ABIModule &, const std::vector<std::string> &symbols, ABIModule &, std::string &error);
 
 // ABIX-STD lowering: match a concrete instantiated type against the
 // `sequence-view` contract. Returns the result (never fails): `direct` when the
@@ -545,34 +547,35 @@ bool project_symbols(const AbiModule &, const std::vector<std::string> &symbols,
 // The element is matched by pointee TypeID when `element_id` is set (and the
 // pointer has a recorded pointee), otherwise by `element_spelling`; empty means
 // "do not check the element". `contract_mutable` requires a non-const pointer.
-LoweringResult evaluate_sequence_view(const AbiModule &module, Hash128 type_id, Hash128 element_id,
+LoweringResult evaluate_sequence_view(const ABIModule &module, Hash128 type_id, Hash128 element_id,
     const std::string &element_spelling, bool contract_mutable);
 
 // Match a concrete type against the `string-view` contract: `{ data, length,
 // encoding }`, with the code unit matched by pointee TypeID.
-LoweringResult evaluate_string_view(const AbiModule &module, Hash128 type_id, Hash128 element_id,
+LoweringResult evaluate_string_view(const ABIModule &module, Hash128 type_id, Hash128 element_id,
     const std::string &element_spelling, bool contract_mutable);
 
 // P1 contracts (value layouts matched by shape + element TypeID).
 LoweringResult evaluate_optional(
-    const AbiModule &module, Hash128 type_id, Hash128 element_id, const std::string &element_spelling);
+    const ABIModule &module, Hash128 type_id, Hash128 element_id, const std::string &element_spelling);
 LoweringResult evaluate_result(
-    const AbiModule &module, Hash128 type_id, Hash128 element_id, const std::string &element_spelling);
-LoweringResult evaluate_callback(const AbiModule &module, Hash128 type_id);
+    const ABIModule &module, Hash128 type_id, Hash128 element_id, const std::string &element_spelling);
+LoweringResult evaluate_callback(const ABIModule &module, Hash128 type_id);
 
 // Mark a type as an intentionally opaque handle (Map / Set / Deque / custom
 // containers): its layout is not exposed and it is used through accessors.
-LoweringResult evaluate_opaque(const AbiModule &module, Hash128 type_id);
+LoweringResult evaluate_opaque(const ABIModule &module, Hash128 type_id);
 
 // Resolve a type spelling (for example `int`) to a TypeID by normalized name,
 // or a zero Hash128 when not found. `const int` and `int` resolve together.
-Hash128 find_type_id_by_spelling(const AbiModule &module, const std::string &spelling);
+Hash128 find_type_id_by_spelling(const ABIModule &module, const std::string &spelling);
 
-bool write_abix(const AbiModule &, const std::string &path, std::string &error);
-bool read_abix(const std::string &path, AbiModule &, std::string &error);
+bool write_abix(const ABIModule &, const std::string &path, std::string &error);
+bool read_abix(const std::string &path, ABIModule &, std::string &error);
 std::string type_kind_name(TypeKind);
 // Returns the recorded declaration site of a type, or nullptr.
-const SourceOrigin *find_source_origin(const AbiModule &, Hash128 type_id);
+const SourceOrigin *find_source_origin(const ABIModule &, Hash128 type_id);
 
-}   // namespace amc
+}   // namespace skl::amc
+
 #endif

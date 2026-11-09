@@ -20,12 +20,12 @@
 #include "SKL/AMC/IR/Module.h"
 #include "SKL/AMC/Pass/Pass.h"
 
-namespace amc::pass {
+namespace skl::amc::pass {
 
 // A2/A3: artifact-level consistency checks that are independent of the ABI
 // view: IR schema version and sidecar metadata.
 bool verify_artifact(ir::Module &module, Context &context, diagnostics::DiagnosticList &diagnostics);
 
-}   // namespace amc::pass
+}   // namespace skl::amc::pass
 
 #endif   // AMC_PASS_ARTIFACT_H

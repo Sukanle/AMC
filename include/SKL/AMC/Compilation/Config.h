@@ -24,7 +24,7 @@
 
 #include <toml++/toml.h>
 
-namespace amc::compilation {
+namespace skl::amc::compilation {
 
 // One `[[export]]` entry: output artifact and the optional symbol subset.
 struct ExportSpec {
@@ -39,8 +39,8 @@ bool parse_exports(const toml::table &table, std::vector<ExportSpec> &exports, s
 
 // Apply the `[target]` table to the module and recompute every LayoutHash with
 // the Canonical Layout Encoding v1. Call once the target facts are final.
-void apply_target_and_layout(const toml::table &config, AbiModule &module);
+void apply_target_and_layout(const toml::table &config, ABIModule &module);
 
-}   // namespace amc::compilation
+}   // namespace skl::amc::compilation
 
 #endif   // AMC_COMPILATION_CONFIG_H

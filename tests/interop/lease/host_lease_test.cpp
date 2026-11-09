@@ -22,11 +22,11 @@ void check(bool condition, const char *what) {
     }
 }
 
-using amc::test::lease::HostLeaseRegistry;
 using skl::abix::poly::invalid_module_instance;
 using skl::abix::poly::module_state;
 using skl::abix::poly::ModuleControl;
 using skl::abix::poly::ModuleState;
+using skl::amc::test::lease::HostLeaseRegistry;
 
 abix_lease_registry *new_registry(const abix_lease_api &api) {
     abix_lease_registry *registry = nullptr;

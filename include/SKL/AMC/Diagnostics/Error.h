@@ -22,7 +22,7 @@
 #include <string>
 #include <string_view>
 
-namespace amc {
+namespace skl::amc {
 
 // Unified AMC error schema.
 //
@@ -32,14 +32,14 @@ namespace amc {
 // coarse class, `stage` names the operation that failed, and `message`
 // carries the human-readable detail.
 enum class ErrorCategory : uint32_t {
-    usage,
-    config,
-    io,
-    provider,
-    format,
-    validation,
-    compatibility,
-    internal,
+    USAGE,
+    CONFIG,
+    IO,
+    PROVIDER,
+    FORMAT,
+    VALIDATION,
+    COMPATIBILITY,
+    INTERNAL,
 };
 
 const char *error_category_name(ErrorCategory category);
@@ -48,14 +48,14 @@ const char *error_category_name(ErrorCategory category);
 // stays available for human-readable output and old consumers.
 [[nodiscard]] constexpr AMCErr amc_error_from_category(ErrorCategory category) noexcept {
     switch (category) {
-        case ErrorCategory::usage:         return AMCErr::usage;
-        case ErrorCategory::config:        return AMCErr::config;
-        case ErrorCategory::io:            return AMCErr::io;
-        case ErrorCategory::provider:      return AMCErr::provider;
-        case ErrorCategory::format:        return AMCErr::format;
-        case ErrorCategory::validation:    return AMCErr::validation;
-        case ErrorCategory::compatibility: return AMCErr::compatibility;
-        case ErrorCategory::internal:      return AMCErr::internal;
+        case ErrorCategory::USAGE:         return AMCErr::usage;
+        case ErrorCategory::CONFIG:        return AMCErr::config;
+        case ErrorCategory::IO:            return AMCErr::io;
+        case ErrorCategory::PROVIDER:      return AMCErr::provider;
+        case ErrorCategory::FORMAT:        return AMCErr::format;
+        case ErrorCategory::VALIDATION:    return AMCErr::validation;
+        case ErrorCategory::COMPATIBILITY: return AMCErr::compatibility;
+        case ErrorCategory::INTERNAL:      return AMCErr::internal;
     }
     return AMCErr::internal;
 }
@@ -68,7 +68,7 @@ struct Error {
     // Stable EPCD identity. `category` below is the coarse compatibility and
     // presentation classification, not a second identity.
     skl::epcd::ErrorCode code{};
-    ErrorCategory category = ErrorCategory::internal;
+    ErrorCategory category = ErrorCategory::INTERNAL;
     std::string stage;
     std::string message;
     std::string file;     // optional offending artifact / path
@@ -88,8 +88,8 @@ std::string error_to_json(const Error &error);
 std::string error_to_text(const Error &error);
 
 enum class ErrorFormat {
-    text,
-    json
+    TEXT,
+    JSON,
 };
 
 bool parse_error_format(std::string_view value, ErrorFormat &format);
@@ -98,6 +98,6 @@ const char *error_format_name(ErrorFormat format);
 // Escapes a UTF-8 string for embedding in a JSON string literal (no quotes).
 std::string json_escape(std::string_view value);
 
-}   // namespace amc
+}   // namespace skl::amc
 
 #endif

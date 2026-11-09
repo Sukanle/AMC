@@ -20,7 +20,7 @@
 #include <cstdint>
 #include <string>
 
-namespace amc::lang::backend::cpp {
+namespace skl::amc::lang::backend::cpp {
 
 // C++ spelling helpers shared by the projection emitters. Everything here maps
 // ABIX names and types to valid C++ text; nothing reads or writes files.
@@ -42,13 +42,13 @@ std::string hex_u64(uint64_t value);
 // Render a recorded TypeID as a C++ spelling. Pointer and record names are
 // already source-level spellings; a C primitive that carries the C spelling
 // `_Bool` maps to the C++ `bool`, exactly as the generated thunk source does.
-std::string cpp_type_of(const amc::AbiModule &m, amc::Hash128 id);
+std::string cpp_type_of(const amc::ABIModule &m, amc::Hash128 id);
 
-bool type_is_pointer(const amc::AbiModule &m, amc::Hash128 id);
+bool type_is_pointer(const amc::ABIModule &m, amc::Hash128 id);
 
 // An interface method is usable as an object-handle call only when its first
 // parameter is a `void *`/`const void *` pointer (the object handle). The
 // generated proxy class is emitted only when every method qualifies.
-bool interface_has_handle_methods(const amc::AbiModule &m, const amc::InterfaceRecord &record);
+bool interface_has_handle_methods(const amc::ABIModule &m, const amc::InterfaceRecord &record);
 
-}   // namespace amc::lang::backend::cpp
+}   // namespace skl::amc::lang::backend::cpp

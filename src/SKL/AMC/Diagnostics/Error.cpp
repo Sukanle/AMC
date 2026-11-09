@@ -20,18 +20,18 @@
 
 #include <fmt/format.h>
 
-namespace amc {
+namespace skl::amc {
 
 const char *error_category_name(ErrorCategory category) {
     switch (category) {
-        case ErrorCategory::usage:         return "usage";
-        case ErrorCategory::config:        return "config";
-        case ErrorCategory::io:            return "io";
-        case ErrorCategory::provider:      return "provider";
-        case ErrorCategory::format:        return "format";
-        case ErrorCategory::validation:    return "validation";
-        case ErrorCategory::compatibility: return "compatibility";
-        case ErrorCategory::internal:      return "internal";
+        case ErrorCategory::USAGE:         return "usage";
+        case ErrorCategory::CONFIG:        return "config";
+        case ErrorCategory::IO:            return "io";
+        case ErrorCategory::PROVIDER:      return "provider";
+        case ErrorCategory::FORMAT:        return "format";
+        case ErrorCategory::VALIDATION:    return "validation";
+        case ErrorCategory::COMPATIBILITY: return "compatibility";
+        case ErrorCategory::INTERNAL:      return "internal";
     }
     return "internal";
 }
@@ -137,16 +137,16 @@ std::string error_to_text(const Error &error) {
 
 bool parse_error_format(std::string_view value, ErrorFormat &format) {
     if (value == "text") {
-        format = ErrorFormat::text;
+        format = ErrorFormat::TEXT;
         return true;
     }
     if (value == "json") {
-        format = ErrorFormat::json;
+        format = ErrorFormat::JSON;
         return true;
     }
     return false;
 }
 
-const char *error_format_name(ErrorFormat format) { return format == ErrorFormat::json ? "json" : "text"; }
+const char *error_format_name(ErrorFormat format) { return format == ErrorFormat::JSON ? "json" : "text"; }
 
-}   // namespace amc
+}   // namespace skl::amc

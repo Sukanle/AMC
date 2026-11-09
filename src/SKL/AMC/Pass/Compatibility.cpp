@@ -19,9 +19,9 @@
 
 #include <fmt/format.h>
 
-namespace amc::pass {
+namespace skl::amc::pass {
 
-bool compare_modules(const AbiModule &contract, const AbiModule &implementation, ir::CompatibilityResult &result,
+bool compare_modules(const ABIModule &contract, const ABIModule &implementation, ir::CompatibilityResult &result,
     Context &context, diagnostics::DiagnosticList &diagnostics) {
     (void)context;
     std::string error;
@@ -40,4 +40,4 @@ bool compare_modules(const AbiModule &contract, const AbiModule &implementation,
     return true;
 }
 
-}   // namespace amc::pass
+}   // namespace skl::amc::pass

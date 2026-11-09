@@ -18,14 +18,14 @@
 #include "SKL/AMC/Lang/Lang.h"
 
 int main(int argc, char **argv) {
-    static const amc::lang::Provider provider{
+    static const skl::amc::lang::Provider provider{
         "rust",
         {
-          {"frontend", amc::lang::rust::run_frontend},
-          {"backend", amc::lang::rust::run_backend},
+          {"frontend", skl::amc::lang::rust::run_frontend},
+          {"backend", skl::amc::lang::rust::run_backend},
           },
         "0.4.0",
         {"ownership", "error", "target"},
     };
-    return amc::lang::run_provider(argc, argv, provider);
+    return skl::amc::lang::run_provider(argc, argv, provider);
 }

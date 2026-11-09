@@ -7,21 +7,23 @@ language = "cpp"
 flags = [
   "-std=c++17",
   "-I", "include",
+  "-I", "dependencies/ABIX/MICS/include",
+  "-I", "dependencies/ABIX/MICS/HLMD",
 ]
 files = ["self_types.cpp"]
 symbols = [
-  "amc::Hash128",
-  "amc::Type",
-  "amc::Field",
-  "amc::Parameter",
-  "amc::Function",
-  "amc::Symbol",
-  "amc::HashRecord",
-  "amc::HashDescriptor",
-  "amc::CompatibilityRecord",
-  "amc::MapOperation",
-  "amc::MapRecord",
-  "amc::AbiModule"
+  "skl::amc::Hash128",
+  "skl::amc::Type",
+  "skl::amc::Field",
+  "skl::amc::Parameter",
+  "skl::amc::Function",
+  "skl::amc::Symbol",
+  "skl::amc::HashRecord",
+  "skl::amc::HashDescriptor",
+  "skl::amc::CompatibilityRecord",
+  "skl::amc::MapOperation",
+  "skl::amc::MapRecord",
+  "skl::amc::ABIModule"
 ]
 
 [[export]]

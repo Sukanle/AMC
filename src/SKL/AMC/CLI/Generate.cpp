@@ -32,12 +32,12 @@
 #include <fmt/os.h>
 
 namespace fs = std::filesystem;
-using amc::util::fail;
-using amc::util::g_error_format;
-using amc::util::read_error_category;
-using amc::util::usage_error;
+using skl::amc::util::fail;
+using skl::amc::util::g_error_format;
+using skl::amc::util::read_error_category;
+using skl::amc::util::usage_error;
 
-namespace amc::cli {
+namespace skl::amc::cli {
 
 int cmd_generate(char **args, int arg_count, const fs::path &provider) {
     const std::string command = args[1];
@@ -47,7 +47,7 @@ int cmd_generate(char **args, int arg_count, const fs::path &provider) {
         const std::string language = args[4];
         if (language == "lua") {
             if (command == "backend") return usage_error("backend is a C++ provider capability; use generate for lua");
-            amc::AbiModule module;
+            amc::ABIModule module;
             std::string error;
             if (!amc::load_module_source(args[2], module, error))
                 return fail(read_error_category(error), "read_abix", error, args[2]);
@@ -55,21 +55,21 @@ int cmd_generate(char **args, int arg_count, const fs::path &provider) {
             const bool conformance = requested.extension() == ".lua";
             const std::string contract =
                 conformance ? amc::generate_lua_conformance(module, error) : amc::generate_lua_contract(module, error);
-            if (!error.empty()) return fail(amc::ErrorCategory::internal, "generate_lua", error, args[2]);
+            if (!error.empty()) return fail(amc::ErrorCategory::INTERNAL, "generate_lua", error, args[2]);
             fs::path output = requested;
             if (output.extension() != ".hpp" && output.extension() != ".lua") output /= "amc_lua_contract.hpp";
             std::error_code ec;
             if (!output.parent_path().empty()) {
                 fs::create_directories(output.parent_path(), ec);
                 if (ec)
-                    return fail(amc::ErrorCategory::io, "generate", "cannot create output directory", output.string(),
+                    return fail(amc::ErrorCategory::IO, "generate", "cannot create output directory", output.string(),
                         ec.message());
             }
             try {
                 auto file = fmt::output_file(output.string());
                 file.print("{}", contract);
             } catch (const std::exception &e) {
-                return fail(amc::ErrorCategory::io, "generate", "cannot write output", output.string(), e.what());
+                return fail(amc::ErrorCategory::IO, "generate", "cannot write output", output.string(), e.what());
             }
             return 0;
         }
@@ -77,7 +77,7 @@ int cmd_generate(char **args, int arg_count, const fs::path &provider) {
             if (command == "backend") {
                 std::string error;
                 if (!amc::compilation::dispatch_provider(provider, "backend", args[2], args[6], error))
-                    return fail(amc::ErrorCategory::provider, "backend", error, args[2]);
+                    return fail(amc::ErrorCategory::PROVIDER, "backend", error, args[2]);
                 return 0;
             }
             return amc::compilation::generate(provider, args[2], args[6], ".hpp");
@@ -87,7 +87,7 @@ int cmd_generate(char **args, int arg_count, const fs::path &provider) {
             if (command == "backend") {
                 std::string error;
                 if (!amc::compilation::dispatch_provider(rust_provider, "backend", args[2], args[6], error))
-                    return fail(amc::ErrorCategory::provider, "backend", error, args[2]);
+                    return fail(amc::ErrorCategory::PROVIDER, "backend", error, args[2]);
                 return 0;
             }
             return amc::compilation::generate(rust_provider, args[2], args[6], ".rs");
@@ -97,7 +97,7 @@ int cmd_generate(char **args, int arg_count, const fs::path &provider) {
             if (command == "backend") {
                 std::string error;
                 if (!amc::compilation::dispatch_provider(zig_provider, "backend", args[2], args[6], error))
-                    return fail(amc::ErrorCategory::provider, "backend", error, args[2]);
+                    return fail(amc::ErrorCategory::PROVIDER, "backend", error, args[2]);
                 return 0;
             }
             return amc::compilation::generate(zig_provider, args[2], args[6], ".zig");
@@ -129,21 +129,21 @@ int cmd_frontend(char **args, int arg_count, const fs::path &provider) {
         std::string error;
         const fs::path selected = amc::compilation::provider_executable(provider, language);
         if (!amc::compilation::dispatch_provider(selected, "frontend", config_path, output_path, error))
-            return fail(amc::ErrorCategory::provider, "frontend", error, config_path.string());
+            return fail(amc::ErrorCategory::PROVIDER, "frontend", error, config_path.string());
         try {
             const toml::table config = toml::parse_file(config_path.string());
-            amc::AbiModule module;
+            amc::ABIModule module;
             if (!amc::read_abix(output_path.string(), module, error))
                 return fail(read_error_category(error), "read_abix", error, output_path.string());
             amc::compilation::apply_target_and_layout(config, module);
             if (!amc::write_abix(module, output_path.string(), error))
-                return fail(amc::ErrorCategory::io, "write_abix", error, output_path.string());
+                return fail(amc::ErrorCategory::IO, "write_abix", error, output_path.string());
         } catch (const toml::parse_error &e) {
-            return fail(amc::ErrorCategory::config, "frontend", std::string(e.description()), config_path.string());
+            return fail(amc::ErrorCategory::CONFIG, "frontend", std::string(e.description()), config_path.string());
         }
         return 0;
     }
     return usage_error(command + ": unsupported subcommand");
 }
 
-}   // namespace amc::cli
+}   // namespace skl::amc::cli

@@ -15,9 +15,9 @@
  */
 #include "SKL/AMC/Tool/MCP.h"
 
-namespace amc::mcp {
+namespace skl::amc::mcp {
 
-using namespace amc::util;
+using namespace skl::amc::util;
 
 // --- JSON-RPC plumbing ---------------------------------------------------
 
@@ -153,4 +153,4 @@ void handle_request(const amc::Json &request) {
     respond(make_error(id, -32'601, "method not found: " + method));
 }
 
-}   // namespace amc::mcp
+}   // namespace skl::amc::mcp

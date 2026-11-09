@@ -39,8 +39,8 @@ namespace {
 
 using Clock = std::chrono::steady_clock;
 
-amc::InstantiationBuildInputs make_inputs(size_t index, const char *source = "source-v1") {
-    amc::InstantiationRequest request;
+skl::amc::InstantiationBuildInputs make_inputs(size_t index, const char *source = "source-v1") {
+    skl::amc::InstantiationRequest request;
     request.template_name = "abix_span";
     request.arguments = {"int32_t", "index_" + std::to_string(index)};
     request.arch = 1;
@@ -48,11 +48,11 @@ amc::InstantiationBuildInputs make_inputs(size_t index, const char *source = "so
     request.target_abi = 1;
     request.pointer_bits = 64;
 
-    amc::InstantiationBuildInputs inputs;
+    skl::amc::InstantiationBuildInputs inputs;
     inputs.request = std::move(request);
-    inputs.source_digest = amc::digest_text(source, amc::digest_domain_source);
-    inputs.toolchain = amc::digest_text("clang-20", amc::digest_domain_toolchain);
-    inputs.build_options = amc::digest_text("-O2", amc::digest_domain_options);
+    inputs.source_digest = skl::amc::digest_text(source, skl::amc::digest_domain_source);
+    inputs.toolchain = skl::amc::digest_text("clang-20", skl::amc::digest_domain_toolchain);
+    inputs.build_options = skl::amc::digest_text("-O2", skl::amc::digest_domain_options);
     return inputs;
 }
 
@@ -75,7 +75,7 @@ public:
         root = make_root("amc-cache-store");
         fs::remove_all(root);
         fs::create_directories(root);
-        cache = std::make_unique<amc::InstantiationCache>(root.string());
+        cache = std::make_unique<skl::amc::InstantiationCache>(root.string());
     }
 
     void TearDown(const ::benchmark::State &) override {
@@ -85,7 +85,7 @@ public:
 
     size_t count = 0;
     fs::path root;
-    std::unique_ptr<amc::InstantiationCache> cache;
+    std::unique_ptr<skl::amc::InstantiationCache> cache;
 };
 
 class CacheReadFixture : public benchmark::Fixture {
@@ -95,7 +95,7 @@ public:
         root = make_root("amc-cache-read");
         fs::remove_all(root);
         fs::create_directories(root);
-        cache = std::make_unique<amc::InstantiationCache>(root.string());
+        cache = std::make_unique<skl::amc::InstantiationCache>(root.string());
 
         std::string error;
         for (size_t i = 0; i < count; ++i) {
@@ -109,8 +109,8 @@ public:
         dependency_file = root / "dependency.txt";
         if (!write_text(dependency_file, "dependency-v1")) throw std::runtime_error("cannot write dependency file");
         dependency_inputs = make_inputs(count + 1);
-        const std::vector<amc::CacheDependency> dependencies = {
-            {dependency_file.string(), amc::digest_text("dependency-v1", amc::digest_domain_dependency)},
+        const std::vector<skl::amc::CacheDependency> dependencies = {
+            {dependency_file.string(), skl::amc::digest_text("dependency-v1", skl::amc::digest_domain_dependency)},
         };
         if (!cache->store(dependency_inputs,
                 {
@@ -131,8 +131,8 @@ public:
     size_t count = 0;
     fs::path root;
     fs::path dependency_file;
-    amc::InstantiationBuildInputs dependency_inputs;
-    std::unique_ptr<amc::InstantiationCache> cache;
+    skl::amc::InstantiationBuildInputs dependency_inputs;
+    std::unique_ptr<skl::amc::InstantiationCache> cache;
 };
 
 // Hits that carry a dependency closure, like a real build: the frontend's
@@ -147,7 +147,7 @@ public:
         root = make_root("amc-cache-deps");
         fs::remove_all(root);
         fs::create_directories(root / "deps");
-        cache = std::make_unique<amc::InstantiationCache>(root.string());
+        cache = std::make_unique<skl::amc::InstantiationCache>(root.string());
 
         for (int i = 0; i < kDependencyFiles; ++i) {
             // Real include closures are headers, not three-byte files: make the
@@ -156,7 +156,7 @@ public:
             body.append(32 * 1'024, 'x');
             const fs::path path = root / "deps" / ("dep" + std::to_string(i) + ".hpp");
             if (!write_text(path, body)) throw std::runtime_error("cannot write dependency");
-            dependencies.push_back({path.string(), amc::digest_text(body, amc::digest_domain_dependency)});
+            dependencies.push_back({path.string(), skl::amc::digest_text(body, skl::amc::digest_domain_dependency)});
         }
 
         std::string error;
@@ -176,8 +176,8 @@ public:
 
     size_t count = 0;
     fs::path root;
-    std::vector<amc::CacheDependency> dependencies;
-    std::unique_ptr<amc::InstantiationCache> cache;
+    std::vector<skl::amc::CacheDependency> dependencies;
+    std::unique_ptr<skl::amc::InstantiationCache> cache;
 };
 
 // Entries with a payload above the mapping threshold exercise the mapped read
@@ -189,7 +189,7 @@ public:
         root = make_root("amc-cache-large");
         fs::remove_all(root);
         fs::create_directories(root);
-        cache = std::make_unique<amc::InstantiationCache>(root.string());
+        cache = std::make_unique<skl::amc::InstantiationCache>(root.string());
         const std::string payload(1 << 20, 'x');
         std::string error;
         for (size_t i = 0; i < count; ++i) {
@@ -207,7 +207,7 @@ public:
 
     size_t count = 0;
     fs::path root;
-    std::unique_ptr<amc::InstantiationCache> cache;
+    std::unique_ptr<skl::amc::InstantiationCache> cache;
 };
 
 }   // namespace
@@ -246,7 +246,7 @@ BENCHMARK_REGISTER_F(CacheReadFixture, LookupHit)->Arg(200)->Arg(1'000);
 BENCHMARK_DEFINE_F(CacheReadFixture, LookupHitShallow)(benchmark::State &state) {
     for (auto _ : state) {
         for (size_t i = 0; i < count; ++i) {
-            auto result = cache->lookup(make_inputs(i), amc::LookupOptions{false, false});
+            auto result = cache->lookup(make_inputs(i), skl::amc::LookupOptions{false, false});
             benchmark::DoNotOptimize(result);
         }
     }
@@ -257,7 +257,7 @@ BENCHMARK_REGISTER_F(CacheReadFixture, LookupHitShallow)->Arg(200)->Arg(1'000);
 BENCHMARK_DEFINE_F(CacheDependencyFixture, LookupHitWithDeps)(benchmark::State &state) {
     for (auto _ : state) {
         for (size_t i = 0; i < count; ++i) {
-            auto result = cache->lookup(make_inputs(i), amc::LookupOptions{false, false});
+            auto result = cache->lookup(make_inputs(i), skl::amc::LookupOptions{false, false});
             benchmark::DoNotOptimize(result);
         }
     }
@@ -290,7 +290,7 @@ BENCHMARK_REGISTER_F(CacheReadFixture, LookupMiss)->Arg(200)->Arg(1'000);
 BENCHMARK_DEFINE_F(CacheReadFixture, LookupMissDiagnose)(benchmark::State &state) {
     for (auto _ : state) {
         for (size_t i = 0; i < count; ++i) {
-            auto result = cache->lookup(make_inputs(i, "source-v2"), amc::LookupOptions{true});
+            auto result = cache->lookup(make_inputs(i, "source-v2"), skl::amc::LookupOptions{true});
             benchmark::DoNotOptimize(result);
         }
     }

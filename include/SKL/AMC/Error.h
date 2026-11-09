@@ -21,7 +21,7 @@
 #include <string>
 #include <system_error>
 
-namespace amc {
+namespace skl::amc {
 
 // AMC owns this static error domain. Values are stable and must never be
 // renumbered once released.
@@ -57,6 +57,6 @@ using errc = AMCErr;
 [[nodiscard]] bool register_errors() noexcept;
 [[nodiscard]] bool errors_registered() noexcept;
 
-}   // namespace amc
+}   // namespace skl::amc
 
 #endif   // AMC_ERROR_IDENTITY_H

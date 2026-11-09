@@ -26,7 +26,7 @@
 #include <fmt/format.h>
 #include <fmt/os.h>
 
-namespace amc {
+namespace skl::amc {
 namespace {
 
 struct Hash128Hash {
@@ -77,36 +77,36 @@ constexpr uint32_t kMethodBindingEntrySize =
     56;   // interface_id(16) + method_signature(16) + native(16) + slot(4) + flags(4)
 
 enum Section : uint32_t {
-    strings = 1,
-    identity,
-    types,
-    fields,
-    functions,
-    parameters,
-    symbols,
-    hash_descriptor,
-    hash_records,
-    compatibility,
-    maps,
-    map_operations,
-    target,
-    sources,
-    owned,
-    contracts,
-    errors,
-    platform,
-    lowering,
-    pointees,
-    view_adapters,
-    range_adapters,
-    instantiations,
-    interfaces,
-    interface_methods,
-    implementations,
-    method_bindings,
-    layout_encoding,
-    error_sets,
-    error_codes
+    STRINGS = 1,
+    IDENTITY,
+    TYPES,
+    FIELDS,
+    FUNCTIONS,
+    PARAMETERS,
+    SYMBOLS,
+    HASH_DESCRIPTOR,
+    HASH_RECORDS,
+    COMPATIBILITY,
+    MAPS,
+    MAP_OPERATIONS,
+    TARGET,
+    SOURCES,
+    OWNED,
+    CONTRACTS,
+    ERRORS,
+    PLATFORM,
+    LOWERING,
+    POINTEES,
+    VIEW_ADAPTERS,
+    RANGE_ADAPTERS,
+    INSTANTIATIONS,
+    INTERFACES,
+    INTERFACE_METHODS,
+    IMPLEMENTATIONS,
+    METHOD_BINDINGS,
+    LAYOUT_ENCODING,
+    ERROR_SETS,
+    ERROR_CODES
 };
 
 constexpr uint32_t section_required = 1u << 0;
@@ -182,17 +182,17 @@ bool table_size_matches(uint32_t byte_length, uint32_t count, uint32_t entry_siz
     return size <= std::numeric_limits<uint32_t>::max() && byte_length == size;
 }
 std::string hash_key(Hash128 value) { return std::to_string(value.lo) + ":" + std::to_string(value.hi); }
-bool valid_type_kind(uint32_t value) { return value <= static_cast<uint32_t>(TypeKind::alias); }
-bool valid_symbol_kind(uint32_t value) { return value <= static_cast<uint32_t>(SymbolKind::function); }
-bool valid_hash_kind(uint32_t value) { return value <= static_cast<uint32_t>(HashKind::signature); }
-bool valid_hash_target(uint32_t value) { return value <= static_cast<uint32_t>(HashTargetKind::function); }
-bool valid_compatibility(uint32_t value) { return value <= static_cast<uint32_t>(CompatibilityKind::incompatible); }
-bool valid_map_opcode(uint8_t value) { return value <= static_cast<uint8_t>(MapOpcode::skip_field); }
+bool valid_type_kind(uint32_t value) { return value <= static_cast<uint32_t>(TypeKind::ALIAS); }
+bool valid_symbol_kind(uint32_t value) { return value <= static_cast<uint32_t>(SymbolKind::FUNC); }
+bool valid_hash_kind(uint32_t value) { return value <= static_cast<uint32_t>(HashKind::SIGNATURE); }
+bool valid_hash_target(uint32_t value) { return value <= static_cast<uint32_t>(HashTargetKind::FUNC); }
+bool valid_compatibility(uint32_t value) { return value <= static_cast<uint32_t>(CompatibilityKind::INCOMP); }
+bool valid_map_opcode(uint8_t value) { return value <= static_cast<uint8_t>(MapOpcode::SKIP_FIELD); }
 // `void` is a first-class primitive with no size. It is valid as a function
 // return type, so the size/align checks below deliberately skip it.
 bool is_void_type(const Type &type) {
-    return type.kind == TypeKind::primitive
-        && (type.primitive_abi & 0xffu) == static_cast<uint32_t>(PrimitiveAbiKind::void_);
+    return type.kind == TypeKind::PRIMITIVE
+        && (type.primitive_abi & 0xffu) == static_cast<uint32_t>(PrimitiveABIKind::AMC_VOID);
 }
 
 }   // namespace
@@ -220,7 +220,7 @@ Hash128 hash_text(std::string_view text, uint64_t domain) {
 }
 
 std::vector<uint8_t> canonical_layout_encoding(
-    const AbiModule &module, const Type &type, const std::vector<Field> &fields) {
+    const ABIModule &module, const Type &type, const std::vector<Field> &fields) {
     std::vector<uint8_t> bytes;
     bytes.reserve(54 + fields.size() * 24);
     const auto put_u16 = [&](uint16_t value) {
@@ -261,13 +261,13 @@ std::vector<uint8_t> canonical_layout_encoding(
     return bytes;
 }
 
-Hash128 canonical_layout_hash(const AbiModule &module, const Type &type, const std::vector<Field> &fields) {
+Hash128 canonical_layout_hash(const ABIModule &module, const Type &type, const std::vector<Field> &fields) {
     const std::vector<uint8_t> bytes = canonical_layout_encoding(module, type, fields);
     return hash_text(
         std::string_view(reinterpret_cast<const char *>(bytes.data()), bytes.size()), canonical_layout_domain);
 }
 
-void recompute_layout_hashes(AbiModule &module) {
+void recompute_layout_hashes(ABIModule &module) {
     module.layout_encoding_version = canonical_layout_version;
     for (auto &type : module.types) {
         std::vector<Field> fields;
@@ -281,7 +281,7 @@ void recompute_layout_hashes(AbiModule &module) {
 Hash128 signature_hash(const Function &function) {
     std::string input =
         function.name + std::to_string(function.return_type.lo) + std::to_string(function.return_type.hi);
-    for (const auto &parameter : function.parameters)
+    for (const auto &parameter : function.params)
         input += std::to_string(parameter.type_id.lo) + std::to_string(parameter.type_id.hi);
     return hash_text(input, 0x5349474e41545552ULL);
 }
@@ -292,7 +292,7 @@ Hash128 method_signature_hash(const InterfaceMethod &method) {
     Function function;
     function.name = method.name;
     function.return_type = method.return_type;
-    function.parameters = method.parameters;
+    function.params = method.parameters;
     return signature_hash(function);
 }
 
@@ -326,20 +326,20 @@ void canonical_string(std::vector<uint8_t> &bytes, const std::string &value) {
     canonical_u32(bytes, static_cast<uint32_t>(value.size()));
     bytes.insert(bytes.end(), value.begin(), value.end());
 }
-Hash128 effective_layout_hash(const AbiModule &module, const Type &type) {
+Hash128 effective_layout_hash(const ABIModule &module, const Type &type) {
     std::vector<Field> fields;
     fields.reserve(type.field_count);
     for (uint32_t i = 0; i < type.field_count; ++i)
         fields.push_back(module.fields[type.field_begin + i]);
     return canonical_layout_hash(module, type, fields);
 }
-std::vector<Symbol> effective_symbols(const AbiModule &module) {
+std::vector<Symbol> effective_symbols(const ABIModule &module) {
     if (!module.symbols.empty()) return module.symbols;
     std::vector<Symbol> result;
     for (uint32_t i = 0; i < module.types.size(); ++i)
-        result.push_back({module.types[i].name, SymbolKind::type, i});
+        result.push_back({module.types[i].name, SymbolKind::TYPE, i});
     for (uint32_t i = 0; i < module.fields.size(); ++i)
-        result.push_back({module.fields[i].name, SymbolKind::field, i});
+        result.push_back({module.fields[i].name, SymbolKind::FIELD, i});
     std::unordered_map<std::string, uint32_t> function_name_counts;
     for (const auto &function : module.functions)
         ++function_name_counts[function.name];
@@ -352,13 +352,13 @@ std::vector<Symbol> effective_symbols(const AbiModule &module) {
         if (function_name_counts[function.name] > 1)
             symbol += fmt::format(
                 "#{:08x}{:04x}", function.signature.lo, static_cast<uint32_t>(function.signature.hi & 0xffff));
-        result.push_back({std::move(symbol), SymbolKind::function, i});
+        result.push_back({std::move(symbol), SymbolKind::FUNC, i});
     }
     return result;
 }
 }   // namespace
 
-std::vector<uint8_t> canonical_bytes(const AbiModule &module) {
+std::vector<uint8_t> canonical_bytes(const ABIModule &module) {
     std::vector<uint8_t> bytes;
     canonical_string(bytes, "ABIX-CANONICAL");
     canonical_u32(bytes, 1);
@@ -415,8 +415,8 @@ std::vector<uint8_t> canonical_bytes(const AbiModule &module) {
         canonical_hash(bytes, function.return_type);
         canonical_u32(bytes, function.calling_convention);
         canonical_u32(bytes, function.flags);
-        canonical_u32(bytes, static_cast<uint32_t>(function.parameters.size()));
-        for (const auto &parameter : function.parameters) {
+        canonical_u32(bytes, static_cast<uint32_t>(function.params.size()));
+        for (const auto &parameter : function.params) {
             canonical_string(bytes, parameter.name);
             canonical_hash(bytes, parameter.type_id);
             canonical_u32(bytes, parameter.flags);
@@ -462,59 +462,59 @@ std::vector<uint8_t> canonical_bytes(const AbiModule &module) {
     return bytes;
 }
 
-Hash128 abi_hash(const AbiModule &module) {
+Hash128 abi_hash(const ABIModule &module) {
     const auto bytes = canonical_bytes(module);
     return hash_text(std::string_view(reinterpret_cast<const char *>(bytes.data()), bytes.size()), 0x41424948415348ULL);
 }
 
-std::vector<HashRecord> hash_table(const AbiModule &module) {
+std::vector<HashRecord> hash_table(const ABIModule &module) {
     std::vector<HashRecord> records;
-    records.push_back({HashKind::artifact, HashTargetKind::module, 0, 0, abi_hash(module)});
+    records.push_back({HashKind::ARTIFACT, HashTargetKind::MODULE, 0, 0, abi_hash(module)});
     for (uint32_t i = 0; i < module.types.size(); ++i) {
-        records.push_back({HashKind::type_id, HashTargetKind::type, i, 0, module.types[i].id});
+        records.push_back({HashKind::TYPE_ID, HashTargetKind::TYPE, i, 0, module.types[i].id});
         records.push_back(
-            {HashKind::layout, HashTargetKind::type, i, 0, effective_layout_hash(module, module.types[i])});
+            {HashKind::LAYOUT, HashTargetKind::TYPE, i, 0, effective_layout_hash(module, module.types[i])});
     }
     for (uint32_t i = 0; i < module.functions.size(); ++i)
-        records.push_back({HashKind::signature, HashTargetKind::function, i, 0, module.functions[i].signature});
+        records.push_back({HashKind::SIGNATURE, HashTargetKind::FUNC, i, 0, module.functions[i].signature});
     return records;
 }
 
 namespace {
-const Type *find_type_by_name(const AbiModule &, const std::string &);
-const Type *find_type_by_id(const AbiModule &, Hash128);
+const Type *find_type_by_name(const ABIModule &, const std::string &);
+const Type *find_type_by_id(const ABIModule &, Hash128);
 }   // namespace
 
 const char *compatibility_name(CompatibilityKind kind) {
     switch (kind) {
-        case CompatibilityKind::identical:         return "identical";
-        case CompatibilityKind::layout_compatible: return "layout_compatible";
-        case CompatibilityKind::map_compatible:    return "map_compatible";
-        case CompatibilityKind::incompatible:      return "incompatible";
+        case CompatibilityKind::IDENTICAL:   return "identical";
+        case CompatibilityKind::LAYOUT_COMP: return "layout_compatible";
+        case CompatibilityKind::MAP_COMP:    return "map_compatible";
+        case CompatibilityKind::INCOMP:      return "incompatible";
     }
     return "unknown";
 }
 
 namespace {
-const Type *find_type_by_name(const AbiModule &module, const std::string &name) {
+const Type *find_type_by_name(const ABIModule &module, const std::string &name) {
     const auto it =
         std::find_if(module.types.begin(), module.types.end(), [&](const Type &type) { return type.name == name; });
     return it == module.types.end() ? nullptr : &*it;
 }
-const Type *find_type_by_id(const AbiModule &module, Hash128 id) {
+const Type *find_type_by_id(const ABIModule &module, Hash128 id) {
     const auto it =
         std::find_if(module.types.begin(), module.types.end(), [&](const Type &type) { return type.id == id; });
     return it == module.types.end() ? nullptr : &*it;
 }
 bool scalar_kind(const Type *type, bool &floating) {
-    if (type == nullptr || type->kind != TypeKind::primitive) return false;
-    const auto abi_kind = static_cast<PrimitiveAbiKind>(type->primitive_abi & 0xffu);
-    floating = abi_kind == PrimitiveAbiKind::floating;
+    if (type == nullptr || type->kind != TypeKind::PRIMITIVE) return false;
+    const auto abi_kind = static_cast<PrimitiveABIKind>(type->primitive_abi & 0xffu);
+    floating = abi_kind == PrimitiveABIKind::AMC_FLOAT;
     return true;
 }
 }   // namespace
 
-bool build_compatibility(const AbiModule &source, const AbiModule &target, AbiModule &result, std::string &error) {
+bool build_compatibility(const ABIModule &source, const ABIModule &target, ABIModule &result, std::string &error) {
     if (!validate(source, error) || !validate(target, error)) return false;
     result = target;
     result.compatibility.clear();
@@ -550,12 +550,12 @@ bool build_compatibility(const AbiModule &source, const AbiModule &target, AbiMo
         if (to == nullptr) to = lookup(target_by_id, from.id);
         if (to == nullptr) continue;
 
-        CompatibilityRecord compatibility{from.id, to->id, CompatibilityKind::incompatible, UINT32_MAX, 0};
+        CompatibilityRecord compatibility{from.id, to->id, CompatibilityKind::INCOMP, UINT32_MAX, 0};
         if (from.id == to->id && effective_layout_hash(source, from) == effective_layout_hash(target, *to)) {
-            compatibility.kind = CompatibilityKind::identical;
+            compatibility.kind = CompatibilityKind::IDENTICAL;
         } else if (effective_layout_hash(source, from) == effective_layout_hash(target, *to)) {
-            compatibility.kind = CompatibilityKind::layout_compatible;
-        } else if (from.kind == TypeKind::record && to->kind == TypeKind::record) {
+            compatibility.kind = CompatibilityKind::LAYOUT_COMP;
+        } else if (from.kind == TypeKind::RECORD && to->kind == TypeKind::RECORD) {
             std::unordered_map<std::string, uint32_t> source_fields;
             std::unordered_map<std::string, uint32_t> target_fields;
             source_fields.reserve(from.field_count);
@@ -571,7 +571,7 @@ bool build_compatibility(const AbiModule &source, const AbiModule &target, AbiMo
                 const auto source_field = source_fields.find(target_field.name);
                 if (source_field == source_fields.end()) {
                     const Type *target_type = lookup(target_by_id, target_field.type_id);
-                    map.operations.push_back({MapOpcode::add_default, UINT32_MAX, target_index, 0, target_field.offset,
+                    map.operations.push_back({MapOpcode::ADD_DEFAULT, UINT32_MAX, target_index, 0, target_field.offset,
                         target_type == nullptr ? 0 : target_type->size, {}});
                     continue;
                 }
@@ -581,7 +581,7 @@ bool build_compatibility(const AbiModule &source, const AbiModule &target, AbiMo
                     const Type *target_type = lookup(target_by_id, target_field.type_id);
                     const uint32_t source_size = source_type == nullptr ? 0 : source_type->size;
                     const uint32_t target_size = target_type == nullptr ? 0 : target_type->size;
-                    map.operations.push_back({MapOpcode::copy_field, source_field->second, target_index,
+                    map.operations.push_back({MapOpcode::COPY_FIELD, source_field->second, target_index,
                         source_field_value.offset, target_field.offset, std::min(source_size, target_size), {}});
                 } else {
                     const Type *source_type = lookup(source_by_id, source_field_value.type_id);
@@ -594,7 +594,7 @@ bool build_compatibility(const AbiModule &source, const AbiModule &target, AbiMo
                         break;
                     }
                     map.operations.push_back(
-                        {source_float ? MapOpcode::convert_float : MapOpcode::convert_int, source_field->second,
+                        {source_float ? MapOpcode::CONVERT_FLOAT : MapOpcode::CONVERT_INT, source_field->second,
                             target_index, source_field_value.offset, target_field.offset, 0, target_field.type_id});
                 }
             }
@@ -603,10 +603,10 @@ bool build_compatibility(const AbiModule &source, const AbiModule &target, AbiMo
                     const auto &source_field = source.fields[from.field_begin + source_index];
                     if (target_fields.find(source_field.name) == target_fields.end())
                         map.operations.push_back(
-                            {MapOpcode::skip_field, source_index, UINT32_MAX, source_field.offset, 0, 0, {}});
+                            {MapOpcode::SKIP_FIELD, source_index, UINT32_MAX, source_field.offset, 0, 0, {}});
                 }
                 map.operation_count = static_cast<uint32_t>(map.operations.size());
-                compatibility.kind = CompatibilityKind::map_compatible;
+                compatibility.kind = CompatibilityKind::MAP_COMP;
                 compatibility.map_index = static_cast<uint32_t>(result.maps.size());
                 result.maps.push_back(std::move(map));
             }
@@ -616,7 +616,7 @@ bool build_compatibility(const AbiModule &source, const AbiModule &target, AbiMo
     return validate(result, error);
 }
 
-bool validate(const AbiModule &module, std::string &error) {
+bool validate(const ABIModule &module, std::string &error) {
     error.clear();
     std::unordered_map<std::string, const Type *> type_by_id;
     for (const auto &type : module.types) {
@@ -692,7 +692,7 @@ bool validate(const AbiModule &module, std::string &error) {
             error = "function references unknown return type: " + function.name;
             return false;
         }
-        for (const auto &parameter : function.parameters) {
+        for (const auto &parameter : function.params) {
             if (type_by_id.count(hash_key(parameter.type_id)) == 0) {
                 error = "parameter references unknown type";
                 return false;
@@ -704,8 +704,8 @@ bool validate(const AbiModule &module, std::string &error) {
             error = "invalid symbol: " + symbol.name;
             return false;
         }
-        const size_t target_count = symbol.kind == SymbolKind::type  ? module.types.size()
-                                  : symbol.kind == SymbolKind::field ? module.fields.size()
+        const size_t target_count = symbol.kind == SymbolKind::TYPE  ? module.types.size()
+                                  : symbol.kind == SymbolKind::FIELD ? module.fields.size()
                                                                      : module.functions.size();
         if (symbol.target_index >= target_count) {
             error = "invalid symbol target: " + symbol.name;
@@ -740,13 +740,13 @@ bool validate(const AbiModule &module, std::string &error) {
     // rejected rather than assumed safe.
     uint32_t total_parameters = 0;
     for (const auto &function : module.functions)
-        total_parameters += static_cast<uint32_t>(function.parameters.size());
+        total_parameters += static_cast<uint32_t>(function.params.size());
     for (const auto &contract : module.contracts) {
-        if (contract.mode == OwnershipMode::unspecified) {
+        if (contract.mode == OwnershipMode::UNSPECIFIED) {
             error = "ownership contract has unspecified mode";
             return false;
         }
-        if (contract.target == OwnershipTarget::return_value) {
+        if (contract.target == OwnershipTarget::RETURN) {
             if (contract.target_index >= module.functions.size()) {
                 error = "ownership contract references an unknown return value";
                 return false;
@@ -767,7 +767,7 @@ bool validate(const AbiModule &module, std::string &error) {
                 error = "ownership contract release entry point not found";
                 return false;
             }
-        } else if (contract.mode == OwnershipMode::owned && contract.target == OwnershipTarget::return_value) {
+        } else if (contract.mode == OwnershipMode::OWNED && contract.target == OwnershipTarget::RETURN) {
             error = "owned return value has no release entry point";
             return false;
         }
@@ -831,22 +831,22 @@ bool validate(const AbiModule &module, std::string &error) {
             }
         }
         const auto &function = module.functions[contract.function_index];
-        if (contract.status_source == StatusSource::return_field) {
+        if (contract.status_source == StatusSource::RETURN_FIELD) {
             // The returned record carries the status/value as fields.
             const Type *result = find_type_by_id(module, function.return_type);
-            const uint32_t fields = (result != nullptr && result->kind == TypeKind::record) ? result->field_count : 0u;
+            const uint32_t fields = (result != nullptr && result->kind == TypeKind::RECORD) ? result->field_count : 0u;
             if (contract.status_parameter >= fields
                 || (contract.value_parameter != UINT32_MAX && contract.value_parameter >= fields)) {
                 error = "error contract result field is out of range";
                 return false;
             }
-        } else if (contract.status_source == StatusSource::parameter
-                   && contract.status_parameter >= function.parameters.size()) {
+        } else if (contract.status_source == StatusSource::PARAMETER
+                   && contract.status_parameter >= function.params.size()) {
             error = "error contract status parameter is out of range";
             return false;
-        } else if (contract.status_source == StatusSource::return_value
+        } else if (contract.status_source == StatusSource::RETURN_VALUE
                    && contract.value_parameter != UINT32_MAX
-                   && contract.value_parameter >= function.parameters.size()) {
+                   && contract.value_parameter >= function.params.size()) {
             error = "error contract value parameter is out of range";
             return false;
         }
@@ -856,8 +856,8 @@ bool validate(const AbiModule &module, std::string &error) {
             error = "lowering references an unknown type";
             return false;
         }
-        if (record.kind > static_cast<uint32_t>(LoweringKind::opaque)
-            || record.status > static_cast<uint32_t>(LoweringStatus::unsupported)) {
+        if (record.kind > static_cast<uint32_t>(LoweringKind::OPAQUE)
+            || record.status > static_cast<uint32_t>(LoweringStatus::UNSUPPORTED)) {
             error = "invalid lowering record";
             return false;
         }
@@ -1077,34 +1077,34 @@ std::string pointer_pointee_spelling(const std::string &name) {
 
 }   // namespace
 
-Hash128 find_type_id_by_spelling(const AbiModule &module, const std::string &spelling) {
+Hash128 find_type_id_by_spelling(const ABIModule &module, const std::string &spelling) {
     const std::string wanted = normalise_spelling(spelling);
     for (const auto &type : module.types) {
         // Skip pointers: their normalized spelling strips `*`, so `int*` would
         // otherwise shadow the `int` value type the caller asked for.
-        if (type.kind == TypeKind::pointer) continue;
+        if (type.kind == TypeKind::POINTER) continue;
         if (normalise_spelling(type.name) == wanted) return type.id;
     }
     return Hash128{};
 }
 
-LoweringResult evaluate_view(const AbiModule &module, Hash128 type_id, LoweringKind kind, Hash128 element_id,
+LoweringResult evaluate_view(const ABIModule &module, Hash128 type_id, LoweringKind kind, Hash128 element_id,
     const std::string &element_spelling, bool contract_mutable) {
     LoweringResult result;
     result.type_id = type_id;
     result.contract_type = type_id;
     result.kind = static_cast<uint32_t>(kind);
-    result.status = static_cast<uint32_t>(LoweringStatus::unsupported);
-    result.reason = static_cast<uint32_t>(LoweringReason::not_a_record);
+    result.status = static_cast<uint32_t>(LoweringStatus::UNSUPPORTED);
+    result.reason = static_cast<uint32_t>(LoweringReason::NOT_A_RECORD);
 
     const Type *type = find_type_by_id(module, type_id);
-    if (!type || type->kind != TypeKind::record) return result;
+    if (!type || type->kind != TypeKind::RECORD) return result;
 
     // sequence-view = { data, length };
     // string-view   = { data, length, encoding } (v0.3.x)
     //              or { data, length, encoding, reserved } (v0.4.0).
-    const uint32_t min_visible = kind == LoweringKind::string_view ? 3u : 2u;
-    const uint32_t max_visible = kind == LoweringKind::string_view ? 4u : 2u;
+    const uint32_t min_visible = kind == LoweringKind::STRING_VIEW ? 3u : 2u;
+    const uint32_t max_visible = kind == LoweringKind::STRING_VIEW ? 4u : 2u;
     uint32_t pointer_size = module.pointer_bits != 0 ? module.pointer_bits / 8 : 0;
     int pointer_index = -1;
     uint32_t visible = 0;
@@ -1114,7 +1114,7 @@ LoweringResult evaluate_view(const AbiModule &module, Hash128 type_id, LoweringK
         if ((field.flags & field_base) != 0 || (field.flags & field_bitfield) != 0) continue;
         ++visible;
         const Type *field_type = find_type_by_id(module, field.type_id);
-        if (field_type && field_type->kind == TypeKind::pointer && pointer_index < 0) {
+        if (field_type && field_type->kind == TypeKind::POINTER && pointer_index < 0) {
             pointer_index = static_cast<int>(i);
             if (pointer_size == 0) pointer_size = field_type->size;
         } else {
@@ -1122,21 +1122,21 @@ LoweringResult evaluate_view(const AbiModule &module, Hash128 type_id, LoweringK
         }
     }
     if (visible < min_visible || visible > max_visible) {
-        result.reason = static_cast<uint32_t>(LoweringReason::field_count);
+        result.reason = static_cast<uint32_t>(LoweringReason::FIELD_COUNT);
         return result;
     }
     if (pointer_index < 0) {
-        result.reason = static_cast<uint32_t>(LoweringReason::missing_data);
+        result.reason = static_cast<uint32_t>(LoweringReason::MISSING_DATA);
         return result;
     }
     // The remaining fields, ordered by offset, are length [, encoding].
     std::sort(others.begin(), others.end(), [&](uint32_t a, uint32_t b) {
         return module.fields[type->field_begin + a].offset < module.fields[type->field_begin + b].offset;
     });
-    const uint32_t min_others = kind == LoweringKind::string_view ? 2u : 1u;
-    const uint32_t max_others = kind == LoweringKind::string_view ? 3u : 1u;
+    const uint32_t min_others = kind == LoweringKind::STRING_VIEW ? 2u : 1u;
+    const uint32_t max_others = kind == LoweringKind::STRING_VIEW ? 3u : 1u;
     if (others.size() < min_others || others.size() > max_others) {
-        result.reason = static_cast<uint32_t>(LoweringReason::field_count);
+        result.reason = static_cast<uint32_t>(LoweringReason::FIELD_COUNT);
         return result;
     }
     result.pointer_field = static_cast<uint32_t>(pointer_index);
@@ -1145,7 +1145,7 @@ LoweringResult evaluate_view(const AbiModule &module, Hash128 type_id, LoweringK
     const auto &length_field = module.fields[type->field_begin + result.length_field];
     const Type *pointer_type = find_type_by_id(module, pointer_field.type_id);
     if (!pointer_type || pointer_size == 0) {
-        result.reason = static_cast<uint32_t>(LoweringReason::missing_data);
+        result.reason = static_cast<uint32_t>(LoweringReason::MISSING_DATA);
         return result;
     }
 
@@ -1173,7 +1173,7 @@ LoweringResult evaluate_view(const AbiModule &module, Hash128 type_id, LoweringK
                  == normalise_spelling(element_spelling);
         }
         if (!match) {
-            result.reason = static_cast<uint32_t>(LoweringReason::element_mismatch);
+            result.reason = static_cast<uint32_t>(LoweringReason::ELEMENT_MISMATCH);
             return result;
         }
     }
@@ -1181,26 +1181,26 @@ LoweringResult evaluate_view(const AbiModule &module, Hash128 type_id, LoweringK
     // recorded qualifier when present; fall back to the spelling otherwise.
     const bool is_const = have_ref ? (pointee_flags & pointee_const) != 0 : spelling_is_const(pointer_type->name);
     if (contract_mutable && is_const) {
-        result.reason = static_cast<uint32_t>(LoweringReason::mutability_mismatch);
+        result.reason = static_cast<uint32_t>(LoweringReason::MUTABILITY_MISMATCH);
         return result;
     }
     // Length (and, for a string view, the encoding) must be unsigned integers.
     const Type *length_type = find_type_by_id(module, length_field.type_id);
     if (!length_type
-        || (length_type->primitive_abi & 0xffu) != static_cast<uint32_t>(PrimitiveAbiKind::uint)
+        || (length_type->primitive_abi & 0xffu) != static_cast<uint32_t>(PrimitiveABIKind::AMC_UINT)
         || length_type->size == 0) {
-        result.reason = static_cast<uint32_t>(LoweringReason::length_type);
+        result.reason = static_cast<uint32_t>(LoweringReason::LENGTH_TYPE);
         return result;
     }
     const amc::Field *encoding_field = nullptr;
     const amc::Type *encoding_type = nullptr;
-    if (kind == LoweringKind::string_view) {
+    if (kind == LoweringKind::STRING_VIEW) {
         encoding_field = &module.fields[type->field_begin + others[1]];
         encoding_type = find_type_by_id(module, encoding_field->type_id);
         if (!encoding_type
-            || (encoding_type->primitive_abi & 0xffu) != static_cast<uint32_t>(PrimitiveAbiKind::uint)
+            || (encoding_type->primitive_abi & 0xffu) != static_cast<uint32_t>(PrimitiveABIKind::AMC_UINT)
             || encoding_type->size == 0) {
-            result.reason = static_cast<uint32_t>(LoweringReason::length_type);
+            result.reason = static_cast<uint32_t>(LoweringReason::LENGTH_TYPE);
             return result;
         }
         // v0.4.0 adds an explicit trailing reserved word. It must be the
@@ -1210,7 +1210,7 @@ LoweringResult evaluate_view(const AbiModule &module, Hash128 type_id, LoweringK
             const auto &reserved_field = module.fields[type->field_begin + others[2]];
             const Type *reserved_type = find_type_by_id(module, reserved_field.type_id);
             if (reserved_field.name != "reserved" || !reserved_type || reserved_type->size != 4) {
-                result.reason = static_cast<uint32_t>(LoweringReason::layout);
+                result.reason = static_cast<uint32_t>(LoweringReason::LAYOUT);
                 return result;
             }
         }
@@ -1219,7 +1219,7 @@ LoweringResult evaluate_view(const AbiModule &module, Hash128 type_id, LoweringK
     // Canonical layout: data at 0, then length, then (string view) encoding,
     // then the optional explicit reserved word.
     bool canonical = pointer_field.offset == 0 && length_field.offset == pointer_size;
-    if (canonical && kind == LoweringKind::string_view) {
+    if (canonical && kind == LoweringKind::STRING_VIEW) {
         canonical = encoding_field->offset == pointer_size + length_type->size;
         if (canonical && others.size() == 3) {
             const auto &reserved_field = module.fields[type->field_begin + others[2]];
@@ -1227,60 +1227,60 @@ LoweringResult evaluate_view(const AbiModule &module, Hash128 type_id, LoweringK
         }
     }
     if (canonical) {
-        result.status = static_cast<uint32_t>(LoweringStatus::direct);
-        result.reason = static_cast<uint32_t>(LoweringReason::ok);
+        result.status = static_cast<uint32_t>(LoweringStatus::DIRECT);
+        result.reason = static_cast<uint32_t>(LoweringReason::OK);
     } else {
         // The exact required fields are present with known layout; a thin
         // representation adapter can reorder them.
-        result.status = static_cast<uint32_t>(LoweringStatus::needs_adapter);
-        result.reason = static_cast<uint32_t>(LoweringReason::layout);
+        result.status = static_cast<uint32_t>(LoweringStatus::NEEDS_ADAPTER);
+        result.reason = static_cast<uint32_t>(LoweringReason::LAYOUT);
     }
     return result;
 }
 
-LoweringResult evaluate_sequence_view(const AbiModule &module, Hash128 type_id, Hash128 element_id,
+LoweringResult evaluate_sequence_view(const ABIModule &module, Hash128 type_id, Hash128 element_id,
     const std::string &element_spelling, bool contract_mutable) {
-    return evaluate_view(module, type_id, LoweringKind::sequence_view, element_id, element_spelling, contract_mutable);
+    return evaluate_view(module, type_id, LoweringKind::SEQUENCE_VIEW, element_id, element_spelling, contract_mutable);
 }
 
-LoweringResult evaluate_string_view(const AbiModule &module, Hash128 type_id, Hash128 element_id,
+LoweringResult evaluate_string_view(const ABIModule &module, Hash128 type_id, Hash128 element_id,
     const std::string &element_spelling, bool contract_mutable) {
-    return evaluate_view(module, type_id, LoweringKind::string_view, element_id, element_spelling, contract_mutable);
+    return evaluate_view(module, type_id, LoweringKind::STRING_VIEW, element_id, element_spelling, contract_mutable);
 }
 
 namespace {
 
 bool byte_discriminant(const Type *type) {
-    if (!type || type->kind != TypeKind::primitive) return false;
+    if (!type || type->kind != TypeKind::PRIMITIVE) return false;
     const uint32_t kind = type->primitive_abi & 0xffu;
-    return kind == static_cast<uint32_t>(PrimitiveAbiKind::bool_)
-        || kind == static_cast<uint32_t>(PrimitiveAbiKind::uchar)
-        || kind == static_cast<uint32_t>(PrimitiveAbiKind::char8)
-        || (kind == static_cast<uint32_t>(PrimitiveAbiKind::uint) && type->size == 1);
+    return kind == static_cast<uint32_t>(PrimitiveABIKind::AMC_BOOL)
+        || kind == static_cast<uint32_t>(PrimitiveABIKind::AMC_UCHAR)
+        || kind == static_cast<uint32_t>(PrimitiveABIKind::AMC_CHAR8)
+        || (kind == static_cast<uint32_t>(PrimitiveABIKind::AMC_UINT) && type->size == 1);
 }
 
 bool integer_status(const Type *type) {
-    if (!type || type->kind != TypeKind::primitive) return false;
+    if (!type || type->kind != TypeKind::PRIMITIVE) return false;
     const uint32_t kind = type->primitive_abi & 0xffu;
-    return (kind == static_cast<uint32_t>(PrimitiveAbiKind::sint)
-               || kind == static_cast<uint32_t>(PrimitiveAbiKind::uint))
+    return (kind == static_cast<uint32_t>(PrimitiveABIKind::AMC_SINT)
+               || kind == static_cast<uint32_t>(PrimitiveABIKind::AMC_UINT))
         && type->size >= 4;
 }
 
 // Shared matcher for the `optional` and `result` value layouts:
 //   optional = { discriminant: bool/u8; payload: T }
 //   result   = { status: int;        payload: T }
-LoweringResult evaluate_pair(const AbiModule &module, Hash128 type_id, LoweringKind kind, Hash128 element_id,
+LoweringResult evaluate_pair(const ABIModule &module, Hash128 type_id, LoweringKind kind, Hash128 element_id,
     const std::string &element_spelling, bool discriminant_is_bool) {
     LoweringResult result;
     result.type_id = type_id;
     result.contract_type = type_id;
     result.kind = static_cast<uint32_t>(kind);
-    result.status = static_cast<uint32_t>(LoweringStatus::unsupported);
-    result.reason = static_cast<uint32_t>(LoweringReason::not_a_record);
+    result.status = static_cast<uint32_t>(LoweringStatus::UNSUPPORTED);
+    result.reason = static_cast<uint32_t>(LoweringReason::NOT_A_RECORD);
 
     const Type *type = find_type_by_id(module, type_id);
-    if (!type || type->kind != TypeKind::record) return result;
+    if (!type || type->kind != TypeKind::RECORD) return result;
 
     int discriminant_index = -1, reserved_index = -1, payload_index = -1;
     int first_visible = -1, last_visible = -1;
@@ -1307,11 +1307,11 @@ LoweringResult evaluate_pair(const AbiModule &module, Hash128 type_id, LoweringK
     const bool has_reserved = reserved_index >= 0;
     const uint32_t expected_visible = has_reserved ? 3u : 2u;
     if (visible != expected_visible) {
-        result.reason = static_cast<uint32_t>(LoweringReason::field_count);
+        result.reason = static_cast<uint32_t>(LoweringReason::FIELD_COUNT);
         return result;
     }
     if (discriminant_index < 0 || payload_index < 0) {
-        result.reason = static_cast<uint32_t>(LoweringReason::missing_data);
+        result.reason = static_cast<uint32_t>(LoweringReason::MISSING_DATA);
         return result;
     }
     result.pointer_field = static_cast<uint32_t>(discriminant_index);
@@ -1325,14 +1325,14 @@ LoweringResult evaluate_pair(const AbiModule &module, Hash128 type_id, LoweringK
                                    ? (byte_discriminant(discriminant_type) || integer_status(discriminant_type))
                                    : integer_status(discriminant_type);
     if (!discriminant_ok) {
-        result.reason = static_cast<uint32_t>(LoweringReason::missing_data);
+        result.reason = static_cast<uint32_t>(LoweringReason::MISSING_DATA);
         return result;
     }
     if (has_reserved) {
         const auto &reserved_field = module.fields[type->field_begin + static_cast<uint32_t>(reserved_index)];
         const Type *reserved_type = find_type_by_id(module, reserved_field.type_id);
         if (!reserved_type || reserved_type->size != 4 || reserved_field.offset != 4) {
-            result.reason = static_cast<uint32_t>(LoweringReason::layout);
+            result.reason = static_cast<uint32_t>(LoweringReason::LAYOUT);
             return result;
         }
     }
@@ -1340,12 +1340,12 @@ LoweringResult evaluate_pair(const AbiModule &module, Hash128 type_id, LoweringK
     // Payload matches the declared element by TypeID (or, failing that, spelling).
     if (!(element_id == Hash128{})) {
         if (!(payload_field.type_id == element_id)) {
-            result.reason = static_cast<uint32_t>(LoweringReason::element_mismatch);
+            result.reason = static_cast<uint32_t>(LoweringReason::ELEMENT_MISMATCH);
             return result;
         }
     } else if (!element_spelling.empty()) {
         if (!payload_type || normalise_spelling(payload_type->name) != normalise_spelling(element_spelling)) {
-            result.reason = static_cast<uint32_t>(LoweringReason::element_mismatch);
+            result.reason = static_cast<uint32_t>(LoweringReason::ELEMENT_MISMATCH);
             return result;
         }
     }
@@ -1354,11 +1354,11 @@ LoweringResult evaluate_pair(const AbiModule &module, Hash128 type_id, LoweringK
                                        ? (8 + payload_align - 1) / payload_align * payload_align
                                        : (discriminant_type->size + payload_align - 1) / payload_align * payload_align;
     if (discriminant_field.offset == 0 && payload_field.offset == expected_offset) {
-        result.status = static_cast<uint32_t>(LoweringStatus::direct);
-        result.reason = static_cast<uint32_t>(LoweringReason::ok);
+        result.status = static_cast<uint32_t>(LoweringStatus::DIRECT);
+        result.reason = static_cast<uint32_t>(LoweringReason::OK);
     } else {
-        result.status = static_cast<uint32_t>(LoweringStatus::needs_adapter);
-        result.reason = static_cast<uint32_t>(LoweringReason::layout);
+        result.status = static_cast<uint32_t>(LoweringStatus::NEEDS_ADAPTER);
+        result.reason = static_cast<uint32_t>(LoweringReason::LAYOUT);
     }
     return result;
 }
@@ -1366,25 +1366,25 @@ LoweringResult evaluate_pair(const AbiModule &module, Hash128 type_id, LoweringK
 }   // namespace
 
 LoweringResult evaluate_optional(
-    const AbiModule &module, Hash128 type_id, Hash128 element_id, const std::string &element_spelling) {
-    return evaluate_pair(module, type_id, LoweringKind::optional, element_id, element_spelling, true);
+    const ABIModule &module, Hash128 type_id, Hash128 element_id, const std::string &element_spelling) {
+    return evaluate_pair(module, type_id, LoweringKind::OPTIONAL, element_id, element_spelling, true);
 }
 
 LoweringResult evaluate_result(
-    const AbiModule &module, Hash128 type_id, Hash128 element_id, const std::string &element_spelling) {
-    return evaluate_pair(module, type_id, LoweringKind::result, element_id, element_spelling, false);
+    const ABIModule &module, Hash128 type_id, Hash128 element_id, const std::string &element_spelling) {
+    return evaluate_pair(module, type_id, LoweringKind::RESULT, element_id, element_spelling, false);
 }
 
-LoweringResult evaluate_callback(const AbiModule &module, Hash128 type_id) {
+LoweringResult evaluate_callback(const ABIModule &module, Hash128 type_id) {
     LoweringResult result;
     result.type_id = type_id;
     result.contract_type = type_id;
-    result.kind = static_cast<uint32_t>(LoweringKind::callback);
-    result.status = static_cast<uint32_t>(LoweringStatus::unsupported);
-    result.reason = static_cast<uint32_t>(LoweringReason::not_a_record);
+    result.kind = static_cast<uint32_t>(LoweringKind::CALLBACK);
+    result.status = static_cast<uint32_t>(LoweringStatus::UNSUPPORTED);
+    result.reason = static_cast<uint32_t>(LoweringReason::NOT_A_RECORD);
 
     const Type *type = find_type_by_id(module, type_id);
-    if (!type || type->kind != TypeKind::record) return result;
+    if (!type || type->kind != TypeKind::RECORD) return result;
 
     // { function entry, opaque context }: exactly two pointer fields.
     int first = -1, second = -1;
@@ -1394,7 +1394,7 @@ LoweringResult evaluate_callback(const AbiModule &module, Hash128 type_id) {
         if ((field.flags & field_base) != 0 || (field.flags & field_bitfield) != 0) continue;
         ++visible;
         const Type *field_type = find_type_by_id(module, field.type_id);
-        if (!field_type || field_type->kind != TypeKind::pointer) continue;
+        if (!field_type || field_type->kind != TypeKind::POINTER) continue;
         if (first < 0)
             first = static_cast<int>(i);
         else if (second < 0)
@@ -1402,7 +1402,7 @@ LoweringResult evaluate_callback(const AbiModule &module, Hash128 type_id) {
     }
     if (visible != 2 || first < 0 || second < 0) {
         result.reason =
-            static_cast<uint32_t>(visible != 2 ? LoweringReason::field_count : LoweringReason::missing_data);
+            static_cast<uint32_t>(visible != 2 ? LoweringReason::FIELD_COUNT : LoweringReason::MISSING_DATA);
         return result;
     }
     result.pointer_field = static_cast<uint32_t>(first);
@@ -1410,33 +1410,33 @@ LoweringResult evaluate_callback(const AbiModule &module, Hash128 type_id) {
     const auto &first_field = module.fields[type->field_begin + static_cast<uint32_t>(first)];
     const auto &second_field = module.fields[type->field_begin + static_cast<uint32_t>(second)];
     if (first_field.offset == 0 && second_field.offset == 8) {
-        result.status = static_cast<uint32_t>(LoweringStatus::direct);
-        result.reason = static_cast<uint32_t>(LoweringReason::ok);
+        result.status = static_cast<uint32_t>(LoweringStatus::DIRECT);
+        result.reason = static_cast<uint32_t>(LoweringReason::OK);
     } else {
-        result.status = static_cast<uint32_t>(LoweringStatus::needs_adapter);
-        result.reason = static_cast<uint32_t>(LoweringReason::layout);
+        result.status = static_cast<uint32_t>(LoweringStatus::NEEDS_ADAPTER);
+        result.reason = static_cast<uint32_t>(LoweringReason::LAYOUT);
     }
     return result;
 }
 
-LoweringResult evaluate_opaque(const AbiModule &module, Hash128 type_id) {
+LoweringResult evaluate_opaque(const ABIModule &module, Hash128 type_id) {
     LoweringResult result;
     result.type_id = type_id;
     result.contract_type = type_id;
-    result.kind = static_cast<uint32_t>(LoweringKind::opaque);
-    result.status = static_cast<uint32_t>(LoweringStatus::unsupported);
-    result.reason = static_cast<uint32_t>(LoweringReason::not_a_record);
+    result.kind = static_cast<uint32_t>(LoweringKind::OPAQUE);
+    result.status = static_cast<uint32_t>(LoweringStatus::UNSUPPORTED);
+    result.reason = static_cast<uint32_t>(LoweringReason::NOT_A_RECORD);
 
     const Type *type = find_type_by_id(module, type_id);
-    if (!type || type->kind != TypeKind::record) return result;
+    if (!type || type->kind != TypeKind::RECORD) return result;
     // An opaque handle is used through accessors; its layout is not consumed.
-    result.status = static_cast<uint32_t>(LoweringStatus::direct);
-    result.reason = static_cast<uint32_t>(LoweringReason::ok);
+    result.status = static_cast<uint32_t>(LoweringStatus::DIRECT);
+    result.reason = static_cast<uint32_t>(LoweringReason::OK);
     return result;
 }
 
 bool project_symbols(
-    const AbiModule &source, const std::vector<std::string> &symbols, AbiModule &result, std::string &error) {
+    const ABIModule &source, const std::vector<std::string> &symbols, ABIModule &result, std::string &error) {
     if (!validate(source, error)) return false;
     auto exact_or_short = [](const std::string &name, const std::string &symbol) {
         const auto separator = name.rfind("::");
@@ -1491,7 +1491,7 @@ bool project_symbols(
         if (!(function.owner_type == Hash128{}) && !is_complete(function.owner_type)) add_type(function.owner_type);
         result.functions.push_back(function);
         add_type(function.return_type);
-        for (const auto &parameter : function.parameters)
+        for (const auto &parameter : function.params)
             add_type(parameter.type_id);
     }
     std::unordered_set<std::string> selected_field_keys;
@@ -1537,17 +1537,17 @@ bool project_symbols(
     std::vector<uint32_t> source_param_base(source.functions.size(), 0);
     for (size_t i = 0, running = 0; i < source.functions.size(); ++i) {
         source_param_base[i] = running;
-        running += source.functions[i].parameters.size();
+        running += source.functions[i].params.size();
     }
     std::unordered_map<std::string, uint32_t> projected_by_signature;
     std::vector<uint32_t> projected_param_base(result.functions.size(), 0);
     for (size_t i = 0, running = 0; i < result.functions.size(); ++i) {
         projected_by_signature[hash_key(result.functions[i].signature)] = static_cast<uint32_t>(i);
         projected_param_base[i] = running;
-        running += result.functions[i].parameters.size();
+        running += result.functions[i].params.size();
     }
     for (const auto &contract : source.contracts) {
-        if (contract.target == OwnershipTarget::return_value) {
+        if (contract.target == OwnershipTarget::RETURN) {
             if (contract.target_index >= source.functions.size()) continue;
             const auto found = projected_by_signature.find(hash_key(source.functions[contract.target_index].signature));
             if (found == projected_by_signature.end()) continue;
@@ -1557,7 +1557,7 @@ bool project_symbols(
         } else {
             size_t owner = 0;
             while (owner < source.functions.size()
-                   && contract.target_index >= source_param_base[owner] + source.functions[owner].parameters.size())
+                   && contract.target_index >= source_param_base[owner] + source.functions[owner].params.size())
                 ++owner;
             if (owner >= source.functions.size()) continue;
             const uint32_t position = contract.target_index - source_param_base[owner];
@@ -1645,25 +1645,25 @@ bool project_symbols(
 
 std::string type_kind_name(TypeKind kind) {
     switch (kind) {
-        case TypeKind::primitive:      return "primitive";
-        case TypeKind::enumeration:    return "enum";
-        case TypeKind::record:         return "record";
-        case TypeKind::pointer:        return "pointer";
-        case TypeKind::array:          return "array";
-        case TypeKind::function:       return "function";
-        case TypeKind::namespace_type: return "namespace";
-        case TypeKind::alias:          return "alias";
+        case TypeKind::PRIMITIVE: return "primitive";
+        case TypeKind::ENUM:      return "enum";
+        case TypeKind::RECORD:    return "record";
+        case TypeKind::POINTER:   return "pointer";
+        case TypeKind::ARRAY:     return "array";
+        case TypeKind::FUNC:      return "function";
+        case TypeKind::NAMESPACE: return "namespace";
+        case TypeKind::ALIAS:     return "alias";
     }
     return "unknown";
 }
 
-const SourceOrigin *find_source_origin(const AbiModule &module, Hash128 type_id) {
+const SourceOrigin *find_source_origin(const ABIModule &module, Hash128 type_id) {
     for (const auto &source : module.sources)
         if (source.type_id == type_id) return &source;
     return nullptr;
 }
 
-bool write_abix(const AbiModule &module, const std::string &path, std::string &error) {
+bool write_abix(const ABIModule &module, const std::string &path, std::string &error) {
     if (!validate(module, error)) return false;
     std::unordered_map<std::string, uint32_t> string_offsets;
     std::vector<uint8_t> string_bytes;
@@ -1695,7 +1695,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
     for (const auto &function : module.functions) {
         intern(function.name);
         parameter_begins.push_back(static_cast<uint32_t>(all_parameters.size()));
-        for (const auto &parameter : function.parameters) {
+        for (const auto &parameter : function.params) {
             intern(parameter.name);
             all_parameters.push_back(parameter);
         }
@@ -1728,12 +1728,12 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
     }
 
     std::vector<SectionData> sections;
-    SectionData string_table{strings, static_cast<uint32_t>(string_offsets.size()), 0, section_required, {}};
+    SectionData string_table{STRINGS, static_cast<uint32_t>(string_offsets.size()), 0, section_required, {}};
     put_u32(string_table.bytes, string_table.count);
     put_u32(string_table.bytes, static_cast<uint32_t>(string_bytes.size()));
     string_table.bytes.insert(string_table.bytes.end(), string_bytes.begin(), string_bytes.end());
     sections.push_back(std::move(string_table));
-    SectionData abi_identity{identity, 1, kIdentityEntrySize, section_required, {}};
+    SectionData abi_identity{IDENTITY, 1, kIdentityEntrySize, section_required, {}};
     put_u32(abi_identity.bytes, module.arch);
     put_u32(abi_identity.bytes, module.os);
     put_u32(abi_identity.bytes, module.compiler);
@@ -1745,12 +1745,12 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
     put_u32(abi_identity.bytes, string_offsets.at(module.package_version));
     put_u32(abi_identity.bytes, static_cast<uint32_t>(module.package_version.size()));
     sections.push_back(std::move(abi_identity));
-    SectionData target_table{target, 1, 12, section_required, {}};
+    SectionData target_table{TARGET, 1, 12, section_required, {}};
     put_u32(target_table.bytes, module.arch);
     put_u32(target_table.bytes, module.os);
     put_u32(target_table.bytes, module.target_abi);
     sections.push_back(std::move(target_table));
-    SectionData type_table{types, static_cast<uint32_t>(module.types.size()), kTypeEntrySize, section_required, {}};
+    SectionData type_table{TYPES, static_cast<uint32_t>(module.types.size()), kTypeEntrySize, section_required, {}};
     for (const auto &type : module.types) {
         put_hash(type_table.bytes, type.id);
         put_hash(type_table.bytes, effective_layout_hash(module, type));
@@ -1766,7 +1766,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
         put_u32(type_table.bytes, type.primitive_abi);
     }
     sections.push_back(std::move(type_table));
-    SectionData field_table{fields, static_cast<uint32_t>(module.fields.size()), kFieldEntrySize, section_required, {}};
+    SectionData field_table{FIELDS, static_cast<uint32_t>(module.fields.size()), kFieldEntrySize, section_required, {}};
     for (const auto &field : module.fields) {
         put_hash(field_table.bytes, field.owner_type);
         put_u32(field_table.bytes, string_offsets.at(field.name));
@@ -1777,7 +1777,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
     }
     sections.push_back(std::move(field_table));
     SectionData function_table{
-        functions, static_cast<uint32_t>(module.functions.size()), kFunctionEntrySize, section_required, {}};
+        FUNCTIONS, static_cast<uint32_t>(module.functions.size()), kFunctionEntrySize, section_required, {}};
     for (uint32_t i = 0; i < module.functions.size(); ++i) {
         const auto &function = module.functions[i];
         put_hash(function_table.bytes, function.owner_type);
@@ -1786,13 +1786,13 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
         put_hash(function_table.bytes, function.signature);
         put_hash(function_table.bytes, function.return_type);
         put_u32(function_table.bytes, parameter_begins[i]);
-        put_u32(function_table.bytes, static_cast<uint32_t>(function.parameters.size()));
+        put_u32(function_table.bytes, static_cast<uint32_t>(function.params.size()));
         put_u32(function_table.bytes, function.calling_convention);
         put_u32(function_table.bytes, function.flags);
     }
     sections.push_back(std::move(function_table));
     SectionData parameter_table{
-        parameters, static_cast<uint32_t>(all_parameters.size()), kParameterEntrySize, section_required, {}};
+        PARAMETERS, static_cast<uint32_t>(all_parameters.size()), kParameterEntrySize, section_required, {}};
     for (const auto &parameter : all_parameters) {
         put_u32(parameter_table.bytes, string_offsets.at(parameter.name));
         put_u32(parameter_table.bytes, static_cast<uint32_t>(parameter.name.size()));
@@ -1801,7 +1801,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
     }
     sections.push_back(std::move(parameter_table));
     SectionData symbol_table{
-        symbols, static_cast<uint32_t>(artifact_symbols.size()), kSymbolEntrySize, section_required, {}};
+        SYMBOLS, static_cast<uint32_t>(artifact_symbols.size()), kSymbolEntrySize, section_required, {}};
     for (const auto &symbol : artifact_symbols) {
         put_u32(symbol_table.bytes, string_offsets.at(symbol.name));
         put_u32(symbol_table.bytes, static_cast<uint32_t>(symbol.name.size()));
@@ -1809,7 +1809,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
         put_u32(symbol_table.bytes, symbol.target_index);
     }
     sections.push_back(std::move(symbol_table));
-    SectionData descriptor{hash_descriptor, 1, kHashDescriptorEntrySize, section_required, {}};
+    SectionData descriptor{HASH_DESCRIPTOR, 1, kHashDescriptorEntrySize, section_required, {}};
     put_u16(descriptor.bytes, kHashAlgorithm);
     put_u16(descriptor.bytes, 1);
     put_u32(descriptor.bytes, 1);
@@ -1818,7 +1818,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
     sections.push_back(std::move(descriptor));
     const auto records = hash_table(module);
     SectionData hash_table_section{
-        hash_records, static_cast<uint32_t>(records.size()), kHashRecordEntrySize, section_required, {}};
+        HASH_RECORDS, static_cast<uint32_t>(records.size()), kHashRecordEntrySize, section_required, {}};
     for (const auto &record : records) {
         put_u32(hash_table_section.bytes, static_cast<uint32_t>(record.kind));
         put_u32(hash_table_section.bytes, static_cast<uint32_t>(record.target_kind));
@@ -1828,7 +1828,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
     }
     sections.push_back(std::move(hash_table_section));
     SectionData compatibility_table{
-        compatibility, static_cast<uint32_t>(module.compatibility.size()), kCompatibilityEntrySize, 0, {}};
+        COMPATIBILITY, static_cast<uint32_t>(module.compatibility.size()), kCompatibilityEntrySize, 0, {}};
     for (const auto &record : module.compatibility) {
         put_hash(compatibility_table.bytes, record.source_type);
         put_hash(compatibility_table.bytes, record.target_type);
@@ -1837,7 +1837,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
         put_u32(compatibility_table.bytes, record.flags);
     }
     sections.push_back(std::move(compatibility_table));
-    SectionData map_table{maps, static_cast<uint32_t>(module.maps.size()), kMapEntrySize, 0, {}};
+    SectionData map_table{MAPS, static_cast<uint32_t>(module.maps.size()), kMapEntrySize, 0, {}};
     for (uint32_t i = 0; i < module.maps.size(); ++i) {
         const auto &map = module.maps[i];
         put_hash(map_table.bytes, map.source_type);
@@ -1852,7 +1852,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
     }
     sections.push_back(std::move(map_table));
     SectionData operation_table{
-        map_operations, static_cast<uint32_t>(all_map_operations.size()), kMapOperationEntrySize, 0, {}};
+        MAP_OPERATIONS, static_cast<uint32_t>(all_map_operations.size()), kMapOperationEntrySize, 0, {}};
     for (const auto &operation : all_map_operations) {
         operation_table.bytes.push_back(static_cast<uint8_t>(operation.opcode));
         operation_table.bytes.push_back(0);
@@ -1868,7 +1868,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
 
     // Optional, debug-only source origins. Excluded from the artifact hash.
     if (!module.sources.empty()) {
-        SectionData source_table{sources, static_cast<uint32_t>(module.sources.size()), kSourceEntrySize, 0, {}};
+        SectionData source_table{SOURCES, static_cast<uint32_t>(module.sources.size()), kSourceEntrySize, 0, {}};
         for (const auto &source : module.sources) {
             put_hash(source_table.bytes, source.type_id);
             put_u32(source_table.bytes, string_offsets.at(source.file));
@@ -1882,7 +1882,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
     // Optional ownership contract. Excluded from ABI identity (it is a
     // contract, not a layout fact); old readers ignore the unknown section.
     if (!module.owned.empty()) {
-        SectionData owned_table{owned, static_cast<uint32_t>(module.owned.size()), kOwnedEntrySize, 0, {}};
+        SectionData owned_table{OWNED, static_cast<uint32_t>(module.owned.size()), kOwnedEntrySize, 0, {}};
         for (const auto &record : module.owned) {
             put_hash(owned_table.bytes, record.type_id);
             put_hash(owned_table.bytes, record.create);
@@ -1896,7 +1896,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
     // from ABI identity and unknown to old readers.
     if (!module.contracts.empty()) {
         SectionData contract_table{
-            contracts, static_cast<uint32_t>(module.contracts.size()), kContractEntrySize, 0, {}};
+            CONTRACTS, static_cast<uint32_t>(module.contracts.size()), kContractEntrySize, 0, {}};
         for (const auto &record : module.contracts) {
             put_u32(contract_table.bytes, static_cast<uint32_t>(record.target));
             put_u32(contract_table.bytes, record.target_index);
@@ -1910,7 +1910,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
     // Optional error-boundary contract. Like `owned`/`contracts`, excluded from
     // ABI identity and unknown to old readers.
     if (!module.errors.empty()) {
-        SectionData error_table{errors, static_cast<uint32_t>(module.errors.size()), kErrorEntrySize, 0, {}};
+        SectionData error_table{ERRORS, static_cast<uint32_t>(module.errors.size()), kErrorEntrySize, 0, {}};
         for (const auto &record : module.errors) {
             put_u32(error_table.bytes, record.function_index);
             put_u32(error_table.bytes, static_cast<uint32_t>(record.status_source));
@@ -1929,7 +1929,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
     // boundary. Like the error table, they are contract metadata and never feed
     // ABI identity.
     if (!module.error_sets.empty()) {
-        SectionData set_table{error_sets, static_cast<uint32_t>(module.error_sets.size()), kErrorSetEntrySize, 0, {}};
+        SectionData set_table{ERROR_SETS, static_cast<uint32_t>(module.error_sets.size()), kErrorSetEntrySize, 0, {}};
         for (const auto &record : module.error_sets) {
             put_hash(set_table.bytes, record.id);
             put_u32(set_table.bytes, string_offsets.at(record.name));
@@ -1944,7 +1944,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
     }
     if (!module.error_codes.empty()) {
         SectionData code_table{
-            error_codes, static_cast<uint32_t>(module.error_codes.size()), kErrorCodeEntrySize, 0, {}};
+            ERROR_CODES, static_cast<uint32_t>(module.error_codes.size()), kErrorCodeEntrySize, 0, {}};
         for (const auto &record : module.error_codes) {
             put_hash(code_table.bytes, record.set_id);
             put_u32(code_table.bytes, string_offsets.at(record.name));
@@ -1959,7 +1959,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
     // Optional target platform facts (pointer width / endianness). Excluded
     // from ABI identity; unknown to old readers.
     if (module.pointer_bits != 0 || module.endianness != 0) {
-        SectionData platform_table{platform, 1, kPlatformEntrySize, 0, {}};
+        SectionData platform_table{PLATFORM, 1, kPlatformEntrySize, 0, {}};
         put_u32(platform_table.bytes, module.pointer_bits);
         put_u32(platform_table.bytes, module.endianness);
         sections.push_back(std::move(platform_table));
@@ -1967,7 +1967,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
 
     // Optional ABIX-STD lowering results. Excluded from ABI identity.
     if (!module.lowerings.empty()) {
-        SectionData lowering_table{lowering, static_cast<uint32_t>(module.lowerings.size()), kLoweringEntrySize, 0, {}};
+        SectionData lowering_table{LOWERING, static_cast<uint32_t>(module.lowerings.size()), kLoweringEntrySize, 0, {}};
         for (const auto &record : module.lowerings) {
             put_hash(lowering_table.bytes, record.type_id);
             put_hash(lowering_table.bytes, record.contract_type);
@@ -1982,7 +1982,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
 
     // Optional pointer -> pointee references. Excluded from ABI identity.
     if (!module.pointees.empty()) {
-        SectionData pointee_table{pointees, static_cast<uint32_t>(module.pointees.size()), kPointeeEntrySize, 0, {}};
+        SectionData pointee_table{POINTEES, static_cast<uint32_t>(module.pointees.size()), kPointeeEntrySize, 0, {}};
         for (const auto &record : module.pointees) {
             put_hash(pointee_table.bytes, record.pointer);
             put_hash(pointee_table.bytes, record.pointee);
@@ -1994,7 +1994,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
     // Optional container -> sequence-view adapters (accessor based).
     if (!module.view_adapters.empty()) {
         SectionData adapter_table{
-            view_adapters, static_cast<uint32_t>(module.view_adapters.size()), kViewAdapterEntrySize, 0, {}};
+            VIEW_ADAPTERS, static_cast<uint32_t>(module.view_adapters.size()), kViewAdapterEntrySize, 0, {}};
         for (const auto &record : module.view_adapters) {
             put_hash(adapter_table.bytes, record.source_type);
             put_hash(adapter_table.bytes, record.target_type);
@@ -2007,7 +2007,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
     // Optional container -> iterable range adapters (accessor based).
     if (!module.range_adapters.empty()) {
         SectionData range_table{
-            range_adapters, static_cast<uint32_t>(module.range_adapters.size()), kRangeAdapterEntrySize, 0, {}};
+            RANGE_ADAPTERS, static_cast<uint32_t>(module.range_adapters.size()), kRangeAdapterEntrySize, 0, {}};
         for (const auto &record : module.range_adapters) {
             put_hash(range_table.bytes, record.source_type);
             put_hash(range_table.bytes, record.size_accessor);
@@ -2019,7 +2019,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
     // Optional instantiation request identities.
     if (!module.instantiations.empty()) {
         SectionData instantiation_table{
-            instantiations, static_cast<uint32_t>(module.instantiations.size()), kInstantiationEntrySize, 0, {}};
+            INSTANTIATIONS, static_cast<uint32_t>(module.instantiations.size()), kInstantiationEntrySize, 0, {}};
         for (const auto &record : module.instantiations) {
             put_hash(instantiation_table.bytes, record.request);
             put_hash(instantiation_table.bytes, record.type);
@@ -2032,7 +2032,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
     // readers, which skip the optional sections.
     if (!module.interfaces.empty()) {
         SectionData interface_table{
-            interfaces, static_cast<uint32_t>(module.interfaces.size()), kInterfaceEntrySize, 0, {}};
+            INTERFACES, static_cast<uint32_t>(module.interfaces.size()), kInterfaceEntrySize, 0, {}};
         for (const auto &record : module.interfaces) {
             put_hash(interface_table.bytes, record.id);
             put_u32(interface_table.bytes, string_offsets.at(record.name));
@@ -2045,7 +2045,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
         sections.push_back(std::move(interface_table));
     }
     if (!module.interface_methods.empty()) {
-        SectionData method_table{interface_methods, static_cast<uint32_t>(module.interface_methods.size()),
+        SectionData method_table{INTERFACE_METHODS, static_cast<uint32_t>(module.interface_methods.size()),
             kInterfaceMethodEntrySize, 0, {}};
         for (uint32_t i = 0; i < module.interface_methods.size(); ++i) {
             const auto &method = module.interface_methods[i];
@@ -2063,7 +2063,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
     }
     if (!module.implementations.empty()) {
         SectionData implementation_table{
-            implementations, static_cast<uint32_t>(module.implementations.size()), kImplementationEntrySize, 0, {}};
+            IMPLEMENTATIONS, static_cast<uint32_t>(module.implementations.size()), kImplementationEntrySize, 0, {}};
         for (const auto &record : module.implementations) {
             put_hash(implementation_table.bytes, record.interface_id);
             put_hash(implementation_table.bytes, record.concrete_type);
@@ -2075,7 +2075,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
     }
     if (!module.method_bindings.empty()) {
         SectionData binding_table{
-            method_bindings, static_cast<uint32_t>(module.method_bindings.size()), kMethodBindingEntrySize, 0, {}};
+            METHOD_BINDINGS, static_cast<uint32_t>(module.method_bindings.size()), kMethodBindingEntrySize, 0, {}};
         for (const auto &record : module.method_bindings) {
             put_hash(binding_table.bytes, record.interface_id);
             put_hash(binding_table.bytes, record.method_signature);
@@ -2085,7 +2085,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
         }
         sections.push_back(std::move(binding_table));
     }
-    SectionData layout_encoding_section{layout_encoding, 1, 4, 0, {}};
+    SectionData layout_encoding_section{LAYOUT_ENCODING, 1, 4, 0, {}};
     put_u32(layout_encoding_section.bytes, canonical_layout_version);
     sections.push_back(std::move(layout_encoding_section));
 
@@ -2128,7 +2128,7 @@ bool write_abix(const AbiModule &module, const std::string &path, std::string &e
     return true;
 }
 
-bool read_abix(const std::string &path, AbiModule &module, std::string &error) {
+bool read_abix(const std::string &path, ABIModule &module, std::string &error) {
     error.clear();
     std::ifstream input(path, std::ios::binary);
     if (!input) {
@@ -2178,7 +2178,7 @@ bool read_abix(const std::string &path, AbiModule &module, std::string &error) {
             error = "invalid section directory entry";
             return false;
         }
-        if (id > target && (entry.flags & section_required) != 0) {
+        if (id > Section::TARGET && (entry.flags & section_required) != 0) {
             error = "unsupported required section";
             return false;
         }
@@ -2203,36 +2203,36 @@ bool read_abix(const std::string &path, AbiModule &module, std::string &error) {
         }
         return &it->second;
     };
-    const auto *string_table = required(strings, 0);
-    const auto *abi_identity = required(identity, kIdentityEntrySize);
-    const auto *target_table = required(target, 12);
-    const auto *type_table = required(types, kTypeEntrySize);
-    const auto *field_table = required(fields, kFieldEntrySize);
-    const auto *function_table = required(functions, kFunctionEntrySize);
-    const auto *parameter_table = required(parameters, kParameterEntrySize);
-    const auto *symbol_table = required(symbols, kSymbolEntrySize);
-    const auto *descriptor_table = required(hash_descriptor, kHashDescriptorEntrySize);
-    const auto *hash_table_section = required(hash_records, kHashRecordEntrySize);
-    const auto *compatibility_table = optional(compatibility, kCompatibilityEntrySize);
-    const auto *map_table = optional(maps, kMapEntrySize);
-    const auto *operation_table = optional(map_operations, kMapOperationEntrySize);
-    const auto *source_table = optional(sources, kSourceEntrySize);
-    const auto *owned_table = optional(owned, kOwnedEntrySize);
-    const auto *contract_table = optional(contracts, kContractEntrySize);
-    const auto *error_table = optional(errors, kErrorEntrySize);
-    const auto *error_set_table = optional(error_sets, kErrorSetEntrySize);
-    const auto *error_code_table = optional(error_codes, kErrorCodeEntrySize);
-    const auto *platform_table = optional(platform, kPlatformEntrySize);
-    const auto *lowering_table = optional(lowering, kLoweringEntrySize);
-    const auto *pointee_table = optional(pointees, kPointeeEntrySize);
-    const auto *view_adapter_table = optional(view_adapters, kViewAdapterEntrySize);
-    const auto *range_adapter_table = optional(range_adapters, kRangeAdapterEntrySize);
-    const auto *instantiation_table = optional(instantiations, kInstantiationEntrySize);
-    const auto *interface_table = optional(interfaces, kInterfaceEntrySize);
-    const auto *interface_method_table = optional(interface_methods, kInterfaceMethodEntrySize);
-    const auto *implementation_table = optional(implementations, kImplementationEntrySize);
-    const auto *method_binding_table = optional(method_bindings, kMethodBindingEntrySize);
-    const auto *layout_encoding_table = optional(layout_encoding, 4);
+    const auto *string_table = required(Section::STRINGS, 0);
+    const auto *abi_identity = required(Section::IDENTITY, kIdentityEntrySize);
+    const auto *target_table = required(Section::TARGET, 12);
+    const auto *type_table = required(Section::TYPES, kTypeEntrySize);
+    const auto *field_table = required(Section::FIELDS, kFieldEntrySize);
+    const auto *function_table = required(Section::FUNCTIONS, kFunctionEntrySize);
+    const auto *parameter_table = required(Section::PARAMETERS, kParameterEntrySize);
+    const auto *symbol_table = required(Section::SYMBOLS, kSymbolEntrySize);
+    const auto *descriptor_table = required(Section::HASH_DESCRIPTOR, kHashDescriptorEntrySize);
+    const auto *hash_table_section = required(Section::HASH_RECORDS, kHashRecordEntrySize);
+    const auto *compatibility_table = optional(Section::COMPATIBILITY, kCompatibilityEntrySize);
+    const auto *map_table = optional(Section::MAPS, kMapEntrySize);
+    const auto *operation_table = optional(Section::MAP_OPERATIONS, kMapOperationEntrySize);
+    const auto *source_table = optional(Section::SOURCES, kSourceEntrySize);
+    const auto *owned_table = optional(Section::OWNED, kOwnedEntrySize);
+    const auto *contract_table = optional(Section::CONTRACTS, kContractEntrySize);
+    const auto *error_table = optional(Section::ERRORS, kErrorEntrySize);
+    const auto *error_set_table = optional(Section::ERROR_SETS, kErrorSetEntrySize);
+    const auto *error_code_table = optional(Section::ERROR_CODES, kErrorCodeEntrySize);
+    const auto *platform_table = optional(Section::PLATFORM, kPlatformEntrySize);
+    const auto *lowering_table = optional(Section::LOWERING, kLoweringEntrySize);
+    const auto *pointee_table = optional(Section::POINTEES, kPointeeEntrySize);
+    const auto *view_adapter_table = optional(Section::VIEW_ADAPTERS, kViewAdapterEntrySize);
+    const auto *range_adapter_table = optional(Section::RANGE_ADAPTERS, kRangeAdapterEntrySize);
+    const auto *instantiation_table = optional(Section::INSTANTIATIONS, kInstantiationEntrySize);
+    const auto *interface_table = optional(Section::INTERFACES, kInterfaceEntrySize);
+    const auto *interface_method_table = optional(Section::INTERFACE_METHODS, kInterfaceMethodEntrySize);
+    const auto *implementation_table = optional(Section::IMPLEMENTATIONS, kImplementationEntrySize);
+    const auto *method_binding_table = optional(Section::METHOD_BINDINGS, kMethodBindingEntrySize);
+    const auto *layout_encoding_table = optional(Section::LAYOUT_ENCODING, 4);
     if (!error.empty()) return false;
     if (!string_table
         || !abi_identity
@@ -2367,7 +2367,7 @@ bool read_abix(const std::string &path, AbiModule &module, std::string &error) {
             if (error.empty()) error = "function parameter range out of bounds";
             return false;
         }
-        function.parameters.insert(function.parameters.end(), all_parameters.begin() + parameter_begin,
+        function.params.insert(function.params.end(), all_parameters.begin() + parameter_begin,
             all_parameters.begin() + parameter_begin + parameter_count);
         module.functions.push_back(std::move(function));
     }
@@ -2490,8 +2490,8 @@ bool read_abix(const std::string &path, AbiModule &module, std::string &error) {
             || !read_u32(bytes, contract_offset, mode, error)
             || !read_u32(bytes, contract_offset, record.flags, error)
             || !read_hash(bytes, contract_offset, record.release, error)
-            || target > static_cast<uint32_t>(OwnershipTarget::return_value)
-            || mode > static_cast<uint32_t>(OwnershipMode::copy)) {
+            || target > static_cast<uint32_t>(OwnershipTarget::RETURN)
+            || mode > static_cast<uint32_t>(OwnershipMode::COPY)) {
             error = "invalid ownership contract record";
             return false;
         }
@@ -2515,7 +2515,7 @@ bool read_abix(const std::string &path, AbiModule &module, std::string &error) {
             || !read_u32(bytes, error_offset, condition, error)
             || !read_hash(bytes, error_offset, record.error_set, error)
             || record.domain == 0
-            || status > static_cast<uint32_t>(StatusSource::return_field)) {
+            || status > static_cast<uint32_t>(StatusSource::RETURN_FIELD)) {
             error = "invalid error contract record";
             return false;
         }
@@ -2577,9 +2577,9 @@ bool read_abix(const std::string &path, AbiModule &module, std::string &error) {
             || !read_u32(bytes, lowering_offset, record.reason, error)
             || !read_u32(bytes, lowering_offset, record.pointer_field, error)
             || !read_u32(bytes, lowering_offset, record.length_field, error)
-            || record.kind > static_cast<uint32_t>(LoweringKind::opaque)
-            || record.status > static_cast<uint32_t>(LoweringStatus::unsupported)
-            || record.reason > static_cast<uint32_t>(LoweringReason::layout)) {
+            || record.kind > static_cast<uint32_t>(LoweringKind::OPAQUE)
+            || record.status > static_cast<uint32_t>(LoweringStatus::UNSUPPORTED)
+            || record.reason > static_cast<uint32_t>(LoweringReason::LAYOUT)) {
             error = "invalid lowering record";
             return false;
         }
@@ -2775,4 +2775,4 @@ bool read_abix(const std::string &path, AbiModule &module, std::string &error) {
     return true;
 }
 
-}   // namespace amc
+}   // namespace skl::amc

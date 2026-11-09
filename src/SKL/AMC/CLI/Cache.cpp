@@ -29,12 +29,12 @@
 #include <fmt/format.h>
 
 namespace fs = std::filesystem;
-using amc::util::fail;
-using amc::util::g_error_format;
-using amc::util::read_error_category;
-using amc::util::usage_error;
+using skl::amc::util::fail;
+using skl::amc::util::g_error_format;
+using skl::amc::util::read_error_category;
+using skl::amc::util::usage_error;
 
-namespace amc::cli {
+namespace skl::amc::cli {
 namespace {
 
 bool parse_size(const std::string &text, uint64_t &out) {
@@ -224,4 +224,4 @@ int cmd_cache(char **args, int arg_count) {
     return 0;
 }
 
-}   // namespace amc::cli
+}   // namespace skl::amc::cli

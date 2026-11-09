@@ -21,7 +21,7 @@
 
 #include <string>
 
-namespace amc::ir {
+namespace skl::amc::ir {
 
 // Serializes the lowered contract next to an artifact (`<artifact>.lowering`).
 // Like the semantic sidecar it is an auxiliary file: the ABI artifact itself is
@@ -43,10 +43,10 @@ bool load_lowering_sidecar(const std::string &artifact_path, LoweringResult &res
 // Read-only consistency check: every lowered entity that claims to be lowered
 // must resolve to a TypeID/signature in the artifact. This is shared by the
 // Pass pipeline and the backend application path.
-bool validate_lowering_references(const LoweringResult &result, const AbiModule &module, std::string &error);
+bool validate_lowering_references(const LoweringResult &result, const ABIModule &module, std::string &error);
 
-bool apply_lowering_contracts(const LoweringResult &result, AbiModule &module, std::string &error);
+bool apply_lowering_contracts(const LoweringResult &result, ABIModule &module, std::string &error);
 
-}   // namespace amc::ir
+}   // namespace skl::amc::ir
 
 #endif   // AMC_IR_LOWERING_JSON_H

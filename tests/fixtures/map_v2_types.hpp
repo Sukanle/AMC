@@ -1,8 +1,8 @@
 #pragma once
 
-namespace amc_map {
+namespace skl::amc_map {
 struct MapRecord {
     int value;
     int added;
 };
-}   // namespace amc_map
+}   // namespace skl::amc_map
