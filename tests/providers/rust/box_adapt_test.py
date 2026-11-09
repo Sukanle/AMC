@@ -275,6 +275,44 @@ fn main() {
                         check(result.returncode == 0 and "rust box auto: OK" in output(result),
                               "auto create/destroy pair runs", output(result)[-500:])
 
+        # A Box<dyn Trait> is a fat pointer and cannot use the thin owned handle.
+        dyn_config = os.path.join(work, "box_dyn.abic.toml")
+        with open(dyn_config, "w", encoding="utf-8") as handle:
+            handle.write("""[package]
+name = "rust_box_dyn"
+version = "0.1"
+
+[[import]]
+language = "rust"
+files = ["rust_box_api.rs"]
+symbols = ["BoxWidget", "box_widget_destroy", "box_widget_live"]
+
+[[adapt]]
+native = "Box"
+target = "*mut BoxWidget"
+
+[[rust.expose]]
+function = "box_dyn_make"
+as = "box_dyn_make"
+
+[target]
+arch = 0
+os = 0
+abi = 1
+pointer_bits = 64
+endianness = "little"
+
+[thunks]
+output = "box_dyn_thunks.rs"
+
+[[export]]
+output = "rust_box_dyn.abix"
+""")
+        result = run([str(amc), "build", "-c", dyn_config, "-B", os.path.join(work, "box_dyn_out")])
+        dyn_output = output(result)
+        check(result.returncode != 0 and "fat pointer" in dyn_output,
+              "Box<dyn Trait> is rejected as a fat pointer", dyn_output[-500:])
+
         # Explicit means explicit: dropping [[owned]] or [[contract]] fails closed.
         no_owned = os.path.join(work, "no_owned.abic.toml")
         with open(config, encoding="utf-8") as handle:

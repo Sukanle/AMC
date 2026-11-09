@@ -822,6 +822,8 @@ std::vector<std::string> tokens_of(const std::string &text) {
     return out;
 }
 
+bool fat_pointer_element(const std::string &element) { return element.rfind("dyn", 0) == 0; }
+
 std::string pointer_pointee(const std::vector<std::string> &tokens) {
     size_t index = 1;
     while (index < tokens.size() && (tokens[index] == "mut" || tokens[index] == "const"))
@@ -835,6 +837,10 @@ bool ensure_container_boundary(std::vector<RawItem> &items, std::unordered_map<s
     if (target.empty() || kind == ContainerKind::NONE || kind == ContainerKind::BOX) return true;
     if (seen.find(target) != seen.end()) return true;
 
+    if (fat_pointer_element(element)) {
+        error = "container elements cannot be trait objects (dyn Trait)";
+        return false;
+    }
     RawItem item;
     item.name = target;
     item.kind = RawItem::Kind::RECORD;
@@ -2204,6 +2210,11 @@ int run_frontend(const char *config_path, const char *output_path) {
             any_adapted = true;
             const std::string element = adapt->element.empty() ? type.element : compact_spelling(adapt->element);
             if (type.kind == ContainerKind::BOX) {
+                if (fat_pointer_element(element)) {
+                    fmt::print(
+                        stderr, "[[rust.expose]] Box<dyn Trait> is a fat pointer; use an opaque handle contract\n");
+                    return EXIT_FAILURE;
+                }
                 const std::string pointee = pointer_pointee(tokens_of(adapt->target));
                 if (!type_name_matches(pointee, element)) {
                     fmt::print(
@@ -2236,10 +2247,16 @@ int run_frontend(const char *config_path, const char *output_path) {
         }
         const ContainerType return_container = detect_container(source->return_type);
         const amc::lang::AdaptDecl *return_adapt = nullptr;
+        ContainerKind return_kind = ContainerKind::NONE;
         if (return_container.kind == ContainerKind::BOX) {
             if (const amc::lang::AdaptDecl *adapt = find_adapt(return_container, config.adaptations)) {
                 const std::string element =
                     adapt->element.empty() ? return_container.element : compact_spelling(adapt->element);
+                if (fat_pointer_element(element)) {
+                    fmt::print(
+                        stderr, "[[rust.expose]] Box<dyn Trait> is a fat pointer; use an opaque handle contract\n");
+                    return EXIT_FAILURE;
+                }
                 const std::string pointee = pointer_pointee(tokens_of(adapt->target));
                 if (!type_name_matches(pointee, element)) {
                     fmt::print(
@@ -2261,6 +2278,23 @@ int run_frontend(const char *config_path, const char *output_path) {
                     return EXIT_FAILURE;
                 }
                 return_adapt = adapt;
+                return_kind = ContainerKind::BOX;
+                any_adapted = true;
+            }
+        } else if (return_container.kind == ContainerKind::OPTION) {
+            if (const amc::lang::AdaptDecl *adapt = find_adapt(return_container, config.adaptations)) {
+                const std::string element =
+                    adapt->element.empty() ? return_container.element : compact_spelling(adapt->element);
+                std::string boundary_error;
+                if (!ensure_container_boundary(
+                        items, seen_items, adapt->target, ContainerKind::OPTION, element, boundary_error)) {
+                    fmt::print(stderr, "{}\n", boundary_error);
+                    return EXIT_FAILURE;
+                }
+                if (emitted_boundaries.emplace(adapt->target, true).second)
+                    boundary_source += container_boundary_definition(adapt->target, ContainerKind::OPTION, element);
+                return_adapt = adapt;
+                return_kind = ContainerKind::OPTION;
                 any_adapted = true;
             }
         } else if (return_container.kind != ContainerKind::NONE
@@ -2314,10 +2348,21 @@ int run_frontend(const char *config_path, const char *output_path) {
             }
             call += ")";
             if (source->is_unsafe) call = "unsafe { " + call + " }";
-            if (return_adapt != nullptr)
+            if (return_adapt != nullptr && return_kind == ContainerKind::OPTION) {
+                const std::string target = return_adapt->target;
+                wrapper_source += fmt::format(
+                    "match {} {{\n"
+                    "        Some(value) => {} {{ discriminant: 1, reserved: 0, "
+                    "value: core::mem::MaybeUninit::new(value) }},\n"
+                    "        None => {} {{ discriminant: 0, reserved: 0, "
+                    "value: core::mem::MaybeUninit::uninit() }},\n"
+                    "    }}",
+                    call, target, target);
+            } else if (return_adapt != nullptr) {
                 wrapper_source += "Box::into_raw(" + call + ")";
-            else
+            } else {
                 wrapper_source += call;
+            }
             wrapper_source += "\n}\n\n";
 
             RawFunction wrapper = *source;

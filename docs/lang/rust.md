@@ -137,6 +137,8 @@ AMC synthesizes the boundary record, emits the matching `#[repr(C)]` struct in t
 - `Vec<T>` → `abix_span_<T>` (`to_vec()`; use `native = "&[T]"` for a zero-copy slice);
 - `Option<T>` → `abix_optional_<T>` (the wrapper reads the value through `MaybeUninit` only when the discriminant is `Some`).
 
+`Option<T>` returns are supported as value contracts: the wrapper turns `Some` into `{ discriminant: 1, value: MaybeUninit::new(value) }` and `None` into `{ discriminant: 0, value: MaybeUninit::uninit() }`. `Box<dyn Trait>` is a fat pointer and is rejected; use an opaque handle contract instead.
+
 `Box<T>` uses the explicit owned-handle path: declare the pointer target, an `[[owned]]` release policy, and the per-interaction `[[contract]]` modes. AMC does not synthesize create/destroy.
 
 ```toml
@@ -173,7 +175,7 @@ returns = "owned"
 release = "auto"
 ```
 
-`create = "auto"` emits a `fn(T) -> *mut T` factory (`Box::new`), and `destroy = "auto"` emits `Box::from_raw` plus drop. `release = "auto"` reuses the matching `[[owned]]` destroy signature. Owned `String`/`Vec`/`Option` returns still need their own owned contract. `Vec<T>`/`Option<T>` elements may be primitives or local `#[repr(C)]` records; owned `Vec<T>` marshalling requires `T: Clone`.
+`create = "auto"` emits a `fn(T) -> *mut T` factory (`Box::new`), and `destroy = "auto"` emits `Box::from_raw` plus drop. `release = "auto"` reuses the matching `[[owned]]` destroy signature. Owned `String`/`Vec` returns still need their own owned contract; `Option<T>` returns are value contracts. `Vec<T>`/`Option<T>` elements may be primitives or local `#[repr(C)]` records; owned `Vec<T>` marshalling requires `T: Clone`.
 
 ### Ownership and error contracts
 

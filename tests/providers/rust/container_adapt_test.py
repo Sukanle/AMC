@@ -102,6 +102,8 @@ def main():
         check("pub struct abix_optional_ContainerPoint" in thunks
               and "MaybeUninit<ContainerPoint>" in thunks,
               "non-primitive Optional element is generated")
+        check("MaybeUninit::new(value)" in thunks and "MaybeUninit::uninit()" in thunks,
+              "Option return is marshalled into the Optional boundary")
 
         for function, expected in (
             ("container_string_len", "abix_str_utf8"),
@@ -119,6 +121,13 @@ def main():
                 parameter = (match.get("parameters") or [{}])[0]
                 check(parameter.get("type_name") == expected,
                       f"{function} takes the adapted boundary type")
+
+        result = run([str(amc), "query", artifact, "--function", "container_option_make",
+                      "--format", "json"])
+        if check(result.returncode == 0, "container_option_make is recorded", output(result)[-300:]):
+            match = json.loads(result.stdout).get("matches", [{}])[0]
+            check(match.get("return_type_name") == "abix_optional_i32",
+                  "Option return uses the Optional boundary type")
 
         lib_rs = os.path.join(work, "lib.rs")
         with open(lib_rs, "w", encoding="utf-8") as handle:
@@ -201,6 +210,13 @@ def main():
               "non-primitive Optional reaches the Rust Option function")
         check(lib.container_option_point(AbixOptionalPoint(0, 0, ContainerPoint(0, 0))) == -1,
               "non-primitive Optional None is preserved")
+        lib.container_option_make.argtypes = [ctypes.c_int32]
+        lib.container_option_make.restype = AbixOptionalI32
+        some = lib.container_option_make(7)
+        check(some.discriminant == 1 and some.value == 7,
+              "Option return produces Some")
+        none = lib.container_option_make(-1)
+        check(none.discriminant == 0, "Option return produces None")
 
         # A container parameter without a declared mapping still fails closed.
         no_adapt = os.path.join(work, "no_adapt.abic.toml")

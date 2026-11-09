@@ -68,6 +68,10 @@ as = "container_points_sum"
 function = "container_option_point"
 as = "container_option_point"
 
+[[rust.expose]]
+function = "container_option_make"
+as = "container_option_make"
+
 [target]
 arch = 0
 os = 0

@@ -41,3 +41,7 @@ pub extern "C" fn box_widget_destroy(ptr: *mut BoxWidget) {
 pub extern "C" fn box_widget_live() -> usize {
     LIVE.load(Ordering::SeqCst)
 }
+
+pub fn box_dyn_make() -> Box<dyn core::fmt::Debug> {
+    Box::new(3i32)
+}

@@ -47,3 +47,11 @@ pub fn container_points_sum(value: Vec<ContainerPoint>) -> i32 {
 pub fn container_option_point(value: Option<ContainerPoint>) -> i32 {
     value.map(|point| point.x + point.y).unwrap_or(-1)
 }
+
+pub fn container_option_make(value: i32) -> Option<i32> {
+    if value < 0 {
+        None
+    } else {
+        Some(value)
+    }
+}

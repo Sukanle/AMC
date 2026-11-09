@@ -137,6 +137,8 @@ AMC 会合成边界 record，在 thunk 源码中生成对应的 `#[repr(C)]` 结
 - `Vec<T>` → `abix_span_<T>`（`to_vec()`；使用 `native = "&[T]"` 可获得零拷贝 slice）；
 - `Option<T>` → `abix_optional_<T>`（wrapper 侧用 `MaybeUninit`，仅在判别为 `Some` 时读取值）。
 
+`Option<T>` 返回值作为 value contract 支持：wrapper 把 `Some` 转成 `{ discriminant: 1, value: MaybeUninit::new(value) }`，把 `None` 转成 `{ discriminant: 0, value: MaybeUninit::uninit() }`。`Box<dyn Trait>` 是 fat pointer，会明确拒绝；请使用 opaque handle 契约。
+
 `Box<T>` 走显式 owned-handle 路径：声明指针 target、`[[owned]]` release policy 以及每个交互的 `[[contract]]` 模式。AMC 不会自动合成 create/destroy。
 
 ```toml
@@ -173,7 +175,7 @@ returns = "owned"
 release = "auto"
 ```
 
-`create = "auto"` 生成 `fn(T) -> *mut T` 工厂（`Box::new`），`destroy = "auto"` 生成 `Box::from_raw` + drop，`release = "auto"` 复用匹配 `[[owned]]` 的 destroy 签名。owned `String`/`Vec`/`Option` 返回值仍需要自己的 owned 契约。`Vec<T>`/`Option<T>` 的元素可以是 primitive 或本地 `#[repr(C)]` record；owned `Vec<T>` marshal 要求 `T: Clone`。
+`create = "auto"` 生成 `fn(T) -> *mut T` 工厂（`Box::new`），`destroy = "auto"` 生成 `Box::from_raw` + drop，`release = "auto"` 复用匹配 `[[owned]]` 的 destroy 签名。owned `String`/`Vec` 返回值仍需要自己的 owned 契约；`Option<T>` 返回值是 value contract。`Vec<T>`/`Option<T>` 的元素可以是 primitive 或本地 `#[repr(C)]` record；owned `Vec<T>` marshal 要求 `T: Clone`。
 
 ### 所有权与错误契约
 
