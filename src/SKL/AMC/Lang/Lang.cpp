@@ -303,7 +303,9 @@ int run_provider(int argc, char **argv, const Provider &provider) {
     std::string error;
     llvm::raw_string_ostream stream(error);
     const std::string overview = "AMC " + provider.language + " provider";
-    if (!llvm::cl::ParseCommandLineOptions(argc, argv, overview, &stream)) {
+    const bool parsed = llvm::cl::ParseCommandLineOptions(argc, argv, overview, &stream);
+    stream.flush();
+    if (!parsed) {
         fmt::print(stderr, "{}", error);
         return 2;
     }
