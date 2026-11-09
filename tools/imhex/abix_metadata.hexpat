@@ -15,7 +15,6 @@
 // `metadata_base` to the section file offset.
 
 u64 metadata_base = 0;
-u64 names_data = std::mem::read_unsigned(metadata_base + 112, 8);
 
 struct Hash128 {
     u64 lo;
@@ -57,8 +56,6 @@ struct MetadataTypeRecord {
     u32 field_count;
     u32 array_count;
     u32 name_offset;
-    if (names_data != 0)
-        char name[] @ names_data + name_offset;
 };
 
 struct MetadataFieldRecord {
@@ -68,8 +65,6 @@ struct MetadataFieldRecord {
     u32 flags;
     u32 name_offset;
     u32 reserved;
-    if (names_data != 0)
-        char name[] @ names_data + name_offset;
 };
 
 struct MetadataFunctionRecord {
@@ -82,8 +77,6 @@ struct MetadataFunctionRecord {
     u32 parameter_count;
     u32 name_offset;
     u32 reserved;
-    if (names_data != 0)
-        char name[] @ names_data + name_offset;
 };
 
 struct MetadataParameterRecord {
@@ -91,8 +84,6 @@ struct MetadataParameterRecord {
     u32 flags;
     u32 name_offset;
     u64 reserved;
-    if (names_data != 0)
-        char name[] @ names_data + name_offset;
 };
 
 struct MetadataSymbolRecord {
@@ -100,8 +91,6 @@ struct MetadataSymbolRecord {
     u32 kind;
     u32 target_index;
     u32 reserved;
-    if (names_data != 0)
-        char name[] @ names_data + name_offset;
 };
 
 struct MetadataHashRecord {
@@ -146,7 +135,7 @@ struct MetadataErrorRecord {
     u32 status_source;
     u32 status_parameter;
     u32 value_parameter;
-    i64 success_value;
+    s64 success_value;
     u32 flags;
     u32 reserved;
     u64 domain;
@@ -205,8 +194,6 @@ struct MetadataInterfaceRecord {
     u32 method_count;
     u32 flags;
     u32 name_offset;
-    if (names_data != 0)
-        char name[] @ names_data + name_offset;
 };
 
 struct MetadataInterfaceMethodRecord {
@@ -219,8 +206,6 @@ struct MetadataInterfaceMethodRecord {
     u32 parameter_begin;
     u32 parameter_count;
     padding[4];
-    if (names_data != 0)
-        char name[] @ names_data + name_offset;
 };
 
 struct MetadataInterfaceParameterRecord {
@@ -308,28 +293,44 @@ struct MetadataRegion {
         header.parameter_count * 32 +
         header.symbol_count * 16;
 
-    MetadataTypeRecord types[header.type_count] @ metadata_base + header.desc_offset;
-    MetadataFieldRecord fields[header.field_count] @ metadata_base + header.desc_offset + header.type_count * 64;
-    MetadataFunctionRecord functions[header.function_count] @
-        metadata_base + header.desc_offset + header.type_count * 64 + header.field_count * 48;
-    MetadataParameterRecord parameters[header.parameter_count] @
-        metadata_base + header.desc_offset + header.type_count * 64 + header.field_count * 48 +
-        header.function_count * 72;
-    MetadataSymbolRecord symbols[header.symbol_count] @
-        metadata_base + header.desc_offset + header.type_count * 64 + header.field_count * 48 +
-        header.function_count * 72 + header.parameter_count * 32;
+    bool valid =
+        header.magic == 0x58494241 &&
+        header.version_major == 1 &&
+        header.desc_offset == 128 &&
+        header.desc_size >= expected_desc_size &&
+        header.desc_offset + header.desc_size <= std::mem::size() &&
+        header.hash_offset + header.hash_size <= std::mem::size() &&
+        header.names_offset + header.names_size <= std::mem::size();
 
-    if (header.desc_size > expected_desc_size) {
-        MetadataExtensionHeader extension_header @ metadata_base + header.desc_offset + expected_desc_size;
-        MetadataExtension<metadata_base + header.desc_offset> extensions[extension_header.count] @
-            metadata_base + header.desc_offset + expected_desc_size + 16;
+    if (valid) {
+        MetadataTypeRecord types[header.type_count] @ metadata_base + header.desc_offset;
+        MetadataFieldRecord fields[header.field_count] @ metadata_base + header.desc_offset + header.type_count * 64;
+        MetadataFunctionRecord functions[header.function_count] @
+            metadata_base + header.desc_offset + header.type_count * 64 + header.field_count * 48;
+        MetadataParameterRecord parameters[header.parameter_count] @
+            metadata_base + header.desc_offset + header.type_count * 64 + header.field_count * 48 +
+            header.function_count * 72;
+        MetadataSymbolRecord symbols[header.symbol_count] @
+            metadata_base + header.desc_offset + header.type_count * 64 + header.field_count * 48 +
+            header.function_count * 72 + header.parameter_count * 32;
+
+        if (header.desc_size > expected_desc_size) {
+            MetadataExtensionHeader extension_header @ metadata_base + header.desc_offset + expected_desc_size;
+            if (header.desc_size >= expected_desc_size + 16 &&
+                extension_header.count < 0x10000 &&
+                header.desc_size - expected_desc_size - 16 >= extension_header.count * 24) {
+                MetadataExtension<metadata_base + header.desc_offset> extensions[extension_header.count] @
+                    metadata_base + header.desc_offset + expected_desc_size + 16;
+            }
+        }
+
+        if (header.hash_size > 0)
+            MetadataHashRecord hash_index[header.hash_size / 24] @ metadata_base + header.hash_offset;
+
+        if (header.names_size > 0)
+            char names[header.names_size] @ metadata_base + header.names_offset;
     }
 
-    if (header.hash_size > 0)
-        MetadataHashRecord hash_index[header.hash_size / 24] @ metadata_base + header.hash_offset;
-
-    if (header.names_size > 0)
-        char names[header.names_size] @ metadata_base + header.names_offset;
 };
 
 MetadataRegion region @ metadata_base;

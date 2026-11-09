@@ -1,7 +1,6 @@
 #pragma author AMC
 #pragma description ABIX v4 artifact (.abix) produced by AMC
 #pragma endian little
-#pragma magic [ 41 42 49 58 04 00 ] @ 0x00
 
 // ABIX artifact container
 // ----------------------
@@ -11,6 +10,8 @@
 //
 // All integers are little-endian. A section payload is placed by its directory
 // entry; the directory itself is always sequential.
+
+import std.mem;
 
 struct Hash128 {
     u64 lo;
@@ -84,7 +85,7 @@ fn section_offset(u32 wanted) {
             return std::mem::read_unsigned(base + 4, 4);
     }
     return 0;
-}
+};
 
 u64 strings_data = section_offset(1) + 8;
 
@@ -116,7 +117,7 @@ struct TypeRecord {
     Hash128 layout_hash;
     u32 name_offset;
     u32 name_length;
-    TypeKind kind;
+    u32 kind;
     u32 flags;
     u32 size;
     u32 align;
@@ -165,7 +166,7 @@ struct ParameterRecord {
 struct SymbolRecord {
     u32 name_offset;
     u32 name_length;
-    SymbolKind kind;
+    u32 kind;
     u32 target_index;
     if (name_length > 0)
         char name[name_length] @ strings_data + name_offset;
@@ -250,7 +251,7 @@ struct ErrorRecord {
     u32 function_index;
     u32 status_source;
     u32 status_parameter;
-    i64 success_value;
+    s64 success_value;
     u32 value_parameter;
     u32 flags;
     u64 domain;
@@ -484,7 +485,15 @@ struct AbixArtifact {
     u32 flags;
     u32 section_count;
     u32 directory_offset;
-    DirectoryEntry sections[section_count] @ directory_offset;
+
+    bool valid =
+        version == 4 &&
+        section_count < 0x100000 &&
+        directory_offset >= 20 &&
+        directory_offset + section_count * 24 <= std::mem::size();
+
+    if (valid)
+        DirectoryEntry sections[section_count] @ directory_offset;
 };
 
 AbixArtifact artifact @ 0x00;
