@@ -80,9 +80,9 @@ mod demo_thunks;
 - 生成 wrapper 时必须提供 `[thunks] output`；
 - `symbols` 仍用于选择类型（以及已 `extern "C"` 的函数）；`[[rust.expose]]` 是普通 Rust 函数的显式 wrapper 路径。
 
-### 可选 rustc helper（v0.4.0 骨架）
+### 可选 rustc helper（v0.4.0）
 
-v0.4.0 的 helper 进程在独立进程中链接 `rustc_driver`。它报告 target/crate 事实，遍历嵌套 module 和 impl，提取 `repr(C)` / `repr(transparent)` / packed / union 记录、具体泛型实例、public `extern "C"` 函数、泛型声明、traits/impls 和 `Result` error enum，并输出稳定的 `amc.rust.semantic/1` envelope。存在 Cargo manifest 时还会从 `cargo metadata` 填充 workspace 与 feature 事实。AMC 将 helper 的 types/functions 导入 ABIX/Semantic IR，并与源码 parser 交叉校验布局。构建需要带 `rustc-dev` 的 Rust toolchain。
+v0.4.0 的 helper 进程在独立进程中链接 `rustc_driver`。它报告 target/crate 事实，遍历嵌套 module 和 impl，提取 `repr(C)` / `repr(transparent)` / packed / union 记录、具体泛型实例、public `extern "C"` 函数、泛型声明、traits/impls 和 `Result` error enum，并输出稳定的 `amc.rust.semantic/1` envelope。存在 Cargo manifest 时还会从 `cargo metadata` 填充 workspace 与 feature 事实。AMC 将 helper 的 types/functions 导入 ABIX/Semantic IR，并与源码 parser 交叉校验布局。构建需要带 `rustc-dev` 的 Rust toolchain。`cmake -DAMC_BUILD_RUST_HELPER=ON` 会用 Cargo 把 `tools/rustc-helper/` 构建到 build 目录并安装到 `amc` 旁边；不开启该选项时，helper 测试会按需自行构建。
 
 ```toml
 [rust]
@@ -224,7 +224,7 @@ Rust 文件仍需要链接原生库；当启用 `abix_link` 选项时，投影�
 
 ## 限制与说明
 
-- 前端不是完整的 `rustc` AST：只提取 `#[repr(C)]` / `extern "C"` 表面；泛型、trait、生命周期与位域留在模块内部。
+- 源码 parser 不是完整的 `rustc` AST：只提取 `#[repr(C)]` / `extern "C"` 表面；泛型、trait、生命周期与位域留在模块内部。可选的 helper 通过 rustc 视图补齐泛型实例、trait、生命周期和标准容器。
 - `repr(C)` 布局通过 provider conformance 测试中的 rustc probe 验证（`amc-rust-layout-probe-test`）；probe 目前只覆盖 Host target。
 - `repr(C, packed)` / `repr(C, packed(N))` 和 `repr(C)` union 只完成布局验证；backend emission 暂缓到 v0.4.0，与一级 union/packed/transparent 表示模型一起落地。v0.3.x 不引入中间态 `TypeRepr` section。
 - `repr(transparent)` 目前要求恰好一个字段；额外的零大小字段在 v0.3.x 尚未建模。
@@ -233,4 +233,4 @@ Rust 文件仍需要链接原生库；当启用 `abix_link` 选项时，投影�
 - panic 与异常不得穿越边界；错误边界契约是受支持的路径。
 - 生成文件是普通 Rust，可以在外层再封装成安全的 crate API。
 - `amc-rust` 链接 LLVM Support 但不使用 Clang AST；它的前端自行计算布局。
-- v0.4.0 会将 Rust 语义发现迁移到独立 rustc helper；adapter 契约见 [amc.rust.semantic/1](../architecture/rust-adapter_zh.md)。
+- v0.4.0 起 Rust 语义发现迁移到独立 rustc helper；adapter 契约见 [amc.rust.semantic/1](../architecture/rust-adapter_zh.md)。使用 `-DAMC_BUILD_RUST_HELPER=ON` 可通过 Cargo 构建并安装它。

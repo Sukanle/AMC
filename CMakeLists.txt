@@ -45,9 +45,44 @@ option(AMC_INSTALL "Generate AMC install rules" ON)
 option(AMC_INSTALL_PRIVATE_HEADERS "Install AMC private implementation headers" OFF)
 option(AMC_ENABLE_LLDB_PLUGIN "Build the optional LLDB plugin" ON)
 option(AMC_BUILD_AUE "Build the optional Aue Lua conformance prototype" ON)
+option(AMC_BUILD_RUST_HELPER "Build the optional amc-rustc-helper with Cargo" OFF)
 set(AMC_ABIX_REF "v0.4.0"
     CACHE STRING "ABIX git revision used when FetchContent downloads ABIX (tag, branch or commit)")
 set(AMC_DEPENDENCIES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dependencies")
+
+# The Rust semantic helper is an isolated rustc_driver process with its own
+# Cargo.lock and rustc-dev requirement, so it stays opt-in. Tests build it
+# themselves when Cargo is available; this target is for release packaging.
+if(AMC_BUILD_RUST_HELPER)
+    find_program(AMC_CARGO_EXECUTABLE cargo)
+    if(NOT AMC_CARGO_EXECUTABLE)
+        message(FATAL_ERROR "AMC_BUILD_RUST_HELPER=ON requires cargo")
+    endif()
+    set(AMC_RUST_HELPER_MANIFEST "${CMAKE_CURRENT_SOURCE_DIR}/tools/rustc-helper/Cargo.toml")
+    set(AMC_RUST_HELPER_TARGET_DIR "${CMAKE_BINARY_DIR}/rustc-helper")
+    set(AMC_RUST_HELPER_BINARY "${AMC_RUST_HELPER_TARGET_DIR}/release/amc-rustc-helper${CMAKE_EXECUTABLE_SUFFIX}")
+    # rustc_private is unstable on stable toolchains; the helper is pinned to a
+    # rustc version and only ever runs as an isolated process.
+    add_custom_target(
+        amc-rustc-helper
+        ALL
+        COMMAND
+            ${CMAKE_COMMAND}
+            -E
+            env
+            RUSTC_BOOTSTRAP=1
+            ${AMC_CARGO_EXECUTABLE}
+            build
+            --release
+            --locked
+            --manifest-path
+            "${AMC_RUST_HELPER_MANIFEST}"
+            --target-dir
+            "${AMC_RUST_HELPER_TARGET_DIR}"
+        BYPRODUCTS "${AMC_RUST_HELPER_BINARY}"
+        COMMENT "Building the optional amc-rustc-helper"
+        VERBATIM)
+endif()
 
 # Prefer an installed ABIX package. If it is missing, fetch ABIX with its
 # submodules into a repository-local checkout that is intentionally untracked.
@@ -633,6 +668,9 @@ if(AMC_INSTALL)
             ${AMC_SOURCE_DIR}/cmake/AMC.cmake DESTINATION ${AMC_CMAKE_INSTALL_DIR})
     endif()
 
+    if(AMC_BUILD_RUST_HELPER)
+        install(PROGRAMS "${AMC_RUST_HELPER_BINARY}" DESTINATION ${CMAKE_INSTALL_BINDIR})
+    endif()
     install(FILES ${AMC_SOURCE_DIR}/providers.toml DESTINATION ${CMAKE_INSTALL_BINDIR} RENAME amc-providers.toml)
     install(DIRECTORY ${AMC_CODEIN_DIR}/ DESTINATION ${CMAKE_INSTALL_DATADIR}/AMC/CodeIn)
     install(

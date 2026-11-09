@@ -80,9 +80,9 @@ Rules:
 - a generated wrapper requires `[thunks] output`;
 - `symbols` still selects types (and already-`extern "C"` functions); `[[rust.expose]]` is the explicit wrapper path for ordinary Rust functions.
 
-### Optional rustc helper (v0.4.0 skeleton)
+### Optional rustc helper (v0.4.0)
 
-The v0.4.0 helper process links `rustc_driver` in an isolated process. It reports target/crate facts, walks nested modules and impls, extracts `repr(C)` / `repr(transparent)` / packed / union records, concrete generic instances, public `extern "C"` functions, generic declarations, traits/impls, and `Result` error enums, and emits the stable `amc.rust.semantic/1` envelope. When a Cargo manifest is available it also fills workspace and feature facts from `cargo metadata`. AMC imports the helper's types and functions into ABIX/Semantic IR and cross-checks their layouts against the source parser. Building the helper requires a Rust toolchain with `rustc-dev`.
+The v0.4.0 helper process links `rustc_driver` in an isolated process. It reports target/crate facts, walks nested modules and impls, extracts `repr(C)` / `repr(transparent)` / packed / union records, concrete generic instances, public `extern "C"` functions, generic declarations, traits/impls, and `Result` error enums, and emits the stable `amc.rust.semantic/1` envelope. When a Cargo manifest is available it also fills workspace and feature facts from `cargo metadata`. AMC imports the helper's types and functions into ABIX/Semantic IR and cross-checks their layouts against the source parser. Building the helper requires a Rust toolchain with `rustc-dev`. `cmake -DAMC_BUILD_RUST_HELPER=ON` builds `tools/rustc-helper/` with Cargo into the build tree and installs it next to `amc`; without that option the helper test builds it on demand.
 
 ```toml
 [rust]
@@ -224,7 +224,7 @@ The Rust file still needs to link the native library; the projection provides `#
 
 ## Limits and notes
 
-- The frontend is not a full `rustc` AST: only `#[repr(C)]` / `extern "C"` surfaces are extracted; generics, traits, lifetimes and bit-fields stay inside the module.
+- The source parser is not a full `rustc` AST: only `#[repr(C)]` / `extern "C"` surfaces are extracted; generics, traits, lifetimes and bit-fields stay inside the module. The optional helper supplies the rustc view for generic instances, traits, lifetimes and standard containers.
 - `repr(C)` layout is validated against a generated rustc probe in the provider conformance test (`amc-rust-layout-probe-test`); the probe currently covers the Host target only.
 - `repr(C, packed)` / `repr(C, packed(N))` and `repr(C)` unions are layout-validated only. Backend emission is deferred to v0.4.0, together with the first-class union/packed/transparent model; v0.3.x does not add an intermediate `TypeRepr` section.
 - `repr(transparent)` currently requires exactly one field; extra zero-sized fields are not modelled in v0.3.x.
@@ -233,4 +233,4 @@ The Rust file still needs to link the native library; the projection provides `#
 - Panics and exceptions must not cross the boundary; the error boundary contract is the supported path.
 - The generated file is ordinary Rust and can be wrapped in a safe crate API.
 - `amc-rust` links LLVM Support but not Clang AST; its frontend computes the layout itself.
-- v0.4.0 will move Rust semantic discovery to an independent rustc helper; the adapter contract is [amc.rust.semantic/1](../architecture/rust-adapter.md).
+- v0.4.0 moves Rust semantic discovery to the independent rustc helper; the adapter contract is [amc.rust.semantic/1](../architecture/rust-adapter.md). Configure with `-DAMC_BUILD_RUST_HELPER=ON` to build and install it with Cargo.
