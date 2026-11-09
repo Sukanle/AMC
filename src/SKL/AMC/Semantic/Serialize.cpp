@@ -27,142 +27,15 @@
 
 #include <fmt/format.h>
 
-using skl::amc::semantic::DeclarationKind;
-using skl::amc::semantic::InstOrigin;
-using skl::amc::semantic::InteractionKind;
-using skl::amc::semantic::LifetimeKind;
-using skl::amc::semantic::Mutability;
-using skl::amc::semantic::OwnershipKind;
-using skl::amc::semantic::SemanticFuncKind;
-using skl::amc::semantic::SemanticTypeKind;
-using skl::amc::semantic::TemplateArgKind;
-using skl::amc::semantic::TemplateParamKind;
-using skl::amc::semantic::TemplateTypeKind;
-
-// MICS static enum reflection replaces the hand-written name switches below.
-// The registration table is the single source of truth for both the wire
-// spelling and enum-to-name lookups.
-SKL_RFS_ENUM(DeclarationKind)
-SKL_RFS_ENUM_VALUE(DeclarationKind::NAMESPACE, "namespace")
-SKL_RFS_ENUM_VALUE(DeclarationKind::RECORD, "record")
-SKL_RFS_ENUM_VALUE(DeclarationKind::ENUM, "enumeration")
-SKL_RFS_ENUM_VALUE(DeclarationKind::FIELD, "field")
-SKL_RFS_ENUM_VALUE(DeclarationKind::FUNC, "function")
-SKL_RFS_ENUM_VALUE(DeclarationKind::METHOD, "method")
-SKL_RFS_ENUM_VALUE(DeclarationKind::CREATE, "constructor")
-SKL_RFS_ENUM_VALUE(DeclarationKind::DESTORY, "destructor")
-SKL_RFS_ENUM_VALUE(DeclarationKind::TEMPLATE, "template")
-SKL_RFS_ENUM_VALUE(DeclarationKind::CONCEPT, "concept")
-SKL_RFS_ENUM_VALUE(DeclarationKind::TYPEDEF, "typedef")
-SKL_RFS_ENUM_VALUE(DeclarationKind::VARIABLE, "variable")
-SKL_RFS_ENUM()
-
-SKL_RFS_ENUM(SemanticTypeKind)
-SKL_RFS_ENUM_VALUE(SemanticTypeKind::BUILTIN, "builtin")
-SKL_RFS_ENUM_VALUE(SemanticTypeKind::POINTER, "pointer")
-SKL_RFS_ENUM_VALUE(SemanticTypeKind::LVREF, "lvalue_reference")
-SKL_RFS_ENUM_VALUE(SemanticTypeKind::RVREF, "rvalue_reference")
-SKL_RFS_ENUM_VALUE(SemanticTypeKind::ARRAY, "array")
-SKL_RFS_ENUM_VALUE(SemanticTypeKind::RECORD, "record")
-SKL_RFS_ENUM_VALUE(SemanticTypeKind::ENUM, "enumeration")
-SKL_RFS_ENUM_VALUE(SemanticTypeKind::FUNC, "function")
-SKL_RFS_ENUM_VALUE(SemanticTypeKind::MEMPTR, "member_pointer")
-SKL_RFS_ENUM_VALUE(SemanticTypeKind::TEMPARAM, "template_parameter")
-SKL_RFS_ENUM_VALUE(SemanticTypeKind::TEMINST, "template_instance")
-SKL_RFS_ENUM_VALUE(SemanticTypeKind::DEPEND, "dependent")
-SKL_RFS_ENUM_VALUE(SemanticTypeKind::UNKNOWN, "unknown")
-SKL_RFS_ENUM()
-
-SKL_RFS_ENUM(TemplateTypeKind)
-SKL_RFS_ENUM_VALUE(TemplateTypeKind::FUNC, "function")
-SKL_RFS_ENUM_VALUE(TemplateTypeKind::CLASS, "class")
-SKL_RFS_ENUM_VALUE(TemplateTypeKind::ALIAS, "alias")
-SKL_RFS_ENUM_VALUE(TemplateTypeKind::VARIABLE, "variable")
-SKL_RFS_ENUM()
-
-SKL_RFS_ENUM(TemplateParamKind)
-SKL_RFS_ENUM_VALUE(TemplateParamKind::TYPE, "type")
-SKL_RFS_ENUM_VALUE(TemplateParamKind::NON, "non_type")
-SKL_RFS_ENUM_VALUE(TemplateParamKind::TEMPLATE, "template_template")
-SKL_RFS_ENUM()
-
-SKL_RFS_ENUM(TemplateArgKind)
-SKL_RFS_ENUM_VALUE(TemplateArgKind::TYPE, "type")
-SKL_RFS_ENUM_VALUE(TemplateArgKind::INTEGRAL, "integral")
-SKL_RFS_ENUM_VALUE(TemplateArgKind::TEMPLATE, "template")
-SKL_RFS_ENUM_VALUE(TemplateArgKind::PACK, "pack")
-SKL_RFS_ENUM_VALUE(TemplateArgKind::OTHER, "other")
-SKL_RFS_ENUM()
-
-SKL_RFS_ENUM(InstOrigin)
-SKL_RFS_ENUM_VALUE(InstOrigin::IMPLICIT_COMPILER, "implicit_compiler")
-SKL_RFS_ENUM_VALUE(InstOrigin::EXPLICIT_SOURCE, "explicit_source")
-SKL_RFS_ENUM_VALUE(InstOrigin::AMC_REQUESTED, "amc_requested")
-SKL_RFS_ENUM_VALUE(InstOrigin::CONFIG_REQUESTED, "config_requested")
-SKL_RFS_ENUM()
-
-SKL_RFS_ENUM(SemanticFuncKind)
-SKL_RFS_ENUM_VALUE(SemanticFuncKind::FREE, "free_function")
-SKL_RFS_ENUM_VALUE(SemanticFuncKind::MEMBER, "member_function")
-SKL_RFS_ENUM_VALUE(SemanticFuncKind::CREATE, "constructor")
-SKL_RFS_ENUM_VALUE(SemanticFuncKind::DESTORY, "destructor")
-SKL_RFS_ENUM_VALUE(SemanticFuncKind::OPETATOR, "operator")
-SKL_RFS_ENUM_VALUE(SemanticFuncKind::CONVERSION, "conversion")
-SKL_RFS_ENUM()
-
-SKL_RFS_ENUM(OwnershipKind)
-SKL_RFS_ENUM_VALUE(OwnershipKind::UNSPECIFIED, "unspecified")
-SKL_RFS_ENUM_VALUE(OwnershipKind::BORROWED, "borrowed")
-SKL_RFS_ENUM_VALUE(OwnershipKind::OWNED, "owned")
-SKL_RFS_ENUM_VALUE(OwnershipKind::SHARED, "shared")
-SKL_RFS_ENUM_VALUE(OwnershipKind::OPAQUE, "opaque")
-SKL_RFS_ENUM_VALUE(OwnershipKind::TRANSFERRED, "transferred")
-SKL_RFS_ENUM()
-
-SKL_RFS_ENUM(LifetimeKind)
-SKL_RFS_ENUM_VALUE(LifetimeKind::UNKNOWN, "unknown")
-SKL_RFS_ENUM_VALUE(LifetimeKind::STATIC, "static")
-SKL_RFS_ENUM_VALUE(LifetimeKind::CALLER, "caller")
-SKL_RFS_ENUM_VALUE(LifetimeKind::OWNER, "owner")
-SKL_RFS_ENUM_VALUE(LifetimeKind::SCOPE, "scope")
-SKL_RFS_ENUM()
-
-SKL_RFS_ENUM(Mutability)
-SKL_RFS_ENUM_VALUE(Mutability::IMMUTABLE, "immutable")
-SKL_RFS_ENUM_VALUE(Mutability::MUTABLE, "mutable")
-SKL_RFS_ENUM()
-
-SKL_RFS_ENUM(InteractionKind)
-SKL_RFS_ENUM_VALUE(InteractionKind::PARAM, "parameter")
-SKL_RFS_ENUM_VALUE(InteractionKind::RETURN, "return_value")
-SKL_RFS_ENUM()
+#include "SKL/AMC/Semantic/Reflect.h"
 
 namespace skl::amc::semantic {
 namespace {
 
 constexpr std::string_view semantic_schema = "amc.semantic/2";
 
-template<typename E>
-const char *reflected_enum_name(E value, const char *fallback) {
-    for (const auto &entry : SRefl::TypeInfo<E>::list)
-        if (entry.value == value) return entry.name.data();
-    return fallback;
-}
-
-template<typename E>
-E reflected_enum_value(std::string_view name, E fallback) {
-    for (const auto &entry : SRefl::TypeInfo<E>::list) {
-        if (entry.name.size() != name.size()) continue;
-        bool equal = true;
-        for (size_t i = 0; i < name.size(); ++i)
-            if (entry.name.data()[i] != name[i]) {
-                equal = false;
-                break;
-            }
-        if (equal) return entry.value;
-    }
-    return fallback;
-}
+using skl::amc::reflect::enum_name;
+using skl::amc::reflect::enum_value;
 
 std::string id_hex(Hash128 value) { return fmt::format("{:016x}{:016x}", value.hi, value.lo); }
 
@@ -202,7 +75,7 @@ Json source_json(const SourceLocation &source) {
 
 Json parameter_json(const TemplateParam &parameter) {
     Json value = Json::object();
-    value.set("kind", reflected_enum_name(parameter.kind, "type"));
+    value.set("kind", enum_name(parameter.kind, "type"));
     value.set("index", static_cast<long long>(parameter.index));
     value.set("name", parameter.name);
     if (parameter.default_argument.lo != 0 || parameter.default_argument.hi != 0)
@@ -215,7 +88,7 @@ Json parameter_json(const TemplateParam &parameter) {
 
 Json argument_json(const TemplateArg &argument) {
     Json value = Json::object();
-    value.set("kind", reflected_enum_name(argument.kind, "other"));
+    value.set("kind", enum_name(argument.kind, "other"));
     if (argument.type.valid()) value.set("type", id_hex(argument.type.value));
     if (argument.kind == decltype(argument.kind)::INTEGRAL) value.set("value", static_cast<long long>(argument.value));
     if (argument.template_decl.valid()) value.set("template_decl", id_hex(argument.template_decl.value));
@@ -224,35 +97,33 @@ Json argument_json(const TemplateArg &argument) {
 }
 
 SemanticTypeKind parse_type_kind(const std::string &name) {
-    return reflected_enum_value<SemanticTypeKind>(name, SemanticTypeKind::UNKNOWN);
+    return enum_value<SemanticTypeKind>(name, SemanticTypeKind::UNKNOWN);
 }
 
 TemplateTypeKind parse_template_kind(const std::string &name) {
-    return reflected_enum_value<TemplateTypeKind>(name, TemplateTypeKind::FUNC);
+    return enum_value<TemplateTypeKind>(name, TemplateTypeKind::FUNC);
 }
 
 TemplateParamKind parse_parameter_kind(const std::string &name) {
-    return reflected_enum_value<TemplateParamKind>(name, TemplateParamKind::TYPE);
+    return enum_value<TemplateParamKind>(name, TemplateParamKind::TYPE);
 }
 
 TemplateArgKind parse_argument_kind(const std::string &name) {
-    return reflected_enum_value<TemplateArgKind>(name, TemplateArgKind::TYPE);
+    return enum_value<TemplateArgKind>(name, TemplateArgKind::TYPE);
 }
 
-InstOrigin parse_origin(const std::string &name) {
-    return reflected_enum_value<InstOrigin>(name, InstOrigin::IMPLICIT_COMPILER);
-}
+InstOrigin parse_origin(const std::string &name) { return enum_value<InstOrigin>(name, InstOrigin::IMPLICIT_COMPILER); }
 
 SemanticFuncKind parse_function_kind(const std::string &name) {
-    return reflected_enum_value<SemanticFuncKind>(name, SemanticFuncKind::FREE);
+    return enum_value<SemanticFuncKind>(name, SemanticFuncKind::FREE);
 }
 
 OwnershipKind parse_ownership_kind(const std::string &name) {
-    return reflected_enum_value<OwnershipKind>(name, OwnershipKind::UNSPECIFIED);
+    return enum_value<OwnershipKind>(name, OwnershipKind::UNSPECIFIED);
 }
 
 LifetimeKind parse_lifetime_kind(const std::string &name) {
-    return reflected_enum_value<LifetimeKind>(name, LifetimeKind::UNKNOWN);
+    return enum_value<LifetimeKind>(name, LifetimeKind::UNKNOWN);
 }
 
 SourceLocation parse_source(const Json *node) {
@@ -609,7 +480,7 @@ bool write_semantic_json(const SemanticModule &module, const std::string &path, 
     for (const auto &type : module.types) {
         Json value = Json::object();
         value.set("id", id_hex(type.id.value));
-        value.set("kind", reflected_enum_name(type.kind, "unknown"));
+        value.set("kind", enum_name(type.kind, "unknown"));
         value.set("name", type.qualified);
         value.set("const", type.qualifiers.is_const);
         value.set("volatile", type.qualifiers.is_volatile);
@@ -660,7 +531,7 @@ bool write_semantic_json(const SemanticModule &module, const std::string &path, 
     for (const auto &function : module.functions) {
         Json value = Json::object();
         value.set("id", id_hex(function.id.value));
-        value.set("kind", reflected_enum_name(function.kind, "free_function"));
+        value.set("kind", enum_name(function.kind, "free_function"));
         value.set("name", function.qualified);
         value.set("unqualified_name", function.unqualified);
         if (function.owner.valid()) value.set("owner", id_hex(function.owner.value));
@@ -695,11 +566,11 @@ bool write_semantic_json(const SemanticModule &module, const std::string &path, 
     for (const auto &contract : module.ownership) {
         Json value = Json::object();
         value.set("function", id_hex(contract.function.value));
-        value.set("interaction", reflected_enum_name(contract.interaction, "parameter"));
+        value.set("interaction", enum_name(contract.interaction, "parameter"));
         value.set("index", static_cast<long long>(contract.index));
-        value.set("ownership", reflected_enum_name(contract.ownership, "unspecified"));
-        value.set("lifetime", reflected_enum_name(contract.lifetime, "unknown"));
-        value.set("mutability", reflected_enum_name(contract.mutability, "immutable"));
+        value.set("ownership", enum_name(contract.ownership, "unspecified"));
+        value.set("lifetime", enum_name(contract.lifetime, "unknown"));
+        value.set("mutability", enum_name(contract.mutability, "immutable"));
         if (contract.release.valid()) value.set("release", id_hex(contract.release.value));
         if (!contract.invalidation.empty()) value.set("invalidation", contract.invalidation);
         ownership.push_back(std::move(value));
@@ -710,7 +581,7 @@ bool write_semantic_json(const SemanticModule &module, const std::string &path, 
     for (const auto &declaration : module.templates) {
         Json value = Json::object();
         value.set("id", id_hex(declaration.id.value));
-        value.set("kind", reflected_enum_name(declaration.kind, "function"));
+        value.set("kind", enum_name(declaration.kind, "function"));
         value.set("name", declaration.qualified_name);
         if (!declaration.requires_source.empty()) value.set("requires", declaration.requires_source);
         if (declaration.requires_hash.lo != 0 || declaration.requires_hash.hi != 0)
@@ -753,7 +624,7 @@ bool write_semantic_json(const SemanticModule &module, const std::string &path, 
         Json value = Json::object();
         value.set("id", id_hex(instance.id.value));
         value.set("declaration", id_hex(instance.declaration.value));
-        value.set("origin", reflected_enum_name(instance.origin, "implicit_compiler"));
+        value.set("origin", enum_name(instance.origin, "implicit_compiler"));
         value.set("explicit_specialization", instance.is_explicit_specialization);
         if (instance.result.lo != 0 || instance.result.hi != 0) value.set("result", id_hex(instance.result));
         Json arguments = Json::array();

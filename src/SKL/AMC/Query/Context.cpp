@@ -15,6 +15,7 @@
  */
 #include "SKL/AMC/Query/Context.h"
 #include "SKL/AMC/Diagnostics/Error.h"
+#include "SKL/AMC/Core/Reflect.h"
 
 #include <llvm/Support/raw_ostream.h>
 
@@ -47,14 +48,7 @@ std::string type_ref(Hash128 id, const TypeIndex &index) {
     return fmt::format("T{}", it->second);
 }
 
-const char *symbol_kind_name(SymbolKind kind) {
-    switch (kind) {
-        case SymbolKind::TYPE:  return "type";
-        case SymbolKind::FIELD: return "field";
-        case SymbolKind::FUNC:  return "function";
-    }
-    return "unknown";
-}
+const char *symbol_kind_name(SymbolKind kind) { return reflect::enum_name(kind, "unknown"); }
 
 }   // namespace
 

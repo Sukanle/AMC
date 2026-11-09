@@ -15,6 +15,9 @@
  */
 #include "SKL/AMC/IR/LoweringJson.h"
 
+#include "SKL/AMC/IR/Reflect.h"
+#include "SKL/AMC/Semantic/Reflect.h"
+
 #include "SKL/AMC/Support/Json.h"
 
 #include <cerrno>
@@ -62,96 +65,36 @@ Hash128 hash_from_hex(const std::string &text) {
     return value;
 }
 
-const char *status_name(LoweringStatus status) {
-    switch (status) {
-        case LoweringStatus::LOWERED:  return "lowered";
-        case LoweringStatus::OPAQUE:   return "opaque";
-        case LoweringStatus::REJECTED: return "rejected";
-    }
-    return "rejected";
-}
+const char *status_name(LoweringStatus status) { return skl::amc::reflect::enum_name(status, "rejected"); }
 
 LoweringStatus parse_status(const std::string &name) {
-    if (name == "lowered") return LoweringStatus::LOWERED;
-    if (name == "opaque") return LoweringStatus::OPAQUE;
-    return LoweringStatus::REJECTED;
+    return skl::amc::reflect::enum_value<LoweringStatus>(name, LoweringStatus::REJECTED);
 }
 
-const char *reason_name(LoweringReason reason) {
-    switch (reason) {
-        case LoweringReason::OK:                        return "ok";
-        case LoweringReason::MISSING_ABI_TYPE:          return "missing_abi_type";
-        case LoweringReason::MISSING_ABI_FUNCTION:      return "missing_abi_function";
-        case LoweringReason::AMBIGUOUS_ABI_FUNCTION:    return "ambiguous_abi_function";
-        case LoweringReason::MISSING_SEMANTIC_RECORD:   return "missing_semantic_record";
-        case LoweringReason::LAYOUT_UNVERIFIED:         return "layout_unverified";
-        case LoweringReason::OWNERSHIP_UNRESOLVED:      return "ownership_unresolved";
-        case LoweringReason::TEMPLATE_NOT_MATERIALIZED: return "template_not_materialized";
-    }
-    return "missing_abi_type";
-}
+const char *reason_name(LoweringReason reason) { return skl::amc::reflect::enum_name(reason, "missing_abi_type"); }
 
 LoweringReason parse_reason(const std::string &name) {
-    if (name == "ok") return LoweringReason::OK;
-    if (name == "missing_abi_function") return LoweringReason::MISSING_ABI_FUNCTION;
-    if (name == "ambiguous_abi_function") return LoweringReason::AMBIGUOUS_ABI_FUNCTION;
-    if (name == "missing_semantic_record") return LoweringReason::MISSING_SEMANTIC_RECORD;
-    if (name == "layout_unverified") return LoweringReason::LAYOUT_UNVERIFIED;
-    if (name == "ownership_unresolved") return LoweringReason::OWNERSHIP_UNRESOLVED;
-    if (name == "template_not_materialized") return LoweringReason::TEMPLATE_NOT_MATERIALIZED;
-    return LoweringReason::MISSING_ABI_TYPE;
+    return skl::amc::reflect::enum_value<LoweringReason>(name, LoweringReason::MISSING_ABI_TYPE);
 }
 
-const char *interaction_name(semantic::InteractionKind kind) {
-    return kind == semantic::InteractionKind::RETURN ? "return_value" : "parameter";
-}
+const char *interaction_name(semantic::InteractionKind kind) { return skl::amc::reflect::enum_name(kind, "parameter"); }
 
-const char *ownership_name(semantic::OwnershipKind kind) {
-    switch (kind) {
-        case semantic::OwnershipKind::UNSPECIFIED: return "unspecified";
-        case semantic::OwnershipKind::BORROWED:    return "borrowed";
-        case semantic::OwnershipKind::OWNED:       return "owned";
-        case semantic::OwnershipKind::SHARED:      return "shared";
-        case semantic::OwnershipKind::OPAQUE:      return "opaque";
-        case semantic::OwnershipKind::TRANSFERRED: return "transferred";
-    }
-    return "unspecified";
-}
+const char *ownership_name(semantic::OwnershipKind kind) { return skl::amc::reflect::enum_name(kind, "unspecified"); }
 
 semantic::OwnershipKind parse_ownership(const std::string &name) {
-    if (name == "borrowed") return semantic::OwnershipKind::BORROWED;
-    if (name == "owned") return semantic::OwnershipKind::OWNED;
-    if (name == "shared") return semantic::OwnershipKind::SHARED;
-    if (name == "opaque") return semantic::OwnershipKind::OPAQUE;
-    if (name == "transferred") return semantic::OwnershipKind::TRANSFERRED;
-    return semantic::OwnershipKind::UNSPECIFIED;
+    return skl::amc::reflect::enum_value<semantic::OwnershipKind>(name, semantic::OwnershipKind::UNSPECIFIED);
 }
 
-const char *lifetime_name(semantic::LifetimeKind kind) {
-    switch (kind) {
-        case semantic::LifetimeKind::UNKNOWN: return "unknown";
-        case semantic::LifetimeKind::STATIC:  return "static";
-        case semantic::LifetimeKind::CALLER:  return "caller";
-        case semantic::LifetimeKind::OWNER:   return "owner";
-        case semantic::LifetimeKind::SCOPE:   return "scope";
-    }
-    return "unknown";
-}
+const char *lifetime_name(semantic::LifetimeKind kind) { return skl::amc::reflect::enum_name(kind, "unknown"); }
 
 semantic::LifetimeKind parse_lifetime(const std::string &name) {
-    if (name == "static") return semantic::LifetimeKind::STATIC;
-    if (name == "caller") return semantic::LifetimeKind::CALLER;
-    if (name == "owner") return semantic::LifetimeKind::OWNER;
-    if (name == "scope") return semantic::LifetimeKind::SCOPE;
-    return semantic::LifetimeKind::UNKNOWN;
+    return skl::amc::reflect::enum_value<semantic::LifetimeKind>(name, semantic::LifetimeKind::UNKNOWN);
 }
 
-const char *mutability_name(semantic::Mutability value) {
-    return value == semantic::Mutability::MUTABLE ? "mutable" : "immutable";
-}
+const char *mutability_name(semantic::Mutability value) { return skl::amc::reflect::enum_name(value, "immutable"); }
 
 semantic::Mutability parse_mutability(const std::string &name) {
-    return name == "mutable" ? semantic::Mutability::MUTABLE : semantic::Mutability::IMMUTABLE;
+    return skl::amc::reflect::enum_value<semantic::Mutability>(name, semantic::Mutability::IMMUTABLE);
 }
 
 const Json *field(const Json &object, const char *name) { return object.is_object() ? object.find(name) : nullptr; }

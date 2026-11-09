@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 #include "SKL/AMC/IR/Verify.h"
+
+#include "SKL/AMC/Core/Reflect.h"
+#include "SKL/AMC/IR/Reflect.h"
 #include "SKL/AMC/Diagnostics/Error.h"
 
 #include <map>
@@ -136,24 +139,9 @@ std::string function_key(const Function &function) {
     return function.name + "#" + hash_string(function.signature) + "#" + hash_string(function.owner_type);
 }
 
-const char *ownership_mode_name(OwnershipMode mode) {
-    switch (mode) {
-        case OwnershipMode::UNSPECIFIED: return "unspecified";
-        case OwnershipMode::BORROWED:    return "borrowed";
-        case OwnershipMode::OWNED:       return "owned";
-        case OwnershipMode::COPY:        return "copy";
-    }
-    return "unknown";
-}
+const char *ownership_mode_name(OwnershipMode mode) { return reflect::enum_name(mode, "unknown"); }
 
-const char *status_source_name(StatusSource source) {
-    switch (source) {
-        case StatusSource::RETURN_VALUE: return "return_value";
-        case StatusSource::PARAMETER:    return "parameter";
-        case StatusSource::RETURN_FIELD: return "return_field";
-    }
-    return "unknown";
-}
+const char *status_source_name(StatusSource source) { return reflect::enum_name(source, "unknown"); }
 
 struct InteractionEntry {
     std::string function;
@@ -262,26 +250,7 @@ void compare_contracts(const ABIModule &contract, const ABIModule &implementatio
 
 }   // namespace
 
-const char *change_kind_name(ChangeKind kind) {
-    switch (kind) {
-        case ChangeKind::TYPE_ADDED:                 return "type_added";
-        case ChangeKind::TYPE_REMOVED:               return "type_removed";
-        case ChangeKind::LAYOUT_CHANGED:             return "layout_changed";
-        case ChangeKind::FIELD_ADDED:                return "field_added";
-        case ChangeKind::FIELD_REMOVED:              return "field_removed";
-        case ChangeKind::FIELD_OFFSET_CHANGED:       return "field_offset_changed";
-        case ChangeKind::FIELD_TYPE_CHANGED:         return "field_type_changed";
-        case ChangeKind::FUNCTION_ADDED:             return "function_added";
-        case ChangeKind::FUNCTION_REMOVED:           return "function_removed";
-        case ChangeKind::FUNCTION_SIGNATURE_CHANGED: return "function_signature_changed";
-        case ChangeKind::FUNCTION_PARAMETER_CHANGED: return "function_parameter_changed";
-        case ChangeKind::CALLING_CONVENTION_CHANGED: return "calling_convention_changed";
-        case ChangeKind::OWNERSHIP_CHANGED:          return "ownership_changed";
-        case ChangeKind::ERROR_BOUNDARY_CHANGED:     return "error_boundary_changed";
-        case ChangeKind::INTERFACE_CHANGED:          return "interface_changed";
-    }
-    return "unknown";
-}
+const char *change_kind_name(ChangeKind kind) { return reflect::enum_name(kind, "unknown"); }
 
 std::map<TypeKey, const InterfaceRecord *> index_interfaces(const ABIModule &module) {
     std::map<TypeKey, const InterfaceRecord *> entries;

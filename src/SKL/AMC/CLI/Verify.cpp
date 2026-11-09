@@ -19,6 +19,7 @@
 #include "SKL/AMC/Core/Core.h"
 #include "SKL/AMC/Diagnostics/Error.h"
 #include "SKL/AMC/Artifact/Metadata.h"
+#include "SKL/AMC/Artifact/Reflect.h"
 #include "SKL/AMC/IR/Verify.h"
 #include "SKL/AMC/Diagnostics/Verify.h"
 #include "SKL/AMC/Pass/Compatibility.h"
@@ -195,11 +196,7 @@ int cmd_verify(char **args, int arg_count, const fs::path &provider) {
 namespace {
 
 const char *target_status_name(amc::TargetVerificationStatus status) {
-    switch (status) {
-        case amc::TargetVerificationStatus::COMPATIBLE:   return "compatible";
-        case amc::TargetVerificationStatus::INCOMPATIBLE: return "incompatible";
-        default:                                          return "unverifiable";
-    }
+    return skl::amc::reflect::enum_name(status, "unverifiable");
 }
 
 // Parse `key=value,key=value` into a TargetExpectation (0 = do not check).

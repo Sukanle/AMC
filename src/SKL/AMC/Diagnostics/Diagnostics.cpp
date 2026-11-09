@@ -16,19 +16,13 @@
 #include "SKL/AMC/Diagnostics/Diagnostics.h"
 
 #include "SKL/AMC/Diagnostics/Error.h"
+#include "SKL/AMC/Diagnostics/Reflect.h"
 
 #include <fmt/format.h>
 
 namespace skl::amc::diagnostics {
 
-const char *severity_name(Severity severity) {
-    switch (severity) {
-        case Severity::NOTE:    return "note";
-        case Severity::WARNING: return "warning";
-        case Severity::ERROR:   return "error";
-    }
-    return "error";
-}
+const char *severity_name(Severity severity) { return reflect::enum_name(severity, "error"); }
 
 Summary summarize(const DiagnosticList &diagnostics) {
     Summary summary;

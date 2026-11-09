@@ -15,6 +15,8 @@
  */
 #include "SKL/AMC/Diagnostics/Error.h"
 
+#include "SKL/AMC/Diagnostics/Reflect.h"
+
 #include <cctype>
 #include <utility>
 
@@ -22,19 +24,7 @@
 
 namespace skl::amc {
 
-const char *error_category_name(ErrorCategory category) {
-    switch (category) {
-        case ErrorCategory::USAGE:         return "usage";
-        case ErrorCategory::CONFIG:        return "config";
-        case ErrorCategory::IO:            return "io";
-        case ErrorCategory::PROVIDER:      return "provider";
-        case ErrorCategory::FORMAT:        return "format";
-        case ErrorCategory::VALIDATION:    return "validation";
-        case ErrorCategory::COMPATIBILITY: return "compatibility";
-        case ErrorCategory::INTERNAL:      return "internal";
-    }
-    return "internal";
-}
+const char *error_category_name(ErrorCategory category) { return reflect::enum_name(category, "internal"); }
 
 std::string error_code(ErrorCategory category) {
     std::string name = error_category_name(category);
@@ -147,6 +137,6 @@ bool parse_error_format(std::string_view value, ErrorFormat &format) {
     return false;
 }
 
-const char *error_format_name(ErrorFormat format) { return format == ErrorFormat::JSON ? "json" : "text"; }
+const char *error_format_name(ErrorFormat format) { return reflect::enum_name(format, "text"); }
 
 }   // namespace skl::amc

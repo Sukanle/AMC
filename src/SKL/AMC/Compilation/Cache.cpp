@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 #include "SKL/AMC/Compilation/Cache.h"
+
+#include "SKL/AMC/Compilation/Reflect.h"
 #include "SKL/AMC/Support/Process.h"
 
 #include <algorithm>
@@ -651,16 +653,7 @@ Hash128 digest_bytes(const void *data, size_t size, uint64_t domain) {
 
 Hash128 digest_text(const std::string &text, uint64_t domain) { return hash_text(text, domain); }
 
-const char *cache_status_name(CacheStatus status) {
-    switch (status) {
-        case CacheStatus::HIT:              return "hit";
-        case CacheStatus::MISS:             return "miss";
-        case CacheStatus::CORRUPTED:        return "corrupted";
-        case CacheStatus::INVALID_MANIFEST: return "invalid_manifest";
-        case CacheStatus::SCHEMA_MISMATCH:  return "schema_mismatch";
-    }
-    return "unknown";
-}
+const char *cache_status_name(CacheStatus status) { return reflect::enum_name(status, "unknown"); }
 
 InstantiationCache::InstantiationCache(std::string root)
     : _root(std::move(root)) {}

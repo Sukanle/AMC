@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "SKL/AMC/Core/Core.h"
+#include "SKL/AMC/Core/Reflect.h"
 
 #include <algorithm>
 #include <string.h>
@@ -485,15 +486,7 @@ const Type *find_type_by_name(const ABIModule &, const std::string &);
 const Type *find_type_by_id(const ABIModule &, Hash128);
 }   // namespace
 
-const char *compatibility_name(CompatibilityKind kind) {
-    switch (kind) {
-        case CompatibilityKind::IDENTICAL:   return "identical";
-        case CompatibilityKind::LAYOUT_COMP: return "layout_compatible";
-        case CompatibilityKind::MAP_COMP:    return "map_compatible";
-        case CompatibilityKind::INCOMP:      return "incompatible";
-    }
-    return "unknown";
-}
+const char *compatibility_name(CompatibilityKind kind) { return reflect::enum_name(kind, "unknown"); }
 
 namespace {
 const Type *find_type_by_name(const ABIModule &module, const std::string &name) {
@@ -1643,19 +1636,7 @@ bool project_symbols(
     return validate(result, error);
 }
 
-std::string type_kind_name(TypeKind kind) {
-    switch (kind) {
-        case TypeKind::PRIMITIVE: return "primitive";
-        case TypeKind::ENUM:      return "enum";
-        case TypeKind::RECORD:    return "record";
-        case TypeKind::POINTER:   return "pointer";
-        case TypeKind::ARRAY:     return "array";
-        case TypeKind::FUNC:      return "function";
-        case TypeKind::NAMESPACE: return "namespace";
-        case TypeKind::ALIAS:     return "alias";
-    }
-    return "unknown";
-}
+std::string type_kind_name(TypeKind kind) { return reflect::enum_name(kind, "unknown"); }
 
 const SourceOrigin *find_source_origin(const ABIModule &module, Hash128 type_id) {
     for (const auto &source : module.sources)
