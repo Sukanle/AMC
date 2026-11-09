@@ -982,7 +982,7 @@ bool read_lowering_contracts(
             error = "lowering contract type index is out of range";
             return false;
         }
-        if (record.kind > static_cast<uint32_t>(LoweringKind::OPAQUE)
+        if (record.kind > static_cast<uint32_t>(LoweringKind::OWNED_SPAN)
             || record.status > static_cast<uint32_t>(LoweringStatus::UNSUPPORTED)
             || record.reason > static_cast<uint32_t>(LoweringReason::LAYOUT)) {
             error = "invalid lowering contract record";

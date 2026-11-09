@@ -12,6 +12,10 @@ native = "String"
 target = "abix_str_utf8"
 
 [[adapt]]
+native = "String"
+target = "abix_owned_str_utf8"
+
+[[adapt]]
 native = "&str"
 target = "abix_str_utf8"
 
@@ -19,6 +23,11 @@ target = "abix_str_utf8"
 native = "Vec"
 target = "abix_span_i32"
 element = "i32"
+
+[[adapt]]
+native = "Vec"
+target = "abix_owned_span_ContainerPoint"
+element = "ContainerPoint"
 
 [[adapt]]
 native = "&[T]"
@@ -71,6 +80,14 @@ as = "container_option_point"
 [[rust.expose]]
 function = "container_option_make"
 as = "container_option_make"
+
+[[rust.expose]]
+function = "container_owned_string"
+as = "container_owned_string"
+
+[[rust.expose]]
+function = "container_owned_points"
+as = "container_owned_points"
 
 [target]
 arch = 0

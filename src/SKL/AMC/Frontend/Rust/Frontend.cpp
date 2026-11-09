@@ -21,6 +21,7 @@
 #include "SKL/AMC/Semantic/Sync.h"
 #include "SKL/AMC/Support/Json.h"
 #include "SKL/AMC/Support/Owned.h"
+#include "SKL/AMC/Support/OwnerLayout.h"
 
 #include <algorithm>
 #include <cctype>
@@ -805,11 +806,21 @@ std::string compact_spelling(const std::string &text) {
     return out;
 }
 
-const amc::lang::AdaptDecl *find_adapt(const ContainerType &type, const std::vector<amc::lang::AdaptDecl> &adapts) {
+const amc::lang::AdaptDecl *find_adapt(
+    const ContainerType &type, const std::vector<amc::lang::AdaptDecl> &adapts, bool return_position) {
     for (const auto &adapt : adapts) {
         if (adapt_kind(adapt.native) != type.kind) continue;
         if (adapt_borrowed(adapt.native) != type.borrowed) continue;
         if (!adapt.element.empty() && compact_spelling(adapt.element) != type.element) continue;
+        const bool owned_view =
+            amc::support::is_owned_string_name(adapt.target) || amc::support::is_owned_span_name(adapt.target);
+        if (return_position) {
+            // Owned returns must use an owned view; borrowed views would dangle.
+            if ((type.kind == ContainerKind::STRING || type.kind == ContainerKind::VEC) && !owned_view) continue;
+        } else if (owned_view) {
+            // Owned views are return-only in this version.
+            continue;
+        }
         return &adapt;
     }
     return nullptr;
@@ -883,6 +894,133 @@ std::string container_boundary_definition(const std::string &target, ContainerKi
             target, element_type);
     }
     return {};
+}
+
+bool owner_handle_target(const std::string &target) { return amc::support::is_owner_handle_name(target); }
+
+bool owned_string_target(const std::string &target) { return amc::support::is_owned_string_name(target); }
+
+bool owned_span_target(const std::string &target) { return amc::support::is_owned_span_name(target); }
+
+std::string owned_string_view_name(const std::string &target) {
+    if (target.rfind("abix_owned_str", 0) != 0) return "abix_str";
+    return "abix_str" + target.substr(std::string("abix_owned_str").size());
+}
+
+std::string owned_span_view_name(const std::string &target) {
+    if (target.rfind("abix_owned_span_", 0) != 0) return "abix_span";
+    return "abix_span_" + target.substr(std::string("abix_owned_span_").size());
+}
+
+bool ensure_owner_handle_item(std::vector<RawItem> &items, std::unordered_map<std::string, bool> &seen,
+    const std::string &target, uint32_t pointer_size) {
+    if (seen.find(target) != seen.end()) return true;
+    const auto layout = amc::support::owner_handle_layout(pointer_size);
+    RawItem item;
+    item.name = target;
+    item.kind = RawItem::Kind::RECORD;
+    item.explicit_layout = true;
+    item.explicit_size = layout.size;
+    item.explicit_align = layout.align;
+    item.explicit_offsets = {layout.object, layout.mode, layout.flags, layout.destroy, layout.module_instance};
+    item.fields.push_back({"object", tokens_of("*mut void")});
+    item.fields.push_back({"mode", tokens_of("u32")});
+    item.fields.push_back({"flags", tokens_of("u32")});
+    item.fields.push_back({"destroy", tokens_of("*mut void")});
+    item.fields.push_back({"module_instance", tokens_of("u64")});
+    seen.emplace(target, true);
+    items.push_back(std::move(item));
+    return true;
+}
+
+bool ensure_owned_string_item(std::vector<RawItem> &items, std::unordered_map<std::string, bool> &seen,
+    const std::string &target, uint32_t pointer_size, std::string &error) {
+    if (seen.find(target) != seen.end()) return true;
+    const std::string view = owned_string_view_name(target);
+    if (!ensure_container_boundary(items, seen, view, ContainerKind::STRING, "", error)) return false;
+    if (!ensure_owner_handle_item(items, seen, "abix_owner_handle", pointer_size)) return false;
+    const uint32_t view_size = pointer_size == 8 ? 24 : 20;
+    const uint32_t owner_size = amc::support::owner_handle_layout(pointer_size).size;
+    RawItem item;
+    item.name = target;
+    item.kind = RawItem::Kind::RECORD;
+    item.explicit_layout = true;
+    item.explicit_size = view_size + owner_size;
+    item.explicit_align = amc::support::owner_handle_layout(pointer_size).align;
+    item.explicit_offsets = {0, view_size};
+    item.fields.push_back({"view", tokens_of(view)});
+    item.fields.push_back({"owner", tokens_of("abix_owner_handle")});
+    seen.emplace(target, true);
+    items.push_back(std::move(item));
+    return true;
+}
+
+bool ensure_owned_span_item(std::vector<RawItem> &items, std::unordered_map<std::string, bool> &seen,
+    const std::string &target, const std::string &element, uint32_t pointer_size, std::string &error) {
+    if (seen.find(target) != seen.end()) return true;
+    const std::string view = owned_span_view_name(target);
+    if (!ensure_container_boundary(items, seen, view, ContainerKind::VEC, element, error)) return false;
+    if (!ensure_owner_handle_item(items, seen, "abix_owner_handle", pointer_size)) return false;
+    const uint32_t view_size = pointer_size == 8 ? 16 : 12;
+    const uint32_t owner_size = amc::support::owner_handle_layout(pointer_size).size;
+    RawItem item;
+    item.name = target;
+    item.kind = RawItem::Kind::RECORD;
+    item.explicit_layout = true;
+    item.explicit_size = view_size + owner_size;
+    item.explicit_align = amc::support::owner_handle_layout(pointer_size).align;
+    item.explicit_offsets = {0, view_size};
+    item.fields.push_back({"view", tokens_of(view)});
+    item.fields.push_back({"owner", tokens_of("abix_owner_handle")});
+    seen.emplace(target, true);
+    items.push_back(std::move(item));
+    return true;
+}
+
+std::string owner_handle_definition(const std::string &name) {
+    return fmt::format(
+        "#[repr(C)]\n#[allow(non_camel_case_types)]\npub struct {} {{\n"
+        "    pub object: *mut core::ffi::c_void,\n"
+        "    pub mode: u32,\n"
+        "    pub flags: u32,\n"
+        "    pub destroy: Option<unsafe extern \"C\" fn(*mut core::ffi::c_void)>,\n"
+        "    pub module_instance: u64,\n}}\n\n",
+        name);
+}
+
+std::string owned_view_definition(const std::string &target, const std::string &view) {
+    return fmt::format(
+        "#[repr(C)]\n#[allow(non_camel_case_types)]\npub struct {} {{\n"
+        "    pub view: {},\n    pub owner: abix_owner_handle,\n}}\n\n",
+        target, view);
+}
+
+std::string owner_destroyer_name(const std::string &payload) {
+    return "__amc_owner_destroy_" + sanitize_ident(payload);
+}
+
+std::string owner_destroyer_definition(const std::string &payload) {
+    return fmt::format(
+        "unsafe extern \"C\" fn {}(object: *mut core::ffi::c_void) {{\n"
+        "    if !object.is_null() {{\n        unsafe {{ drop(Box::from_raw(object as *mut {})); }}\n    }}\n}}\n\n",
+        owner_destroyer_name(payload), payload);
+}
+
+std::string owned_string_destroyer_definition() {
+    return "unsafe extern \"C\" fn __amc_owned_str_destroy(object: *mut core::ffi::c_void) {\n"
+           "    if !object.is_null() {\n        unsafe { drop(Box::from_raw(object as *mut String)); }\n    }\n}\n\n";
+}
+
+std::string owned_span_destroyer_name(const std::string &element) {
+    return "__amc_owned_span_" + sanitize_ident(element) + "_destroy";
+}
+
+std::string owned_span_destroyer_definition(const std::string &element) {
+    return fmt::format(
+        "unsafe extern \"C\" fn {}(object: *mut core::ffi::c_void) {{\n"
+        "    if !object.is_null() {{\n        unsafe {{ drop(Box::from_raw(object as *mut Vec<{}>)); }}\n    "
+        "}}\n}}\n\n",
+        owned_span_destroyer_name(element), element);
 }
 
 std::string container_adapter_expression(
@@ -2169,10 +2307,10 @@ int run_frontend(const char *config_path, const char *output_path) {
             fmt::print(stderr, "[[adapt]] requires an element spelling for {}\n", adapt.native);
             return EXIT_FAILURE;
         }
-        if (kind == ContainerKind::BOX) {
+        if (kind == ContainerKind::BOX && !owner_handle_target(adapt.target)) {
             const std::vector<std::string> target_tokens = tokens_of(adapt.target);
             if (target_tokens.empty() || target_tokens[0] != "*") {
-                fmt::print(stderr, "[[adapt]] Box target must be a raw pointer spelling\n");
+                fmt::print(stderr, "[[adapt]] Box target must be a raw pointer or abix_owner_ spelling\n");
                 return EXIT_FAILURE;
             }
         }
@@ -2204,7 +2342,7 @@ int run_frontend(const char *config_path, const char *output_path) {
         for (size_t i = 0; i < source->parameters.size(); ++i) {
             const ContainerType type = detect_container(source->parameters[i].type);
             if (type.kind == ContainerKind::NONE) continue;
-            const amc::lang::AdaptDecl *adapt = find_adapt(type, config.adaptations);
+            const amc::lang::AdaptDecl *adapt = find_adapt(type, config.adaptations, false);
             if (adapt == nullptr) continue;
             parameter_adapts[i] = adapt;
             any_adapted = true;
@@ -2214,6 +2352,12 @@ int run_frontend(const char *config_path, const char *output_path) {
                     fmt::print(
                         stderr, "[[rust.expose]] Box<dyn Trait> is a fat pointer; use an opaque handle contract\n");
                     return EXIT_FAILURE;
+                }
+                if (owner_handle_target(adapt->target)) {
+                    ensure_owner_handle_item(items, seen_items, adapt->target, target.pointer_size);
+                    if (emitted_boundaries.emplace(adapt->target, true).second)
+                        boundary_source += owner_handle_definition(adapt->target);
+                    continue;
                 }
                 const std::string pointee = pointer_pointee(tokens_of(adapt->target));
                 if (!type_name_matches(pointee, element)) {
@@ -2248,8 +2392,13 @@ int run_frontend(const char *config_path, const char *output_path) {
         const ContainerType return_container = detect_container(source->return_type);
         const amc::lang::AdaptDecl *return_adapt = nullptr;
         ContainerKind return_kind = ContainerKind::NONE;
+        bool return_owner_handle = false;
+        bool return_owned_string = false;
+        bool return_owned_span = false;
+        std::string return_payload;
+        std::string return_view;
         if (return_container.kind == ContainerKind::BOX) {
-            if (const amc::lang::AdaptDecl *adapt = find_adapt(return_container, config.adaptations)) {
+            if (const amc::lang::AdaptDecl *adapt = find_adapt(return_container, config.adaptations, true)) {
                 const std::string element =
                     adapt->element.empty() ? return_container.element : compact_spelling(adapt->element);
                 if (fat_pointer_element(element)) {
@@ -2257,32 +2406,45 @@ int run_frontend(const char *config_path, const char *output_path) {
                         stderr, "[[rust.expose]] Box<dyn Trait> is a fat pointer; use an opaque handle contract\n");
                     return EXIT_FAILURE;
                 }
-                const std::string pointee = pointer_pointee(tokens_of(adapt->target));
-                if (!type_name_matches(pointee, element)) {
-                    fmt::print(
-                        stderr, "[[rust.expose]] Box target '*mut {}' does not match Box<{}>\n", pointee, element);
-                    return EXIT_FAILURE;
+                if (owner_handle_target(adapt->target)) {
+                    ensure_owner_handle_item(items, seen_items, adapt->target, target.pointer_size);
+                    if (emitted_boundaries.emplace(adapt->target, true).second)
+                        boundary_source += owner_handle_definition(adapt->target);
+                    if (emitted_boundaries.emplace(owner_destroyer_name(element), true).second)
+                        boundary_source += owner_destroyer_definition(element);
+                    return_adapt = adapt;
+                    return_kind = ContainerKind::BOX;
+                    return_owner_handle = true;
+                    return_payload = element;
+                    any_adapted = true;
+                } else {
+                    const std::string pointee = pointer_pointee(tokens_of(adapt->target));
+                    if (!type_name_matches(pointee, element)) {
+                        fmt::print(
+                            stderr, "[[rust.expose]] Box target '*mut {}' does not match Box<{}>\n", pointee, element);
+                        return EXIT_FAILURE;
+                    }
+                    const amc::lang::OwnedDecl *owned = find_owned(config, element);
+                    if (owned == nullptr || owned->destroy.empty()) {
+                        fmt::print(stderr,
+                            "[[rust.expose]] Box return '{}' requires [[owned]] type = \"{}\" with a destroy entry\n",
+                            decl.function, element);
+                        return EXIT_FAILURE;
+                    }
+                    const amc::lang::ContractDecl *contract = find_contract(config, decl.function);
+                    if (contract == nullptr || contract->returns != "owned" || contract->release.empty()) {
+                        fmt::print(stderr,
+                            "[[rust.expose]] Box return '{}' requires [[contract]] returns = \"owned\" and release\n",
+                            decl.function);
+                        return EXIT_FAILURE;
+                    }
+                    return_adapt = adapt;
+                    return_kind = ContainerKind::BOX;
+                    any_adapted = true;
                 }
-                const amc::lang::OwnedDecl *owned = find_owned(config, element);
-                if (owned == nullptr || owned->destroy.empty()) {
-                    fmt::print(stderr,
-                        "[[rust.expose]] Box return '{}' requires [[owned]] type = \"{}\" with a destroy entry\n",
-                        decl.function, element);
-                    return EXIT_FAILURE;
-                }
-                const amc::lang::ContractDecl *contract = find_contract(config, decl.function);
-                if (contract == nullptr || contract->returns != "owned" || contract->release.empty()) {
-                    fmt::print(stderr,
-                        "[[rust.expose]] Box return '{}' requires [[contract]] returns = \"owned\" and release\n",
-                        decl.function);
-                    return EXIT_FAILURE;
-                }
-                return_adapt = adapt;
-                return_kind = ContainerKind::BOX;
-                any_adapted = true;
             }
         } else if (return_container.kind == ContainerKind::OPTION) {
-            if (const amc::lang::AdaptDecl *adapt = find_adapt(return_container, config.adaptations)) {
+            if (const amc::lang::AdaptDecl *adapt = find_adapt(return_container, config.adaptations, true)) {
                 const std::string element =
                     adapt->element.empty() ? return_container.element : compact_spelling(adapt->element);
                 std::string boundary_error;
@@ -2297,8 +2459,63 @@ int run_frontend(const char *config_path, const char *output_path) {
                 return_kind = ContainerKind::OPTION;
                 any_adapted = true;
             }
+        } else if (return_container.kind == ContainerKind::STRING || return_container.kind == ContainerKind::VEC) {
+            if (const amc::lang::AdaptDecl *adapt = find_adapt(return_container, config.adaptations, true)) {
+                const std::string element =
+                    adapt->element.empty() ? return_container.element : compact_spelling(adapt->element);
+                std::string boundary_error;
+                if (return_container.kind == ContainerKind::STRING) {
+                    if (!owned_string_target(adapt->target)) {
+                        fmt::print(stderr, "[[rust.expose]] String return requires an abix_owned_str target\n");
+                        return EXIT_FAILURE;
+                    }
+                    if (!ensure_owned_string_item(
+                            items, seen_items, adapt->target, target.pointer_size, boundary_error)) {
+                        fmt::print(stderr, "{}\n", boundary_error);
+                        return EXIT_FAILURE;
+                    }
+                    return_view = owned_string_view_name(adapt->target);
+                    if (emitted_boundaries.emplace(return_view, true).second)
+                        boundary_source += container_boundary_definition(return_view, ContainerKind::STRING, "");
+                    if (emitted_boundaries.emplace("abix_owner_handle", true).second)
+                        boundary_source += owner_handle_definition("abix_owner_handle");
+                    if (emitted_boundaries.emplace(adapt->target, true).second)
+                        boundary_source += owned_view_definition(adapt->target, return_view);
+                    if (emitted_boundaries.emplace("__amc_owned_str_destroy", true).second)
+                        boundary_source += owned_string_destroyer_definition();
+                    return_owned_string = true;
+                } else {
+                    if (!owned_span_target(adapt->target)) {
+                        fmt::print(stderr, "[[rust.expose]] Vec return requires an abix_owned_span target\n");
+                        return EXIT_FAILURE;
+                    }
+                    if (!ensure_owned_span_item(
+                            items, seen_items, adapt->target, element, target.pointer_size, boundary_error)) {
+                        fmt::print(stderr, "{}\n", boundary_error);
+                        return EXIT_FAILURE;
+                    }
+                    return_view = owned_span_view_name(adapt->target);
+                    if (emitted_boundaries.emplace(return_view, true).second)
+                        boundary_source += container_boundary_definition(return_view, ContainerKind::VEC, element);
+                    if (emitted_boundaries.emplace("abix_owner_handle", true).second)
+                        boundary_source += owner_handle_definition("abix_owner_handle");
+                    if (emitted_boundaries.emplace(adapt->target, true).second)
+                        boundary_source += owned_view_definition(adapt->target, return_view);
+                    if (emitted_boundaries.emplace(owned_span_destroyer_name(element), true).second)
+                        boundary_source += owned_span_destroyer_definition(element);
+                    return_owned_span = true;
+                }
+                return_adapt = adapt;
+                return_kind = return_container.kind;
+                return_payload = element;
+                any_adapted = true;
+            } else {
+                fmt::print(stderr, "[[rust.expose]] container return '{}' needs an explicit owned contract\n",
+                    spell_type(source->return_type));
+                return EXIT_FAILURE;
+            }
         } else if (return_container.kind != ContainerKind::NONE
-                   && find_adapt(return_container, config.adaptations) != nullptr) {
+                   && find_adapt(return_container, config.adaptations, true) != nullptr) {
             fmt::print(stderr, "[[rust.expose]] container return '{}' needs an explicit owned contract\n",
                 spell_type(source->return_type));
             return EXIT_FAILURE;
@@ -2336,9 +2553,16 @@ int run_frontend(const char *config_path, const char *output_path) {
             for (size_t i = 0; i < source->parameters.size(); ++i) {
                 const auto *adapt = parameter_adapts[i];
                 if (adapt == nullptr) continue;
-                const ContainerKind kind = detect_container(source->parameters[i].type).kind;
-                wrapper_source += fmt::format(
-                    "    let p{} = {};\n", i, container_adapter_expression(*adapt, kind, fmt::format("p{}", i)));
+                const ContainerType type = detect_container(source->parameters[i].type);
+                if (type.kind == ContainerKind::BOX && owner_handle_target(adapt->target)) {
+                    const std::string element =
+                        adapt->element.empty() ? type.element : compact_spelling(adapt->element);
+                    wrapper_source += fmt::format(
+                        "    let p{} = unsafe {{ Box::from_raw(p{}.object as *mut {}) }};\n", i, i, element);
+                } else {
+                    wrapper_source += fmt::format("    let p{} = {};\n", i,
+                        container_adapter_expression(*adapt, type.kind, fmt::format("p{}", i)));
+                }
             }
             wrapper_source += "    ";
             std::string call = "crate::" + decl.function + "(";
@@ -2348,7 +2572,35 @@ int run_frontend(const char *config_path, const char *output_path) {
             }
             call += ")";
             if (source->is_unsafe) call = "unsafe { " + call + " }";
-            if (return_adapt != nullptr && return_kind == ContainerKind::OPTION) {
+            if (return_owner_handle) {
+                wrapper_source += "let __amc_value = " + call + ";\n    ";
+                wrapper_source += fmt::format(
+                    "{} {{ object: Box::into_raw(__amc_value) as *mut core::ffi::c_void, mode: 1, flags: 0, "
+                    "destroy: Some({}), module_instance: 0 }}",
+                    return_adapt->target, owner_destroyer_name(return_payload));
+            } else if (return_owned_string) {
+                wrapper_source += "let __amc_value = " + call + ";\n    ";
+                wrapper_source += "let __amc_data = __amc_value.as_ptr() as *const u8;\n    ";
+                wrapper_source += "let __amc_len = __amc_value.len() as u64;\n    ";
+                wrapper_source +=
+                    "let __amc_object = Box::into_raw(Box::new(__amc_value)) as *mut core::ffi::c_void;\n    ";
+                wrapper_source += fmt::format(
+                    "{} {{ view: {} {{ data: __amc_data, len: __amc_len, encoding: 0, reserved: 0 }}, "
+                    "owner: abix_owner_handle {{ object: __amc_object, mode: 1, flags: 0, "
+                    "destroy: Some(__amc_owned_str_destroy), module_instance: 0 }} }}",
+                    return_adapt->target, return_view);
+            } else if (return_owned_span) {
+                wrapper_source += "let __amc_value = " + call + ";\n    ";
+                wrapper_source += "let __amc_data = __amc_value.as_ptr();\n    ";
+                wrapper_source += "let __amc_len = __amc_value.len() as u64;\n    ";
+                wrapper_source +=
+                    "let __amc_object = Box::into_raw(Box::new(__amc_value)) as *mut core::ffi::c_void;\n    ";
+                wrapper_source += fmt::format(
+                    "{} {{ view: {} {{ data: __amc_data, len: __amc_len }}, "
+                    "owner: abix_owner_handle {{ object: __amc_object, mode: 1, flags: 0, "
+                    "destroy: Some({}), module_instance: 0 }} }}",
+                    return_adapt->target, return_view, owned_span_destroyer_name(return_payload));
+            } else if (return_adapt != nullptr && return_kind == ContainerKind::OPTION) {
                 const std::string target = return_adapt->target;
                 wrapper_source += fmt::format(
                     "match {} {{\n"

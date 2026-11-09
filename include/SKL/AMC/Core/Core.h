@@ -338,6 +338,9 @@ enum class LoweringKind : uint32_t {
     CALLBACK = 5,
     RANGE = 6,
     OPAQUE = 7,
+    OWNER = 8,
+    OWNED_STRING = 9,
+    OWNED_SPAN = 10,
 };
 enum class LoweringStatus : uint32_t {
     DIRECT = 0,          // the concrete type is already the boundary entity
@@ -559,6 +562,10 @@ LoweringResult evaluate_string_view(const ABIModule &module, Hash128 type_id, Ha
 LoweringResult evaluate_optional(
     const ABIModule &module, Hash128 type_id, Hash128 element_id, const std::string &element_spelling);
 LoweringResult evaluate_result(
+    const ABIModule &module, Hash128 type_id, Hash128 element_id, const std::string &element_spelling);
+LoweringResult evaluate_owner(const ABIModule &module, Hash128 type_id);
+LoweringResult evaluate_owned_string(const ABIModule &module, Hash128 type_id);
+LoweringResult evaluate_owned_span(
     const ABIModule &module, Hash128 type_id, Hash128 element_id, const std::string &element_spelling);
 LoweringResult evaluate_callback(const ABIModule &module, Hash128 type_id);
 

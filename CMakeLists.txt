@@ -46,7 +46,9 @@ option(AMC_INSTALL_PRIVATE_HEADERS "Install AMC private implementation headers" 
 option(AMC_ENABLE_LLDB_PLUGIN "Build the optional LLDB plugin" ON)
 option(AMC_BUILD_AUE "Build the optional Aue Lua conformance prototype" ON)
 option(AMC_BUILD_RUST_HELPER "Build the optional amc-rustc-helper with Cargo" OFF)
-set(AMC_ABIX_REF "v0.4.0"
+# v0.4.0 owner handle + owned views (the v0.4.0 tag will be re-cut after the
+# breaking ABIX update; pin the pushed commit until then).
+set(AMC_ABIX_REF "30fc9be"
     CACHE STRING "ABIX git revision used when FetchContent downloads ABIX (tag, branch or commit)")
 set(AMC_DEPENDENCIES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dependencies")
 

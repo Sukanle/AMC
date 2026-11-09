@@ -139,6 +139,14 @@ AMC synthesizes the boundary record, emits the matching `#[repr(C)]` struct in t
 
 `Option<T>` returns are supported as value contracts: the wrapper turns `Some` into `{ discriminant: 1, value: MaybeUninit::new(value) }` and `None` into `{ discriminant: 0, value: MaybeUninit::uninit() }`. `Box<dyn Trait>` is a fat pointer and is rejected; use an opaque handle contract instead.
 
+`Box<T>` can target the ABIX owner handle `abix_owner_<T>`: the wrapper stores `Box::into_raw` in `owner.object`, sets `mode = owned` and puts an `Box::from_raw` trampoline in `owner.destroy`. The consumer releases through the handle. The older explicit `*mut T` + `[[owned]]` path remains available:
+
+```toml
+[[adapt]]
+native = "Box"
+target = "abix_owner_Widget"
+```
+
 `Box<T>` uses the explicit owned-handle path: declare the pointer target, an `[[owned]]` release policy, and the per-interaction `[[contract]]` modes. AMC does not synthesize create/destroy.
 
 ```toml
@@ -175,7 +183,7 @@ returns = "owned"
 release = "auto"
 ```
 
-`create = "auto"` emits a `fn(T) -> *mut T` factory (`Box::new`), and `destroy = "auto"` emits `Box::from_raw` plus drop. `release = "auto"` reuses the matching `[[owned]]` destroy signature. Owned `String`/`Vec` returns still need their own owned contract; `Option<T>` returns are value contracts. `Vec<T>`/`Option<T>` elements may be primitives or local `#[repr(C)]` records; owned `Vec<T>` marshalling requires `T: Clone`.
+`create = "auto"` emits a `fn(T) -> *mut T` factory (`Box::new`), and `destroy = "auto"` emits `Box::from_raw` plus drop. `release = "auto"` reuses the matching `[[owned]]` destroy signature. Owned `String`/`Vec` returns map to `abix_owned_str_utf8` / `abix_owned_span_<T>`: the generated value contains the borrowed view plus an `abix_owner_handle` whose destroy trampoline drops the Rust allocation. `Option<T>` returns are value contracts. `Vec<T>`/`Option<T>` elements may be primitives or local `#[repr(C)]` records; owned `Vec<T>` marshalling requires `T: Clone`.
 
 ### Ownership and error contracts
 

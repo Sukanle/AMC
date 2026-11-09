@@ -55,3 +55,11 @@ pub fn container_option_make(value: i32) -> Option<i32> {
         Some(value)
     }
 }
+
+pub fn container_owned_string(value: i32) -> String {
+    value.to_string()
+}
+
+pub fn container_owned_points(value: i32) -> Vec<ContainerPoint> {
+    vec![ContainerPoint { x: value, y: value + 1 }]
+}

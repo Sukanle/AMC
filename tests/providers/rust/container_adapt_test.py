@@ -104,6 +104,13 @@ def main():
               "non-primitive Optional element is generated")
         check("MaybeUninit::new(value)" in thunks and "MaybeUninit::uninit()" in thunks,
               "Option return is marshalled into the Optional boundary")
+        check("pub struct abix_owned_str_utf8" in thunks
+              and "pub struct abix_owner_handle" in thunks
+              and "__amc_owned_str_destroy" in thunks,
+              "owned String return uses the ABIX-owned view")
+        check("pub struct abix_owned_span_ContainerPoint" in thunks
+              and "__amc_owned_span_ContainerPoint_destroy" in thunks,
+              "owned Vec return uses the ABIX-owned span view")
 
         for function, expected in (
             ("container_string_len", "abix_str_utf8"),
@@ -122,12 +129,16 @@ def main():
                 check(parameter.get("type_name") == expected,
                       f"{function} takes the adapted boundary type")
 
-        result = run([str(amc), "query", artifact, "--function", "container_option_make",
-                      "--format", "json"])
-        if check(result.returncode == 0, "container_option_make is recorded", output(result)[-300:]):
-            match = json.loads(result.stdout).get("matches", [{}])[0]
-            check(match.get("return_type_name") == "abix_optional_i32",
-                  "Option return uses the Optional boundary type")
+        for function, expected in (
+            ("container_option_make", "abix_optional_i32"),
+            ("container_owned_string", "abix_owned_str_utf8"),
+            ("container_owned_points", "abix_owned_span_ContainerPoint"),
+        ):
+            result = run([str(amc), "query", artifact, "--function", function, "--format", "json"])
+            if check(result.returncode == 0, f"{function} is recorded", output(result)[-300:]):
+                match = json.loads(result.stdout).get("matches", [{}])[0]
+                check(match.get("return_type_name") == expected,
+                      f"{function} uses the expected boundary return type")
 
         lib_rs = os.path.join(work, "lib.rs")
         with open(lib_rs, "w", encoding="utf-8") as handle:
@@ -164,6 +175,19 @@ def main():
             _fields_ = [("discriminant", ctypes.c_uint32),
                         ("reserved", ctypes.c_uint32),
                         ("value", ContainerPoint)]
+
+        class AbixOwnerHandle(ctypes.Structure):
+            _fields_ = [("object", ctypes.c_void_p),
+                        ("mode", ctypes.c_uint32),
+                        ("flags", ctypes.c_uint32),
+                        ("destroy", ctypes.c_void_p),
+                        ("module_instance", ctypes.c_uint64)]
+
+        class AbixOwnedStr(ctypes.Structure):
+            _fields_ = [("view", AbixStr), ("owner", AbixOwnerHandle)]
+
+        class AbixOwnedSpanPoint(ctypes.Structure):
+            _fields_ = [("view", AbixSpanPoint), ("owner", AbixOwnerHandle)]
 
         lib = ctypes.CDLL(library)
 
@@ -218,6 +242,22 @@ def main():
         none = lib.container_option_make(-1)
         check(none.discriminant == 0, "Option return produces None")
 
+        lib.container_owned_string.argtypes = [ctypes.c_int32]
+        lib.container_owned_string.restype = AbixOwnedStr
+        owned_str = lib.container_owned_string(7)
+        check(owned_str.view.len == 1 and owned_str.view.data[0] == ord("7")
+              and owned_str.owner.mode == 1 and owned_str.owner.object,
+              "owned String return carries a view and an owner")
+        ctypes.CFUNCTYPE(None, ctypes.c_void_p)(owned_str.owner.destroy)(owned_str.owner.object)
+
+        lib.container_owned_points.argtypes = [ctypes.c_int32]
+        lib.container_owned_points.restype = AbixOwnedSpanPoint
+        owned_span = lib.container_owned_points(5)
+        check(owned_span.view.len == 1 and owned_span.view.data[0].x == 5
+              and owned_span.view.data[0].y == 6 and owned_span.owner.mode == 1,
+              "owned Vec return carries a span view and an owner")
+        ctypes.CFUNCTYPE(None, ctypes.c_void_p)(owned_span.owner.destroy)(owned_span.owner.object)
+
         # A container parameter without a declared mapping still fails closed.
         no_adapt = os.path.join(work, "no_adapt.abic.toml")
         with open(no_adapt, "w", encoding="utf-8") as handle:
@@ -256,6 +296,8 @@ output = "rust_container_no_adapt.abix"
         return_config = os.path.join(work, "return_adapt.abic.toml")
         with open(config, encoding="utf-8") as handle:
             text = handle.read()
+        text = text.replace(
+            '[[adapt]]\nnative = "String"\ntarget = "abix_owned_str_utf8"\n\n', '', 1)
         text = text.replace(
             '[[rust.expose]]\nfunction = "container_string_len"\nas = "container_string_len"',
             '[[rust.expose]]\nfunction = "container_make_string"\nas = "container_make_string"\n\n'

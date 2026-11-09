@@ -16,6 +16,7 @@
 #include "SKL/AMC/Compilation/Build.h"
 #include "SKL/AMC/Support/CommandLine.h"
 #include "SKL/AMC/Support/Owned.h"
+#include "SKL/AMC/Support/OwnerLayout.h"
 #include "SKL/AMC/Support/Process.h"
 #include "SKL/AMC/Compilation/Config.h"
 #include "SKL/AMC/Compilation/Meta.h"
@@ -1149,10 +1150,16 @@ int build_command(const fs::path &provider) {
                     }
                     amc::LoweringResult result;
                     bool evaluated = true;
-                    if (native == "String"
-                        || native == "&str"
-                        || native == "std::string"
-                        || native == "std::string_view") {
+                    if (amc::support::is_owner_handle_name(target) && native == "Box") {
+                        result = amc::evaluate_owner(full, type_id);
+                    } else if (amc::support::is_owned_string_name(target) && (native == "String" || native == "&str")) {
+                        result = amc::evaluate_owned_string(full, type_id);
+                    } else if (amc::support::is_owned_span_name(target) && (native == "Vec" || native == "&[T]")) {
+                        result = amc::evaluate_owned_span(full, type_id, element_id, element_spelling);
+                    } else if (native == "String"
+                               || native == "&str"
+                               || native == "std::string"
+                               || native == "std::string_view") {
                         result = amc::evaluate_string_view(full, type_id, element_id, element_spelling, false);
                     } else if (native == "Vec"
                                || native == "&[T]"

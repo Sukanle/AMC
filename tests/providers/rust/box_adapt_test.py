@@ -159,6 +159,110 @@ fn main() {
             check(result.returncode == 0 and "rust box: OK" in output(result),
                   "consumer drives create, transfer and destroy", output(result)[-500:])
 
+        # ABIX v0.4.0 owner handle: Box<T> maps to abix_owner_T with the
+        # canonical object/mode/flags/destroy/module_instance layout.
+        owner_dir = os.path.join(work, "owner")
+        os.makedirs(owner_dir, exist_ok=True)
+        shutil.copyfile(os.path.join(work, "rust_box_api.rs"), os.path.join(owner_dir, "rust_box_api.rs"))
+        owner_config = os.path.join(owner_dir, "rust_box_owner.abic.toml")
+        with open(owner_config, "w", encoding="utf-8") as handle:
+            handle.write("""[package]
+name = "rust_box_owner"
+version = "0.1"
+
+[[import]]
+language = "rust"
+files = ["rust_box_api.rs"]
+symbols = ["BoxWidget", "box_widget_live"]
+
+[[adapt]]
+native = "Box"
+target = "abix_owner_BoxWidget"
+
+[[rust.expose]]
+function = "box_widget_make"
+as = "box_widget_make"
+
+[[rust.expose]]
+function = "box_widget_value"
+as = "box_widget_value"
+
+[target]
+arch = 0
+os = 0
+abi = 1
+pointer_bits = 64
+endianness = "little"
+
+[thunks]
+output = "box_owner_thunks.rs"
+
+[[export]]
+output = "rust_box_owner.abix"
+""")
+        result = run([str(amc), "build", "-c", owner_config, "-B", os.path.join(owner_dir, "out")])
+        owner_artifact = os.path.join(owner_dir, "out", "rust_box_owner.abix")
+        if check(result.returncode == 0 and os.path.isfile(owner_artifact),
+                 "owner handle Box build", output(result)[-600:]):
+            owner_thunks = open(os.path.join(owner_dir, "box_owner_thunks.rs"), encoding="utf-8").read()
+            check("pub struct abix_owner_BoxWidget" in owner_thunks
+                  and "mode: 1" in owner_thunks
+                  and "Box::into_raw(__amc_value)" in owner_thunks,
+                  "owner handle return is generated")
+            check("Box::from_raw(p0.object as *mut BoxWidget)" in owner_thunks,
+                  "owner handle parameter is unwrapped")
+            check("__amc_owner_destroy_BoxWidget" in owner_thunks,
+                  "owner handle destroy trampoline is generated")
+            for function, expected in (("box_widget_make", "abix_owner_BoxWidget"),
+                                       ("box_widget_value", "abix_owner_BoxWidget")):
+                result = run([str(amc), "query", owner_artifact, "--function", function,
+                              "--format", "json"])
+                if check(result.returncode == 0, f"owner {function} is recorded", output(result)[-300:]):
+                    match = json.loads(result.stdout).get("matches", [{}])[0]
+                    if function == "box_widget_make":
+                        check(match.get("return_type_name") == expected,
+                              "owner make returns the owner handle")
+                    else:
+                        parameter = (match.get("parameters") or [{}])[0]
+                        check(parameter.get("type_name") == expected,
+                              "owner consume takes the owner handle")
+            owner_root = os.path.join(owner_dir, "provider.rs")
+            with open(owner_root, "w", encoding="utf-8") as handle:
+                handle.write('include!("rust_box_api.rs");\n')
+                handle.write('include!("box_owner_thunks.rs");\n')
+            owner_provider = module_path(owner_dir, "rust_box_owner")
+            result = run([rustc, "--edition", "2021", "--crate-type", "cdylib",
+                          owner_root, "-o", owner_provider])
+            if check(result.returncode == 0, "owner Box provider compiled", output(result)[-500:]):
+                owner_consumer = os.path.join(owner_dir, "consumer.py")
+                with open(owner_consumer, "w", encoding="utf-8") as handle:
+                    handle.write("""import ctypes, os, sys
+class Owner(ctypes.Structure):
+    _fields_ = [("object", ctypes.c_void_p), ("mode", ctypes.c_uint32), ("flags", ctypes.c_uint32),
+                ("destroy", ctypes.c_void_p), ("module_instance", ctypes.c_uint64)]
+lib = ctypes.CDLL(os.path.join(os.path.dirname(__file__), 'lib' + 'rust_box_owner' + ('.dylib' if sys.platform == 'darwin' else '.so')))
+lib.box_widget_make.argtypes = [ctypes.c_int32]
+lib.box_widget_make.restype = Owner
+lib.box_widget_value.argtypes = [Owner]
+lib.box_widget_value.restype = ctypes.c_int32
+lib.box_widget_live.restype = ctypes.c_size_t
+handle = lib.box_widget_make(7)
+assert handle.object and handle.mode == 1 and handle.destroy
+assert lib.box_widget_live() == 1
+assert lib.box_widget_value(handle) == 7
+assert lib.box_widget_live() == 0
+handle2 = lib.box_widget_make(9)
+ctypes.CFUNCTYPE(None, ctypes.c_void_p)(handle2.destroy)(handle2.object)
+assert lib.box_widget_live() == 0
+print('owner box: OK')
+""")
+                env = dict(os.environ)
+                env["LD_LIBRARY_PATH"] = owner_dir + os.pathsep + env.get("LD_LIBRARY_PATH", "")
+                env["DYLD_LIBRARY_PATH"] = owner_dir + os.pathsep + env.get("DYLD_LIBRARY_PATH", "")
+                result = run([sys.executable, owner_consumer], env=env)
+                check(result.returncode == 0 and "owner box: OK" in output(result),
+                      "owner handle create/consume/destroy runs", output(result)[-500:])
+
         # Optional auto thunks: create = "auto" / destroy = "auto" synthesize
         # the Box::new and Box::from_raw pair, while [[owned]]/[[contract]]
         # still declare the policy.

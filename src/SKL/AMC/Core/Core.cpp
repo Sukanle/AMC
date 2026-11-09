@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "SKL/AMC/Core/Core.h"
+#include "SKL/AMC/Support/OwnerLayout.h"
 #include "SKL/AMC/Core/Reflect.h"
 
 #include <algorithm>
@@ -849,7 +850,7 @@ bool validate(const ABIModule &module, std::string &error) {
             error = "lowering references an unknown type";
             return false;
         }
-        if (record.kind > static_cast<uint32_t>(LoweringKind::OPAQUE)
+        if (record.kind > static_cast<uint32_t>(LoweringKind::OWNED_SPAN)
             || record.status > static_cast<uint32_t>(LoweringStatus::UNSUPPORTED)) {
             error = "invalid lowering record";
             return false;
@@ -1366,6 +1367,136 @@ LoweringResult evaluate_optional(
 LoweringResult evaluate_result(
     const ABIModule &module, Hash128 type_id, Hash128 element_id, const std::string &element_spelling) {
     return evaluate_pair(module, type_id, LoweringKind::RESULT, element_id, element_spelling, false);
+}
+
+LoweringResult evaluate_owner(const ABIModule &module, Hash128 type_id) {
+    LoweringResult result;
+    result.type_id = type_id;
+    result.contract_type = type_id;
+    result.kind = static_cast<uint32_t>(LoweringKind::OWNER);
+    result.status = static_cast<uint32_t>(LoweringStatus::UNSUPPORTED);
+    result.reason = static_cast<uint32_t>(LoweringReason::NOT_A_RECORD);
+
+    const Type *type = find_type_by_id(module, type_id);
+    if (!type || type->kind != TypeKind::RECORD) return result;
+
+    const auto layout = amc::support::owner_handle_layout(module.pointer_bits / 8);
+    const auto field_named = [&](const char *name) -> const Field * {
+        for (uint32_t i = 0; i < type->field_count; ++i) {
+            const Field &field = module.fields[type->field_begin + i];
+            if ((field.flags & field_base) == 0 && (field.flags & field_bitfield) == 0 && field.name == name)
+                return &field;
+        }
+        return nullptr;
+    };
+    const Field *object = field_named("object");
+    const Field *mode = field_named("mode");
+    const Field *flags = field_named("flags");
+    const Field *destroy = field_named("destroy");
+    const Field *module_instance = field_named("module_instance");
+    if (type->field_count != 5 || !object || !mode || !flags || !destroy || !module_instance) {
+        result.reason = static_cast<uint32_t>(LoweringReason::FIELD_COUNT);
+        return result;
+    }
+    const Type *object_type = find_type_by_id(module, object->type_id);
+    const Type *mode_type = find_type_by_id(module, mode->type_id);
+    const Type *flags_type = find_type_by_id(module, flags->type_id);
+    const Type *destroy_type = find_type_by_id(module, destroy->type_id);
+    const Type *module_type = find_type_by_id(module, module_instance->type_id);
+    if (!object_type
+        || object_type->kind != TypeKind::POINTER
+        || !destroy_type
+        || destroy_type->kind != TypeKind::POINTER
+        || !mode_type
+        || mode_type->size != 4
+        || !flags_type
+        || flags_type->size != 4
+        || !module_type
+        || module_type->size != 8) {
+        result.reason = static_cast<uint32_t>(LoweringReason::MISSING_DATA);
+        return result;
+    }
+    result.pointer_field = static_cast<uint32_t>(object - &module.fields[type->field_begin]);
+    if (object->offset == layout.object
+        && mode->offset == layout.mode
+        && flags->offset == layout.flags
+        && destroy->offset == layout.destroy
+        && module_instance->offset == layout.module_instance
+        && type->size == layout.size
+        && type->align == layout.align) {
+        result.status = static_cast<uint32_t>(LoweringStatus::DIRECT);
+        result.reason = static_cast<uint32_t>(LoweringReason::OK);
+    } else {
+        result.reason = static_cast<uint32_t>(LoweringReason::LAYOUT);
+    }
+    return result;
+}
+
+namespace {
+
+const Field *visible_field_named(const ABIModule &module, const Type &type, const char *name) {
+    for (uint32_t i = 0; i < type.field_count; ++i) {
+        const Field &field = module.fields[type.field_begin + i];
+        if ((field.flags & field_base) == 0 && (field.flags & field_bitfield) == 0 && field.name == name) return &field;
+    }
+    return nullptr;
+}
+
+LoweringResult evaluate_owned_view(const ABIModule &module, Hash128 type_id, LoweringKind kind, Hash128 element_id,
+    const std::string &element_spelling, bool string_view) {
+    LoweringResult result;
+    result.type_id = type_id;
+    result.contract_type = type_id;
+    result.kind = static_cast<uint32_t>(kind);
+    result.status = static_cast<uint32_t>(LoweringStatus::UNSUPPORTED);
+    result.reason = static_cast<uint32_t>(LoweringReason::NOT_A_RECORD);
+
+    const Type *type = find_type_by_id(module, type_id);
+    if (!type || type->kind != TypeKind::RECORD) return result;
+    const Field *view = visible_field_named(module, *type, "view");
+    const Field *owner = visible_field_named(module, *type, "owner");
+    if (type->field_count != 2 || !view || !owner) {
+        result.reason = static_cast<uint32_t>(LoweringReason::FIELD_COUNT);
+        return result;
+    }
+    const Type *view_type = find_type_by_id(module, view->type_id);
+    const Type *owner_type = find_type_by_id(module, owner->type_id);
+    if (!view_type || !owner_type) {
+        result.reason = static_cast<uint32_t>(LoweringReason::MISSING_DATA);
+        return result;
+    }
+    const LoweringResult view_result =
+        string_view ? evaluate_string_view(module, view->type_id, element_id, element_spelling, false)
+                    : evaluate_sequence_view(module, view->type_id, element_id, element_spelling, false);
+    const LoweringResult owner_result = evaluate_owner(module, owner->type_id);
+    if (view_result.status != static_cast<uint32_t>(LoweringStatus::DIRECT)
+        || owner_result.status != static_cast<uint32_t>(LoweringStatus::DIRECT)) {
+        result.reason = static_cast<uint32_t>(LoweringReason::LAYOUT);
+        return result;
+    }
+    result.pointer_field = view_result.pointer_field;
+    result.length_field = view_result.length_field;
+    if (view->offset == 0
+        && owner->offset == view_type->size
+        && type->size == view_type->size + owner_type->size
+        && type->align >= owner_type->align) {
+        result.status = static_cast<uint32_t>(LoweringStatus::DIRECT);
+        result.reason = static_cast<uint32_t>(LoweringReason::OK);
+    } else {
+        result.reason = static_cast<uint32_t>(LoweringReason::LAYOUT);
+    }
+    return result;
+}
+
+}   // namespace
+
+LoweringResult evaluate_owned_string(const ABIModule &module, Hash128 type_id) {
+    return evaluate_owned_view(module, type_id, LoweringKind::OWNED_STRING, Hash128{}, "", true);
+}
+
+LoweringResult evaluate_owned_span(
+    const ABIModule &module, Hash128 type_id, Hash128 element_id, const std::string &element_spelling) {
+    return evaluate_owned_view(module, type_id, LoweringKind::OWNED_SPAN, element_id, element_spelling, false);
 }
 
 LoweringResult evaluate_callback(const ABIModule &module, Hash128 type_id) {
@@ -2558,7 +2689,7 @@ bool read_abix(const std::string &path, ABIModule &module, std::string &error) {
             || !read_u32(bytes, lowering_offset, record.reason, error)
             || !read_u32(bytes, lowering_offset, record.pointer_field, error)
             || !read_u32(bytes, lowering_offset, record.length_field, error)
-            || record.kind > static_cast<uint32_t>(LoweringKind::OPAQUE)
+            || record.kind > static_cast<uint32_t>(LoweringKind::OWNED_SPAN)
             || record.status > static_cast<uint32_t>(LoweringStatus::UNSUPPORTED)
             || record.reason > static_cast<uint32_t>(LoweringReason::LAYOUT)) {
             error = "invalid lowering record";
