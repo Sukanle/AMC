@@ -29,6 +29,7 @@
 ### 变更
 
 - `amc` CLI 和 `amc-cpp` / `amc-rust` / `amc-zig` provider 改用 LLVM `CommandLine` 解析参数。每个命令都是注册的 subcommand，使用类型化选项并自动提供 `--help` / `--version`；手写 argv 循环、手工拆分 `--format=` 和手写 usage 文本已移除。命令拼写通过 MICS `SKL_RFS_ENUM` 统一注册，不带命令运行时会输出 LLVM 的 subcommand 总览。`--error-format` 和每个命令的 `--format` 都是真正的 LLVM 选项，通过 callback 选择错误信封。CLI 采用 git 风格的 `amc <command> [options]` 形式：选项写在命令之后，因此不再需要 argv 重排或引导扫描。每个命令在实现旁边注册 handler，分派改为表查找而不是 switch。
+- 语言、provider capability 和 cache action 的分派改用 MICS 注册枚举：`Support/Language.h` 中的 `Language` / `Capability`，以及 `Compilation/Reflect.h` 中的 `CacheAction`。`generate` 的语言链、provider capability 匹配和 `cache stats|prune` 分支改为枚举/表驱动，不再使用字符串比较。
 - 函数签名和 record 字段中的 trait object（`&dyn Trait` / `*const dyn Trait`）会被明确拒绝；它是 fat pointer，没有显式契约时 AMC 不再把它降级为 thin pointer。
 - Rust semantic 重新加载时也会恢复 async functions 以及其他语言扩展。
 - C++ namespace 统一为 `skl::amc`（生成代码为 `skl::amc::generated`），C++ 枚举值使用 `UPPER_SNAKE_CASE`。

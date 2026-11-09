@@ -948,7 +948,8 @@ int build_command(const fs::path &provider) {
                 }
             }
             if (frontend_ran) {
-                if (!amc::compilation::dispatch_provider(frontend, "frontend", config_path, temporary, error))
+                if (!amc::compilation::dispatch_provider(
+                        frontend, amc::support::Capability::FRONTEND, config_path, temporary, error))
                     return fail(amc::ErrorCategory::PROVIDER, "frontend", error, config_path.string());
             }
 

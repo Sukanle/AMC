@@ -285,7 +285,7 @@ std::string provider_capability_names(const Provider &provider) {
     std::string names;
     for (const auto &capability : provider.capabilities) {
         if (!names.empty()) names += "|";
-        names += capability.name;
+        names += amc::support::capability_name(capability.kind);
     }
     return names;
 }
@@ -320,8 +320,9 @@ int run_provider(int argc, char **argv, const Provider &provider) {
         print_provider_usage(provider);
         return 2;
     }
+    const amc::support::Capability requested = amc::support::capability_from(provider_capability);
     for (const auto &candidate : provider.capabilities)
-        if (candidate.name == provider_capability)
+        if (candidate.kind == requested)
             return candidate.run(provider_input.getValue().c_str(), provider_output.getValue().c_str());
     fmt::print(stderr, "unknown capability\n");
     return 2;
@@ -401,7 +402,7 @@ bool parse_protocol(const amc::Json &message, bool &legacy, std::string &error) 
 amc::Json roles_json(const Provider &provider) {
     amc::Json roles = amc::Json::array();
     for (const auto &capability : provider.capabilities)
-        roles.push_back(capability.name);
+        roles.push_back(amc::support::capability_name(capability.kind));
     return roles;
 }
 
@@ -500,9 +501,9 @@ int run_capturing_stderr(
 }
 
 void emit_result(
-    long long id, const std::string &capability, const std::string &output, const std::string &diagnostics = {}) {
+    long long id, amc::support::Capability capability, const std::string &output, const std::string &diagnostics = {}) {
     amc::Json artifact = amc::Json::object();
-    artifact.set("kind", capability == "frontend" ? "abix" : "source");
+    artifact.set("kind", capability == amc::support::Capability::FRONTEND ? "abix" : "source");
     artifact.set("path", output);
 
     amc::Json artifacts = amc::Json::array();
@@ -513,18 +514,19 @@ void emit_result(
     message.set("id", amc::Json(id));
     message.set("type", "RESULT");
     message.set("status", "ok");
-    message.set("capability", capability);
+    message.set("capability", amc::support::capability_name(capability));
     message.set("artifacts", std::move(artifacts));
     message.set("diagnostics", diagnostics_json(diagnostics, "warning"));
     emit(message);
 }
 
-void emit_event(long long id, const char *phase, const std::string &capability) {
+void emit_event(long long id, const char *phase, amc::support::Capability capability) {
+    const char *name = amc::support::capability_name(capability);
     amc::Json event = amc::Json::object();
     event.set("kind", "progress");
     event.set("phase", phase);
-    event.set("capability", capability);
-    event.set("message", fmt::format("{} {}", capability, phase));
+    event.set("capability", name);
+    event.set("message", fmt::format("{} {}", name, phase));
 
     amc::Json message = amc::Json::object();
     message.set("schema", "abix.plugin/1");
@@ -545,10 +547,10 @@ void emit_cancelled(long long id, long long target, const char *status, const st
     emit(message);
 }
 
-int run_capability(const Provider &provider, const std::string &name, const char *input, const char *output,
+int run_capability(const Provider &provider, amc::support::Capability kind, const char *input, const char *output,
     std::string &diagnostics) {
     for (const auto &candidate : provider.capabilities) {
-        if (candidate.name != name) continue;
+        if (candidate.kind != kind) continue;
         return run_capturing_stderr(candidate.run, input, output, diagnostics);
     }
     return -1;
@@ -563,7 +565,7 @@ struct InputState {
 
 struct Work {
     long long id = -1;
-    std::string capability;
+    amc::support::Capability capability = amc::support::Capability::UNKNOWN;
     std::string input;
     std::string output;
     CancellationToken token;
@@ -573,9 +575,9 @@ struct Work {
     std::thread worker;
 };
 
-bool has_capability(const Provider &provider, const std::string &name) {
+bool has_capability(const Provider &provider, amc::support::Capability kind) {
     for (const auto &candidate : provider.capabilities)
-        if (candidate.name == name) return true;
+        if (candidate.kind == kind) return true;
     return false;
 }
 
@@ -610,10 +612,12 @@ int ipc(const Provider &provider) {
             emit_cancelled(work->id, work->id, "cancelled", work->diagnostics);
         } else if (work->result < 0) {
             emit_error(work->id, "PLUGIN-UNKNOWN-CAPABILITY", "protocol",
-                fmt::format("capability `{}` is not advertised by {}", work->capability, provider.language));
+                fmt::format("capability `{}` is not advertised by {}", amc::support::capability_name(work->capability),
+                    provider.language));
         } else if (work->result != 0) {
             emit_error(work->id, "PLUGIN-CAPABILITY-FAILED", "provider",
-                fmt::format("capability `{}` failed with status {}", work->capability, work->result),
+                fmt::format("capability `{}` failed with status {}", amc::support::capability_name(work->capability),
+                    work->result),
                 work->diagnostics);
         } else {
             emit_event(work->id, "finished", work->capability);
@@ -628,10 +632,11 @@ int ipc(const Provider &provider) {
         finish_work();
     };
 
-    const auto start_work = [&](long long id, std::string capability, std::string input, std::string output) {
+    const auto start_work = [&](long long id, amc::support::Capability capability, std::string input,
+                                std::string output) {
         work = std::make_unique<Work>();
         work->id = id;
-        work->capability = std::move(capability);
+        work->capability = capability;
         work->input = std::move(input);
         work->output = std::move(output);
         emit_event(id, "started", work->capability);
@@ -738,10 +743,13 @@ int ipc(const Provider &provider) {
                 stop_work();
                 return 2;
             }
-            const std::string capability = type == "PROJECT" ? "backend" : capability_node->as_string();
+            const amc::support::Capability capability = type == "PROJECT"
+                                                          ? amc::support::Capability::BACKEND
+                                                          : amc::support::capability_from(capability_node->as_string());
             if (!has_capability(provider, capability)) {
                 emit_error(id, "PLUGIN-UNKNOWN-CAPABILITY", "protocol",
-                    fmt::format("capability `{}` is not advertised by {}", capability, provider.language));
+                    fmt::format("capability `{}` is not advertised by {}", amc::support::capability_name(capability),
+                        provider.language));
                 stop_work();
                 return 2;
             }

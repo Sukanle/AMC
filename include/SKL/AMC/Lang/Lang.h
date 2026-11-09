@@ -15,6 +15,8 @@
  */
 #pragma once
 
+#include "SKL/AMC/Support/Language.h"
+
 #include <atomic>
 #include <stdint.h>
 #include <string>
@@ -157,9 +159,10 @@ private:
 CancellationToken *current_cancellation() noexcept;
 bool cancellation_requested() noexcept;
 
-// A capability the provider exposes (e.g. "frontend", "backend").
+// A capability the provider exposes. The spelling ("frontend"/"backend") is
+// registered in `Support/Language.h`.
 struct Capability {
-    std::string name;
+    support::Capability kind;
     int (*run)(const char *input, const char *output);
 };
 

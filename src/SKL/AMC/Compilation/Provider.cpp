@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "SKL/AMC/Compilation/Provider.h"
+#include "SKL/AMC/Support/Language.h"
 
 #include "SKL/AMC/Support/Json.h"
 #include "SKL/AMC/Util/Error.h"
@@ -196,7 +197,7 @@ std::string describe_provider(const ProviderManifestEntry &provider) {
 }
 
 fs::path provider_executable(const fs::path &base_provider, const std::string &language) {
-    if (language.empty() || language == "cpp") return base_provider;
+    if (language.empty() || amc::support::language_from(language) == amc::support::Language::CPP) return base_provider;
     ProviderManifest manifest;
     std::string manifest_error;
     if (load_provider_manifest(base_provider.parent_path(), manifest, manifest_error)) {
@@ -508,8 +509,9 @@ bool provider_protocol_compatible(const amc::Json &message) {
 
 }   // namespace
 
-bool dispatch_provider(const fs::path &provider, const char *capability, const fs::path &input, const fs::path &output,
-    std::string &error) {
+bool dispatch_provider(const fs::path &provider, amc::support::Capability capability, const fs::path &input,
+    const fs::path &output, std::string &error) {
+    const char *capability_name = amc::support::capability_name(capability);
     ProviderProcess child;
     if (!provider_spawn(provider, child, error)) return false;
     const int timeout_ms = provider_timeout_ms();
@@ -546,20 +548,20 @@ bool dispatch_provider(const fs::path &provider, const char *capability, const f
     bool advertised = false;
     if (const auto *entries = capabilities.find("capabilities"); entries != nullptr && entries->is_array()) {
         for (const auto &entry : entries->items()) {
-            if (entry.as_string() == capability) {
+            if (entry.as_string() == capability_name) {
                 advertised = true;
                 break;
             }
         }
     }
-    if (!advertised) return fail_and_wait(fmt::format("provider does not advertise capability `{}`", capability));
+    if (!advertised) return fail_and_wait(fmt::format("provider does not advertise capability `{}`", capability_name));
 
-    const bool project = std::string(capability) == "backend";
+    const bool project = capability == amc::support::Capability::BACKEND;
     amc::Json work = amc::Json::object();
     work.set("schema", "abix.plugin/1");
     work.set("id", amc::Json(3));
     work.set("type", project ? "PROJECT" : "ANALYZE");
-    if (!project) work.set("capability", capability);
+    if (!project) work.set("capability", capability_name);
     work.set("input", input.string());
     work.set("output", output.string());
     if (!provider_send(child, work)) return fail_and_wait(project ? "cannot send PROJECT" : "cannot send ANALYZE");
@@ -599,7 +601,7 @@ int generate(
                 amc::ErrorCategory::IO, "generate", "cannot create output directory", output.string(), ec.message());
     }
     std::string error;
-    if (!dispatch_provider(provider, "backend", input, output, error))
+    if (!dispatch_provider(provider, amc::support::Capability::BACKEND, input, output, error))
         return fail(amc::ErrorCategory::PROVIDER, "backend", error, input.string());
     return 0;
 }

@@ -31,8 +31,8 @@ int main(int argc, char **argv) {
     static const skl::amc::lang::Provider provider{
         "cpp",
         {
-          {"frontend", skl::amc::lang::cpp::run_frontend},
-          {"backend", skl::amc::lang::cpp::run_backend},
+          {skl::amc::support::Capability::FRONTEND, skl::amc::lang::cpp::run_frontend},
+          {skl::amc::support::Capability::BACKEND, skl::amc::lang::cpp::run_backend},
           },
         "0.4.0",
         {"templates", "interfaces"},

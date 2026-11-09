@@ -21,8 +21,8 @@ int main(int argc, char **argv) {
     static const skl::amc::lang::Provider provider{
         "rust",
         {
-          {"frontend", skl::amc::lang::rust::run_frontend},
-          {"backend", skl::amc::lang::rust::run_backend},
+          {skl::amc::support::Capability::FRONTEND, skl::amc::lang::rust::run_frontend},
+          {skl::amc::support::Capability::BACKEND, skl::amc::lang::rust::run_backend},
           },
         "0.4.0",
         {"ownership", "error", "target"},

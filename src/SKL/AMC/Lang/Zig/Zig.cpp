@@ -20,7 +20,7 @@ int main(int argc, char **argv) {
     static const skl::amc::lang::Provider provider{
         "zig",
         {
-          {"backend", skl::amc::lang::zig::run_backend},
+          {skl::amc::support::Capability::BACKEND, skl::amc::lang::zig::run_backend},
           },
         "0.4.0",
         {"target"},

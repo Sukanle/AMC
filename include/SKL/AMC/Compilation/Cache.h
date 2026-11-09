@@ -122,6 +122,14 @@ enum class CacheStatus : uint32_t {
 
 const char *cache_status_name(CacheStatus status);
 
+// `amc cache` inspection action. The CLI spelling is registered in
+// `Compilation/Reflect.h`.
+enum class CacheAction : uint32_t {
+    NONE = 0,
+    STATS,
+    PRUNE,
+};
+
 // Diagnostics strings recorded in CacheLookup::reason.
 constexpr const char *cache_reason_hit = "hit";
 constexpr const char *cache_reason_not_found = "not_found";

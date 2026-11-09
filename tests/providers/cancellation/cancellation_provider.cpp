@@ -39,7 +39,7 @@ int main(int argc, char **argv) {
     static const skl::amc::lang::Provider provider{
         "cancel",
         {
-          {"backend", slow_backend},
+          {skl::amc::support::Capability::BACKEND, slow_backend},
           },
         "0.0.0",
         {"test"},

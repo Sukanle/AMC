@@ -17,6 +17,7 @@
 #include "SKL/AMC/CLI/Support.h"
 #include "SKL/AMC/Core/Adapter.h"
 #include "SKL/AMC/Compilation/Cache.h"
+#include "SKL/AMC/Compilation/Reflect.h"
 #include "SKL/AMC/Core/Core.h"
 #include "SKL/AMC/Diagnostics/Error.h"
 #include "SKL/AMC/Artifact/Metadata.h"
@@ -126,7 +127,7 @@ llvm::cl::opt<std::string> cache_format("format", llvm::cl::desc("Output format"
 // populates the cache; this command is the diagnostic and CI surface over it.
 int cmd_cache() {
     const fs::path root = cache_root.getValue();
-    const std::string &command = cache_action;
+    const amc::CacheAction action = amc::reflect::enum_value<amc::CacheAction>(cache_action, amc::CacheAction::NONE);
     const bool verify = cache_verify;
     const bool clear = cache_clear;
     const bool json = cache_format == "json";
@@ -138,9 +139,9 @@ int cmd_cache() {
         return usage_error("--max-size expects a size like 512M");
     if (!cache_max_age.empty() && !parse_days(cache_max_age, max_age_days))
         return usage_error("--max-age expects a number of days");
-    if (!command.empty() && command != "stats" && command != "prune")
+    if (!cache_action.empty() && action == amc::CacheAction::NONE)
         return usage_error("cache accepts only stats or prune");
-    if (!command.empty() && (clear || verify))
+    if (action != amc::CacheAction::NONE && (clear || verify))
         return usage_error("stats/prune cannot be combined with --clear or --verify");
 
     amc::InstantiationCache cache(root.string());
@@ -170,7 +171,7 @@ int cmd_cache() {
         return failures.empty() ? 0 : 1;
     }
 
-    if (command == "stats") {
+    if (action == amc::CacheAction::STATS) {
         const amc::CacheStats stats = cache.stats();
         const uint64_t lookups = stats.hits + stats.misses;
         const double hit_rate = lookups == 0 ? 0.0 : static_cast<double>(stats.hits) / static_cast<double>(lookups);
@@ -197,7 +198,7 @@ int cmd_cache() {
         return 0;
     }
 
-    if (command == "prune") {
+    if (action == amc::CacheAction::PRUNE) {
         amc::PruneOptions options;
         options.max_bytes = max_bytes;
         options.max_age_seconds = max_age_days * 86'400;

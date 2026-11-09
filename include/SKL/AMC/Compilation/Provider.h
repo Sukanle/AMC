@@ -16,6 +16,8 @@
 #ifndef AMC_COMPILATION_PROVIDER_H
 #define AMC_COMPILATION_PROVIDER_H
 
+#include "SKL/AMC/Support/Language.h"
+
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -50,7 +52,7 @@ std::string describe_provider(const ProviderManifestEntry &provider);
 std::filesystem::path provider_executable(const std::filesystem::path &base_provider, const std::string &language);
 
 // Run a provider capability over the JSON-lines IPC protocol.
-bool dispatch_provider(const std::filesystem::path &provider, const char *capability,
+bool dispatch_provider(const std::filesystem::path &provider, support::Capability capability,
     const std::filesystem::path &input, const std::filesystem::path &output, std::string &error);
 
 // Dispatch a provider `backend` capability, defaulting the output to
