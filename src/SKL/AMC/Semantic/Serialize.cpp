@@ -27,10 +27,127 @@
 
 #include <fmt/format.h>
 
+using skl::amc::semantic::DeclarationKind;
+using skl::amc::semantic::InstOrigin;
+using skl::amc::semantic::InteractionKind;
+using skl::amc::semantic::LifetimeKind;
+using skl::amc::semantic::Mutability;
+using skl::amc::semantic::OwnershipKind;
+using skl::amc::semantic::SemanticFuncKind;
+using skl::amc::semantic::SemanticTypeKind;
+using skl::amc::semantic::TemplateArgKind;
+using skl::amc::semantic::TemplateParamKind;
+using skl::amc::semantic::TemplateTypeKind;
+
+// MICS static enum reflection replaces the hand-written name switches below.
+// The registration table is the single source of truth for both the wire
+// spelling and enum-to-name lookups.
+SKL_RFS_ENUM(DeclarationKind)
+SKL_RFS_ENUM_VALUE(DeclarationKind::NAMESPACE, "namespace")
+SKL_RFS_ENUM_VALUE(DeclarationKind::RECORD, "record")
+SKL_RFS_ENUM_VALUE(DeclarationKind::ENUM, "enumeration")
+SKL_RFS_ENUM_VALUE(DeclarationKind::FIELD, "field")
+SKL_RFS_ENUM_VALUE(DeclarationKind::FUNC, "function")
+SKL_RFS_ENUM_VALUE(DeclarationKind::METHOD, "method")
+SKL_RFS_ENUM_VALUE(DeclarationKind::CREATE, "constructor")
+SKL_RFS_ENUM_VALUE(DeclarationKind::DESTORY, "destructor")
+SKL_RFS_ENUM_VALUE(DeclarationKind::TEMPLATE, "template")
+SKL_RFS_ENUM_VALUE(DeclarationKind::CONCEPT, "concept")
+SKL_RFS_ENUM_VALUE(DeclarationKind::TYPEDEF, "typedef")
+SKL_RFS_ENUM_VALUE(DeclarationKind::VARIABLE, "variable")
+SKL_RFS_ENUM()
+
+SKL_RFS_ENUM(SemanticTypeKind)
+SKL_RFS_ENUM_VALUE(SemanticTypeKind::BUILTIN, "builtin")
+SKL_RFS_ENUM_VALUE(SemanticTypeKind::POINTER, "pointer")
+SKL_RFS_ENUM_VALUE(SemanticTypeKind::LVREF, "lvalue_reference")
+SKL_RFS_ENUM_VALUE(SemanticTypeKind::RVREF, "rvalue_reference")
+SKL_RFS_ENUM_VALUE(SemanticTypeKind::ARRAY, "array")
+SKL_RFS_ENUM_VALUE(SemanticTypeKind::RECORD, "record")
+SKL_RFS_ENUM_VALUE(SemanticTypeKind::ENUM, "enumeration")
+SKL_RFS_ENUM_VALUE(SemanticTypeKind::FUNC, "function")
+SKL_RFS_ENUM_VALUE(SemanticTypeKind::MEMPTR, "member_pointer")
+SKL_RFS_ENUM_VALUE(SemanticTypeKind::TEMPARAM, "template_parameter")
+SKL_RFS_ENUM_VALUE(SemanticTypeKind::TEMINST, "template_instance")
+SKL_RFS_ENUM_VALUE(SemanticTypeKind::DEPEND, "dependent")
+SKL_RFS_ENUM_VALUE(SemanticTypeKind::UNKNOWN, "unknown")
+SKL_RFS_ENUM()
+
+SKL_RFS_ENUM(TemplateTypeKind)
+SKL_RFS_ENUM_VALUE(TemplateTypeKind::FUNC, "function")
+SKL_RFS_ENUM_VALUE(TemplateTypeKind::CLASS, "class")
+SKL_RFS_ENUM_VALUE(TemplateTypeKind::ALIAS, "alias")
+SKL_RFS_ENUM_VALUE(TemplateTypeKind::VARIABLE, "variable")
+SKL_RFS_ENUM()
+
+SKL_RFS_ENUM(TemplateParamKind)
+SKL_RFS_ENUM_VALUE(TemplateParamKind::TYPE, "type")
+SKL_RFS_ENUM_VALUE(TemplateParamKind::NON, "non_type")
+SKL_RFS_ENUM_VALUE(TemplateParamKind::TEMPLATE, "template_template")
+SKL_RFS_ENUM()
+
+SKL_RFS_ENUM(TemplateArgKind)
+SKL_RFS_ENUM_VALUE(TemplateArgKind::TYPE, "type")
+SKL_RFS_ENUM_VALUE(TemplateArgKind::INTEGRAL, "integral")
+SKL_RFS_ENUM_VALUE(TemplateArgKind::TEMPLATE, "template")
+SKL_RFS_ENUM_VALUE(TemplateArgKind::PACK, "pack")
+SKL_RFS_ENUM_VALUE(TemplateArgKind::OTHER, "other")
+SKL_RFS_ENUM()
+
+SKL_RFS_ENUM(InstOrigin)
+SKL_RFS_ENUM_VALUE(InstOrigin::IMPLICIT_COMPILER, "implicit_compiler")
+SKL_RFS_ENUM_VALUE(InstOrigin::EXPLICIT_SOURCE, "explicit_source")
+SKL_RFS_ENUM_VALUE(InstOrigin::AMC_REQUESTED, "amc_requested")
+SKL_RFS_ENUM_VALUE(InstOrigin::CONFIG_REQUESTED, "config_requested")
+SKL_RFS_ENUM()
+
+SKL_RFS_ENUM(SemanticFuncKind)
+SKL_RFS_ENUM_VALUE(SemanticFuncKind::FREE, "free_function")
+SKL_RFS_ENUM_VALUE(SemanticFuncKind::MEMBER, "member_function")
+SKL_RFS_ENUM_VALUE(SemanticFuncKind::CREATE, "constructor")
+SKL_RFS_ENUM_VALUE(SemanticFuncKind::DESTORY, "destructor")
+SKL_RFS_ENUM_VALUE(SemanticFuncKind::OPETATOR, "operator")
+SKL_RFS_ENUM_VALUE(SemanticFuncKind::CONVERSION, "conversion")
+SKL_RFS_ENUM()
+
+SKL_RFS_ENUM(OwnershipKind)
+SKL_RFS_ENUM_VALUE(OwnershipKind::UNSPECIFIED, "unspecified")
+SKL_RFS_ENUM_VALUE(OwnershipKind::BORROWED, "borrowed")
+SKL_RFS_ENUM_VALUE(OwnershipKind::OWNED, "owned")
+SKL_RFS_ENUM_VALUE(OwnershipKind::SHARED, "shared")
+SKL_RFS_ENUM_VALUE(OwnershipKind::OPAQUE, "opaque")
+SKL_RFS_ENUM_VALUE(OwnershipKind::TRANSFERRED, "transferred")
+SKL_RFS_ENUM()
+
+SKL_RFS_ENUM(LifetimeKind)
+SKL_RFS_ENUM_VALUE(LifetimeKind::UNKNOWN, "unknown")
+SKL_RFS_ENUM_VALUE(LifetimeKind::STATIC, "static")
+SKL_RFS_ENUM_VALUE(LifetimeKind::CALLER, "caller")
+SKL_RFS_ENUM_VALUE(LifetimeKind::OWNER, "owner")
+SKL_RFS_ENUM_VALUE(LifetimeKind::SCOPE, "scope")
+SKL_RFS_ENUM()
+
+SKL_RFS_ENUM(Mutability)
+SKL_RFS_ENUM_VALUE(Mutability::IMMUTABLE, "immutable")
+SKL_RFS_ENUM_VALUE(Mutability::MUTABLE, "mutable")
+SKL_RFS_ENUM()
+
+SKL_RFS_ENUM(InteractionKind)
+SKL_RFS_ENUM_VALUE(InteractionKind::PARAM, "parameter")
+SKL_RFS_ENUM_VALUE(InteractionKind::RETURN, "return_value")
+SKL_RFS_ENUM()
+
 namespace skl::amc::semantic {
 namespace {
 
 constexpr std::string_view semantic_schema = "amc.semantic/2";
+
+template<typename E>
+const char *reflected_enum_name(E value, const char *fallback) {
+    for (const auto &entry : SRefl::TypeInfo<E>::list)
+        if (entry.value == value) return entry.name.data();
+    return fallback;
+}
 
 std::string id_hex(Hash128 value) { return fmt::format("{:016x}{:016x}", value.hi, value.lo); }
 
@@ -60,113 +177,25 @@ Hash128 hash_from_hex(const std::string &text) {
     return value;
 }
 
-const char *type_kind_name(SemanticTypeKind kind) {
-    using case_enum_type = decltype(kind);
-    switch (kind) {
-        case case_enum_type::BUILTIN:  return "builtin";
-        case case_enum_type::POINTER:  return "pointer";
-        case case_enum_type::LVREF:    return "lvalue_reference";
-        case case_enum_type::RVREF:    return "rvalue_reference";
-        case case_enum_type::ARRAY:    return "array";
-        case case_enum_type::RECORD:   return "record";
-        case case_enum_type::ENUM:     return "enumeration";
-        case case_enum_type::FUNC:     return "function";
-        case case_enum_type::MEMPTR:   return "member_pointer";
-        case case_enum_type::TEMPARAM: return "template_parameter";
-        case case_enum_type::TEMINST:  return "template_instance";
-        case case_enum_type::DEPEND:   return "dependent";
-        case case_enum_type::UNKNOWN:  return "unknown";
-    }
-    return "unknown";
-}
+const char *type_kind_name(SemanticTypeKind kind) { return reflected_enum_name(kind, "unknown"); }
 
-const char *template_kind_name(TemplateTypeKind kind) {
-    using case_enum_type = decltype(kind);
-    switch (kind) {
-        case case_enum_type::FUNC:     return "function";
-        case case_enum_type::CLASS:    return "class";
-        case case_enum_type::ALIAS:    return "alias";
-        case case_enum_type::VARIABLE: return "variable";
-    }
-    return "function";
-}
+const char *template_kind_name(TemplateTypeKind kind) { return reflected_enum_name(kind, "function"); }
 
-const char *parameter_kind_name(TemplateParamKind kind) {
-    using case_enum_type = decltype(kind);
-    switch (kind) {
-        case case_enum_type::TYPE:     return "type";
-        case case_enum_type::NON:      return "non_type";
-        case case_enum_type::TEMPLATE: return "template_template";
-    }
-    return "type";
-}
+const char *parameter_kind_name(TemplateParamKind kind) { return reflected_enum_name(kind, "type"); }
 
-const char *argument_kind_name(TemplateArgKind kind) {
-    using case_enum_type = decltype(kind);
-    switch (kind) {
-        case case_enum_type::TYPE:     return "type";
-        case case_enum_type::INTEGRAL: return "integral";
-        case case_enum_type::TEMPLATE: return "template";
-        case case_enum_type::PACK:     return "pack";
-        case case_enum_type::OTHER:    return "other";
-    }
-    return "other";
-}
+const char *argument_kind_name(TemplateArgKind kind) { return reflected_enum_name(kind, "other"); }
 
-const char *origin_name(InstOrigin origin) {
-    using case_enum_type = decltype(origin);
-    switch (origin) {
-        case case_enum_type::IMPLICIT_COMPILER: return "implicit_compiler";
-        case case_enum_type::EXPLICIT_SOURCE:   return "explicit_source";
-        case case_enum_type::AMC_REQUESTED:     return "amc_requested";
-        case case_enum_type::CONFIG_REQUESTED:  return "config_requested";
-    }
-    return "implicit_compiler";
-}
+const char *origin_name(InstOrigin origin) { return reflected_enum_name(origin, "implicit_compiler"); }
 
-const char *function_kind_name(SemanticFuncKind kind) {
-    using case_enum_type = decltype(kind);
-    switch (kind) {
-        case case_enum_type::FREE:       return "free_function";
-        case case_enum_type::MEMBER:     return "member_function";
-        case case_enum_type::CREATE:     return "constructor";
-        case case_enum_type::DESTORY:    return "destructor";
-        case case_enum_type::OPETATOR:   return "operator";
-        case case_enum_type::CONVERSION: return "conversion";
-    }
-    return "free_function";
-}
+const char *function_kind_name(SemanticFuncKind kind) { return reflected_enum_name(kind, "free_function"); }
 
-const char *ownership_kind_name(OwnershipKind kind) {
-    using case_enum_type = decltype(kind);
-    switch (kind) {
-        case case_enum_type::UNSPECIFIED: return "unspecified";
-        case case_enum_type::BORROWED:    return "borrowed";
-        case case_enum_type::OWNED:       return "owned";
-        case case_enum_type::SHARED:      return "shared";
-        case case_enum_type::OPAQUE:      return "opaque";
-        case case_enum_type::TRANSFERRED: return "transferred";
-    }
-    return "unspecified";
-}
+const char *ownership_kind_name(OwnershipKind kind) { return reflected_enum_name(kind, "unspecified"); }
 
-const char *lifetime_kind_name(LifetimeKind kind) {
-    using case_enum_type = decltype(kind);
-    switch (kind) {
-        case case_enum_type::UNKNOWN: return "unknown";
-        case case_enum_type::STATIC:  return "static";
-        case case_enum_type::CALLER:  return "caller";
-        case case_enum_type::OWNER:   return "owner";
-        case case_enum_type::SCOPE:   return "scope";
-    }
-    return "unknown";
-}
+const char *lifetime_kind_name(LifetimeKind kind) { return reflected_enum_name(kind, "unknown"); }
 
-const char *mutability_name(Mutability value) { return value == Mutability::MUTABLE ? "mutable" : "immutable"; }
+const char *mutability_name(Mutability value) { return reflected_enum_name(value, "immutable"); }
 
-const char *interaction_name(InteractionKind kind) {
-    return kind == InteractionKind::RETURN ? "return_value" : "parameter";
-}
+const char *interaction_name(InteractionKind kind) { return reflected_enum_name(kind, "parameter"); }
 
 Json source_json(const SourceLocation &source) {
     Json value = Json::object();
