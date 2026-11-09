@@ -149,6 +149,21 @@ const char *reflected_enum_name(E value, const char *fallback) {
     return fallback;
 }
 
+template<typename E>
+E reflected_enum_value(std::string_view name, E fallback) {
+    for (const auto &entry : SRefl::TypeInfo<E>::list) {
+        if (entry.name.size() != name.size()) continue;
+        bool equal = true;
+        for (size_t i = 0; i < name.size(); ++i)
+            if (entry.name.data()[i] != name[i]) {
+                equal = false;
+                break;
+            }
+        if (equal) return entry.value;
+    }
+    return fallback;
+}
+
 std::string id_hex(Hash128 value) { return fmt::format("{:016x}{:016x}", value.hi, value.lo); }
 
 bool parse_hex_u64(std::string_view text, uint64_t &value) {
@@ -229,73 +244,35 @@ Json argument_json(const TemplateArg &argument) {
 }
 
 SemanticTypeKind parse_type_kind(const std::string &name) {
-    if (name == "builtin") return SemanticTypeKind::BUILTIN;
-    if (name == "pointer") return SemanticTypeKind::POINTER;
-    if (name == "lvalue_reference") return SemanticTypeKind::LVREF;
-    if (name == "rvalue_reference") return SemanticTypeKind::RVREF;
-    if (name == "array") return SemanticTypeKind::ARRAY;
-    if (name == "record") return SemanticTypeKind::RECORD;
-    if (name == "enumeration") return SemanticTypeKind::ENUM;
-    if (name == "function") return SemanticTypeKind::FUNC;
-    if (name == "member_pointer") return SemanticTypeKind::MEMPTR;
-    if (name == "template_parameter") return SemanticTypeKind::TEMPARAM;
-    if (name == "template_instance") return SemanticTypeKind::TEMINST;
-    if (name == "dependent") return SemanticTypeKind::DEPEND;
-    return SemanticTypeKind::UNKNOWN;
+    return reflected_enum_value<SemanticTypeKind>(name, SemanticTypeKind::UNKNOWN);
 }
 
 TemplateTypeKind parse_template_kind(const std::string &name) {
-    if (name == "class") return TemplateTypeKind::CLASS;
-    if (name == "alias") return TemplateTypeKind::ALIAS;
-    if (name == "variable") return TemplateTypeKind::VARIABLE;
-    return TemplateTypeKind::FUNC;
+    return reflected_enum_value<TemplateTypeKind>(name, TemplateTypeKind::FUNC);
 }
 
 TemplateParamKind parse_parameter_kind(const std::string &name) {
-    if (name == "non_type") return TemplateParamKind::NON;
-    if (name == "template_template") return TemplateParamKind::TEMPLATE;
-    return TemplateParamKind::TYPE;
+    return reflected_enum_value<TemplateParamKind>(name, TemplateParamKind::TYPE);
 }
 
 TemplateArgKind parse_argument_kind(const std::string &name) {
-    if (name == "integral") return TemplateArgKind::INTEGRAL;
-    if (name == "template") return TemplateArgKind::TEMPLATE;
-    if (name == "pack") return TemplateArgKind::PACK;
-    if (name == "other") return TemplateArgKind::OTHER;
-    return TemplateArgKind::TYPE;
+    return reflected_enum_value<TemplateArgKind>(name, TemplateArgKind::TYPE);
 }
 
 InstOrigin parse_origin(const std::string &name) {
-    if (name == "explicit_source") return InstOrigin::EXPLICIT_SOURCE;
-    if (name == "amc_requested") return InstOrigin::AMC_REQUESTED;
-    if (name == "config_requested") return InstOrigin::CONFIG_REQUESTED;
-    return InstOrigin::IMPLICIT_COMPILER;
+    return reflected_enum_value<InstOrigin>(name, InstOrigin::IMPLICIT_COMPILER);
 }
 
 SemanticFuncKind parse_function_kind(const std::string &name) {
-    if (name == "member_function") return SemanticFuncKind::MEMBER;
-    if (name == "constructor") return SemanticFuncKind::CREATE;
-    if (name == "destructor") return SemanticFuncKind::DESTORY;
-    if (name == "operator") return SemanticFuncKind::OPETATOR;
-    if (name == "conversion") return SemanticFuncKind::CONVERSION;
-    return SemanticFuncKind::FREE;
+    return reflected_enum_value<SemanticFuncKind>(name, SemanticFuncKind::FREE);
 }
 
 OwnershipKind parse_ownership_kind(const std::string &name) {
-    if (name == "borrowed") return OwnershipKind::BORROWED;
-    if (name == "owned") return OwnershipKind::OWNED;
-    if (name == "shared") return OwnershipKind::SHARED;
-    if (name == "opaque") return OwnershipKind::OPAQUE;
-    if (name == "transferred") return OwnershipKind::TRANSFERRED;
-    return OwnershipKind::UNSPECIFIED;
+    return reflected_enum_value<OwnershipKind>(name, OwnershipKind::UNSPECIFIED);
 }
 
 LifetimeKind parse_lifetime_kind(const std::string &name) {
-    if (name == "static") return LifetimeKind::STATIC;
-    if (name == "caller") return LifetimeKind::CALLER;
-    if (name == "owner") return LifetimeKind::OWNER;
-    if (name == "scope") return LifetimeKind::SCOPE;
-    return LifetimeKind::UNKNOWN;
+    return reflected_enum_value<LifetimeKind>(name, LifetimeKind::UNKNOWN);
 }
 
 SourceLocation parse_source(const Json *node) {
