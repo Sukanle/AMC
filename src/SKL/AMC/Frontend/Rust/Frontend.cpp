@@ -1155,16 +1155,19 @@ private:
 std::string unsupported_abi_type_hint(const std::string &spelling) {
     struct Entry {
         const char *prefix;
+        bool exact;
         const char *hint;
     };
     static const Entry entries[] = {
-        {"Option<", "Rust Option<T> has no implicit ABI layout; add an explicit [[contract]] or wrap it in repr(C)"},
-        {   "Box<",         "Rust Box<T> is an owned pointer; add an explicit [[contract]]/[[owned]] or use *mut T"},
-        {   "Vec<",    "Rust Vec<T> is an owned buffer; add an explicit [[contract]] or pass a pointer plus length"},
-        { "String",      "Rust String is an owned buffer; add an explicit [[contract]] or use abix_str/*const char"},
+        {"Option<", false,
+         "Rust Option<T> has no implicit ABI layout; add an explicit [[contract]] or wrap it in repr(C)"               },
+        {   "Box<", false,      "Rust Box<T> is an owned pointer; add an explicit [[contract]]/[[owned]] or use *mut T"},
+        {   "Vec<", false, "Rust Vec<T> is an owned buffer; add an explicit [[contract]] or pass a pointer plus length"},
+        { "String",  true,   "Rust String is an owned buffer; add an explicit [[contract]] or use abix_str/*const char"},
     };
-    for (const Entry &entry : entries)
-        if (spelling.rfind(entry.prefix, 0) == 0) return entry.hint;
+    for (const Entry &entry : entries) {
+        if (entry.exact ? spelling == entry.prefix : spelling.rfind(entry.prefix, 0) == 0) return entry.hint;
+    }
     if (spelling.rfind("dyn ", 0) == 0) return "Rust trait objects need an explicit contract or a repr(C) wrapper";
     return {};
 }
