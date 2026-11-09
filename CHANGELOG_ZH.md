@@ -11,6 +11,10 @@
 - `tools/rustc-helper/`：`amc-rustc-helper` 现在是真正的 `rustc_driver` 语义生产者。它输出 `amc.rust.semantic/1` envelope，并提取嵌套 module 中的 `repr(C)` / `repr(transparent)` / packed / align / union / enum 记录、具体泛型实例、public `extern "C"` 函数（含 `impl` 关联函数）、泛型声明、trait/impl 元数据和 `Result` error enum。构建需要 `rustc-dev`。
 - `[rust] helper` 配置：`amc-rust` 将 helper 的 types/functions 导入 ABIX/Semantic IR，与源码 parser 交叉校验布局，并写出 semantic sidecar。helper 已证明的语法如果 parser 无法建模，parser 错误会降级为 warning；helper 不可用时仍回退到 parser/probe。
 - Cargo metadata 集成：helper 通过 `--manifest-path`（或从 `--source` 向上发现的 manifest）读取 `cargo metadata`，填充 crate name、edition 和声明的 features，并支持 additive `--features`。
+- Cargo workspace 事实：helper 记录 package id、manifest 路径、workspace root、target directory、workspace/default members 和依赖（kind、requirement、optional、path）。`[rust] manifest` 与 `[rust] target` 会转发给 helper，事实保存在 `.semantic` 的 `rust.cargo`。
+- 显式泛型实例现在支持 primitive、非泛型本地类型和 const generic 十进制整数。未知名称、多余参数和非法 const 值会 fail closed，不再生成猜测的实例。
+- 标准容器事实：`Option<T>`、`Box<T>`、`String`、`Vec<T>` 的出现位置记录在 `.semantic` 的 `rust.containers`。选中进入 ABI 时会要求显式 `[[contract]]`，不会假设 niche 布局或所有权。
+- `AMC_BUILD_RUST_HELPER=ON` 会用 Cargo 把 `tools/rustc-helper` 构建到 build 目录（仅在 helper 进程内设置 `RUSTC_BOOTSTRAP=1`），并安装到 AMC 工具旁边；未开启时测试仍按需构建 helper。
 - `amc-rust-helper-test`：用 Cargo 构建 helper，验证 generics/traits/errors/cargo metadata，用 rustc `size_of`/`align_of`/`offset_of!` probe 交叉校验布局，并检查 AMC 导入路径。
 - `tools/rustc-helper` 改为 Cargo 项目（`Cargo.toml`、`Cargo.lock`、`build.rs`）。命令行交给 `clap`，envelope 交给 `serde_json`，workspace 事实交给 `cargo_metadata`，不再手写参数与 JSON 解析。
 - Rust 投影：原始 FFI 声明移入 `raw` 模块；生成的包装保留源码函数名，纯值类型为安全 `pub fn`，指针/owner 契约为 `pub unsafe fn`，所有原始调用统一走生成的 `amc_ffi!` 宏。`Owned*` 和 typed `Result` 包装使用同一宏。
@@ -24,13 +28,18 @@
 
 ### 变更
 
+- 函数签名和 record 字段中的 trait object（`&dyn Trait` / `*const dyn Trait`）会被明确拒绝；它是 fat pointer，没有显式契约时 AMC 不再把它降级为 thin pointer。
+- Rust semantic 重新加载时也会恢复 async functions 以及其他语言扩展。
+- C++ namespace 统一为 `skl::amc`（生成代码为 `skl::amc::generated`），C++ 枚举值使用 `UPPER_SNAKE_CASE`。
+- Core/Semantic/IR/Diagnostics/Compilation/Artifact 的枚举名称与解析改由共享 MICS `SKL_RFS_ENUM` 表驱动，不再维护本地 switch。
 - `evaluate_optional` / `evaluate_result` / `evaluate_string_view` 支持 v0.4.0 的显式 `reserved` 布局，并拒绝非法的 reserved 字段。
 - 合成的 StringView 边界与 C++ thunk 包含显式 reserved 字段；error-boundary 的值字段索引跟随新的 `status, reserved, value` 布局。
 - Rust/Zig/C++ interop fixture 改用显式布局。
 
 ### 验证
 
-- Linux CTest：34/34 passed。
+- Linux CTest：35/35 passed。
+- `amc-rust-helper-test`：131 项检查，覆盖 Cargo workspace、const/本地类型泛型实例、容器事实、trait object 拒绝和 rustc 布局 probe。
 - rustc frontend 工作另行推进；本条只记录 ABIX 锁步。
 
 ## v0.3.3 — 2026-11-09

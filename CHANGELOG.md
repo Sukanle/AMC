@@ -11,6 +11,10 @@
 - `tools/rustc-helper/`: `amc-rustc-helper` is now a real `rustc_driver` semantic producer. It emits the `amc.rust.semantic/1` envelope and extracts `repr(C)` / `repr(transparent)` / packed / align / union / enum records from nested modules, concrete generic instances, public `extern "C"` functions (including `impl` associated functions), generic declarations, trait/impl metadata and `Result` error enums. Building it requires `rustc-dev`.
 - `[rust] helper` config: `amc-rust` imports the helper's types and functions into ABIX/Semantic IR, cross-checks their layouts against the source parser, and writes the semantic sidecar. Parser errors for syntax the helper already proved are downgraded to warnings. The parser/probe remains the fallback when the helper is unavailable.
 - Cargo metadata integration: the helper fills crate name, edition and declared features from `cargo metadata` through `--manifest-path` (or a manifest discovered above `--source`), with additive `--features`.
+- Cargo workspace facts: the helper records package id, manifest path, workspace root, target directory, workspace/default members and dependencies (kind, requirement, optional, path). `[rust] manifest` and `[rust] target` are forwarded to the helper, and the facts persist under `.semantic` `rust.cargo`.
+- Explicit generic instances now accept primitives, non-generic local types and const-generic decimal integer literals. Unknown names, extra arguments and malformed const values fail closed instead of producing a guessed instance.
+- Standard-container facts: `Option<T>`, `Box<T>`, `String` and `Vec<T>` occurrences are recorded under `.semantic` `rust.containers`. Selecting one for the ABI fails with a diagnostic that asks for an explicit `[[contract]]` instead of assuming a niche layout or ownership.
+- `AMC_BUILD_RUST_HELPER=ON` builds `tools/rustc-helper` with Cargo into the build tree (scoped `RUSTC_BOOTSTRAP=1`) and installs the binary next to the AMC tools. Tests keep building the helper on demand when the option is off.
 - `amc-rust-helper-test`: builds the helper with Cargo, validates generics/traits/errors/cargo metadata, cross-validates layout with a rustc `size_of`/`align_of`/`offset_of!` probe, and checks the AMC import path.
 - `tools/rustc-helper` is now a Cargo project (`Cargo.toml`, `Cargo.lock`, `build.rs`). `clap` handles the command line, `serde_json` emits the envelope, and `cargo_metadata` reads workspace facts instead of hand-written parsers.
 - Rust projection: raw FFI declarations move into a `raw` module; generated wrappers keep the source names, are safe `pub fn` for pure value types and `pub unsafe fn` for pointer/owner contracts, and funnel every raw call through the generated `amc_ffi!` macro. `Owned*` and typed `Result` wrappers use the same macro.
@@ -24,13 +28,18 @@
 
 ### Changed
 
+- Trait objects (`&dyn Trait` / `*const dyn Trait`) are rejected in function signatures and record fields. They are fat pointers, so AMC no longer lowers them as thin pointers without an explicit contract.
+- Rust semantic reload now restores async functions as well as the other language extensions.
+- C++ namespaces are unified as `skl::amc` (generated code: `skl::amc::generated`) and C++ enum values use `UPPER_SNAKE_CASE`.
+- Enum names and parsing for Core/Semantic/IR/Diagnostics/Compilation/Artifact are driven by shared MICS `SKL_RFS_ENUM` tables instead of local switches.
 - `evaluate_optional` / `evaluate_result` / `evaluate_string_view` accept the v0.4.0 explicit `reserved` layouts and reject a malformed reserved field.
 - Synthesized StringView boundaries and C++ thunks include the explicit reserved word; error-boundary value indices follow the new `status, reserved, value` layout.
 - Rust/Zig/C++ interop fixtures use the explicit layouts.
 
 ### Validation
 
-- Linux CTest: 34/34 passed.
+- Linux CTest: 35/35 passed.
+- `amc-rust-helper-test`: 131 checks, including Cargo workspaces, const/local generic instances, container facts, trait-object rejection and rustc layout probes.
 - The rustc frontend work continues separately; this entry records the ABIX lockstep only.
 
 ## v0.3.3 — 2026-11-09
