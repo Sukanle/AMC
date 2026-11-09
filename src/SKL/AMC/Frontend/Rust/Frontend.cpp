@@ -1008,7 +1008,14 @@ std::string owner_destroyer_definition(const std::string &payload) {
 
 std::string owned_string_destroyer_definition() {
     return "unsafe extern \"C\" fn __amc_owned_str_destroy(object: *mut core::ffi::c_void) {\n"
-           "    if !object.is_null() {\n        unsafe { drop(Box::from_raw(object as *mut String)); }\n    }\n}\n\n";
+           "    if object.is_null() { return; }\n"
+           "    let header = core::mem::size_of::<usize>() * 2;\n"
+           "    let base = (object as *mut u8).sub(header);\n"
+           "    let len = *(base as *const usize);\n"
+           "    let total = *((base as *const usize).add(1));\n"
+           "    let _ = len;\n"
+           "    std::alloc::dealloc(base, core::alloc::Layout::from_size_align_unchecked(total, 1));\n"
+           "}\n\n";
 }
 
 std::string owned_span_destroyer_name(const std::string &element) {
@@ -1018,9 +1025,17 @@ std::string owned_span_destroyer_name(const std::string &element) {
 std::string owned_span_destroyer_definition(const std::string &element) {
     return fmt::format(
         "unsafe extern \"C\" fn {}(object: *mut core::ffi::c_void) {{\n"
-        "    if !object.is_null() {{\n        unsafe {{ drop(Box::from_raw(object as *mut Vec<{}>)); }}\n    "
-        "}}\n}}\n\n",
-        owned_span_destroyer_name(element), element);
+        "    if object.is_null() {{ return; }}\n"
+        "    let align = core::mem::align_of::<{}>();\n"
+        "    let header = (2 * core::mem::size_of::<usize>() + align - 1) / align * align;\n"
+        "    let base = (object as *mut u8).sub(header);\n"
+        "    let len = *(base as *const usize);\n"
+        "    let total = *((base as *const usize).add(1));\n"
+        "    let data = object as *mut {};\n"
+        "    for i in 0..len {{ core::ptr::drop_in_place(data.add(i)); }}\n"
+        "    std::alloc::dealloc(base, core::alloc::Layout::from_size_align_unchecked(total, align));\n"
+        "}}\n\n",
+        owned_span_destroyer_name(element), element, element);
 }
 
 std::string container_adapter_expression(
@@ -2579,27 +2594,55 @@ int run_frontend(const char *config_path, const char *output_path) {
                     "destroy: Some({}), module_instance: 0 }}",
                     return_adapt->target, owner_destroyer_name(return_payload));
             } else if (return_owned_string) {
+                wrapper_source += "unsafe {\n    ";
                 wrapper_source += "let __amc_value = " + call + ";\n    ";
-                wrapper_source += "let __amc_data = __amc_value.as_ptr() as *const u8;\n    ";
-                wrapper_source += "let __amc_len = __amc_value.len() as u64;\n    ";
+                wrapper_source += "let __amc_bytes = __amc_value.into_bytes();\n    ";
+                wrapper_source += "let __amc_len = __amc_bytes.len();\n    ";
+                wrapper_source += "let __amc_header = core::mem::size_of::<usize>() * 2;\n    ";
+                wrapper_source += "let __amc_total = __amc_header + __amc_len;\n    ";
                 wrapper_source +=
-                    "let __amc_object = Box::into_raw(Box::new(__amc_value)) as *mut core::ffi::c_void;\n    ";
+                    "let __amc_layout = core::alloc::Layout::from_size_align_unchecked(__amc_total, 1);\n    ";
+                wrapper_source += "let __amc_base = std::alloc::alloc(__amc_layout);\n    ";
+                wrapper_source += "if __amc_base.is_null() {{ std::alloc::handle_alloc_error(__amc_layout); }}\n    ";
+                wrapper_source += "*(__amc_base as *mut usize) = __amc_len;\n    ";
+                wrapper_source += "*((__amc_base as *mut usize).add(1)) = __amc_total;\n    ";
+                wrapper_source += "let __amc_data = __amc_base.add(__amc_header);\n    ";
+                wrapper_source += "core::ptr::copy_nonoverlapping(__amc_bytes.as_ptr(), __amc_data, __amc_len);\n    ";
+                wrapper_source += "core::mem::forget(__amc_bytes);\n    ";
+                wrapper_source += "let __amc_object = __amc_data as *mut core::ffi::c_void;\n    ";
                 wrapper_source += fmt::format(
-                    "{} {{ view: {} {{ data: __amc_data, len: __amc_len, encoding: 0, reserved: 0 }}, "
+                    "{} {{ view: {} {{ data: __amc_data, len: __amc_len as u64, encoding: 0, reserved: 0 }}, "
                     "owner: abix_owner_handle {{ object: __amc_object, mode: 1, flags: 0, "
-                    "destroy: Some(__amc_owned_str_destroy), module_instance: 0 }} }}",
+                    "destroy: Some(__amc_owned_str_destroy), module_instance: 0 }} }}\n    }}",
                     return_adapt->target, return_view);
             } else if (return_owned_span) {
+                const std::string element = return_payload;
+                wrapper_source += "unsafe {\n    ";
                 wrapper_source += "let __amc_value = " + call + ";\n    ";
-                wrapper_source += "let __amc_data = __amc_value.as_ptr();\n    ";
-                wrapper_source += "let __amc_len = __amc_value.len() as u64;\n    ";
+                wrapper_source += "let __amc_len = __amc_value.len();\n    ";
+                wrapper_source += fmt::format("let __amc_align = core::mem::align_of::<{}>();\n    ", element);
                 wrapper_source +=
-                    "let __amc_object = Box::into_raw(Box::new(__amc_value)) as *mut core::ffi::c_void;\n    ";
+                    "let __amc_header = (2 * core::mem::size_of::<usize>() + __amc_align - 1) / __amc_align * "
+                    "__amc_align;\n    ";
                 wrapper_source += fmt::format(
-                    "{} {{ view: {} {{ data: __amc_data, len: __amc_len }}, "
+                    "let __amc_total = __amc_header + __amc_len * core::mem::size_of::<{}>();\n    ", element);
+                wrapper_source +=
+                    "let __amc_layout = core::alloc::Layout::from_size_align_unchecked(__amc_total, __amc_align);\n   "
+                    " ";
+                wrapper_source += "let __amc_base = std::alloc::alloc(__amc_layout);\n    ";
+                wrapper_source += "if __amc_base.is_null() {{ std::alloc::handle_alloc_error(__amc_layout); }}\n    ";
+                wrapper_source += "*(__amc_base as *mut usize) = __amc_len;\n    ";
+                wrapper_source += "*((__amc_base as *mut usize).add(1)) = __amc_total;\n    ";
+                wrapper_source +=
+                    fmt::format("let __amc_data = __amc_base.add(__amc_header) as *mut {};\n    ", element);
+                wrapper_source += "core::ptr::copy_nonoverlapping(__amc_value.as_ptr(), __amc_data, __amc_len);\n    ";
+                wrapper_source += "core::mem::forget(__amc_value);\n    ";
+                wrapper_source += "let __amc_object = __amc_data as *mut core::ffi::c_void;\n    ";
+                wrapper_source += fmt::format(
+                    "{} {{ view: {} {{ data: __amc_data, len: __amc_len as u64 }}, "
                     "owner: abix_owner_handle {{ object: __amc_object, mode: 1, flags: 0, "
-                    "destroy: Some({}), module_instance: 0 }} }}",
-                    return_adapt->target, return_view, owned_span_destroyer_name(return_payload));
+                    "destroy: Some({}), module_instance: 0 }} }}\n    }}",
+                    return_adapt->target, return_view, owned_span_destroyer_name(element));
             } else if (return_adapt != nullptr && return_kind == ContainerKind::OPTION) {
                 const std::string target = return_adapt->target;
                 wrapper_source += fmt::format(

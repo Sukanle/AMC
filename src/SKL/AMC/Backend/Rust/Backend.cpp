@@ -650,6 +650,91 @@ void emit_owned(Output &o, const Projector &p) {
     }
 }
 
+const amc::Field *find_visible_field(const amc::ABIModule &module, const amc::Type &type, const char *name) {
+    for (uint32_t i = 0; i < type.field_count; ++i) {
+        const amc::Field &field = module.fields[type.field_begin + i];
+        if ((field.flags & amc::field_base) == 0 && (field.flags & amc::field_bitfield) == 0 && field.name == name)
+            return &field;
+    }
+    return nullptr;
+}
+
+void emit_owner_views(Output &o, const Projector &p) {
+    if (p.m.lowerings.empty()) return;
+    std::set<std::string> emitted;
+    bool header = false;
+    for (const auto &lowering : p.m.lowerings) {
+        const auto kind = static_cast<amc::LoweringKind>(lowering.kind);
+        if (kind != amc::LoweringKind::OWNER
+            && kind != amc::LoweringKind::OWNED_STRING
+            && kind != amc::LoweringKind::OWNED_SPAN)
+            continue;
+        const int index = p.index_of(lowering.type_id);
+        if (index < 0) continue;
+        const amc::Type &type = p.m.types[static_cast<size_t>(index)];
+        const std::string raw_name = p.name_of(lowering.type_id);
+        if (raw_name.empty() || !emitted.emplace(raw_name).second) continue;
+        if (!header) {
+            o.print(
+                "\n// ABIX owner handles and owned views: value wrappers that\n"
+                "// release through the owner destroy entry exactly once.\n");
+            header = true;
+        }
+        if (kind == amc::LoweringKind::OWNER) {
+            const amc::Field *object = find_visible_field(p.m, type, "object");
+            const amc::Field *mode = find_visible_field(p.m, type, "mode");
+            const amc::Field *destroy = find_visible_field(p.m, type, "destroy");
+            if (!object || !mode || !destroy) continue;
+            std::string suffix = raw_name;
+            const std::string prefix = "abix_owner_";
+            if (suffix.rfind(prefix, 0) == 0) suffix = suffix.substr(prefix.size());
+            const std::string wrapper = "OwnerOf" + pascal_ident(suffix);
+            o.print("pub struct {} {{\n    raw: {},\n}}\n", wrapper, raw_name);
+            o.print("impl {} {{\n", wrapper);
+            o.print("    pub unsafe fn from_raw(raw: {}) -> Option<Self> {{\n", raw_name);
+            o.print("        if raw.object.is_null() {{ None }} else {{ Some(Self {{ raw }}) }}\n    }}\n");
+            o.print("    pub fn object(&self) -> {} {{ self.raw.object }}\n", p.field_type(object->type_id));
+            o.print("    pub fn into_raw(self) -> {} {{\n", raw_name);
+            o.print("        let raw = unsafe {{ core::ptr::read(&self.raw) }};\n");
+            o.print("        core::mem::forget(self);\n        raw\n    }}\n}}\n");
+            o.print("impl Drop for {} {{\n", wrapper);
+            o.print("    fn drop(&mut self) {{\n");
+            o.print("        if !self.raw.destroy.is_null() && (self.raw.mode == 1 || self.raw.mode == 2) {{\n");
+            o.print("            let destroy: unsafe extern \"C\" fn(*mut core::ffi::c_void) =\n");
+            o.print("                unsafe {{ core::mem::transmute(self.raw.destroy) }};\n");
+            o.print("            if !self.raw.object.is_null() {{ unsafe {{ destroy(self.raw.object); }} }}\n");
+            o.print("        }}\n        self.raw.object = core::ptr::null_mut();\n    }}\n}}\n");
+        } else {
+            const amc::Field *view = find_visible_field(p.m, type, "view");
+            const amc::Field *owner = find_visible_field(p.m, type, "owner");
+            if (!view || !owner) continue;
+            std::string suffix = raw_name;
+            const std::string prefix = kind == amc::LoweringKind::OWNED_STRING ? "abix_owned_str_" : "abix_owned_span_";
+            if (suffix.rfind(prefix, 0) == 0) suffix = suffix.substr(prefix.size());
+            const std::string wrapper =
+                (kind == amc::LoweringKind::OWNED_STRING ? "OwnedString" : "OwnedSpan") + pascal_ident(suffix);
+            const std::string view_type = p.field_type(view->type_id);
+            o.print("pub struct {} {{\n    raw: {},\n}}\n", wrapper, raw_name);
+            o.print("impl {} {{\n", wrapper);
+            o.print("    pub unsafe fn from_raw(raw: {}) -> Option<Self> {{\n", raw_name);
+            o.print("        if raw.owner.object.is_null() {{ None }} else {{ Some(Self {{ raw }}) }}\n    }}\n");
+            o.print("    pub fn view(&self) -> &{} {{ &self.raw.view }}\n", view_type);
+            o.print("    pub fn into_raw(self) -> {} {{\n", raw_name);
+            o.print("        let raw = unsafe {{ core::ptr::read(&self.raw) }};\n");
+            o.print("        core::mem::forget(self);\n        raw\n    }}\n}}\n");
+            o.print("impl Drop for {} {{\n", wrapper);
+            o.print("    fn drop(&mut self) {{\n");
+            o.print("        if !self.raw.owner.destroy.is_null()\n");
+            o.print("            && (self.raw.owner.mode == 1 || self.raw.owner.mode == 2)\n        {{\n");
+            o.print("            let destroy: unsafe extern \"C\" fn(*mut core::ffi::c_void) =\n");
+            o.print("                unsafe {{ core::mem::transmute(self.raw.owner.destroy) }};\n");
+            o.print(
+                "            if !self.raw.owner.object.is_null() {{ unsafe {{ destroy(self.raw.owner.object); }} }}\n");
+            o.print("        }}\n        self.raw.owner.object = core::ptr::null_mut();\n    }}\n}}\n");
+        }
+    }
+}
+
 void emit_capability_contracts(Output &o, const Projector &p) {
     if (p.m.interfaces.empty()) return;
     o.print("\n// Interface capability contracts: identity, version, slots and signatures.\n");
@@ -1175,6 +1260,7 @@ std::string generate_projection(const amc::ABIModule &module, const amc::ir::Low
     }
     emit_functions(o, projector);
     emit_owned(o, projector);
+    emit_owner_views(o, projector);
     emit_capability_contracts(o, projector);
     emit_interface_proxies(o, projector);
     emit_error_sets(o, projector);

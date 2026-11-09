@@ -140,6 +140,15 @@ def main():
                 check(match.get("return_type_name") == expected,
                       f"{function} uses the expected boundary return type")
 
+        gen = os.path.join(work, "gen_owner")
+        result = run([str(amc), "generate", artifact, "-l", "rust", "-o", gen])
+        if check(result.returncode == 0, "owned view Rust projection generated", output(result)[-400:]):
+            projection = open(os.path.join(gen, "amc_generated.rs"), encoding="utf-8").read()
+            check("pub struct OwnedStringUtf8" in projection and "pub struct OwnedSpanContainerPoint" in projection,
+                  "owned view RAII wrappers are generated")
+            check("impl Drop for OwnedStringUtf8" in projection and "owner.destroy" in projection,
+                  "owned view Drop calls the owner destroy")
+
         lib_rs = os.path.join(work, "lib.rs")
         with open(lib_rs, "w", encoding="utf-8") as handle:
             handle.write('include!("rust_container_api.rs");\n')
@@ -148,6 +157,47 @@ def main():
         result = run([rustc, "--edition", "2021", "--crate-type", "cdylib", lib_rs, "-o", library])
         if not check(result.returncode == 0, "generated container wrappers compile", output(result)[-600:]):
             return 1
+
+        owner_consumer = os.path.join(work, "owner_consumer.rs")
+        with open(owner_consumer, "w", encoding="utf-8") as handle:
+            handle.write("""#[path = "gen_owner/amc_generated.rs"]
+pub mod abix;
+
+mod skl {
+    pub use crate::abix;
+}
+use skl::abix::*;
+
+fn main() {
+    unsafe {
+        let string = OwnedStringUtf8::from_raw(container_owned_string(7)).expect("owned string");
+        assert_eq!(string.view().len, 1);
+        assert_eq!(*string.view().data, b'7');
+        drop(string);
+
+        let span = OwnedSpanContainerPoint::from_raw(container_owned_points(5)).expect("owned span");
+        assert_eq!(span.view().len, 1);
+        assert_eq!((*span.view().data).x, 5);
+        drop(span);
+    }
+    println!("owned views: OK");
+}
+""")
+        owner_consumer_bin = os.path.join(work, exe("owner_consumer"))
+        link = ["-L", "native=" + work, "-l", "dylib=rust_container_api"]
+        if sys.platform != "win32":
+            link += ["-C", "link-arg=-Wl,-rpath," + work]
+        result = run([rustc, "--edition", "2021", owner_consumer, "-o", owner_consumer_bin] + link)
+        if check(result.returncode == 0, "owned view consumer compiled", output(result)[-500:]):
+            env = dict(os.environ)
+            if sys.platform == "win32":
+                env["PATH"] = work + os.pathsep + env.get("PATH", "")
+            else:
+                env["LD_LIBRARY_PATH"] = work + os.pathsep + env.get("LD_LIBRARY_PATH", "")
+                env["DYLD_LIBRARY_PATH"] = work + os.pathsep + env.get("DYLD_LIBRARY_PATH", "")
+            result = run([owner_consumer_bin], env=env)
+            check(result.returncode == 0 and "owned views: OK" in output(result),
+                  "owned view RAII wrappers release through the owner", output(result)[-500:])
 
         class AbixStr(ctypes.Structure):
             _fields_ = [("data", ctypes.POINTER(ctypes.c_uint8)),
@@ -248,6 +298,8 @@ def main():
         check(owned_str.view.len == 1 and owned_str.view.data[0] == ord("7")
               and owned_str.owner.mode == 1 and owned_str.owner.object,
               "owned String return carries a view and an owner")
+        check(owned_str.owner.object == ctypes.cast(owned_str.view.data, ctypes.c_void_p).value,
+              "owned String owner.object equals view.data")
         ctypes.CFUNCTYPE(None, ctypes.c_void_p)(owned_str.owner.destroy)(owned_str.owner.object)
 
         lib.container_owned_points.argtypes = [ctypes.c_int32]
@@ -256,6 +308,8 @@ def main():
         check(owned_span.view.len == 1 and owned_span.view.data[0].x == 5
               and owned_span.view.data[0].y == 6 and owned_span.owner.mode == 1,
               "owned Vec return carries a span view and an owner")
+        check(owned_span.owner.object == ctypes.cast(owned_span.view.data, ctypes.c_void_p).value,
+              "owned Vec owner.object equals view.data")
         ctypes.CFUNCTYPE(None, ctypes.c_void_p)(owned_span.owner.destroy)(owned_span.owner.object)
 
         # A container parameter without a declared mapping still fails closed.

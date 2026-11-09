@@ -226,6 +226,14 @@ output = "rust_box_owner.abix"
                         parameter = (match.get("parameters") or [{}])[0]
                         check(parameter.get("type_name") == expected,
                               "owner consume takes the owner handle")
+            owner_gen = os.path.join(owner_dir, "gen")
+            result = run([str(amc), "generate", owner_artifact, "-l", "rust", "-o", owner_gen])
+            if check(result.returncode == 0, "owner Box Rust projection generated", output(result)[-400:]):
+                owner_projection = open(os.path.join(owner_gen, "amc_generated.rs"), encoding="utf-8").read()
+                check("pub struct OwnerOfBoxWidget" in owner_projection
+                      and "impl Drop for OwnerOfBoxWidget" in owner_projection,
+                      "owner handle RAII wrapper is generated")
+
             owner_root = os.path.join(owner_dir, "provider.rs")
             with open(owner_root, "w", encoding="utf-8") as handle:
                 handle.write('include!("rust_box_api.rs");\n')
@@ -262,6 +270,46 @@ print('owner box: OK')
                 result = run([sys.executable, owner_consumer], env=env)
                 check(result.returncode == 0 and "owner box: OK" in output(result),
                       "owner handle create/consume/destroy runs", output(result)[-500:])
+
+            owner_rs = os.path.join(owner_dir, "consumer.rs")
+            with open(owner_rs, "w", encoding="utf-8") as handle:
+                handle.write("""#[path = "gen/amc_generated.rs"]
+pub mod abix;
+
+mod skl {
+    pub use crate::abix;
+}
+use skl::abix::*;
+
+fn main() {
+    unsafe {
+        let owner = OwnerOfBoxWidget::from_raw(box_widget_make(7)).expect("owner");
+        assert_eq!(box_widget_live(), 1);
+        assert_eq!(box_widget_value(owner.into_raw()), 7);
+        assert_eq!(box_widget_live(), 0);
+
+        let owner = OwnerOfBoxWidget::from_raw(box_widget_make(9)).expect("owner");
+        drop(owner);
+        assert_eq!(box_widget_live(), 0);
+    }
+    println!("owner box raii: OK");
+}
+""")
+            owner_rs_bin = os.path.join(owner_dir, exe("consumer_rs"))
+            link = ["-L", "native=" + owner_dir, "-l", "dylib=rust_box_owner"]
+            if sys.platform != "win32":
+                link += ["-C", "link-arg=-Wl,-rpath," + owner_dir]
+            result = run([rustc, "--edition", "2021", owner_rs, "-o", owner_rs_bin] + link)
+            if check(result.returncode == 0, "owner Box Rust consumer compiled", output(result)[-500:]):
+                env = dict(os.environ)
+                if sys.platform == "win32":
+                    env["PATH"] = owner_dir + os.pathsep + env.get("PATH", "")
+                else:
+                    env["LD_LIBRARY_PATH"] = owner_dir + os.pathsep + env.get("LD_LIBRARY_PATH", "")
+                    env["DYLD_LIBRARY_PATH"] = owner_dir + os.pathsep + env.get("DYLD_LIBRARY_PATH", "")
+                result = run([owner_rs_bin], env=env)
+                check(result.returncode == 0 and "owner box raii: OK" in output(result),
+                      "owner handle RAII wrapper releases through destroy", output(result)[-500:])
 
         # Optional auto thunks: create = "auto" / destroy = "auto" synthesize
         # the Box::new and Box::from_raw pair, while [[owned]]/[[contract]]
