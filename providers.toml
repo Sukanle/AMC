@@ -30,7 +30,7 @@ language = "rust"
 executable = "amc-rust"
 roles = ["frontend", "backend"]
 protocol = "jsonl-v1"
-features = ["ownership", "error", "target"]
+features = ["ownership", "error", "target", "semantics", "cargo", "edition"]
 
 [[provider]]
 language = "zig"

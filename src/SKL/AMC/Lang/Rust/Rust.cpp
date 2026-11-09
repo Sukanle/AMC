@@ -25,7 +25,7 @@ int main(int argc, char **argv) {
           {skl::amc::support::Capability::BACKEND, skl::amc::lang::rust::run_backend},
           },
         "0.4.0",
-        {"ownership", "error", "target"},
+        {"ownership", "error", "target", "semantics", "cargo", "edition"},
     };
     return skl::amc::lang::run_provider(argc, argv, provider);
 }
