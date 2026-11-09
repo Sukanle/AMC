@@ -24,6 +24,10 @@ namespace skl::amc::util {
 
 // Process-wide error envelope selector, set once from `--error-format`.
 extern amc::ErrorFormat g_error_format;
+// True when `--error-format` was seen; `--format json` must not override it.
+extern bool g_error_format_explicit;
+// True when `--error-format` had an unsupported value.
+extern bool g_error_format_invalid;
 
 // Prints `error` through the selected envelope and returns 1 (convenience for
 // `return fail(...)` paths). Callers pass the file/detail that located the

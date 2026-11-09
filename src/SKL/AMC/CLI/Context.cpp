@@ -41,7 +41,8 @@ llvm::cl::SubCommand context_subcommand("context", "Emit LLM/JSON context for an
 llvm::cl::opt<std::string> context_input(llvm::cl::Positional, llvm::cl::desc("<file.abix>"), llvm::cl::Required,
     llvm::cl::cat(support::cli_category()), llvm::cl::sub(context_subcommand));
 llvm::cl::opt<std::string> context_format("format", llvm::cl::desc("Output format"), llvm::cl::value_desc("llm|json"),
-    llvm::cl::init("llm"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(context_subcommand));
+    llvm::cl::init("llm"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(context_subcommand),
+    support::format_callback());
 llvm::cl::opt<std::string> context_output("o", llvm::cl::desc("Write output to a file"), llvm::cl::value_desc("file"),
     llvm::cl::cat(support::cli_category()), llvm::cl::sub(context_subcommand));
 llvm::cl::alias context_output_alias("output", llvm::cl::desc("Alias for -o"), llvm::cl::aliasopt(context_output),

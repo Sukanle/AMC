@@ -48,7 +48,8 @@ llvm::cl::opt<std::string> query_function("function", llvm::cl::desc("Match a fu
 llvm::cl::opt<std::string> query_compatible("compatible", llvm::cl::desc("Compare against another artifact"),
     llvm::cl::value_desc("other.abix"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(query_subcommand));
 llvm::cl::opt<std::string> query_format("format", llvm::cl::desc("Output format"), llvm::cl::value_desc("text|json"),
-    llvm::cl::init("text"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(query_subcommand));
+    llvm::cl::init("text"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(query_subcommand),
+    support::format_callback());
 llvm::cl::opt<bool> query_layout("layout", llvm::cl::desc("Include layout details"),
     llvm::cl::cat(support::cli_category()), llvm::cl::sub(query_subcommand));
 

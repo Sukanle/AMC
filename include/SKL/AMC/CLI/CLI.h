@@ -31,6 +31,7 @@ namespace skl::amc::cli {
 // The unified error envelope is shared with the other AMC executables.
 using amc::util::fail;
 using amc::util::g_error_format;
+using amc::util::g_error_format_invalid;
 using amc::util::read_error_category;
 using amc::util::usage_error;
 
@@ -58,8 +59,8 @@ enum class Command {
     FRONTEND,
 };
 
-// Parse the pre-filtered argument vector (without --error-format) and execute
-// the selected command. `executable_dir` is where the language providers live.
+// Parse the argument vector and execute the selected command.
+// `executable_dir` is where the language providers live.
 int run(int argc, char **argv, const fs::path &executable_dir);
 
 int cmd_context();

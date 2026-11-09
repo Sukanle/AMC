@@ -42,11 +42,9 @@ llvm::cl::opt<bool> list_languages(
 llvm::cl::opt<std::string> describe_language("describe-language",
     llvm::cl::desc("Describe one installed language provider"), llvm::cl::value_desc("language"),
     llvm::cl::cat(support::cli_category()));
-// Registered for `--help` only: `--error-format` is consumed before parsing so
-// parse failures already use the selected envelope.
 llvm::cl::opt<std::string> error_format_option("error-format", llvm::cl::desc("Structured error envelope"),
     llvm::cl::value_desc("text|json"), llvm::cl::init("text"), llvm::cl::cat(support::cli_category()),
-    llvm::cl::sub(llvm::cl::SubCommand::getAll()));
+    llvm::cl::sub(llvm::cl::SubCommand::getAll()), support::error_format_callback());
 
 std::string trim(std::string text) {
     while (!text.empty() && (text.back() == '\n' || text.back() == '\r' || text.back() == ' '))
@@ -87,43 +85,32 @@ Command selected_command() {
 }
 
 int run(int argc, char **argv, const fs::path &executable_dir) {
-    // --error-format selects the envelope used for every later failure, so it
-    // is resolved before LLVM can report a parse error.
-    std::vector<std::string> filtered;
-    filtered.emplace_back(argc > 0 ? argv[0] : "amc");
-    bool explicit_error_format = false;
+    // LLVM's subcommand parser requires the subcommand token before options.
+    // Move the global diagnostic option to the end so `amc --error-format json
+    // build ...` still works; LLVM parses its value and invokes the callback.
+    std::vector<std::string> arguments;
+    std::vector<std::string> global_options;
+    arguments.emplace_back(argc > 0 ? argv[0] : "amc");
     for (int i = 1; i < argc; ++i) {
         const std::string argument = argv[i];
         if (argument == "--error-format" || argument == "-error-format") {
             if (i + 1 >= argc) return usage_error("--error-format requires a value");
-            explicit_error_format = true;
-            if (!amc::parse_error_format(argv[++i], g_error_format))
-                return usage_error("--error-format must be text or json");
+            global_options.push_back(argument);
+            global_options.emplace_back(argv[++i]);
             continue;
         }
         if (argument.rfind("--error-format=", 0) == 0 || argument.rfind("-error-format=", 0) == 0) {
-            explicit_error_format = true;
-            const size_t prefix = argument.find('=') + 1;
-            if (!amc::parse_error_format(argument.substr(prefix), g_error_format))
-                return usage_error("--error-format must be text or json");
+            global_options.push_back(argument);
             continue;
         }
-        filtered.push_back(argument);
+        arguments.push_back(argument);
     }
-    if (!explicit_error_format) {
-        for (size_t i = 1; i < filtered.size(); ++i) {
-            const bool format_option = filtered[i] == "--format" || filtered[i] == "-format";
-            if (filtered[i] == "--format=json"
-                || filtered[i] == "-format=json"
-                || (format_option && i + 1 < filtered.size() && filtered[i + 1] == "json")) {
-                g_error_format = amc::ErrorFormat::JSON;
-                break;
-            }
-        }
-    }
+    arguments.insert(arguments.end(), global_options.begin(), global_options.end());
 
     std::string parse_error;
-    if (!parse_command_line(filtered, parse_error)) return usage_error(trim(parse_error));
+    const bool parsed = parse_command_line(arguments, parse_error);
+    if (g_error_format_invalid) return usage_error("--error-format must be text or json");
+    if (!parsed) return usage_error(trim(parse_error));
     const Command command = selected_command();
 
     if (list_languages) {

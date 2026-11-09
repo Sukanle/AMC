@@ -49,7 +49,7 @@ llvm::cl::opt<std::string> metadata_input(llvm::cl::Positional, llvm::cl::desc("
     llvm::cl::Required, llvm::cl::cat(support::cli_category()), llvm::cl::sub(metadata_subcommand));
 llvm::cl::opt<std::string> metadata_format("format", llvm::cl::desc("Output format"),
     llvm::cl::value_desc("bin|meta|json|text"), llvm::cl::init("bin"), llvm::cl::cat(support::cli_category()),
-    llvm::cl::sub(metadata_subcommand));
+    llvm::cl::sub(metadata_subcommand), support::format_callback());
 llvm::cl::opt<std::string> metadata_output("o", llvm::cl::desc("Write output to a file"), llvm::cl::value_desc("file"),
     llvm::cl::cat(support::cli_category()), llvm::cl::sub(metadata_subcommand));
 llvm::cl::opt<std::string> metadata_build_id("build-id", llvm::cl::desc("Override the build id"),

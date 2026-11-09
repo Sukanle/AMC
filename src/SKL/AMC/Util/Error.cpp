@@ -20,6 +20,8 @@
 namespace skl::amc::util {
 
 amc::ErrorFormat g_error_format = amc::ErrorFormat::TEXT;
+bool g_error_format_explicit = false;
+bool g_error_format_invalid = false;
 
 int fail(amc::ErrorCategory category, const std::string &stage, const std::string &message, const std::string &file,
     const std::string &detail) {

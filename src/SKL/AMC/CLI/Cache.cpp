@@ -114,7 +114,8 @@ llvm::cl::opt<std::string> cache_max_size("max-size", llvm::cl::desc("Prune abov
 llvm::cl::opt<std::string> cache_max_age("max-age", llvm::cl::desc("Prune entries older than this many days"),
     llvm::cl::value_desc("days"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(cache_subcommand));
 llvm::cl::opt<std::string> cache_format("format", llvm::cl::desc("Output format"), llvm::cl::value_desc("text|json"),
-    llvm::cl::init("text"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(cache_subcommand));
+    llvm::cl::init("text"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(cache_subcommand),
+    support::format_callback());
 
 }   // namespace
 

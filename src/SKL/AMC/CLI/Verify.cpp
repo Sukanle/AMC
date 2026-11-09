@@ -56,7 +56,7 @@ llvm::cl::opt<std::string> verify_build_dir("B", llvm::cl::desc("Build directory
     llvm::cl::cat(support::cli_category()), llvm::cl::sub(verify_subcommand));
 llvm::cl::opt<std::string> verify_format("format", llvm::cl::desc("Output format"),
     llvm::cl::value_desc("text|json|diagnostics|diagnostics-json"), llvm::cl::init("text"),
-    llvm::cl::cat(support::cli_category()), llvm::cl::sub(verify_subcommand));
+    llvm::cl::cat(support::cli_category()), llvm::cl::sub(verify_subcommand), support::format_callback());
 
 }   // namespace
 
@@ -201,7 +201,8 @@ llvm::cl::opt<std::string> target_input(llvm::cl::Positional, llvm::cl::desc("<f
 llvm::cl::opt<std::string> target_expect("expect", llvm::cl::desc("Expected target facts"),
     llvm::cl::value_desc("arch=..,os=.."), llvm::cl::cat(support::cli_category()), llvm::cl::sub(target_subcommand));
 llvm::cl::opt<std::string> target_format("format", llvm::cl::desc("Output format"), llvm::cl::value_desc("text|json"),
-    llvm::cl::init("text"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(target_subcommand));
+    llvm::cl::init("text"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(target_subcommand),
+    support::format_callback());
 
 const char *target_status_name(amc::TargetVerificationStatus status) {
     return skl::amc::reflect::enum_name(status, "unverifiable");
