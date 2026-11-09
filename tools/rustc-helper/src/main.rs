@@ -49,9 +49,9 @@ struct Cli {
     /// Rust crate name passed to rustc.
     #[arg(long)]
     crate_name: String,
-    /// Rust edition passed to rustc.
-    #[arg(long, default_value = "2021")]
-    edition: String,
+    /// Rust edition passed to rustc; defaults to the Cargo package edition.
+    #[arg(long)]
+    edition: Option<String>,
     /// Root Rust source file.
     #[arg(long)]
     source: PathBuf,
@@ -1424,11 +1424,9 @@ impl Callbacks for HelperCallbacks {
             .as_ref()
             .map(|cargo| cargo.name.clone())
             .unwrap_or_else(|| crate_name.clone());
-        let cargo_edition = self
-            .cargo
-            .as_ref()
-            .map(|cargo| cargo.edition.clone())
-            .unwrap_or_else(|| edition.clone());
+        // Report the edition rustc actually compiled with, not the Cargo
+        // manifest default that may have been overridden by `--edition`.
+        let cargo_edition = edition.clone();
         let features = self
             .cargo
             .as_ref()
@@ -1443,6 +1441,7 @@ impl Callbacks for HelperCallbacks {
                 "target_directory": cargo.target_directory,
                 "workspace_members": cargo.workspace_members,
                 "default_members": cargo.default_members,
+                "edition": cargo.edition,
                 "dependencies": cargo.dependencies.iter().map(|dependency| json!({
                     "name": dependency.name,
                     "requirement": dependency.requirement,
@@ -1513,6 +1512,11 @@ fn main() {
     }
 
     let cargo = cargo_facts(&cli);
+    let edition = cli
+        .edition
+        .clone()
+        .or_else(|| cargo.as_ref().map(|cargo| cargo.edition.clone()))
+        .unwrap_or_else(|| "2021".to_string());
     let metadata = env::temp_dir().join(format!("amc-rustc-helper-{}.rmeta", std::process::id()));
     let metadata_path = metadata.to_string_lossy().into_owned();
     let mut args = vec![
@@ -1520,7 +1524,7 @@ fn main() {
         "--crate-name".to_string(),
         cli.crate_name.clone(),
         "--edition".to_string(),
-        cli.edition.clone(),
+        edition,
         "--crate-type=lib".to_string(),
         "--emit=metadata".to_string(),
         "-o".to_string(),

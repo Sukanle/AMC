@@ -421,10 +421,23 @@ def main():
                   "cargo path dependency is recorded")
             check(workspace.get("crate", {}).get("name") == "rust_workspace_app",
                   "cargo workspace package name")
+            check(workspace_cargo.get("edition") == "2021", "cargo package edition is recorded")
             check(set(workspace.get("crate", {}).get("features", [])) >= {"default", "extra"},
                   "cargo workspace features are recorded")
             check(workspace.get("target", {}).get("triple") == host_triple,
                   "cargo target triple is forwarded to the helper")
+
+        edition_source = Path(work) / "edition2024.rs"
+        edition_source.write_text(
+            "#[repr(C)]\npub struct Edition2024 { pub value: i32 }\n", encoding="utf-8")
+        edition_json = os.path.join(work, "edition2024.json")
+        result = run([helper, "--crate-name", "edition2024", "--edition", "2024",
+                      "--source", str(edition_source), "--output", edition_json])
+        if check(result.returncode == 0 and os.path.isfile(edition_json),
+                 "helper compiles an explicit edition", output(result)[-400:]):
+            edition_crate = json.load(open(edition_json, encoding="utf-8")).get("crate", {})
+            check(edition_crate.get("edition") == "2024",
+                  "helper reports the requested edition")
 
         feature_json = os.path.join(work, "features-without-manifest.json")
         result = run([helper, "--crate-name", "rust_semantic", "--edition", "2021",
@@ -582,6 +595,35 @@ def main():
                               for item in cargo.get("dependencies", [])),
                           "AMC stores cargo dependencies")
                     check(cargo.get("target_directory") != "", "AMC stores the cargo target directory")
+
+            # [rust] edition selects the rustc edition and is validated early.
+            edition_dir = Path(work) / "edition_import"
+            edition_dir.mkdir()
+            shutil.copyfile(edition_source, edition_dir / "edition2024.rs")
+            edition_config = edition_dir / "edition.abic.toml"
+            edition_config.write_text(
+                "[package]\nname = \"edition2024\"\nversion = \"0.1\"\n\n"
+                "[[import]]\nlanguage = \"rust\"\nfiles = [\"edition2024.rs\"]\n"
+                "symbols = [\"Edition2024\"]\n\n"
+                "[rust]\nhelper = \"" + helper_toml + "\"\nedition = \"2024\"\n\n"
+                "[[export]]\noutput = \"edition2024.abix\"\n",
+                encoding="utf-8")
+            result = run([str(amc), "build", "-c", str(edition_config),
+                          "-B", str(edition_dir / "out")])
+            check(result.returncode == 0
+                  and (edition_dir / "out" / "edition2024.abix").is_file(),
+                  "AMC forwards [rust] edition", output(result)[-500:])
+
+            bad_edition = edition_dir / "bad_edition.abic.toml"
+            bad_edition.write_text(
+                edition_config.read_text(encoding="utf-8").replace(
+                    'edition = "2024"', 'edition = "bogus"', 1),
+                encoding="utf-8")
+            result = run([str(amc), "build", "-c", str(bad_edition),
+                          "-B", str(edition_dir / "bad_out")])
+            bad_output = output(result)
+            check(result.returncode != 0 and "[rust] edition must be" in bad_output,
+                  "invalid [rust] edition fails closed", bad_output[-400:])
 
             # Standard containers are fail-closed when selected for ABI, but
             # their facts still reach the semantic sidecar.

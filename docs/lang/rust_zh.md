@@ -89,6 +89,7 @@ v0.4.0 的 helper 进程在独立进程中链接 `rustc_driver`。它报告 targ
 helper = "path/to/amc-rustc-helper"
 manifest = "path/to/Cargo.toml"   # 可选，显式 Cargo manifest
 target = "x86_64-unknown-linux-gnu"  # 可选，rustc target triple
+edition = "2024"                    # 可选，2015 | 2018 | 2021 | 2024
 features = ["default", "std"]
 
 [[instantiate]]
@@ -97,7 +98,7 @@ args = ["u64"]
 as = "WrapperU64"
 ```
 
-`[rust] manifest` 会作为 `--manifest-path` 转发，使 helper 能通过 `cargo metadata` 解析 workspace 成员、默认成员、依赖和 target directory。`[rust] target` 会作为 `--target` 转发，用于选择布局和 target facts 的 rustc target。`[rust] features` 会作为 `--features` 转发给 helper。每个 `[[instantiate]]` 条目会作为 `--instantiate` 转发，强制输出一个本地具体泛型实例；类型参数可以是 primitive 或非泛型本地类型，const generic 参数使用十进制整数字面量；helper 仍不会枚举所有 monomorphization。
+`[rust] manifest` 会作为 `--manifest-path` 转发，使 helper 能通过 `cargo metadata` 解析 workspace 成员、默认成员、依赖和 target directory。`[rust] target` 会作为 `--target` 转发，用于选择布局和 target facts 的 rustc target。`[rust] edition` 选择 rustc edition（默认 `2021`；存在 manifest 且未设置该键时使用 Cargo package edition）；不支持的值会在 helper 启动前失败。`[rust] features` 会作为 `--features` 转发给 helper。每个 `[[instantiate]]` 条目会作为 `--instantiate` 转发，强制输出一个本地具体泛型实例；类型参数可以是 primitive 或非泛型本地类型，const generic 参数使用十进制整数字面量；helper 仍不会枚举所有 monomorphization。
 
 配置后，`amc-rust` 会运行 helper 并使用其 target facts。如果 helper 失败且 `[target]` 已提供 `pointer_bits`、endianness 和 `c_long_bits`，AMC 会给出警告并回退到 parser/probe 路径。
 

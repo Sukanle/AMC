@@ -136,6 +136,7 @@ struct Config {
     std::vector<std::string> rust_features;        // [rust] features: additive Cargo features
     std::string rust_manifest;                     // [rust] manifest: explicit Cargo.toml (optional)
     std::string rust_target;                       // [rust] target: rustc target triple (optional)
+    std::string rust_edition;                      // [rust] edition: 2015 | 2018 | 2021 | 2024 (optional)
 };
 
 // A capability returns this value when it observed a cooperative cancellation

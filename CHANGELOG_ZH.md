@@ -11,6 +11,7 @@
 - `tools/rustc-helper/`：`amc-rustc-helper` 现在是真正的 `rustc_driver` 语义生产者。它输出 `amc.rust.semantic/1` envelope，并提取嵌套 module 中的 `repr(C)` / `repr(transparent)` / packed / align / union / enum 记录、具体泛型实例、public `extern "C"` 函数（含 `impl` 关联函数）、泛型声明、trait/impl 元数据和 `Result` error enum。构建需要 `rustc-dev`。
 - `[rust] helper` 配置：`amc-rust` 将 helper 的 types/functions 导入 ABIX/Semantic IR，与源码 parser 交叉校验布局，并写出 semantic sidecar。helper 已证明的语法如果 parser 无法建模，parser 错误会降级为 warning；helper 不可用时仍回退到 parser/probe。
 - Cargo metadata 集成：helper 通过 `--manifest-path`（或从 `--source` 向上发现的 manifest）读取 `cargo metadata`，填充 crate name、edition 和声明的 features，并支持 additive `--features`。
+- Rust edition 选择：`[rust] edition`（2015/2018/2021/2024）会转发给 helper；未设置时由 Cargo manifest 提供 package edition，否则使用 2021。helper 报告 rustc 实际编译使用的 edition，并在 `cargo.edition` 保留 Cargo package edition。
 - Cargo workspace 事实：helper 记录 package id、manifest 路径、workspace root、target directory、workspace/default members 和依赖（kind、requirement、optional、path）。`[rust] manifest` 与 `[rust] target` 会转发给 helper，事实保存在 `.semantic` 的 `rust.cargo`。
 - 显式泛型实例现在支持 primitive、非泛型本地类型和 const generic 十进制整数。未知名称、多余参数和非法 const 值会 fail closed，不再生成猜测的实例。
 - 标准容器事实：`Option<T>`、`Box<T>`、`String`、`Vec<T>` 的出现位置记录在 `.semantic` 的 `rust.containers`。选中进入 ABI 时会要求显式 `[[contract]]`，不会假设 niche 布局或所有权。

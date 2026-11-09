@@ -68,6 +68,7 @@ Rules:
     "manifest_path": "/workspace/app/Cargo.toml",
     "workspace_root": "/workspace",
     "target_directory": "/workspace/target",
+    "edition": "2021",
     "workspace_members": [
       "path+file:///workspace/core#demo_core@0.1.0",
       "path+file:///workspace/app#demo@0.2.0"
@@ -139,7 +140,7 @@ Required for any layout-bearing record. The helper must report the target it com
 
 ### `cargo`
 
-Present when a Cargo manifest is available. `package_id`, `manifest_path`, `workspace_root` and `target_directory` identify the selected package and build layout. `workspace_members` and `default_members` list package IDs; `dependencies[]` records `name`, `requirement`, `kind` (`normal` / `dev` / `build`), `optional` and an optional `path`. Workspace facts are language/build metadata; they never enter ABI identity.
+Present when a Cargo manifest is available. `package_id`, `manifest_path`, `workspace_root` and `target_directory` identify the selected package and build layout; `edition` is the Cargo package edition. `workspace_members` and `default_members` list package IDs; `dependencies[]` records `name`, `requirement`, `kind` (`normal` / `dev` / `build`), `optional` and an optional `path`. Workspace facts are language/build metadata; they never enter ABI identity.
 
 ### `types`
 

@@ -406,7 +406,11 @@ bool query_rust_helper(
         return false;
     }
     const std::string crate = llvm::sys::path::stem(source).str();
-    const std::string edition = "2021";
+    const std::string edition = config.rust_edition.empty() ? "2021" : config.rust_edition;
+    if (edition != "2015" && edition != "2018" && edition != "2021" && edition != "2024") {
+        error = "[rust] edition must be 2015, 2018, 2021 or 2024";
+        return false;
+    }
     llvm::SmallVector<llvm::StringRef, 10> args;
     args.push_back(helper.str());
     args.push_back("--crate-name");

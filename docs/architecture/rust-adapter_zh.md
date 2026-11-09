@@ -68,6 +68,7 @@ schema: "amc.rust.semantic/1"
     "manifest_path": "/workspace/app/Cargo.toml",
     "workspace_root": "/workspace",
     "target_directory": "/workspace/target",
+    "edition": "2021",
     "workspace_members": [
       "path+file:///workspace/core#demo_core@0.1.0",
       "path+file:///workspace/app#demo@0.2.0"
@@ -139,7 +140,7 @@ schema: "amc.rust.semantic/1"
 
 ### `cargo`
 
-存在 Cargo manifest 时出现。`package_id`、`manifest_path`、`workspace_root`、`target_directory` 标识选中的 package 和构建布局；`workspace_members` / `default_members` 列出 package ID；`dependencies[]` 记录 `name`、`requirement`、`kind`（`normal` / `dev` / `build`）、`optional` 和可选 `path`。workspace 事实属于语言/构建元数据，不进入 ABI 身份。
+存在 Cargo manifest 时出现。`package_id`、`manifest_path`、`workspace_root`、`target_directory` 标识选中的 package 和构建布局；`edition` 是 Cargo package edition；`workspace_members` / `default_members` 列出 package ID；`dependencies[]` 记录 `name`、`requirement`、`kind`（`normal` / `dev` / `build`）、`optional` 和可选 `path`。workspace 事实属于语言/构建元数据，不进入 ABI 身份。
 
 ### `types`
 

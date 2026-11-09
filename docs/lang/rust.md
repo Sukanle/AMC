@@ -89,6 +89,7 @@ The v0.4.0 helper process links `rustc_driver` in an isolated process. It report
 helper = "path/to/amc-rustc-helper"
 manifest = "path/to/Cargo.toml"   # optional, explicit Cargo manifest
 target = "x86_64-unknown-linux-gnu"  # optional, rustc target triple
+edition = "2024"                    # optional, 2015 | 2018 | 2021 | 2024
 features = ["default", "std"]
 
 [[instantiate]]
@@ -97,7 +98,7 @@ args = ["u64"]
 as = "WrapperU64"
 ```
 
-`[rust] manifest` is forwarded as `--manifest-path`, so the helper can resolve workspace members, default members, dependencies and the target directory through `cargo metadata`. `[rust] target` is forwarded as `--target` and selects the rustc target used for both layout and target facts. `[rust] features` is forwarded to the helper as `--features`. Each `[[instantiate]]` entry is forwarded as `--instantiate` and forces one concrete local generic instance. Type arguments may be primitives or non-generic local types; const-generic arguments are decimal integer literals. The helper still does not enumerate every monomorphization.
+`[rust] manifest` is forwarded as `--manifest-path`, so the helper can resolve workspace members, default members, dependencies and the target directory through `cargo metadata`. `[rust] target` is forwarded as `--target` and selects the rustc target used for both layout and target facts. `[rust] edition` selects the rustc edition (default `2021`, or the Cargo package edition when a manifest is present and the key is omitted); unsupported values fail before the helper runs. `[rust] features` is forwarded to the helper as `--features`. Each `[[instantiate]]` entry is forwarded as `--instantiate` and forces one concrete local generic instance. Type arguments may be primitives or non-generic local types; const-generic arguments are decimal integer literals. The helper still does not enumerate every monomorphization.
 
 When configured, `amc-rust` runs the helper and uses its target facts. If the helper fails and `[target]` already provides `pointer_bits`, endianness and `c_long_bits`, AMC falls back to the parser/probe path with a warning.
 
