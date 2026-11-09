@@ -101,14 +101,20 @@ fn main() {
         assert_eq!(ret.mode, skl::abix::metadata::OWNERSHIP_OWNED, "create returns owned");
         assert_eq!(
             ret.release_function,
-            region.function_index_by_name("demo_vec2_destroy").expect("destroy index"),
+            region
+                .function_index_by_name("demo_vec2_destroy")
+                .expect("destroy index"),
             "release entry point"
         );
         let scale = region.find_function_by_name("demo_scale").expect("demo_scale");
-        let borrowed = region.find_ownership(0, scale.parameter_begin).expect("scale param contract");
+        let borrowed = region
+            .find_ownership(0, scale.parameter_begin)
+            .expect("scale param contract");
         assert_eq!(borrowed.mode, skl::abix::metadata::OWNERSHIP_BORROWED, "scale borrows");
         let destroy = region.find_function_by_name("demo_vec2_destroy").expect("destroy");
-        let consumed = region.find_ownership(0, destroy.parameter_begin).expect("destroy param contract");
+        let consumed = region
+            .find_ownership(0, destroy.parameter_begin)
+            .expect("destroy param contract");
         assert_eq!(consumed.mode, skl::abix::metadata::OWNERSHIP_OWNED, "destroy consumes");
 
         // The error boundary contract is discoverable from the same directory.
@@ -130,16 +136,28 @@ fn main() {
         assert!(region.interface_count() >= 1, "interface in region");
         let iface = region.interface_at(0).expect("interface record");
         assert_eq!(iface.method_count, 2, "interface method count");
-        assert!(region.interface_method_count() >= iface.method_count, "interface methods in region");
+        assert!(
+            region.interface_method_count() >= iface.method_count,
+            "interface methods in region"
+        );
         let first_method = region.interface_method_at(0).expect("interface method");
-        assert!(first_method.signature.lo != 0 || first_method.signature.hi != 0, "method signature present");
+        assert!(
+            first_method.signature.lo != 0 || first_method.signature.hi != 0,
+            "method signature present"
+        );
         assert!(first_method.parameter_count >= 1, "method parameters recorded");
-        assert!(region.interface_implementation_count() >= 1, "interface implementation in region");
+        assert!(
+            region.interface_implementation_count() >= 1,
+            "interface implementation in region"
+        );
         let implementation = region.interface_implementation_at(0).expect("implementation");
         assert_eq!(implementation.binding_count, 2, "implementation binds every method");
         assert!(region.method_binding_count() >= 2, "method bindings in region");
         let binding = region.method_binding_at(0).expect("method binding");
-        assert!(binding.native_function.lo != 0 || binding.native_function.hi != 0, "native adapter recorded");
+        assert!(
+            binding.native_function.lo != 0 || binding.native_function.hi != 0,
+            "native adapter recorded"
+        );
 
         // Target platform verification, read from the same region.
         let target = region.target().expect("target description");
@@ -153,16 +171,31 @@ fn main() {
             endianness: 1,
             calling_convention: 1,
         };
-        assert_eq!(region.verify_target(expected), skl::abix::metadata::TARGET_COMPATIBLE, "target compatible");
-        let wrong = skl::abix::metadata::TargetExpectation { arch: 2, ..Default::default() };
-        assert_eq!(region.verify_target(wrong), skl::abix::metadata::TARGET_INCOMPATIBLE, "target incompatible");
+        assert_eq!(
+            region.verify_target(expected),
+            skl::abix::metadata::TARGET_COMPATIBLE,
+            "target compatible"
+        );
+        let wrong = skl::abix::metadata::TargetExpectation {
+            arch: 2,
+            ..Default::default()
+        };
+        assert_eq!(
+            region.verify_target(wrong),
+            skl::abix::metadata::TARGET_INCOMPATIBLE,
+            "target incompatible"
+        );
 
         // Structured ABI verification: platform, layout and calling convention
         // are reported independently, so a reader can tell what matched.
         let abi = region.verify_abi(expected);
         assert_eq!(abi.platform, skl::abix::metadata::TARGET_COMPATIBLE, "abi platform");
         assert_eq!(abi.layout, skl::abix::metadata::TARGET_COMPATIBLE, "abi layout");
-        assert_eq!(abi.calling_convention, skl::abix::metadata::TARGET_COMPATIBLE, "abi calling convention");
+        assert_eq!(
+            abi.calling_convention,
+            skl::abix::metadata::TARGET_COMPATIBLE,
+            "abi calling convention"
+        );
 
         // ABIX-STD borrowed span (M3): a non-owning view over library memory.
         // The consumer reads it and never releases it; `demo_sum` takes it by
@@ -241,14 +274,25 @@ fn main() {
         // the reader learns an adapter is required but never runs it implicitly.
         let rev_index = region.type_index_by_name("abix_view_rev_i32").expect("rev type index");
         let lowering = region.find_lowering(rev_index).expect("lowering record");
-        assert_eq!(lowering.status, skl::abix::metadata::LOWERING_NEEDS_ADAPTER, "rev needs adapter");
-        assert_eq!(lowering.reason, skl::abix::metadata::LOWERING_REASON_LAYOUT, "rev lowering reason");
+        assert_eq!(
+            lowering.status,
+            skl::abix::metadata::LOWERING_NEEDS_ADAPTER,
+            "rev needs adapter"
+        );
+        assert_eq!(
+            lowering.reason,
+            skl::abix::metadata::LOWERING_REASON_LAYOUT,
+            "rev lowering reason"
+        );
         assert_eq!(
             lowering.contract_index,
             region.type_index_by_name("abix_span_i32").expect("span type index"),
             "lowering contract type"
         );
 
-        println!("interop ok: add=5 scale={scaled} div=5 err=1 types={}", region.header.type_count);
+        println!(
+            "interop ok: add=5 scale={scaled} div=5 err=1 types={}",
+            region.header.type_count
+        );
     }
 }

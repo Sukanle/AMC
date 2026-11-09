@@ -8,8 +8,8 @@ mod skl {
     pub use crate::abix;
 }
 
-use skl::abix::*;
 use core::ffi::c_void;
+use skl::abix::*;
 use std::ffi::{CStr, CString};
 
 fn cs(s: &str) -> CString {
@@ -45,12 +45,7 @@ fn main() {
         assert_eq!(cmdly_completion_insert(terminal.as_ptr(), cs("hello").as_ptr()), 0);
 
         let mut buf = [0i8; 128];
-        let n = cmdly_read_line(
-            terminal.as_ptr(),
-            cs("> ").as_ptr(),
-            buf.as_mut_ptr(),
-            buf.len() as u64,
-        );
+        let n = cmdly_read_line(terminal.as_ptr(), cs("> ").as_ptr(), buf.as_mut_ptr(), buf.len() as u64);
         assert_eq!(n, 10, "read_line length");
         assert_eq!(CStr::from_ptr(buf.as_ptr()).to_str().unwrap(), "hello abix");
 
@@ -58,12 +53,21 @@ fn main() {
         assert!(key_count >= 10, "callback saw the keys: {key_count}");
 
         let out = cmdly_last_output(terminal.as_ptr());
-        assert!(!out.is_null() && !CStr::from_ptr(out).to_bytes().is_empty(), "output captured");
+        assert!(
+            !out.is_null() && !CStr::from_ptr(out).to_bytes().is_empty(),
+            "output captured"
+        );
 
         // The generated metadata region carries the same facts.
         let region = skl::abix::metadata::Region::open(&skl::abix::AMC_METADATA_REGION).expect("region");
-        assert!(region.find_type_by_name("cmdly_terminal").is_some(), "opaque handle in region");
-        assert!(region.find_function_by_name("cmdly_read_line").is_some(), "read_line in region");
+        assert!(
+            region.find_type_by_name("cmdly_terminal").is_some(),
+            "opaque handle in region"
+        );
+        assert!(
+            region.find_function_by_name("cmdly_read_line").is_some(),
+            "read_line in region"
+        );
 
         // `Drop` releases the handle through `cmdly_terminal_destroy`.
     }

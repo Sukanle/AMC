@@ -18,7 +18,10 @@ static LIVE: AtomicUsize = AtomicUsize::new(0);
 #[no_mangle]
 pub extern "C" fn rust_owned_create() -> *mut RustOwnedBuffer {
     let data: Box<[u8; 4]> = Box::new([1, 2, 3, 4]);
-    let buffer = Box::new(RustOwnedBuffer { data: Box::into_raw(data) as *mut u8, len: 4 });
+    let buffer = Box::new(RustOwnedBuffer {
+        data: Box::into_raw(data) as *mut u8,
+        len: 4,
+    });
     LIVE.fetch_add(1, Ordering::SeqCst);
     Box::into_raw(buffer)
 }

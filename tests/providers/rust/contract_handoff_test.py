@@ -62,8 +62,7 @@ def main():
         return ok
 
     def run(args, **kwargs):
-        return subprocess.run(args, capture_output=True, text=True, encoding="utf-8",
-                              errors="replace", **kwargs)
+        return subprocess.run(args, capture_output=True, text=True, encoding="utf-8", errors="replace", **kwargs)
 
     def output(r):
         return (r.stdout or "") + (r.stderr or "")
@@ -76,8 +75,7 @@ def main():
         artifact = os.path.join(out, "rust_contracts.abix")
 
         r = run([str(amc), "build", "-c", config, "-B", out])
-        if not check(r.returncode == 0 and os.path.isfile(artifact),
-                     "contract artifact built", output(r)[-400:]):
+        if not check(r.returncode == 0 and os.path.isfile(artifact), "contract artifact built", output(r)[-400:]):
             return 1
 
         gen = os.path.join(work, "gen")
@@ -93,14 +91,24 @@ def main():
         check("RustDivError" in text, "error wrapper has a named status type")
 
         provider = module_path(work, "rust_contracts_native")
-        r = run([rustc, "--edition", "2021", "--crate-type", "cdylib",
-                 os.path.join(work, "rust_contracts.rs"), "-o", provider])
+        r = run(
+            [
+                rustc,
+                "--edition",
+                "2021",
+                "--crate-type",
+                "cdylib",
+                os.path.join(work, "rust_contracts.rs"),
+                "-o",
+                provider,
+            ]
+        )
         if not check(r.returncode == 0, "native provider compiled", output(r)[-400:]):
             return 1
 
         consumer = os.path.join(work, "consumer.rs")
         with open(consumer, "w", encoding="utf-8") as handle:
-            handle.write('''#[path = "gen/amc_generated.rs"]
+            handle.write("""#[path = "gen/amc_generated.rs"]
 pub mod abix;
 
 mod skl {
@@ -125,7 +133,7 @@ fn main() {
     }
     println!("rust contracts: OK");
 }
-''')
+""")
 
         consumer_bin = os.path.join(work, exe("consumer"))
         link = ["-L", "native=" + work, "-l", "dylib=rust_contracts_native"]
@@ -140,8 +148,11 @@ fn main() {
                 env["LD_LIBRARY_PATH"] = work + os.pathsep + env.get("LD_LIBRARY_PATH", "")
                 env["DYLD_LIBRARY_PATH"] = work + os.pathsep + env.get("DYLD_LIBRARY_PATH", "")
             r = run([consumer_bin], env=env)
-            check(r.returncode == 0 and "rust contracts: OK" in output(r),
-                  "consumer runs the RAII and error wrappers", output(r)[-400:])
+            check(
+                r.returncode == 0 and "rust contracts: OK" in output(r),
+                "consumer runs the RAII and error wrappers",
+                output(r)[-400:],
+            )
 
         # Negative: [[owned]] references an unknown type.
         bad_owned = os.path.join(work, "bad_owned.abic.toml")
@@ -150,19 +161,26 @@ fn main() {
         with open(bad_owned, "w", encoding="utf-8") as handle:
             handle.write(bad_owned_text)
         r = run([str(amc), "build", "-c", bad_owned, "-B", os.path.join(work, "bad_owned_out")])
-        check(r.returncode != 0 and "unknown type" in output(r),
-              "owned contract with an unknown type is rejected", output(r)[-400:])
+        check(
+            r.returncode != 0 and "unknown type" in output(r),
+            "owned contract with an unknown type is rejected",
+            output(r)[-400:],
+        )
 
         # Negative: an owned return must name a release entry.
         bad_contract = os.path.join(work, "bad_contract.abic.toml")
         with open(config, encoding="utf-8") as handle:
             bad_contract_text = handle.read().replace(
-                'returns = "owned"\nrelease = "rust_owned_destroy"', 'returns = "owned"', 1)
+                'returns = "owned"\nrelease = "rust_owned_destroy"', 'returns = "owned"', 1
+            )
         with open(bad_contract, "w", encoding="utf-8") as handle:
             handle.write(bad_contract_text)
         r = run([str(amc), "build", "-c", bad_contract, "-B", os.path.join(work, "bad_contract_out")])
-        check(r.returncode != 0 and "requires a release function" in output(r),
-              "owned return without a release entry is rejected", output(r)[-400:])
+        check(
+            r.returncode != 0 and "requires a release function" in output(r),
+            "owned return without a release entry is rejected",
+            output(r)[-400:],
+        )
 
         if keep:
             print("  kept artifacts in " + work)

@@ -45,3 +45,13 @@ repos:
         language: system
         types_or: [c, c++]
         require_serial: true
+
+      # 4. Rust sources. `skip_children` keeps rustfmt from resolving the
+      #    generated `#[path = "gen/amc_generated.rs"]` module, which only
+      #    exists after `amc generate` has run.
+      - id: rustfmt
+        name: rustfmt
+        entry: rustfmt --config skip_children=true
+        language: system
+        files: \.rs$
+        require_serial: true

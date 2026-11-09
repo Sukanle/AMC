@@ -137,21 +137,13 @@ fn rustc_release() -> String {
 }
 
 fn item_id(tcx: TyCtxt<'_>, def_id: DefId) -> String {
-    format!(
-        "rust:{}::{}",
-        tcx.crate_name(def_id.krate),
-        tcx.def_path_str(def_id)
-    )
+    format!("rust:{}::{}", tcx.crate_name(def_id.krate), tcx.def_path_str(def_id))
 }
 
 fn type_spelling(tcx: TyCtxt<'_>, ty: Ty<'_>) -> String {
     match ty.kind() {
         TyKind::Adt(adt, args) => {
-            let mut spelling = format!(
-                "{}::{}",
-                tcx.crate_name(adt.did().krate),
-                tcx.def_path_str(adt.did())
-            );
+            let mut spelling = format!("{}::{}", tcx.crate_name(adt.did().krate), tcx.def_path_str(adt.did()));
             if !args.is_empty() {
                 spelling.push_str(&format!("{:?}", args));
             }
@@ -166,11 +158,7 @@ fn type_spelling(tcx: TyCtxt<'_>, ty: Ty<'_>) -> String {
             format!("{}{}", qualifier, type_spelling(tcx, *pointee))
         }
         TyKind::Ref(_, pointee, mutability) => {
-            let qualifier = if *mutability == Mutability::Mut {
-                "&mut "
-            } else {
-                "&"
-            };
+            let qualifier = if *mutability == Mutability::Mut { "&mut " } else { "&" };
             format!("{}{}", qualifier, type_spelling(tcx, *pointee))
         }
         TyKind::Array(element, length) => {
@@ -202,10 +190,7 @@ fn integer_repr(int: IntegerType) -> String {
 }
 
 fn repr_list(tcx: TyCtxt<'_>, def_id: DefId) -> Vec<String> {
-    let ty = tcx
-        .type_of(def_id)
-        .instantiate_identity()
-        .skip_normalization();
+    let ty = tcx.type_of(def_id).instantiate_identity().skip_normalization();
     let TyKind::Adt(adt, _) = ty.kind() else {
         return Vec::new();
     };
@@ -237,18 +222,11 @@ fn emit_type(tcx: TyCtxt<'_>, def_id: DefId) -> Option<String> {
         DefKind::TyAlias => "alias",
         _ => return None,
     };
-    let ty = tcx
-        .type_of(def_id)
-        .instantiate_identity()
-        .skip_normalization();
+    let ty = tcx.type_of(def_id).instantiate_identity().skip_normalization();
     let typing_env = TypingEnv::post_analysis(tcx, def_id);
     let layout = tcx.layout_of(typing_env.as_query_input(ty)).ok();
-    let size = layout
-        .map(|layout| layout.layout.size().bytes())
-        .unwrap_or(0);
-    let align = layout
-        .map(|layout| layout.layout.align().abi.bytes())
-        .unwrap_or(1);
+    let size = layout.map(|layout| layout.layout.size().bytes()).unwrap_or(0);
+    let align = layout.map(|layout| layout.layout.align().abi.bytes()).unwrap_or(1);
     let name = tcx.item_name(def_id).to_string();
     let id = if kind == "alias" {
         item_id(tcx, def_id)
@@ -267,10 +245,7 @@ fn emit_type(tcx: TyCtxt<'_>, def_id: DefId) -> Option<String> {
         if !adt.is_enum() {
             if let Some(layout) = layout {
                 for (index, field) in adt.non_enum_variant().fields.iter().enumerate() {
-                    let field_ty = tcx
-                        .type_of(field.did)
-                        .instantiate_identity()
-                        .skip_normalization();
+                    let field_ty = tcx.type_of(field.did).instantiate_identity().skip_normalization();
                     let field_name = field.ident(tcx).to_string();
                     let offset = layout.layout.fields().offset(index).bytes();
                     fields.push(format!(
@@ -368,10 +343,7 @@ impl Callbacks for HelperCallbacks {
             let item = tcx.hir_item(item_id);
             let def_id = item.owner_id.def_id.to_def_id();
             match item.kind {
-                ItemKind::Struct(..)
-                | ItemKind::Union(..)
-                | ItemKind::Enum(..)
-                | ItemKind::TyAlias(..) => {
+                ItemKind::Struct(..) | ItemKind::Union(..) | ItemKind::Enum(..) | ItemKind::TyAlias(..) => {
                     if let Some(value) = emit_type(tcx, def_id) {
                         types.push(value);
                     }

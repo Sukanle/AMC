@@ -72,11 +72,19 @@ impl OwnedSession {
                 return None;
             }
 
-            Some(Self { api, registry, bridge, object, lease })
+            Some(Self {
+                api,
+                registry,
+                bridge,
+                object,
+                lease,
+            })
         }
     }
 
-    fn object(&self) -> *mut c_void { self.object }
+    fn object(&self) -> *mut c_void {
+        self.object
+    }
 }
 
 impl Drop for OwnedSession {
@@ -132,7 +140,10 @@ fn main() {
             // Draining: unregister reports busy, new acquires are rejected, but
             // the existing object can still be destroyed.
             assert_eq!(lease_host_unregister(bridge), ABIX_ERROR_BUSY, "unregister is busy");
-            assert!(OwnedSession::acquire(bridge).is_none(), "acquire while draining must fail");
+            assert!(
+                OwnedSession::acquire(bridge).is_none(),
+                "acquire while draining must fail"
+            );
         }
         assert_eq!(lease_host_leases(bridge), 0, "lease released after drop");
         assert_eq!(lease_host_unregister(bridge), ABIX_SUCCESS, "unregister after release");
@@ -171,11 +182,22 @@ fn main() {
         let bridge = lease_host_load(module.as_ptr());
         assert!(!bridge.is_null(), "second lease_host_load");
         let session = OwnedSession::acquire(bridge).expect("second acquire");
-        assert_eq!(lease_host_registry_destroy(), ABIX_ERROR_BUSY, "registry destroy is busy");
-        assert!(OwnedSession::acquire(bridge).is_none(), "acquire after CLOSING must fail");
+        assert_eq!(
+            lease_host_registry_destroy(),
+            ABIX_ERROR_BUSY,
+            "registry destroy is busy"
+        );
+        assert!(
+            OwnedSession::acquire(bridge).is_none(),
+            "acquire after CLOSING must fail"
+        );
         drop(session);
         assert_eq!(lease_host_unregister(bridge), ABIX_SUCCESS, "second unregister");
-        assert_eq!(lease_host_registry_destroy(), ABIX_SUCCESS, "registry destroy after release");
+        assert_eq!(
+            lease_host_registry_destroy(),
+            ABIX_SUCCESS,
+            "registry destroy after release"
+        );
         assert_eq!(lease_host_finish(bridge), 0, "second finish");
     }
 

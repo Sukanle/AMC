@@ -129,8 +129,9 @@ def main() -> int:
         print("usage: expose_test.py <amc_bin_dir> [source_root]", file=sys.stderr)
         return 2
     bin_dir = os.path.abspath(argv[0])
-    source_root = os.path.abspath(argv[1]) if len(argv) > 1 else os.path.abspath(
-        os.path.join(SCRIPT_DIR, "..", "..", ".."))
+    source_root = (
+        os.path.abspath(argv[1]) if len(argv) > 1 else os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", ".."))
+    )
     amc = os.path.join(bin_dir, exe_name("amc"))
     cxx = os.environ.get("CXX") or shutil.which("clang++") or shutil.which("c++")
     rustc = shutil.which("rustc")
@@ -160,8 +161,9 @@ def main() -> int:
         return ok
 
     def run(args, env=None, cwd=None):
-        return subprocess.run(args, capture_output=True, text=True, encoding="utf-8",
-                              errors="replace", env=env, cwd=cwd)
+        return subprocess.run(
+            args, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, cwd=cwd
+        )
 
     work = os.environ.get("AMC_INTEROP_WORK_DIR") or tempfile.mkdtemp(prefix="amc-expose.")
     fixture = os.path.join(SCRIPT_DIR, "expose")
@@ -178,9 +180,10 @@ def main() -> int:
 
     # 2. Compile the generated thunks into the producing module.
     module = module_path(work, "counter")
-    r = run([cxx, "-std=c++17", "-fPIC", "-shared", "-O2", thunks,
-             *include_flags(source_root), "-o", module]
-            + module_flags(work, "counter"))
+    r = run(
+        [cxx, "-std=c++17", "-fPIC", "-shared", "-O2", thunks, *include_flags(source_root), "-o", module]
+        + module_flags(work, "counter")
+    )
     if not check(r.returncode == 0, "the generated thunks compile", r.stderr[-400:]):
         return 1
     if IS_WINDOWS:
@@ -191,9 +194,11 @@ def main() -> int:
         nm_args = ["nm", "-gU", module]
     else:
         nm_args = ["nm", "-D", module]
-    check("abix_module_query_v1" in subprocess.run(
-        nm_args, capture_output=True, text=True, encoding="utf-8", errors="replace").stdout,
-          "the module exports the fixed discovery entry")
+    check(
+        "abix_module_query_v1"
+        in subprocess.run(nm_args, capture_output=True, text=True, encoding="utf-8", errors="replace").stdout,
+        "the module exports the fixed discovery entry",
+    )
 
     # 3. Project the capabilities to Rust.
     gen = os.path.join(work, "gen")
@@ -204,13 +209,16 @@ def main() -> int:
     generated = open(os.path.join(gen, "amc_generated.rs"), encoding="utf-8").read()
     check("pub struct Counter([u8; 4])" in generated, "the class projects as an opaque handle")
     check("pub struct OwnedCounter" in generated, "an owner wrapper was generated")
-    check("pub fn get(&mut self)" in generated and "pub fn add(&mut self" in generated,
-          "the owner wrapper exposes typed methods from the lowering contract")
+    check(
+        "pub fn get(&mut self)" in generated and "pub fn add(&mut self" in generated,
+        "the owner wrapper exposes typed methods from the lowering contract",
+    )
 
     # The explicit exposed-handle contract is written next to the artifact.
     lowering_path = abix + ".lowering"
     if os.path.isfile(lowering_path):
         import json
+
         lowering = json.load(open(lowering_path, encoding="utf-8"))
         exposed = lowering.get("exposed", [])
         method_names = {method.get("name") for record in exposed for method in record.get("methods", [])}
@@ -223,14 +231,19 @@ def main() -> int:
 
     # 4. Compile and run the Rust consumer (create / get / add / destroy).
     consumer = os.path.join(work, exe_name("rust_consumer"))
-    r = run([rustc, "--edition", "2021", os.path.join(work, "rust_consumer.rs"), "-o", consumer]
-            + rustc_link(work, "counter"))
+    r = run(
+        [rustc, "--edition", "2021", os.path.join(work, "rust_consumer.rs"), "-o", consumer]
+        + rustc_link(work, "counter")
+    )
     if not check(r.returncode == 0, "rustc compiled the consumer", r.stderr[-400:]):
         return 1
     env = runtime_env(work)
     r = run([consumer], env=env)
-    check(r.returncode == 0 and "expose counter" in r.stdout,
-          "Rust created, called and destroyed the C++ object", (r.stdout + r.stderr)[-400:])
+    check(
+        r.returncode == 0 and "expose counter" in r.stdout,
+        "Rust created, called and destroyed the C++ object",
+        (r.stdout + r.stderr)[-400:],
+    )
 
     # 4b. The C++ projection consumes the same exposed-handle contract.
     cpp_gen = os.path.join(work, "gen_cpp")
@@ -238,28 +251,33 @@ def main() -> int:
     r = run([amc, "generate", abix, "-l", "cpp", "-o", cpp_gen])
     if check(r.returncode == 0, "amc generate -l cpp", (r.stdout + r.stderr)[-400:]):
         cpp_header = open(os.path.join(cpp_gen, "amc_generated.hpp"), encoding="utf-8").read()
-        check("class CounterHandle" in cpp_header and "static CounterHandle create" in cpp_header,
-              "the C++ projection emits an RAII handle and factory")
+        check(
+            "class CounterHandle" in cpp_header and "static CounterHandle create" in cpp_header,
+            "the C++ projection emits an RAII handle and factory",
+        )
         cpp_src = os.path.join(work, "cpp_handle_consumer.cpp")
         open(cpp_src, "w", encoding="utf-8").write(
             '#include "counter.hpp"\n'
             '#include "gen_cpp/amc_generated.hpp"\n'
-            'int main() {\n'
-            '    auto counter = amc_generated::CounterHandle::create(40);\n'
-            '    if (!counter || counter.get() != 40) return 1;\n'
-            '    counter.add(2);\n'
-            '    return counter.get() == 42 ? 0 : 2;\n'
-            '}\n')
+            "int main() {\n"
+            "    auto counter = amc_generated::CounterHandle::create(40);\n"
+            "    if (!counter || counter.get() != 40) return 1;\n"
+            "    counter.add(2);\n"
+            "    return counter.get() == 42 ? 0 : 2;\n"
+            "}\n"
+        )
         cpp_bin = os.path.join(work, exe_name("cpp_handle_consumer"))
         cpp_link = ["-L" + work, "-lcounter"]
         if not IS_WINDOWS:
             cpp_link.append("-Wl,-rpath," + work)
-        r = run([cxx, "-std=c++17", cpp_src, "-I" + work, *include_flags(source_root), *cpp_link,
-                 "-o", cpp_bin])
+        r = run([cxx, "-std=c++17", cpp_src, "-I" + work, *include_flags(source_root), *cpp_link, "-o", cpp_bin])
         if check(r.returncode == 0, "the C++ handle consumer compiles", r.stderr[-400:]):
             r = run([cpp_bin], env=runtime_env(work))
-            check(r.returncode == 0, "the C++ handle consumer ran through the generated wrapper",
-                  (r.stdout + r.stderr)[-400:])
+            check(
+                r.returncode == 0,
+                "the C++ handle consumer ran through the generated wrapper",
+                (r.stdout + r.stderr)[-400:],
+            )
 
     # 4c. The Zig projection consumes the same contract. Runtime execution is
     # checked by the language toolchain when available; the generated wrapper
@@ -271,38 +289,60 @@ def main() -> int:
         r = run([amc, "generate", abix, "-l", "zig", "-o", zig_gen])
         if check(r.returncode == 0, "amc generate -l zig", (r.stdout + r.stderr)[-400:]):
             zig_header = open(os.path.join(zig_gen, "amc_generated.zig"), encoding="utf-8").read()
-            check("pub const CounterHandle" in zig_header and "bytes: [4]u8" in zig_header,
-                  "the Zig projection emits an opaque handle and RAII wrapper")
+            check(
+                "pub const CounterHandle" in zig_header and "bytes: [4]u8" in zig_header,
+                "the Zig projection emits an opaque handle and RAII wrapper",
+            )
             zig_src = os.path.join(work, "zig_handle_consumer.zig")
             open(zig_src, "w", encoding="utf-8").write(
                 'const abi = @import("gen_zig/amc_generated.zig");\n'
-                'pub fn main() !void {\n'
-                '    var counter = abi.CounterHandle.create(40) orelse return error.CreateFailed;\n'
-                '    if (counter.get() != 40) return error.BadValue;\n'
-                '    counter.add(2);\n'
-                '    if (counter.get() != 42) return error.BadValue;\n'
-                '    counter.deinit();\n'
-                '}\n')
+                "pub fn main() !void {\n"
+                "    var counter = abi.CounterHandle.create(40) orelse return error.CreateFailed;\n"
+                "    if (counter.get() != 40) return error.BadValue;\n"
+                "    counter.add(2);\n"
+                "    if (counter.get() != 42) return error.BadValue;\n"
+                "    counter.deinit();\n"
+                "}\n"
+            )
             zig_bin = os.path.join(work, exe_name("zig_handle_consumer"))
-            r = run([zig, "build-exe", "zig_handle_consumer.zig", "-L.", "-lcounter", "-lc",
-                     "-rpath", work, "-femit-bin=" + zig_bin], cwd=work)
+            r = run(
+                [
+                    zig,
+                    "build-exe",
+                    "zig_handle_consumer.zig",
+                    "-L.",
+                    "-lcounter",
+                    "-lc",
+                    "-rpath",
+                    work,
+                    "-femit-bin=" + zig_bin,
+                ],
+                cwd=work,
+            )
             if check(r.returncode == 0, "the Zig handle consumer compiles", (r.stdout + r.stderr)[-400:]):
                 r = run([zig_bin], env=runtime_env(work))
-                check(r.returncode == 0, "the Zig handle consumer ran through the generated wrapper",
-                      (r.stdout + r.stderr)[-400:])
+                check(
+                    r.returncode == 0,
+                    "the Zig handle consumer ran through the generated wrapper",
+                    (r.stdout + r.stderr)[-400:],
+                )
     else:
         print("  [SKIP] Zig handle consumer (zig not available or unsupported platform)")
 
     # 5/8/9: discovery through the fixed entry, binding once, and a module lease
     # that keeps the module loaded while the object is alive.
     cpp_consumer = os.path.join(work, exe_name("cpp_consumer"))
-    r = run([cxx, "-std=c++17", os.path.join(work, "cpp_consumer.cpp"),
-             *include_flags(source_root), "-o", cpp_consumer])
+    r = run(
+        [cxx, "-std=c++17", os.path.join(work, "cpp_consumer.cpp"), *include_flags(source_root), "-o", cpp_consumer]
+    )
     if not check(r.returncode == 0, "the registry consumer compiles", r.stderr[-400:]):
         return 1
     r = run([cpp_consumer, module], env=env)
-    check(r.returncode == 0 and "expose registry: OK" in r.stdout,
-          "registry bus discovered, bound and leased the exposed capabilities", (r.stdout + r.stderr)[-400:])
+    check(
+        r.returncode == 0 and "expose registry: OK" in r.stdout,
+        "registry bus discovered, bound and leased the exposed capabilities",
+        (r.stdout + r.stderr)[-400:],
+    )
 
     # ABIX-STD contract mapping: exposed methods speak SequenceView / StringView
     # / Result, and the contracts are recorded and projected.
@@ -312,15 +352,30 @@ def main() -> int:
     # root to the import flags so neither the header nor the generated thunks
     # need an absolute include path.
     std_config = os.path.join(work, "std_api.abic.toml")
-    text = open(std_config, encoding="utf-8").read().replace(
-        '"-std=c++17"', '"-std=c++17", ' + toml_include_flags(source_root))
+    text = (
+        open(std_config, encoding="utf-8")
+        .read()
+        .replace('"-std=c++17"', '"-std=c++17", ' + toml_include_flags(source_root))
+    )
     open(std_config, "w", encoding="utf-8").write(text)
     r = run([amc, "build", "-c", std_config, "-B", os.path.join(work, "std_out")])
     if not check(r.returncode == 0, "amc build for the ABIX-STD api", (r.stdout + r.stderr)[-400:]):
         return 1
     std_module = module_path(work, "metrics")
-    r = run([cxx, "-std=c++17", "-fPIC", "-shared", "-O2", os.path.join(work, "std_thunks.cpp"),
-             *include_flags(source_root), "-o", std_module] + module_flags(work, "metrics"))
+    r = run(
+        [
+            cxx,
+            "-std=c++17",
+            "-fPIC",
+            "-shared",
+            "-O2",
+            os.path.join(work, "std_thunks.cpp"),
+            *include_flags(source_root),
+            "-o",
+            std_module,
+        ]
+        + module_flags(work, "metrics")
+    )
     if not check(r.returncode == 0, "the ABIX-STD thunks compile", r.stderr[-400:]):
         return 1
     std_gen = os.path.join(work, "std_gen")
@@ -333,13 +388,15 @@ def main() -> int:
     std_consumer_src = os.path.join(work, "rust_consumer_std.rs")
     text = open(std_consumer_src, encoding="utf-8").read().replace("gen/amc_generated.rs", "std_gen/amc_generated.rs")
     open(std_consumer_src, "w", encoding="utf-8").write(text)
-    r = run([rustc, "--edition", "2021", std_consumer_src, "-o", std_consumer]
-            + rustc_link(work, "metrics"))
+    r = run([rustc, "--edition", "2021", std_consumer_src, "-o", std_consumer] + rustc_link(work, "metrics"))
     if not check(r.returncode == 0, "rustc compiled the ABIX-STD consumer", r.stderr[-400:]):
         return 1
     r = run([std_consumer], env=env)
-    check(r.returncode == 0 and "expose std: OK" in r.stdout,
-          "SequenceView / StringView / Result mapped through the exposed API", (r.stdout + r.stderr)[-400:])
+    check(
+        r.returncode == 0 and "expose std: OK" in r.stdout,
+        "SequenceView / StringView / Result mapped through the exposed API",
+        (r.stdout + r.stderr)[-400:],
+    )
 
     # The same Result contract is projected to C++ and Zig as a typed wrapper.
     std_abix = os.path.join(work, "std_out", "expose_std.abix")
@@ -348,27 +405,31 @@ def main() -> int:
     r = run([amc, "generate", std_abix, "-l", "cpp", "-o", std_cpp_gen])
     if check(r.returncode == 0, "amc generate -l cpp for the ABIX-STD api", (r.stdout + r.stderr)[-400:]):
         std_cpp_header = open(os.path.join(std_cpp_gen, "amc_generated.hpp"), encoding="utf-8").read()
-        check("abix_Metrics_divide_result" in std_cpp_header and "struct Result" in std_cpp_header,
-              "the C++ projection emits a typed Result wrapper")
+        check(
+            "abix_Metrics_divide_result" in std_cpp_header and "struct Result" in std_cpp_header,
+            "the C++ projection emits a typed Result wrapper",
+        )
         std_cpp_src = os.path.join(work, "std_cpp_consumer.cpp")
         open(std_cpp_src, "w", encoding="utf-8").write(
             '#include "std_api.hpp"\n'
             '#include "std_gen_cpp/amc_generated.hpp"\n'
-            'int main() {\n'
-            '    auto metrics = amc_generated::MetricsHandle::create();\n'
-            '    if (!metrics) return 1;\n'
-            '    auto ok = amc_generated::abix_Metrics_divide_result(metrics.native_handle(), 10, 2);\n'
-            '    if (!ok || ok.value != 5) return 2;\n'
-            '    auto err = amc_generated::abix_Metrics_divide_result(metrics.native_handle(), 10, 0);\n'
-            '    if (err || err.error != 1) return 3;\n'
-            '    return 0;\n'
-            '}\n')
+            "int main() {\n"
+            "    auto metrics = amc_generated::MetricsHandle::create();\n"
+            "    if (!metrics) return 1;\n"
+            "    auto ok = amc_generated::abix_Metrics_divide_result(metrics.native_handle(), 10, 2);\n"
+            "    if (!ok || ok.value != 5) return 2;\n"
+            "    auto err = amc_generated::abix_Metrics_divide_result(metrics.native_handle(), 10, 0);\n"
+            "    if (err || err.error != 1) return 3;\n"
+            "    return 0;\n"
+            "}\n"
+        )
         std_cpp_bin = os.path.join(work, exe_name("std_cpp_consumer"))
         std_cpp_link = ["-L" + work, "-lmetrics"]
         if not IS_WINDOWS:
             std_cpp_link.append("-Wl,-rpath," + work)
-        r = run([cxx, "-std=c++17", std_cpp_src, "-I" + work, *include_flags(source_root), *std_cpp_link,
-                 "-o", std_cpp_bin])
+        r = run(
+            [cxx, "-std=c++17", std_cpp_src, "-I" + work, *include_flags(source_root), *std_cpp_link, "-o", std_cpp_bin]
+        )
         if check(r.returncode == 0, "the C++ typed Result consumer compiles", r.stderr[-400:]):
             r = run([std_cpp_bin], env=runtime_env(work))
             check(r.returncode == 0, "the C++ typed Result consumer ran", (r.stdout + r.stderr)[-400:])
@@ -379,22 +440,37 @@ def main() -> int:
         r = run([amc, "generate", std_abix, "-l", "zig", "-o", std_zig_gen])
         if check(r.returncode == 0, "amc generate -l zig for the ABIX-STD api", (r.stdout + r.stderr)[-400:]):
             std_zig_header = open(os.path.join(std_zig_gen, "amc_generated.zig"), encoding="utf-8").read()
-            check("AmcResult" in std_zig_header and "abix_Metrics_divide_result" in std_zig_header,
-                  "the Zig projection emits a typed Result wrapper")
+            check(
+                "AmcResult" in std_zig_header and "abix_Metrics_divide_result" in std_zig_header,
+                "the Zig projection emits a typed Result wrapper",
+            )
             std_zig_src = os.path.join(work, "std_zig_consumer.zig")
             open(std_zig_src, "w", encoding="utf-8").write(
                 'const abi = @import("std_gen_zig/amc_generated.zig");\n'
-                'pub fn main() !void {\n'
-                '    var metrics = abi.MetricsHandle.create() orelse return error.CreateFailed;\n'
-                '    const ok = abi.abix_Metrics_divide_result(metrics.ptr, 10, 2);\n'
-                '    switch (ok) { .ok => |v| { if (v != 5) return error.BadValue; }, .err => return error.Unexpected }\n'
-                '    const err = abi.abix_Metrics_divide_result(metrics.ptr, 10, 0);\n'
-                '    switch (err) { .ok => return error.Unexpected, .err => |e| { if (e != 1) return error.BadStatus; } }\n'
-                '    metrics.deinit();\n'
-                '}\n')
+                "pub fn main() !void {\n"
+                "    var metrics = abi.MetricsHandle.create() orelse return error.CreateFailed;\n"
+                "    const ok = abi.abix_Metrics_divide_result(metrics.ptr, 10, 2);\n"
+                "    switch (ok) { .ok => |v| { if (v != 5) return error.BadValue; }, .err => return error.Unexpected }\n"
+                "    const err = abi.abix_Metrics_divide_result(metrics.ptr, 10, 0);\n"
+                "    switch (err) { .ok => return error.Unexpected, .err => |e| { if (e != 1) return error.BadStatus; } }\n"
+                "    metrics.deinit();\n"
+                "}\n"
+            )
             std_zig_bin = os.path.join(work, exe_name("std_zig_consumer"))
-            r = run([zig, "build-exe", "std_zig_consumer.zig", "-L.", "-lmetrics", "-lc",
-                     "-rpath", work, "-femit-bin=" + std_zig_bin], cwd=work)
+            r = run(
+                [
+                    zig,
+                    "build-exe",
+                    "std_zig_consumer.zig",
+                    "-L.",
+                    "-lmetrics",
+                    "-lc",
+                    "-rpath",
+                    work,
+                    "-femit-bin=" + std_zig_bin,
+                ],
+                cwd=work,
+            )
             if check(r.returncode == 0, "the Zig typed Result consumer compiles", (r.stdout + r.stderr)[-400:]):
                 r = run([std_zig_bin], env=runtime_env(work))
                 check(r.returncode == 0, "the Zig typed Result consumer ran", (r.stdout + r.stderr)[-400:])
@@ -409,13 +485,29 @@ def main() -> int:
     if not check(r.returncode == 0, "amc build for the native adaptation api", (r.stdout + r.stderr)[-400:]):
         return 1
     native_thunks = open(os.path.join(work, "native_thunks.cpp"), encoding="utf-8").read()
-    check("abix_str_utf8" in native_thunks and "std::string(" in native_thunks,
-          "a std::string parameter becomes a StringView with a generated adapter")
-    check("abix_span_i32" in native_thunks and "std::vector<" in native_thunks,
-          "a std::vector parameter becomes a SequenceView with a generated adapter")
+    check(
+        "abix_str_utf8" in native_thunks and "std::string(" in native_thunks,
+        "a std::string parameter becomes a StringView with a generated adapter",
+    )
+    check(
+        "abix_span_i32" in native_thunks and "std::vector<" in native_thunks,
+        "a std::vector parameter becomes a SequenceView with a generated adapter",
+    )
     nat_module = module_path(work, "native")
-    r = run([cxx, "-std=c++20", "-fPIC", "-shared", "-O2", os.path.join(work, "native_thunks.cpp"),
-             *include_flags(source_root), "-o", nat_module] + module_flags(work, "native"))
+    r = run(
+        [
+            cxx,
+            "-std=c++20",
+            "-fPIC",
+            "-shared",
+            "-O2",
+            os.path.join(work, "native_thunks.cpp"),
+            *include_flags(source_root),
+            "-o",
+            nat_module,
+        ]
+        + module_flags(work, "native")
+    )
     if not check(r.returncode == 0, "the native adaptation thunks compile", r.stderr[-400:]):
         return 1
     nat_gen = os.path.join(work, "nat_gen")
@@ -427,13 +519,15 @@ def main() -> int:
     text = open(nat_consumer_src, encoding="utf-8").read().replace("gen/amc_generated.rs", "nat_gen/amc_generated.rs")
     open(nat_consumer_src, "w", encoding="utf-8").write(text)
     nat_consumer = os.path.join(work, exe_name("rust_consumer_native"))
-    r = run([rustc, "--edition", "2021", nat_consumer_src, "-o", nat_consumer]
-            + rustc_link(work, "native"))
+    r = run([rustc, "--edition", "2021", nat_consumer_src, "-o", nat_consumer] + rustc_link(work, "native"))
     if not check(r.returncode == 0, "rustc compiled the native adaptation consumer", r.stderr[-400:]):
         return 1
     r = run([nat_consumer], env=env)
-    check(r.returncode == 0 and "expose native: OK" in r.stdout,
-          "native string/vector/span parameters adapted onto ABIX-STD views", (r.stdout + r.stderr)[-400:])
+    check(
+        r.returncode == 0 and "expose native: OK" in r.stdout,
+        "native string/vector/span parameters adapted onto ABIX-STD views",
+        (r.stdout + r.stderr)[-400:],
+    )
 
     # Interface contracts: [[interface]] + [[implements]] project to a C++ header
     # carrying the identity, a Traits struct and an UniqueInterfaceProxy-derived class,
@@ -446,48 +540,52 @@ def main() -> int:
         r = run([amc, "generate", os.path.join(work, "shapes_out", "shapes.abix"), "-l", "cpp", "-o", iface_header])
         if check(r.returncode == 0, "amc generate -l cpp for the interface contract", (r.stdout + r.stderr)[-400:]):
             header = open(iface_header, encoding="utf-8").read()
-            check("kShapeInterface" in header and "struct ShapeTraits" in header and "Shape_shape_area_fn" in header,
-                  "the interface identity, Traits and method typedef were emitted")
-            check("class Shape : public ::skl::abix::poly::UniqueInterfaceProxy<ShapeTraits>" in header,
-                  "a handle interface projects to an UniqueInterfaceProxy-derived class")
+            check(
+                "kShapeInterface" in header and "struct ShapeTraits" in header and "Shape_shape_area_fn" in header,
+                "the interface identity, Traits and method typedef were emitted",
+            )
+            check(
+                "class Shape : public ::skl::abix::poly::UniqueInterfaceProxy<ShapeTraits>" in header,
+                "a handle interface projects to an UniqueInterfaceProxy-derived class",
+            )
             proxy_src = os.path.join(work, "shapes_proxy.cpp")
             open(proxy_src, "w", encoding="utf-8").write(
                 '#include "shapes.hpp"\n'
                 '#include "shapes_iface.hpp"\n'
-                '#include <cstdint>\n'
-                'struct FakeShape { std::int32_t area; };\n'
+                "#include <cstdint>\n"
+                "struct FakeShape { std::int32_t area; };\n"
                 'extern "C" std::int32_t fake_area(const void *object) {\n'
-                '    return static_cast<const FakeShape *>(object)->area;\n'
-                '}\n'
-                'int main() {\n'
-                '    static_assert(amc_generated::ShapeTraits::slots.shape_area == 0);\n'
-                '    static_assert(amc_generated::ShapeTraits::signatures.size() == 1);\n'
-                '    FakeShape object{42};\n'
-                '    ::skl::abix::poly::InterfaceMethod methods[] = {\n'
-                '        {amc_generated::ShapeTraits::signatures[0],\n'
-                '         ::skl::abix::poly::interface_entry(&fake_area), 0, 0}};\n'
-                '    amc_generated::Shape proxy;\n'
-                '    if (proxy.bind_methods(amc_generated::ShapeTraits::id,\n'
-                '            amc_generated::ShapeTraits::version, methods, 1, &object)\n'
-                '        != ::skl::abix::poly::InterfaceStatus::ok)\n'
-                '        return 1;\n'
-                '    if (proxy.shape_area() != 42) return 2;\n'
-                '    amc_generated::Shape wrong;\n'
-                '    if (wrong.bind_methods(amc_generated::ShapeTraits::id,\n'
-                '            amc_generated::ShapeTraits::version + 1, methods, 1, &object)\n'
-                '        != ::skl::abix::poly::InterfaceStatus::version_mismatch)\n'
-                '        return 3;\n'
-                '    methods[0].signature = {};\n'
-                '    amc_generated::Shape stale;\n'
-                '    if (stale.bind_methods(amc_generated::ShapeTraits::id,\n'
-                '            amc_generated::ShapeTraits::version, methods, 1, &object)\n'
-                '        != ::skl::abix::poly::InterfaceStatus::signature_mismatch)\n'
-                '        return 4;\n'
-                '    return 0;\n'
-                '}\n')
+                "    return static_cast<const FakeShape *>(object)->area;\n"
+                "}\n"
+                "int main() {\n"
+                "    static_assert(amc_generated::ShapeTraits::slots.shape_area == 0);\n"
+                "    static_assert(amc_generated::ShapeTraits::signatures.size() == 1);\n"
+                "    FakeShape object{42};\n"
+                "    ::skl::abix::poly::InterfaceMethod methods[] = {\n"
+                "        {amc_generated::ShapeTraits::signatures[0],\n"
+                "         ::skl::abix::poly::interface_entry(&fake_area), 0, 0}};\n"
+                "    amc_generated::Shape proxy;\n"
+                "    if (proxy.bind_methods(amc_generated::ShapeTraits::id,\n"
+                "            amc_generated::ShapeTraits::version, methods, 1, &object)\n"
+                "        != ::skl::abix::poly::InterfaceStatus::ok)\n"
+                "        return 1;\n"
+                "    if (proxy.shape_area() != 42) return 2;\n"
+                "    amc_generated::Shape wrong;\n"
+                "    if (wrong.bind_methods(amc_generated::ShapeTraits::id,\n"
+                "            amc_generated::ShapeTraits::version + 1, methods, 1, &object)\n"
+                "        != ::skl::abix::poly::InterfaceStatus::version_mismatch)\n"
+                "        return 3;\n"
+                "    methods[0].signature = {};\n"
+                "    amc_generated::Shape stale;\n"
+                "    if (stale.bind_methods(amc_generated::ShapeTraits::id,\n"
+                "            amc_generated::ShapeTraits::version, methods, 1, &object)\n"
+                "        != ::skl::abix::poly::InterfaceStatus::signature_mismatch)\n"
+                "        return 4;\n"
+                "    return 0;\n"
+                "}\n"
+            )
             proxy_bin = os.path.join(work, exe_name("shapes_proxy"))
-            r = run([cxx, "-std=c++17", *include_flags(source_root), "-I" + work,
-                     proxy_src, "-o", proxy_bin])
+            r = run([cxx, "-std=c++17", *include_flags(source_root), "-I" + work, proxy_src, "-o", proxy_bin])
             if check(r.returncode == 0, "the generated interface proxy header compiles", r.stderr[-400:]):
                 r = run([proxy_bin], env=env)
                 check(r.returncode == 0, "the generated interface proxy header runs")
@@ -502,48 +600,51 @@ def main() -> int:
             rust_proxy_src = os.path.join(work, "rust_interface_proxy.rs")
             open(rust_proxy_src, "w", encoding="utf-8").write(
                 '#[path = "shapes_gen_rust/amc_generated.rs"]\n'
-                'pub mod abix;\n'
-                '\n'
-                'mod skl {\n'
-                '    pub use crate::abix;\n'
-                '}\n'
-                'use skl::abix::*;\n'
-                'use core::ffi::c_void;\n'
+                "pub mod abix;\n"
+                "\n"
+                "mod skl {\n"
+                "    pub use crate::abix;\n"
+                "}\n"
+                "use skl::abix::*;\n"
+                "use core::ffi::c_void;\n"
                 'unsafe extern "C" fn fake_area(object: *mut c_void) -> core::ffi::c_int {\n'
-                '    unsafe { *(object as *mut i32) }\n'
-                '}\n'
-                'fn main() {\n'
-                '    let mut value: i32 = 42;\n'
-                '    let method = InterfaceMethodEntry {\n'
-                '        signature_lo: ShapeProxy::SHAPE_AREA_SIGNATURE.0,\n'
-                '        signature_hi: ShapeProxy::SHAPE_AREA_SIGNATURE.1,\n'
-                '        entry: fake_area as usize,\n'
-                '        slot: ShapeProxy::SHAPE_AREA_SLOT,\n'
-                '        flags: 0,\n'
-                '    };\n'
-                '    let proxy = unsafe { ShapeProxy::bind(\n'
-                '        (ShapeProxy::ID_LO, ShapeProxy::ID_HI), ShapeProxy::VERSION,\n'
-                '        &mut value as *mut i32 as *mut c_void, &[method], None) };\n'
-                '    let proxy = match proxy { Ok(p) => p, Err(_) => std::process::exit(1) };\n'
-                '    if proxy.shape_area() != 42 { std::process::exit(2); }\n'
-                '    let wrong = unsafe { ShapeProxy::bind(\n'
-                '        (ShapeProxy::ID_LO, ShapeProxy::ID_HI), ShapeProxy::VERSION + 1,\n'
-                '        &mut value as *mut i32 as *mut c_void, &[method], None) };\n'
-                '    if wrong.err() != Some(BindError::VersionMismatch) { std::process::exit(3); }\n'
-                '    let bad = InterfaceMethodEntry { signature_lo: 0, ..method };\n'
-                '    let stale = unsafe { ShapeProxy::bind(\n'
-                '        (ShapeProxy::ID_LO, ShapeProxy::ID_HI), ShapeProxy::VERSION,\n'
-                '        &mut value as *mut i32 as *mut c_void, &[bad], None) };\n'
-                '    if stale.err() != Some(BindError::SignatureMismatch) { std::process::exit(4); }\n'
+                "    unsafe { *(object as *mut i32) }\n"
+                "}\n"
+                "fn main() {\n"
+                "    let mut value: i32 = 42;\n"
+                "    let method = InterfaceMethodEntry {\n"
+                "        signature_lo: ShapeProxy::SHAPE_AREA_SIGNATURE.0,\n"
+                "        signature_hi: ShapeProxy::SHAPE_AREA_SIGNATURE.1,\n"
+                "        entry: fake_area as usize,\n"
+                "        slot: ShapeProxy::SHAPE_AREA_SLOT,\n"
+                "        flags: 0,\n"
+                "    };\n"
+                "    let proxy = unsafe { ShapeProxy::bind(\n"
+                "        (ShapeProxy::ID_LO, ShapeProxy::ID_HI), ShapeProxy::VERSION,\n"
+                "        &mut value as *mut i32 as *mut c_void, &[method], None) };\n"
+                "    let proxy = match proxy { Ok(p) => p, Err(_) => std::process::exit(1) };\n"
+                "    if proxy.shape_area() != 42 { std::process::exit(2); }\n"
+                "    let wrong = unsafe { ShapeProxy::bind(\n"
+                "        (ShapeProxy::ID_LO, ShapeProxy::ID_HI), ShapeProxy::VERSION + 1,\n"
+                "        &mut value as *mut i32 as *mut c_void, &[method], None) };\n"
+                "    if wrong.err() != Some(BindError::VersionMismatch) { std::process::exit(3); }\n"
+                "    let bad = InterfaceMethodEntry { signature_lo: 0, ..method };\n"
+                "    let stale = unsafe { ShapeProxy::bind(\n"
+                "        (ShapeProxy::ID_LO, ShapeProxy::ID_HI), ShapeProxy::VERSION,\n"
+                "        &mut value as *mut i32 as *mut c_void, &[bad], None) };\n"
+                "    if stale.err() != Some(BindError::SignatureMismatch) { std::process::exit(4); }\n"
                 '    println!("rust interface proxy: OK");\n'
-                '}\n')
+                "}\n"
+            )
             rust_proxy_bin = os.path.join(work, exe_name("rust_interface_proxy"))
             r = run([rustc, "--edition", "2021", rust_proxy_src, "-o", rust_proxy_bin])
             if check(r.returncode == 0, "the Rust interface proxy consumer compiles", r.stderr[-400:]):
                 r = run([rust_proxy_bin], env=env)
-                check(r.returncode == 0 and "rust interface proxy: OK" in r.stdout,
-                      "the Rust interface proxy binds, calls and rejects stale contracts",
-                      (r.stdout + r.stderr)[-400:])
+                check(
+                    r.returncode == 0 and "rust interface proxy: OK" in r.stdout,
+                    "the Rust interface proxy binds, calls and rejects stale contracts",
+                    (r.stdout + r.stderr)[-400:],
+                )
 
         if zig and not IS_WINDOWS and not IS_MACOS:
             zig_proxy_gen = os.path.join(work, "shapes_gen_zig")
@@ -554,40 +655,42 @@ def main() -> int:
                 open(zig_proxy_src, "w", encoding="utf-8").write(
                     'const std = @import("std");\n'
                     'const abi = @import("shapes_gen_zig/amc_generated.zig");\n'
-                    'fn fake_area(object: ?*anyopaque) callconv(.c) c_int {\n'
-                    '    const value: *i32 = @ptrCast(@alignCast(object.?));\n'
-                    '    return value.*;\n'
-                    '}\n'
-                    'pub fn main() !void {\n'
-                    '    var value: i32 = 42;\n'
-                    '    const methods = [_]abi.InterfaceMethodEntry{.{\n'
-                    '        .signature_lo = abi.ShapeProxy.shape_area_signature_lo,\n'
-                    '        .signature_hi = abi.ShapeProxy.shape_area_signature_hi,\n'
-                    '        .entry = @intFromPtr(&fake_area),\n'
-                    '        .slot = abi.ShapeProxy.shape_area_slot,\n'
-                    '        .flags = 0,\n'
-                    '    }};\n'
-                    '    const proxy = try abi.ShapeProxy.bind(abi.ShapeProxy.ID_LO, abi.ShapeProxy.ID_HI,\n'
-                    '        abi.ShapeProxy.VERSION, &value, methods[0..], null);\n'
-                    '    if (proxy.shape_area() != 42) return error.BadValue;\n'
-                    '    const wrong = abi.ShapeProxy.bind(abi.ShapeProxy.ID_LO, abi.ShapeProxy.ID_HI,\n'
-                    '        abi.ShapeProxy.VERSION + 1, &value, methods[0..], null);\n'
-                    '    if (wrong != error.VersionMismatch) return error.ExpectedVersionMismatch;\n'
-                    '    var stale = methods;\n'
-                    '    stale[0].signature_lo = 0;\n'
-                    '    const invalid = abi.ShapeProxy.bind(abi.ShapeProxy.ID_LO, abi.ShapeProxy.ID_HI,\n'
-                    '        abi.ShapeProxy.VERSION, &value, stale[0..], null);\n'
-                    '    if (invalid != error.SignatureMismatch) return error.ExpectedSignatureMismatch;\n'
+                    "fn fake_area(object: ?*anyopaque) callconv(.c) c_int {\n"
+                    "    const value: *i32 = @ptrCast(@alignCast(object.?));\n"
+                    "    return value.*;\n"
+                    "}\n"
+                    "pub fn main() !void {\n"
+                    "    var value: i32 = 42;\n"
+                    "    const methods = [_]abi.InterfaceMethodEntry{.{\n"
+                    "        .signature_lo = abi.ShapeProxy.shape_area_signature_lo,\n"
+                    "        .signature_hi = abi.ShapeProxy.shape_area_signature_hi,\n"
+                    "        .entry = @intFromPtr(&fake_area),\n"
+                    "        .slot = abi.ShapeProxy.shape_area_slot,\n"
+                    "        .flags = 0,\n"
+                    "    }};\n"
+                    "    const proxy = try abi.ShapeProxy.bind(abi.ShapeProxy.ID_LO, abi.ShapeProxy.ID_HI,\n"
+                    "        abi.ShapeProxy.VERSION, &value, methods[0..], null);\n"
+                    "    if (proxy.shape_area() != 42) return error.BadValue;\n"
+                    "    const wrong = abi.ShapeProxy.bind(abi.ShapeProxy.ID_LO, abi.ShapeProxy.ID_HI,\n"
+                    "        abi.ShapeProxy.VERSION + 1, &value, methods[0..], null);\n"
+                    "    if (wrong != error.VersionMismatch) return error.ExpectedVersionMismatch;\n"
+                    "    var stale = methods;\n"
+                    "    stale[0].signature_lo = 0;\n"
+                    "    const invalid = abi.ShapeProxy.bind(abi.ShapeProxy.ID_LO, abi.ShapeProxy.ID_HI,\n"
+                    "        abi.ShapeProxy.VERSION, &value, stale[0..], null);\n"
+                    "    if (invalid != error.SignatureMismatch) return error.ExpectedSignatureMismatch;\n"
                     '    std.debug.print("zig interface proxy: OK\\n", .{});\n'
-                    '}\n')
+                    "}\n"
+                )
                 zig_proxy_bin = os.path.join(work, exe_name("zig_interface_proxy"))
-                r = run([zig, "build-exe", "zig_interface_proxy.zig", "-lc",
-                         "-femit-bin=" + zig_proxy_bin], cwd=work)
+                r = run([zig, "build-exe", "zig_interface_proxy.zig", "-lc", "-femit-bin=" + zig_proxy_bin], cwd=work)
                 if check(r.returncode == 0, "the Zig interface proxy consumer compiles", r.stderr[-400:]):
                     r = run([zig_proxy_bin], env=env)
-                    check(r.returncode == 0 and "zig interface proxy: OK" in (r.stdout + r.stderr),
-                          "the Zig interface proxy binds, calls and rejects stale contracts",
-                          (r.stdout + r.stderr)[-400:])
+                    check(
+                        r.returncode == 0 and "zig interface proxy: OK" in (r.stdout + r.stderr),
+                        "the Zig interface proxy binds, calls and rejects stale contracts",
+                        (r.stdout + r.stderr)[-400:],
+                    )
 
         else:
             print("  [SKIP] Zig interface proxy consumer (zig not available or unsupported platform)")
@@ -617,8 +720,7 @@ def main() -> int:
         fmt_toml = "".join(', "%s"' % flag for flag in fmt_cflags)
         # GNU ld-only option for transitive deps; the Apple and PE linkers
         # reject it.
-        rpath_link = [] if (IS_MACOS or IS_WINDOWS) else [
-            "-C", "link-arg=-Wl,-rpath-link," + cmdly_lib]
+        rpath_link = [] if (IS_MACOS or IS_WINDOWS) else ["-C", "link-arg=-Wl,-rpath-link," + cmdly_lib]
         key_header = os.path.join(cmdly_include, "cmdly", "key.h")
         key_config = os.path.join(work, "cmdly_key.abic.toml")
         open(key_config, "w", encoding="utf-8").write(f"""[package]
@@ -643,28 +745,50 @@ output = "cmdly_key.abix"
         if ok:
             key_module = module_path(work, "cmdlykey")
             key_link = ["-L" + cmdly_lib] + ([] if IS_WINDOWS else ["-Wl,-rpath," + cmdly_lib])
-            r = run([cxx, "-std=c++17", "-fPIC", "-shared", "-O2", os.path.join(work, "cmdly_thunks.cpp"),
-                     *include_flags(source_root), "-I" + cmdly_include, "-o", key_module]
-                    + key_link + fmt_cflags + module_flags(work, "cmdlykey"))
+            r = run(
+                [
+                    cxx,
+                    "-std=c++17",
+                    "-fPIC",
+                    "-shared",
+                    "-O2",
+                    os.path.join(work, "cmdly_thunks.cpp"),
+                    *include_flags(source_root),
+                    "-I" + cmdly_include,
+                    "-o",
+                    key_module,
+                ]
+                + key_link
+                + fmt_cflags
+                + module_flags(work, "cmdlykey")
+            )
             if check(r.returncode == 0, "cmdly thunks compile", r.stderr[-400:]):
                 key_gen = os.path.join(work, "cmdly_gen")
                 os.makedirs(key_gen, exist_ok=True)
-                r = run([amc, "generate", os.path.join(work, "cmdly_out", "cmdly_key.abix"), "-l", "rust",
-                         "-o", key_gen])
+                r = run(
+                    [amc, "generate", os.path.join(work, "cmdly_out", "cmdly_key.abix"), "-l", "rust", "-o", key_gen]
+                )
                 check(r.returncode == 0, "cmdly capabilities project to Rust", (r.stdout + r.stderr)[-400:])
                 key_src = os.path.join(work, "rust_consumer_key.rs")
                 shutil.copy(os.path.join(fixture, "rust_consumer_key.rs"), key_src)
-                key_text = open(key_src, encoding="utf-8").read().replace(
-                    "gen/amc_generated.rs", "cmdly_gen/amc_generated.rs")
+                key_text = (
+                    open(key_src, encoding="utf-8").read().replace("gen/amc_generated.rs", "cmdly_gen/amc_generated.rs")
+                )
                 open(key_src, "w", encoding="utf-8").write(key_text)
                 kenv = runtime_env(work, [cmdly_lib])
                 key_bin = os.path.join(work, exe_name("rust_consumer_key"))
-                r = run([rustc, "--edition", "2021", key_src, "-o", key_bin]
-                        + rustc_link(work, "cmdlykey", [cmdly_lib]) + rpath_link)
+                r = run(
+                    [rustc, "--edition", "2021", key_src, "-o", key_bin]
+                    + rustc_link(work, "cmdlykey", [cmdly_lib])
+                    + rpath_link
+                )
                 if check(r.returncode == 0, "cmdly consumer compiles", r.stderr[-400:]):
                     r = run([key_bin], env=kenv)
-                    check(r.returncode == 0 and "expose cmdly: OK" in r.stdout,
-                          "Rust drove the real cmdly Key", (r.stdout + r.stderr)[-400:])
+                    check(
+                        r.returncode == 0 and "expose cmdly: OK" in r.stdout,
+                        "Rust drove the real cmdly Key",
+                        (r.stdout + r.stderr)[-400:],
+                    )
 
         # Without a declared [[adapt]] a std::string method is refused: an STL
         # type must not cross the boundary raw (ABI-SPEC §18 requires an
@@ -689,8 +813,11 @@ output = "insert_thunks.cpp"
 output = "cmdly_insert.abix"
 """)
         r = run([amc, "build", "-c", ins_config, "-B", os.path.join(work, "insert_out")])
-        check(r.returncode != 0 and "needs a contract" in (r.stdout + r.stderr),
-              "a std::string method is refused without an explicit adaptation", (r.stdout + r.stderr)[-400:])
+        check(
+            r.returncode != 0 and "needs a contract" in (r.stdout + r.stderr),
+            "a std::string method is refused without an explicit adaptation",
+            (r.stdout + r.stderr)[-400:],
+        )
 
         # With a declared [[adapt]] the same method is auto-exposed: the thunk
         # takes the StringView boundary type and marshals it back onto
@@ -717,36 +844,71 @@ output = "history_thunks.cpp"
 output = "cmdly_history.abix"
 """)
         r = run([amc, "build", "-c", hist_config, "-B", os.path.join(work, "hist_out")])
-        ok = check(r.returncode == 0, "cmdly::MemoryHistory::insert exposed after an adaptation",
-                   (r.stdout + r.stderr)[-400:])
+        ok = check(
+            r.returncode == 0, "cmdly::MemoryHistory::insert exposed after an adaptation", (r.stdout + r.stderr)[-400:]
+        )
         if ok:
             history_thunks = open(os.path.join(work, "history_thunks.cpp"), encoding="utf-8").read()
-            check("abix_str_utf8 line" in history_thunks and "std::string(line.data, line.len)" in history_thunks,
-                  "the inherited insert takes a StringView and adapts it")
+            check(
+                "abix_str_utf8 line" in history_thunks and "std::string(line.data, line.len)" in history_thunks,
+                "the inherited insert takes a StringView and adapts it",
+            )
             history_module = module_path(work, "cmdlyhistory")
             history_link = ["-L" + cmdly_lib] + ([] if IS_WINDOWS else ["-Wl,-rpath," + cmdly_lib])
-            r = run([cxx, "-std=c++17", "-fPIC", "-shared", "-O2", os.path.join(work, "history_thunks.cpp"),
-                     *include_flags(source_root), "-I" + cmdly_include, "-o", history_module]
-                    + history_link + fmt_cflags + module_flags(work, "cmdlyhistory"))
+            r = run(
+                [
+                    cxx,
+                    "-std=c++17",
+                    "-fPIC",
+                    "-shared",
+                    "-O2",
+                    os.path.join(work, "history_thunks.cpp"),
+                    *include_flags(source_root),
+                    "-I" + cmdly_include,
+                    "-o",
+                    history_module,
+                ]
+                + history_link
+                + fmt_cflags
+                + module_flags(work, "cmdlyhistory")
+            )
             if check(r.returncode == 0, "cmdly history thunks compile", r.stderr[-400:]):
                 hist_gen = os.path.join(work, "hist_gen")
                 os.makedirs(hist_gen, exist_ok=True)
-                r = run([amc, "generate", os.path.join(work, "hist_out", "cmdly_history.abix"), "-l", "rust",
-                         "-o", hist_gen])
+                r = run(
+                    [
+                        amc,
+                        "generate",
+                        os.path.join(work, "hist_out", "cmdly_history.abix"),
+                        "-l",
+                        "rust",
+                        "-o",
+                        hist_gen,
+                    ]
+                )
                 if check(r.returncode == 0, "cmdly history capabilities project to Rust", (r.stdout + r.stderr)[-400:]):
                     hist_src = os.path.join(work, "rust_consumer_history.rs")
                     shutil.copy(os.path.join(fixture, "rust_consumer_history.rs"), hist_src)
-                    text = open(hist_src, encoding="utf-8").read().replace(
-                        "gen/amc_generated.rs", "hist_gen/amc_generated.rs")
+                    text = (
+                        open(hist_src, encoding="utf-8")
+                        .read()
+                        .replace("gen/amc_generated.rs", "hist_gen/amc_generated.rs")
+                    )
                     open(hist_src, "w", encoding="utf-8").write(text)
                     hist_bin = os.path.join(work, exe_name("rust_consumer_history"))
-                    r = run([rustc, "--edition", "2021", hist_src, "-o", hist_bin]
-                            + rustc_link(work, "cmdlyhistory", [cmdly_lib]) + rpath_link)
+                    r = run(
+                        [rustc, "--edition", "2021", hist_src, "-o", hist_bin]
+                        + rustc_link(work, "cmdlyhistory", [cmdly_lib])
+                        + rpath_link
+                    )
                     if check(r.returncode == 0, "cmdly history consumer compiles", r.stderr[-400:]):
                         hvenv = runtime_env(work, [cmdly_lib])
                         r = run([hist_bin], env=hvenv)
-                        check(r.returncode == 0 and "expose history: OK" in r.stdout,
-                              "Rust drove the real cmdly insert through a StringView", (r.stdout + r.stderr)[-400:])
+                        check(
+                            r.returncode == 0 and "expose history: OK" in r.stdout,
+                            "Rust drove the real cmdly insert through a StringView",
+                            (r.stdout + r.stderr)[-400:],
+                        )
 
     if KEEP_ARTIFACTS:
         print("  [KEEP] retained artifacts: " + work)

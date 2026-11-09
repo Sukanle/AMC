@@ -369,8 +369,7 @@ pub mod metadata {
                 return None;
             }
             let d = self.desc();
-            let base = self.header.type_count as usize * TYPE_RECORD_SIZE
-                + index as usize * FIELD_RECORD_SIZE;
+            let base = self.header.type_count as usize * TYPE_RECORD_SIZE + index as usize * FIELD_RECORD_SIZE;
             if base + FIELD_RECORD_SIZE > d.len() {
                 return None;
             }
@@ -447,9 +446,7 @@ pub mod metadata {
         /// Number of declared ownership contracts; 0 when absent (every
         /// interaction is then `unspecified`).
         pub fn ownership_count(&self) -> u32 {
-            self.extension(EXTENSION_OWNERSHIP)
-                .map(|e| e.count)
-                .unwrap_or(0)
+            self.extension(EXTENSION_OWNERSHIP).map(|e| e.count).unwrap_or(0)
         }
 
         pub fn ownership_at(&self, index: u32) -> Option<OwnershipRecord> {
@@ -471,20 +468,14 @@ pub mod metadata {
             })
         }
 
-        pub fn find_ownership(
-            &self,
-            target_kind: u32,
-            target_index: u32,
-        ) -> Option<OwnershipRecord> {
+        pub fn find_ownership(&self, target_kind: u32, target_index: u32) -> Option<OwnershipRecord> {
             (0..self.ownership_count())
                 .filter_map(|i| self.ownership_at(i))
                 .find(|r| r.target_kind == target_kind && r.target_index == target_index)
         }
 
         pub fn error_count(&self) -> u32 {
-            self.extension(EXTENSION_ERROR)
-                .map(|e| e.count)
-                .unwrap_or(0)
+            self.extension(EXTENSION_ERROR).map(|e| e.count).unwrap_or(0)
         }
 
         pub fn error_at(&self, index: u32) -> Option<ErrorRecord> {
@@ -517,9 +508,7 @@ pub mod metadata {
         }
 
         pub fn lowering_count(&self) -> u32 {
-            self.extension(EXTENSION_LOWERING)
-                .map(|e| e.count)
-                .unwrap_or(0)
+            self.extension(EXTENSION_LOWERING).map(|e| e.count).unwrap_or(0)
         }
 
         pub fn lowering_at(&self, index: u32) -> Option<LoweringRecord> {
@@ -573,9 +562,7 @@ pub mod metadata {
         }
 
         pub fn range_adapter_count(&self) -> u32 {
-            self.extension(EXTENSION_RANGE)
-                .map(|e| e.count)
-                .unwrap_or(0)
+            self.extension(EXTENSION_RANGE).map(|e| e.count).unwrap_or(0)
         }
 
         pub fn range_adapter_at(&self, index: u32) -> Option<RangeAdapterRecord> {
@@ -597,9 +584,7 @@ pub mod metadata {
         }
 
         pub fn interface_count(&self) -> u32 {
-            self.extension(EXTENSION_INTERFACE)
-                .map(|e| e.count)
-                .unwrap_or(0)
+            self.extension(EXTENSION_INTERFACE).map(|e| e.count).unwrap_or(0)
         }
 
         pub fn interface_at(&self, index: u32) -> Option<InterfaceRecord> {
@@ -629,9 +614,7 @@ pub mod metadata {
         }
 
         pub fn interface_method_count(&self) -> u32 {
-            self.extension(EXTENSION_INTERFACE_METHOD)
-                .map(|e| e.count)
-                .unwrap_or(0)
+            self.extension(EXTENSION_INTERFACE_METHOD).map(|e| e.count).unwrap_or(0)
         }
 
         pub fn interface_method_at(&self, index: u32) -> Option<InterfaceMethodRecord> {
@@ -670,22 +653,16 @@ pub mod metadata {
         }
 
         pub fn interface_implementation_count(&self) -> u32 {
-            self.extension(EXTENSION_IMPLEMENTATION)
-                .map(|e| e.count)
-                .unwrap_or(0)
+            self.extension(EXTENSION_IMPLEMENTATION).map(|e| e.count).unwrap_or(0)
         }
 
-        pub fn interface_implementation_at(
-            &self,
-            index: u32,
-        ) -> Option<InterfaceImplementationRecord> {
+        pub fn interface_implementation_at(&self, index: u32) -> Option<InterfaceImplementationRecord> {
             let ext = self.extension(EXTENSION_IMPLEMENTATION)?;
             if index >= ext.count {
                 return None;
             }
             let d = self.desc();
-            let base =
-                ext.byte_offset as usize + index as usize * INTERFACE_IMPLEMENTATION_RECORD_SIZE;
+            let base = ext.byte_offset as usize + index as usize * INTERFACE_IMPLEMENTATION_RECORD_SIZE;
             if base + INTERFACE_IMPLEMENTATION_RECORD_SIZE > d.len() {
                 return None;
             }
@@ -699,9 +676,7 @@ pub mod metadata {
         }
 
         pub fn method_binding_count(&self) -> u32 {
-            self.extension(EXTENSION_METHOD_BINDING)
-                .map(|e| e.count)
-                .unwrap_or(0)
+            self.extension(EXTENSION_METHOD_BINDING).map(|e| e.count).unwrap_or(0)
         }
 
         pub fn method_binding_at(&self, index: u32) -> Option<MethodBindingRecord> {
@@ -827,11 +802,7 @@ pub mod metadata {
 
             let mut layout_incompatible = false;
             let mut layout_unverifiable = false;
-            let pointer_bytes = if pointer_bits != 0 {
-                pointer_bits / 8
-            } else {
-                0
-            };
+            let pointer_bytes = if pointer_bits != 0 { pointer_bits / 8 } else { 0 };
             for i in 0..self.header.type_count {
                 if let Some(record) = self.type_at(i) {
                     if record.kind == 3 {
@@ -925,8 +896,7 @@ pub mod metadata {
         }
 
         pub fn type_index_by_name(&self, name: &str) -> Option<u32> {
-            (0..self.header.type_count)
-                .find(|&i| self.type_at(i).and_then(|t| self.name(t.name_offset)) == Some(name))
+            (0..self.header.type_count).find(|&i| self.type_at(i).and_then(|t| self.name(t.name_offset)) == Some(name))
         }
 
         pub fn find_type_by_id(&self, id: Hash128) -> Option<TypeRecord> {
