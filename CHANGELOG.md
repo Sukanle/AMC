@@ -4,9 +4,10 @@
 
 ### Added
 
-- `tools/rustc-helper/`: the first `amc-rustc-helper` skeleton, an isolated `rustc_driver` process that emits the `amc.rust.semantic/1` envelope and extracts `repr(C)` / `repr(transparent)` / packed / union records plus public `extern "C"` functions. Building it requires `rustc-dev`.
-- `[rust] helper` config: `amc-rust` runs the helper, uses its target facts, and falls back to the parser/probe path when `[target]` already provides them.
-- `amc-rust-helper-test`: builds the helper with rustc and validates both the schema envelope and the AMC integration.
+- `tools/rustc-helper/`: `amc-rustc-helper` is now a real `rustc_driver` semantic producer. It emits the `amc.rust.semantic/1` envelope and extracts `repr(C)` / `repr(transparent)` / packed / align / union / enum records from nested modules, concrete generic instances, public `extern "C"` functions (including `impl` associated functions), generic declarations, trait/impl metadata and `Result` error enums. Building it requires `rustc-dev`.
+- `[rust] helper` config: `amc-rust` imports the helper's types and functions into ABIX/Semantic IR, cross-checks their layouts against the source parser, and writes the semantic sidecar. Parser errors for syntax the helper already proved are downgraded to warnings. The parser/probe remains the fallback when the helper is unavailable.
+- Cargo metadata integration: the helper fills crate name, edition and declared features from `cargo metadata` through `--manifest-path` (or a manifest discovered above `--source`), with additive `--features`.
+- `amc-rust-helper-test`: builds the helper with rustc, validates generics/traits/errors/cargo metadata, cross-validates layout with a rustc `size_of`/`align_of`/`offset_of!` probe, and checks the AMC import path.
 
 ### Breaking
 

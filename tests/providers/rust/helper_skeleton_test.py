@@ -4,10 +4,10 @@
 Usage:
     helper_skeleton_test.py <amc_bin_dir> [source_root]
 
-Builds the dependency-free helper with rustc, runs it against a fixture and
-validates the `amc.rust.semantic/1` envelope. The helper intentionally emits an
-empty type/function set in this first v0.4.0 increment; later revisions fill
-the arrays without changing the envelope.
+Builds the dependency-free helper with rustc, runs it against the demo and
+semantic fixtures, and validates the `amc.rust.semantic/1` envelope: types,
+functions, generics, traits, errors, cargo metadata and the layout probe. It
+also checks that AMC imports the helper types/functions into ABIX/Semantic IR.
 """
 
 import json
@@ -124,7 +124,7 @@ def main():
         check(crate.get("edition") == "2021", "crate edition")
         for key in ("generics", "traits", "errors"):
             check(isinstance(document.get(key), list) and document[key] == [],
-                  f"{key} remains an empty array in this increment")
+                  f"{key} is empty for the demo fixture")
 
         types = {item.get("name"): item for item in document.get("types", [])}
         check("RustRect" in types, "record type extracted")
@@ -164,6 +164,124 @@ def main():
         result = run([helper, "--unknown"])
         check(result.returncode != 0, "unknown option is rejected", output(result)[-200:])
 
+        # Advanced semantics: nested modules, impl methods, generics, traits and
+        # Result error types.
+        semantic_fixture = source_root / "tests" / "fixtures" / "rust_semantic.rs"
+        semantic_json = os.path.join(work, "semantic_advanced.json")
+        result = run([helper, "--crate-name", "rust_semantic", "--edition", "2021",
+                      "--source", str(semantic_fixture), "--output", semantic_json])
+        if check(result.returncode == 0 and os.path.isfile(semantic_json),
+                 "helper extracted the advanced fixture", output(result)[-400:]):
+            advanced = json.load(open(semantic_json, encoding="utf-8"))
+            advanced_types = {item.get("name"): item for item in advanced.get("types", [])}
+            check("nested::NestedPoint" in advanced_types, "nested module type extracted")
+            check("Wrapper<i32>" in advanced_types, "concrete generic instance extracted")
+            check(advanced_types.get("Wrapper<i32>", {}).get("size") == 4,
+                  "generic instance layout")
+            check(advanced_types.get("Wrapper", {}).get("generic") is True,
+                  "generic declaration is marked")
+            check("WrapperI32" in advanced_types, "generic alias extracted")
+
+            advanced_functions = {item.get("name"): item for item in advanced.get("functions", [])}
+            nested_sum = advanced_functions.get("nested_sum", {})
+            check(nested_sum.get("kind") == "associated", "impl associated function kind")
+            check("nested::NestedPoint" in nested_sum.get("owner", ""),
+                  "impl method owner is recorded")
+            check("rust_try_fallible" in advanced_functions, "fallible function extracted")
+
+            generics = {item.get("name"): item for item in advanced.get("generics", [])}
+            wrapper = generics.get("Wrapper", {})
+            check(any(parameter.get("name") == "T" for parameter in wrapper.get("parameters", [])),
+                  "generic type parameter extracted")
+            check(any(name.endswith("Wrapper<i32>") for name in wrapper.get("instances", [])),
+                  "generic instance is linked to its declaration")
+
+            traits = advanced.get("traits", [])
+            trait_decl = next((item for item in traits if item.get("kind") == "trait"), {})
+            check(trait_decl.get("name") == "Shape", "trait declaration extracted")
+            check({method.get("name") for method in trait_decl.get("methods", [])} == {"area", "perimeter"},
+                  "trait methods extracted")
+            check(any(item.get("kind") == "impl" and item.get("self_type", "").endswith("::Circle")
+                      for item in traits), "trait impl extracted")
+            check(any(item.get("kind") == "impl"
+                      and item.get("self_type", "").endswith("::nested::NestedPoint")
+                      for item in traits), "inherent impl extracted")
+
+            errors = {item.get("name"): item for item in advanced.get("errors", [])}
+            failure = errors.get("RustFailure", {})
+            check(failure.get("kind") == "enum", "error enum extracted")
+            check({variant.get("name") for variant in failure.get("variants", [])}
+                  == {"None", "InvalidInput", "Overflow"}, "error variants extracted")
+            check(any("rust_try_fallible" in name for name in failure.get("functions", [])),
+                  "error is linked to its functions")
+
+            # Cross-validate the helper layout with a rustc `size_of` /
+            # `align_of` / `offset_of!` probe, independent of AMC's parser.
+            probe_source = Path(work) / "semantic_probe.rs"
+            probe_exe = Path(work) / exe("semantic_probe")
+            cases = {
+                "Circle": ["radius"],
+                "nested::NestedPoint": ["x", "y"],
+                "Wrapper<i32>": ["value"],
+            }
+            lines = [
+                "use std::mem::{align_of, offset_of, size_of};",
+                f'#[path = r"{semantic_fixture}"]',
+                "mod fixture;",
+                "fn main() {",
+            ]
+            for name, fields in cases.items():
+                lines.append(f'    println!("{name}.size {{}}", size_of::<fixture::{name}>());')
+                lines.append(f'    println!("{name}.align {{}}", align_of::<fixture::{name}>());')
+                for field in fields:
+                    lines.append(
+                        f'    println!("{name}.{field}.offset {{}}", offset_of!(fixture::{name}, {field}));'
+                    )
+            lines.append("}")
+            probe_source.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            probe_build = run([rustc, "--edition", "2021", str(probe_source), "-o", str(probe_exe)])
+            if check(probe_build.returncode == 0, "layout probe compiled",
+                     output(probe_build)[-400:]):
+                probe_run = run([str(probe_exe)])
+                facts = {}
+                for line in probe_run.stdout.splitlines():
+                    parts = line.split()
+                    if len(parts) == 2 and parts[1].isdigit():
+                        facts[parts[0]] = int(parts[1])
+                probe_ok = True
+                for name, fields in cases.items():
+                    helper_type = advanced_types.get(name, {})
+                    probe_ok &= helper_type.get("size") == facts.get(f"{name}.size")
+                    probe_ok &= helper_type.get("align") == facts.get(f"{name}.align")
+                    offsets = {field.get("name"): field.get("offset")
+                               for field in helper_type.get("fields", [])}
+                    for field in fields:
+                        probe_ok &= offsets.get(field) == facts.get(f"{name}.{field}.offset")
+                check(probe_ok, "helper layout matches the rustc probe")
+
+        # Cargo metadata fills workspace facts when a manifest is available.
+        cargo_dir = Path(work) / "cargo-demo"
+        (cargo_dir / "src").mkdir(parents=True)
+        (cargo_dir / "Cargo.toml").write_text(
+            "[package]\nname = \"cargo-demo\"\nversion = \"0.2.0\"\nedition = \"2021\"\n\n"
+            "[features]\ndefault = [\"fast\"]\nfast = []\nslow = []\n",
+            encoding="utf-8")
+        cargo_source = cargo_dir / "src" / "lib.rs"
+        cargo_source.write_text(
+            '#[no_mangle]\npub extern "C" fn cargo_answer() -> i32 { 42 }\n',
+            encoding="utf-8")
+        cargo_json = os.path.join(work, "cargo.json")
+        result = run([helper, "--crate-name", "cargo_demo", "--edition", "2021",
+                      "--source", str(cargo_source), "--manifest-path", str(cargo_dir / "Cargo.toml"),
+                      "--features", "slow", "--output", cargo_json])
+        if check(result.returncode == 0 and os.path.isfile(cargo_json),
+                 "helper reads cargo metadata", output(result)[-400:]):
+            cargo_crate = json.load(open(cargo_json, encoding="utf-8")).get("crate", {})
+            check(cargo_crate.get("name") == "cargo-demo", "cargo package name")
+            check(cargo_crate.get("edition") == "2021", "cargo edition")
+            check(set(cargo_crate.get("features", [])) == {"default", "fast", "slow"},
+                  "cargo features are recorded")
+
         # AMC integration: the Rust frontend fills missing target facts from the
         # helper. Remove [target] so a successful build proves the helper path.
         if amc.is_file():
@@ -198,6 +316,48 @@ def main():
             result = run([str(amc), "build", "-c", mismatch_config, "-B", os.path.join(work, "mismatch_out")])
             check(result.returncode != 0 and "does not match" in output(result),
                   "helper target mismatch is fatal", output(result)[-400:])
+
+            # Helper-only syntax: the source parser rejects the generic alias,
+            # but the helper supplies the concrete layout and the build must
+            # still import nested modules, generic instances and impl methods.
+            import_dir = Path(work) / "helper_import"
+            import_dir.mkdir()
+            shutil.copyfile(semantic_fixture, import_dir / "rust_semantic.rs")
+            import_config = import_dir / "helper_import.abic.toml"
+            import_config.write_text(
+                "[package]\nname = \"rust_semantic\"\nversion = \"0.1\"\n\n"
+                "[[import]]\nlanguage = \"rust\"\nfiles = [\"rust_semantic.rs\"]\n"
+                "symbols = [\"Circle\", \"NestedPoint\", \"WrapperI32\", \"nested_sum\"]\n\n"
+                "[rust]\nhelper = \"" + helper_toml + "\"\n\n"
+                "[[export]]\noutput = \"rust_semantic.abix\"\n",
+                encoding="utf-8")
+            import_out = import_dir / "out"
+            result = run([str(amc), "build", "-c", str(import_config), "-B", str(import_out)])
+            import_artifact = import_out / "rust_semantic.abix"
+            if check(result.returncode == 0 and import_artifact.is_file(),
+                     "AMC imports helper semantic entities", output(result)[-400:]):
+                check("layout differs from the source parser" not in output(result),
+                      "AMC cross-validates helper and parser layouts")
+                semantic_path = Path(str(import_artifact) + ".semantic")
+                check(semantic_path.is_file(), "AMC writes the imported semantic sidecar")
+                if semantic_path.is_file():
+                    semantic = json.loads(semantic_path.read_text(encoding="utf-8"))
+                    names = {item.get("name") for item in semantic.get("types", [])}
+                    check({"NestedPoint", "WrapperI32", "Wrapper<i32>"} <= names,
+                          "helper types reached Semantic IR")
+                    check(bool(semantic.get("functions")), "helper functions reached Semantic IR")
+                query = run([str(amc), "query", str(import_artifact), "--type", "WrapperI32",
+                             "--format", "json", "--layout"])
+                if check(query.returncode == 0, "AMC queries the imported alias", output(query)[-300:]):
+                    match = json.loads(query.stdout).get("matches", [{}])[0]
+                    check(match.get("size") == 4 and match.get("align") == 4,
+                          "imported alias keeps the helper layout")
+                query = run([str(amc), "query", str(import_artifact), "--type", "NestedPoint",
+                             "--format", "json", "--layout"])
+                if check(query.returncode == 0, "AMC queries the imported nested record", output(query)[-300:]):
+                    match = json.loads(query.stdout).get("matches", [{}])[0]
+                    check(match.get("size") == 8 and match.get("align") == 4,
+                          "imported nested record keeps the helper layout")
 
         if keep:
             print("  kept artifacts in " + work)

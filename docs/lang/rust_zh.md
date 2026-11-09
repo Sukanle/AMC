@@ -82,7 +82,7 @@ mod demo_thunks;
 
 ### 可选 rustc helper（v0.4.0 骨架）
 
-v0.4.0 的 helper 进程已有一个最小骨架。它在独立进程中链接 `rustc_driver`，报告 target/crate 事实，提取 `repr(C)` / `repr(transparent)` / packed / union 记录和 public `extern "C"` 函数，并输出稳定的 `amc.rust.semantic/1` envelope。generics/traits/errors 由后续增量填充。构建需要带 `rustc-dev` 的 Rust toolchain。
+v0.4.0 的 helper 进程在独立进程中链接 `rustc_driver`。它报告 target/crate 事实，遍历嵌套 module 和 impl，提取 `repr(C)` / `repr(transparent)` / packed / union 记录、具体泛型实例、public `extern "C"` 函数、泛型声明、traits/impls 和 `Result` error enum，并输出稳定的 `amc.rust.semantic/1` envelope。存在 Cargo manifest 时还会从 `cargo metadata` 填充 workspace 与 feature 事实。AMC 将 helper 的 types/functions 导入 ABIX/Semantic IR，并与源码 parser 交叉校验布局。构建需要带 `rustc-dev` 的 Rust toolchain。
 
 ```toml
 [rust]

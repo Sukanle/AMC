@@ -16,6 +16,9 @@
 #include "SKL/AMC/Frontend/Rust/Rust.h"
 
 #include "SKL/AMC/Core/Core.h"
+#include "SKL/AMC/Semantic/Identity.h"
+#include "SKL/AMC/Semantic/Serialize.h"
+#include "SKL/AMC/Semantic/Sync.h"
 #include "SKL/AMC/Support/Json.h"
 
 #include <algorithm>
@@ -61,6 +64,109 @@ struct TargetFacts {
     uint32_t c_long_size = 0;
 };
 
+struct HelperField {
+    std::string name;
+    std::string type;
+    uint64_t offset = 0;
+};
+
+struct HelperType {
+    std::string id;
+    std::string name;
+    std::string path;
+    std::string kind;
+    std::string underlying;
+    std::vector<std::string> repr;
+    uint64_t size = 0;
+    uint32_t align = 1;
+    bool generic = false;
+    std::vector<HelperField> fields;
+};
+
+struct HelperFunction {
+    std::string name;
+    std::string path;
+    std::string symbol;
+    std::string abi;
+    std::string visibility;
+    std::string kind;
+    std::string owner;
+    std::string return_type;
+    bool has_receiver = false;
+    std::vector<HelperField> parameters;
+};
+
+// Facts imported from `amc.rust.semantic/1`. The helper is the semantic
+// authority; the parser is the fallback when the helper is unavailable.
+struct HelperDocument {
+    bool loaded = false;
+    std::vector<HelperType> types;
+    std::vector<HelperFunction> functions;
+};
+
+uint64_t json_uint(const amc::Json *value, uint64_t fallback = 0) {
+    return value == nullptr ? fallback : static_cast<uint64_t>(value->as_number(static_cast<double>(fallback)));
+}
+
+void parse_helper_field(const amc::Json &value, HelperField &field) {
+    if (const amc::Json *name = value.find("name")) field.name = name->as_string();
+    if (const amc::Json *type = value.find("type")) field.type = type->as_string();
+    field.offset = json_uint(value.find("offset"));
+}
+
+void parse_helper_document(const amc::Json &root, HelperDocument &document) {
+    const amc::Json *types = root.find("types");
+    if (types != nullptr && types->is_array()) {
+        for (const amc::Json &entry : types->items()) {
+            if (!entry.is_object()) continue;
+            HelperType type;
+            if (const amc::Json *value = entry.find("id")) type.id = value->as_string();
+            if (const amc::Json *value = entry.find("name")) type.name = value->as_string();
+            if (const amc::Json *value = entry.find("path")) type.path = value->as_string();
+            if (const amc::Json *value = entry.find("kind")) type.kind = value->as_string();
+            if (const amc::Json *value = entry.find("underlying")) type.underlying = value->as_string();
+            if (const amc::Json *value = entry.find("size")) type.size = json_uint(value);
+            if (const amc::Json *value = entry.find("align")) type.align = static_cast<uint32_t>(json_uint(value, 1));
+            if (const amc::Json *value = entry.find("generic")) type.generic = value->as_bool();
+            if (const amc::Json *value = entry.find("repr"); value != nullptr && value->is_array())
+                for (const amc::Json &item : value->items())
+                    type.repr.push_back(item.as_string());
+            if (const amc::Json *value = entry.find("fields"); value != nullptr && value->is_array())
+                for (const amc::Json &item : value->items()) {
+                    HelperField field;
+                    parse_helper_field(item, field);
+                    type.fields.push_back(std::move(field));
+                }
+            if (!type.id.empty()) document.types.push_back(std::move(type));
+        }
+    }
+
+    const amc::Json *functions = root.find("functions");
+    if (functions != nullptr && functions->is_array()) {
+        for (const amc::Json &entry : functions->items()) {
+            if (!entry.is_object()) continue;
+            HelperFunction function;
+            if (const amc::Json *value = entry.find("name")) function.name = value->as_string();
+            if (const amc::Json *value = entry.find("path")) function.path = value->as_string();
+            if (const amc::Json *value = entry.find("symbol")) function.symbol = value->as_string();
+            if (const amc::Json *value = entry.find("abi")) function.abi = value->as_string();
+            if (const amc::Json *value = entry.find("visibility")) function.visibility = value->as_string();
+            if (const amc::Json *value = entry.find("kind")) function.kind = value->as_string();
+            if (const amc::Json *value = entry.find("owner")) function.owner = value->as_string();
+            if (const amc::Json *value = entry.find("return_type")) function.return_type = value->as_string();
+            if (const amc::Json *value = entry.find("has_receiver")) function.has_receiver = value->as_bool();
+            if (const amc::Json *value = entry.find("parameters"); value != nullptr && value->is_array())
+                for (const amc::Json &item : value->items()) {
+                    HelperField field;
+                    parse_helper_field(item, field);
+                    function.parameters.push_back(std::move(field));
+                }
+            if (!function.name.empty()) document.functions.push_back(std::move(function));
+        }
+    }
+    document.loaded = true;
+}
+
 bool target_facts_from(const amc::lang::Config &config, TargetFacts &target, std::string &error) {
     if (config.pointer_bits == 0) {
         error = "Rust frontend requires [target] pointer_bits";
@@ -90,7 +196,8 @@ bool target_facts_from(const amc::lang::Config &config, TargetFacts &target, std
 
 // Run the optional v0.4.0 rustc helper and use its target facts. The helper is
 // an independent process: AMC never links rustc or reads its internal types.
-bool query_rust_helper(amc::lang::Config &config, llvm::StringRef base, std::string &error, bool &fatal) {
+bool query_rust_helper(
+    amc::lang::Config &config, llvm::StringRef base, HelperDocument &document, std::string &error, bool &fatal) {
     fatal = false;
     if (config.rust_helper.empty()) return true;
     if (config.files.empty()) {
@@ -159,6 +266,7 @@ bool query_rust_helper(amc::lang::Config &config, llvm::StringRef base, std::str
         fatal = true;
         return false;
     }
+    parse_helper_document(root, document);
     const amc::Json *target = root.find("target");
     if (target == nullptr || !target->is_object()) {
         error = "rust helper output has no target object";
@@ -339,6 +447,12 @@ struct RawItem {
     uint32_t packed_align = 0;
     bool transparent = false;
     uint32_t enum_size = 4;
+    // When set, the layout comes from the rustc helper instead of being
+    // recomputed from source tokens.
+    bool explicit_layout = false;
+    uint64_t explicit_size = 0;
+    uint32_t explicit_align = 0;
+    std::vector<uint64_t> explicit_offsets;
 };
 
 struct RawFunction {
@@ -1123,8 +1237,9 @@ private:
             type.name = item.name;
             type.kind = amc::TypeKind::enumeration;
             type.id = amc::hash_text(item.name, kTypeDomain);
-            type.size = item.enum_size == 0 ? 4 : item.enum_size;
-            type.align = type.size;
+            type.size = item.explicit_layout ? static_cast<uint32_t>(item.explicit_size)
+                                             : (item.enum_size == 0 ? 4 : item.enum_size);
+            type.align = item.explicit_layout ? (item.explicit_align == 0 ? 1 : item.explicit_align) : type.size;
             const int index = static_cast<int>(module_.types.size());
             module_.types.push_back(std::move(type));
             resolved_[name] = index;
@@ -1161,8 +1276,9 @@ private:
         if (size == 0) size = 1;
         auto &record = module_.types[static_cast<size_t>(index)];
         record.field_count = static_cast<uint32_t>(module_.fields.size()) - record.field_begin;
-        record.size = round_up(size, align);
-        record.align = align == 0 ? 1 : align;
+        record.size = item.explicit_layout ? static_cast<uint32_t>(item.explicit_size) : round_up(size, align);
+        record.align =
+            item.explicit_layout ? (item.explicit_align == 0 ? 1 : item.explicit_align) : (align == 0 ? 1 : align);
         std::vector<amc::Field> layout(module_.fields.begin() + record.field_begin, module_.fields.end());
         record.layout_hash = amc::canonical_layout_hash(module_, record, layout);
         resolved_[item.name] = index;
@@ -1181,8 +1297,11 @@ private:
         const Resolved underlying =
             resolve_type(item.fields.empty() ? std::vector<std::string>{} : item.fields[0].type);
         if (!ok()) return -1;
-        module_.types[static_cast<size_t>(index)].size = underlying.size;
-        module_.types[static_cast<size_t>(index)].align = underlying.align == 0 ? 1 : underlying.align;
+        module_.types[static_cast<size_t>(index)].size =
+            item.explicit_layout ? static_cast<uint32_t>(item.explicit_size) : underlying.size;
+        module_.types[static_cast<size_t>(index)].align = item.explicit_layout
+                                                            ? (item.explicit_align == 0 ? 1 : item.explicit_align)
+                                                            : (underlying.align == 0 ? 1 : underlying.align);
         module_.fields.push_back({module_.types[static_cast<size_t>(index)].id, "underlying", underlying.id, 0, 0});
         resolved_[item.name] = index;
         return index;
@@ -1203,7 +1322,8 @@ private:
         }
         uint32_t offset = 0;
         uint32_t align = 1;
-        for (const auto &raw : item.fields) {
+        for (size_t index = 0; index < item.fields.size(); ++index) {
+            const auto &raw = item.fields[index];
             const Resolved field_type = resolve_type(raw.type);
             if (!ok()) return -1;
             const uint32_t natural_align = field_type.align == 0 ? 1 : field_type.align;
@@ -1214,7 +1334,9 @@ private:
             field.owner_type = type.id;
             field.name = raw.name.empty() ? fmt::format("field{}", module_.fields.size()) : raw.name;
             field.type_id = field_type.id;
-            field.offset = offset;
+            field.offset = item.explicit_layout && index < item.explicit_offsets.size()
+                             ? static_cast<uint32_t>(item.explicit_offsets[index])
+                             : offset;
             offset += field_type.size;
             align = std::max(align, field_align);
             module_.fields.push_back(std::move(field));
@@ -1224,8 +1346,9 @@ private:
         const uint32_t size = round_up(offset, align);
         auto &record = module_.types[static_cast<size_t>(index)];
         record.field_count = static_cast<uint32_t>(module_.fields.size()) - record.field_begin;
-        record.size = size == 0 ? 1 : size;
-        record.align = align == 0 ? 1 : align;
+        record.size = item.explicit_layout ? static_cast<uint32_t>(item.explicit_size) : (size == 0 ? 1 : size);
+        record.align =
+            item.explicit_layout ? (item.explicit_align == 0 ? 1 : item.explicit_align) : (align == 0 ? 1 : align);
         std::vector<amc::Field> layout(module_.fields.begin() + record.field_begin, module_.fields.end());
         record.layout_hash = amc::canonical_layout_hash(module_, record, layout);
         resolved_[item.name] = index;
@@ -1261,6 +1384,175 @@ private:
     }
 };
 
+std::string helper_simple_name(std::string name) {
+    if (name.rfind("rust:", 0) == 0) name.erase(0, 5);
+    const size_t generic = name.find('<');
+    std::string base = generic == std::string::npos ? name : name.substr(0, generic);
+    const std::string suffix = generic == std::string::npos ? std::string{} : name.substr(generic);
+    const size_t separator = base.rfind("::");
+    if (separator != std::string::npos) base.erase(0, separator + 2);
+    return base + suffix;
+}
+
+std::string helper_type_spelling(std::string text, const std::unordered_map<std::string, std::string> &names) {
+    if (text.rfind("rust:", 0) == 0) text.erase(0, 5);
+    if (const auto exact = names.find(text); exact != names.end()) return exact->second;
+    if (const auto exact = names.find("rust:" + text); exact != names.end()) return exact->second;
+    for (const char *prefix : {"*const ", "*mut ", "&mut ", "&"}) {
+        const std::string qualifier(prefix);
+        if (text.rfind(qualifier, 0) == 0)
+            return qualifier + helper_type_spelling(text.substr(qualifier.size()), names);
+    }
+    return helper_simple_name(text);
+}
+
+std::vector<std::string> helper_type_tokens(
+    const std::string &text, const std::unordered_map<std::string, std::string> &names) {
+    std::vector<Token> tokens = lex(helper_type_spelling(text, names));
+    std::vector<std::string> out;
+    for (const Token &token : tokens)
+        if (token.kind != Tok::End) out.push_back(token.text);
+    return out;
+}
+
+RawItem::Kind helper_raw_kind(const std::string &kind) {
+    if (kind == "union") return RawItem::Kind::Union;
+    if (kind == "enum") return RawItem::Kind::Enum;
+    if (kind == "alias") return RawItem::Kind::Alias;
+    return RawItem::Kind::Record;
+}
+
+void apply_helper_repr(const HelperType &type, RawItem &item) {
+    for (const std::string &repr : type.repr) {
+        if (repr == "transparent") item.transparent = true;
+        if (repr.rfind("packed(", 0) == 0) {
+            try {
+                item.packed_align = static_cast<uint32_t>(std::stoul(repr.substr(7)));
+            } catch (...) {
+                item.packed_align = 1;
+            }
+        }
+        if (repr.rfind("align(", 0) == 0) {
+            try {
+                item.align_override = static_cast<uint32_t>(std::stoul(repr.substr(6)));
+            } catch (...) {
+                item.align_override = 0;
+            }
+        }
+        if (repr == "u8")
+            item.enum_size = 1;
+        else if (repr == "u16" || repr == "i16")
+            item.enum_size = 2;
+        else if (repr == "u32" || repr == "i32")
+            item.enum_size = 4;
+        else if (repr == "u64" || repr == "i64")
+            item.enum_size = 8;
+    }
+}
+
+void merge_helper_types(
+    const HelperDocument &document, std::vector<RawItem> &items, std::unordered_map<std::string, std::string> &names) {
+    std::unordered_map<std::string, size_t> index;
+    for (size_t i = 0; i < items.size(); ++i)
+        index.emplace(items[i].name, i);
+    for (const HelperType &type : document.types)
+        names.emplace(type.id, helper_simple_name(type.name.empty() ? type.path : type.name));
+
+    for (const HelperType &type : document.types) {
+        if (type.generic) continue;
+        const std::string name = helper_simple_name(type.name.empty() ? type.path : type.name);
+        auto found = index.find(name);
+        if (found == index.end()) {
+            RawItem item;
+            item.name = name;
+            found = index.emplace(name, items.size()).first;
+            items.push_back(std::move(item));
+        }
+        RawItem &item = items[found->second];
+        item.kind = helper_raw_kind(type.kind);
+        item.explicit_layout = true;
+        item.explicit_size = type.size;
+        item.explicit_align = type.align;
+        item.explicit_offsets.clear();
+        apply_helper_repr(type, item);
+        if (type.kind == "enum") {
+            item.fields.clear();
+            continue;
+        }
+        if (type.kind == "alias") {
+            item.fields.clear();
+            RawField field;
+            field.name = "underlying";
+            field.type = helper_type_tokens(type.underlying, names);
+            item.fields.push_back(std::move(field));
+            continue;
+        }
+        item.fields.clear();
+        for (const HelperField &field : type.fields) {
+            RawField raw;
+            raw.name = field.name;
+            raw.type = helper_type_tokens(field.type, names);
+            item.fields.push_back(std::move(raw));
+            item.explicit_offsets.push_back(field.offset);
+        }
+    }
+}
+
+void merge_helper_functions(const HelperDocument &document, std::vector<RawFunction> &functions,
+    const std::unordered_map<std::string, std::string> &names) {
+    std::unordered_map<std::string, bool> seen;
+    for (const RawFunction &function : functions)
+        seen.emplace(function.name, true);
+    for (const HelperFunction &function : document.functions) {
+        if (function.has_receiver || function.kind == "method" || function.abi != "C") continue;
+        if (!seen.emplace(function.name, true).second) continue;
+        RawFunction raw;
+        raw.name = function.name;
+        raw.extern_c = true;
+        for (const HelperField &parameter : function.parameters) {
+            RawField field;
+            field.name = parameter.name;
+            field.type = helper_type_tokens(parameter.type, names);
+            raw.parameters.push_back(std::move(field));
+        }
+        raw.return_type = helper_type_tokens(function.return_type, names);
+        functions.push_back(std::move(raw));
+    }
+}
+
+std::string cross_validate_helper(const HelperDocument &document, const amc::AbiModule &parser_module) {
+    std::string mismatches;
+    for (const HelperType &type : document.types) {
+        if (type.generic) continue;
+        const std::string name = helper_simple_name(type.name.empty() ? type.path : type.name);
+        const amc::Type *parsed = nullptr;
+        for (const amc::Type &candidate : parser_module.types)
+            if (candidate.name == name) {
+                parsed = &candidate;
+                break;
+            }
+        if (parsed == nullptr) continue;
+        if (parsed->size != type.size || parsed->align != type.align) {
+            mismatches += fmt::format(
+                "{}: parser {}/{} helper {}/{}\n", name, parsed->size, parsed->align, type.size, type.align);
+            continue;
+        }
+        if (type.fields.empty()) continue;
+        for (const HelperField &field : type.fields) {
+            bool found = false;
+            for (uint32_t i = 0; i < parsed->field_count; ++i) {
+                const amc::Field &candidate = parser_module.fields[parsed->field_begin + i];
+                if (candidate.name == field.name && candidate.offset == field.offset) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) mismatches += fmt::format("{}::{}: offset {} differs\n", name, field.name, field.offset);
+        }
+    }
+    return mismatches;
+}
+
 }   // namespace
 
 int run_frontend(const char *config_path, const char *output_path) {
@@ -1278,10 +1570,11 @@ int run_frontend(const char *config_path, const char *output_path) {
     }
     const llvm::StringRef base = llvm::sys::path::parent_path(config_path_abs);
 
+    HelperDocument helper;
     if (!config.rust_helper.empty()) {
         std::string helper_error;
         bool helper_fatal = false;
-        if (!query_rust_helper(config, base, helper_error, helper_fatal)) {
+        if (!query_rust_helper(config, base, helper, helper_error, helper_fatal)) {
             if (helper_fatal || config.pointer_bits == 0) {
                 fmt::print(stderr, "{}\n", helper_error);
                 return EXIT_FAILURE;
@@ -1316,6 +1609,13 @@ int run_frontend(const char *config_path, const char *output_path) {
         Parser parser(lex(source));
         parser.parse();
         if (!parser.ok()) {
+            // The rustc helper is the semantic authority. When it succeeded,
+            // advanced syntax the lightweight parser does not model is not a
+            // build failure; the helper records those entities instead.
+            if (helper.loaded) {
+                fmt::print(stderr, "warning: {}: {}\n", path.str().str(), parser.error());
+                continue;
+            }
             fmt::print(stderr, "{}: {}\n", path.str().str(), parser.error());
             return EXIT_FAILURE;
         }
@@ -1324,6 +1624,7 @@ int run_frontend(const char *config_path, const char *output_path) {
         for (auto &function : parser.functions())
             functions.push_back(std::move(function));
     }
+    const std::vector<RawItem> parser_items = items;
 
     std::vector<std::string> exposed_names;
     std::string wrapper_source;
@@ -1419,6 +1720,22 @@ int run_frontend(const char *config_path, const char *output_path) {
         }
     }
 
+    std::unordered_map<std::string, std::string> helper_names;
+    if (helper.loaded) {
+        merge_helper_types(helper, items, helper_names);
+        merge_helper_functions(helper, functions, helper_names);
+        // The source parser remains an independent implementation. Compare the
+        // layouts it derives with the rustc helper for every type both views
+        // resolved; the helper layout wins, but a mismatch is a real bug.
+        Builder parser_builder(parser_items, {}, target);
+        const amc::AbiModule parser_module = parser_builder.build(config.symbols, exposed_names);
+        if (parser_builder.ok()) {
+            const std::string mismatches = cross_validate_helper(helper, parser_module);
+            if (!mismatches.empty())
+                fmt::print(stderr, "warning: rust helper layout differs from the source parser:\n{}", mismatches);
+        }
+    }
+
     Builder builder(std::move(items), std::move(functions), target);
     amc::AbiModule module = builder.build(config.symbols, exposed_names);
     if (amc::lang::cancellation_requested()) return amc::lang::kCapabilityCancelled;
@@ -1427,6 +1744,20 @@ int run_frontend(const char *config_path, const char *output_path) {
         return EXIT_FAILURE;
     }
     if (!amc::write_abix(module, output_path, error)) {
+        fmt::print(stderr, "{}\n", error);
+        return EXIT_FAILURE;
+    }
+
+    // Import the ABI entities into Semantic IR and write the sidecar next to
+    // the artifact. `synchronize_from_abi` gives every ABI type and function a
+    // semantic identity and a direct `abi_type` / `abi_signature` link, so the
+    // lowering pass consumes the same facts whether or not the helper ran.
+    amc::semantic::SemanticModule semantic;
+    semantic.package_name = "rust";
+    semantic.rules_version = amc::semantic::semantic_rules_version;
+    amc::semantic::synchronize_from_abi(module, semantic);
+    const std::string semantic_path = std::string(output_path) + ".semantic";
+    if (!amc::semantic::write_semantic_json(semantic, semantic_path, error)) {
         fmt::print(stderr, "{}\n", error);
         return EXIT_FAILURE;
     }

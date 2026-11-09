@@ -116,29 +116,75 @@ schema: "amc.rust.semantic/1"
 ### `types`
 
 - `id`：helper 内部稳定身份，不是 Rust `TypeId`；
-- `name`：源码拼写；
+- `name`：源码拼写，包含模块路径（`nested::Point`）；
+- `path`：同一模块限定拼写；
 - `kind`：`record`、`enum`、`union`、`alias`、`primitive`、`pointer`、`array`；
-- `repr`：显式 representation hints（`C`、`transparent`、`packed(N)`、`u8` 等）；
+- `repr`：显式 representation hints（`C`、`transparent`、`packed(N)`、`align(N)`、`u8` 等）；
 - `size` / `align`：target-specific，来自 rustc；
-- `fields[].offset`：target-specific，来自 rustc；union 字段 offset 为 0。
+- `generic`：true 表示布局尚未具体化的泛型声明；
+- `underlying`：alias 的被引用类型身份，其他情况为 `null`；
+- `fields[].offset`：target-specific，来自 rustc；union 字段 offset 为 0；
+- `variants[]`：enum variant 的 `name`、`discriminant`（十进制字符串）和 `payload` 类型身份。
+
+具体泛型实例以普通 `record` / `union` / `enum` 条目输出，身份形如 `rust:demo::Wrapper<i32>`。泛型声明保持 `size = 0`、`align = 1`；AMC 导入布局实体时必须跳过声明并使用具体实例。
 
 AMC 将这些记录转换为 Semantic IR，并决定实体是否 ABI-safe。helper 不决定 ABI 策略。
 
 ### `functions`
 
 - `name` 与 `symbol` 分离：`#[link_name]` 可能改变 symbol；
+- `path` 是模块限定源码路径，`name` 是非限定名；
 - `abi`：声明的 ABI（当前为 `C`）；不支持的 ABI 明确拒绝或标记不可投影；
 - `visibility` / `source` 只是 provenance，不是 ABI identity；
+- `kind`：`free`、`associated` 或 `method`；`has_receiver` 区分方法；
+- `owner`：关联函数的 self type 身份，否则为 `null`；
 - `mode` 只在 helper 能证明时描述 `borrowed` / `owned` / `copy`；缺失表示未指定；
 - 只有显式选择的函数才导出。
 
-### `generics` / `traits`
+### `generics`
 
-可选、additive。v0.4 可以填充声明、bounds、associated types 和显式实例。 AMC 不能假设“缺失 = 不存在”；缺失只表示“未选择/未证明”。
+每个条目描述一个声明：
+
+```json
+{
+  "id": "rust:demo::Wrapper",
+  "name": "Wrapper",
+  "path": "Wrapper",
+  "kind": "type",
+  "parameters": [{ "index": 0, "name": "T", "kind": "type", "default": null }],
+  "where_clause": ["T: core::marker::Copy"],
+  "instances": ["rust:demo::Wrapper<i32>"]
+}
+```
+
+`parameters[].kind` 为 `type`、`const` 或 `lifetime`。`instances` 指向文档中其他位置的具体类型条目，不表示要求 helper 主动单态化。
+
+### `traits`
+
+trait 声明和 impl 共用数组，通过 `kind` 区分：
+
+- `trait`：`parameters`、`where_clause`、`supertraits`、`associated_types[]` 和 `methods[]`；method 包含 `name`、`path`、`has_receiver`、`required`、`abi`、`return_type` 和 `parameters`；
+- `impl`：`self_type`、`trait`（或 `null`）、`negative`、`parameters`、`where_clause` 和 `methods[]`。
+
+AMC 将这些作为语言元数据保留，不运行 trait solver，也不假设“缺失 = 不是 trait”。
 
 ### `errors`
 
-可选。`Result<T,E>` 和 error enum 可以描述为语义实体；ABI 映射由 AMC 的 error pass 完成，不由 helper 决定。
+`errors[]` 描述函数签名中观察到的 `Result<T, E>` 错误类型：
+
+```json
+{
+  "id": "rust:demo::DemoError",
+  "name": "DemoError",
+  "kind": "enum",
+  "variants": [
+    { "name": "InvalidInput", "discriminant": "1", "payload": null }
+  ],
+  "functions": ["rust:demo::demo_try"]
+}
+```
+
+helper 只描述语义实体；ABI status 映射仍由 AMC 的 error pass 和显式 `[[error]]` 契约完成。
 
 ### `provenance`
 
@@ -158,11 +204,13 @@ AMC 将这些记录转换为 Semantic IR，并决定实体是否 ABI-safe。help
 
 ```text
 v0.3.x  冻结 schema；probe 和 TargetFacts 验证相同字段
-v0.4.0  amc-rustc-helper 先实现 target/crate envelope；
-        types/functions/generics/traits/errors 后续增量填充，不改变 envelope
+v0.4.0  amc-rustc-helper 输出 target/crate envelope、types、functions、
+        generics、traits 和 errors
 ```
 
-v0.4.0 的首个增量用 `rustc_driver` 实现进程边界，输出 `target` / `crate` / `provenance` envelope，并提取 `repr` 记录和 public `extern "C"` 函数。`amc-rust` 可以通过 `[rust] helper` 调用它并使用 target facts；helper 不可用时，parser/probe 仍是回退路径。构建 helper 需要 `rustc-dev` 组件。
+v0.4.0 的 helper 用 `rustc_driver` 实现进程边界，输出 `target` / `crate` / `provenance` envelope，遍历所有 free items（含嵌套 module），并提取 `repr` 记录、具体泛型实例、public `extern "C"` 函数、impl 方法、泛型声明、 traits/impls 和 `Result` error enum。存在 manifest 时还会读取 `cargo metadata` 的 workspace 事实；构建需要 `rustc-dev`。
+
+`amc-rust` 通过 `[rust] helper` 调用它，将 helper 的 types/functions 导入 ABIX/Semantic IR，与源码 parser 交叉校验布局，并写出 semantic sidecar。 helper 不可用时 parser/probe 仍是回退路径；helper 已证明的语法如果 parser 无法建模，parser 错误会降级为 warning。
 
 v0.3.x 不实现 helper，只做：
 

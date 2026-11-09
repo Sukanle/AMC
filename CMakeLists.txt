@@ -1,9 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 cmake_minimum_required(VERSION 3.20)
-project(
-    AMC
-    VERSION 0.4.0
-    LANGUAGES C CXX)
+project(AMC VERSION 0.4.0 LANGUAGES C CXX)
 
 # Standalone AMC build. This repository prefers an installed ABIX package and
 # does not assume that the ABIX source tree is its parent.
@@ -48,8 +45,7 @@ option(AMC_INSTALL "Generate AMC install rules" ON)
 option(AMC_INSTALL_PRIVATE_HEADERS "Install AMC private implementation headers" OFF)
 option(AMC_ENABLE_LLDB_PLUGIN "Build the optional LLDB plugin" ON)
 option(AMC_BUILD_AUE "Build the optional Aue Lua conformance prototype" ON)
-set(AMC_ABIX_REF
-    "v0.4.0"
+set(AMC_ABIX_REF "v0.4.0"
     CACHE STRING "ABIX git revision used when FetchContent downloads ABIX (tag, branch or commit)")
 set(AMC_DEPENDENCIES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dependencies")
 
@@ -91,14 +87,15 @@ if(NOT ABIX_FOUND)
         # .gitmodules uses SSH URLs, which fail on machines without GitHub SSH
         # credentials. The rewritten submodules are initialized below, then
         # ABIX is added as a subproject.
-        FetchContent_Declare(
+        fetchcontent_declare(
             ABIX
             GIT_REPOSITORY https://github.com/Sukanle/ABIX.git
             GIT_TAG ${AMC_ABIX_REF}
             GIT_SUBMODULES ""
             GIT_PROGRESS TRUE
-            SOURCE_DIR ${AMC_DEPENDENCIES_DIR}/ABIX SOURCE_SUBDIR amc-deferred-subproject)
-        FetchContent_MakeAvailable(ABIX)
+            SOURCE_DIR ${AMC_DEPENDENCIES_DIR}/ABIX
+            SOURCE_SUBDIR amc-deferred-subproject)
+        fetchcontent_makeavailable(ABIX)
     endif()
 
     # Rewrite every SSH submodule URL in .gitmodules to HTTPS in the local
@@ -106,13 +103,13 @@ if(NOT ABIX_FOUND)
     execute_process(
         COMMAND ${GIT_EXECUTABLE} config -f .gitmodules --get-regexp "^submodule\\..*\\.url$"
         WORKING_DIRECTORY "${abix_SOURCE_DIR}"
-        OUTPUT_VARIABLE AMC_ABIX_SUBMODULE_URLS
-        OUTPUT_STRIP_TRAILING_WHITESPACE)
+        OUTPUT_VARIABLE AMC_ABIX_SUBMODULE_URLS OUTPUT_STRIP_TRAILING_WHITESPACE)
     string(REPLACE "\n" ";" AMC_ABIX_SUBMODULE_URLS "${AMC_ABIX_SUBMODULE_URLS}")
     foreach(AMC_ABIX_SUBMODULE_URL IN LISTS AMC_ABIX_SUBMODULE_URLS)
         if(AMC_ABIX_SUBMODULE_URL MATCHES "^submodule\\.([^.]+)\\.url git@github\\.com:(.+)$")
-            execute_process(COMMAND ${GIT_EXECUTABLE} config "submodule.${CMAKE_MATCH_1}.url"
-                                    "https://github.com/${CMAKE_MATCH_2}" WORKING_DIRECTORY "${abix_SOURCE_DIR}")
+            execute_process(
+                COMMAND ${GIT_EXECUTABLE} config "submodule.${CMAKE_MATCH_1}.url" "https://github.com/${CMAKE_MATCH_2}"
+                WORKING_DIRECTORY "${abix_SOURCE_DIR}")
         endif()
     endforeach()
     unset(AMC_ABIX_SUBMODULE_URLS)
@@ -147,17 +144,13 @@ endif()
 # EPCD owns the stable application-layer error identity. AMC requires Core
 # (ErrorCode / static domains / conditions); Interface is used for registration
 # when the installed or fetched EPCD provides it.
-set(AMC_EPCD_REF
-    "main"
-    CACHE STRING "EPCD git revision used when FetchContent downloads EPCD")
+set(AMC_EPCD_REF "main" CACHE STRING "EPCD git revision used when FetchContent downloads EPCD")
 # Older AMC revisions pinned a local-only tag that was never pushed to the
 # public EPCD repository. Migrate that cache entry in place so an existing
 # build directory does not keep failing on the missing ref.
 if(AMC_EPCD_REF STREQUAL "v0.1.0-baseline")
     message(STATUS "AMC_EPCD_REF legacy tag v0.1.0-baseline -> main (EPCD has no such remote tag)")
-    set(AMC_EPCD_REF
-        "main"
-        CACHE STRING "EPCD git revision used when FetchContent downloads EPCD" FORCE)
+    set(AMC_EPCD_REF "main" CACHE STRING "EPCD git revision used when FetchContent downloads EPCD" FORCE)
 endif()
 find_package(EPCD 0.1 CONFIG QUIET COMPONENTS Core)
 if(NOT EPCD_FOUND)
@@ -175,20 +168,16 @@ if(NOT EPCD_FOUND)
         add_subdirectory("${epcd_SOURCE_DIR}" "${epcd_BINARY_DIR}")
     else()
         message(STATUS "EPCD 0.1 package not found; fetching EPCD into ${AMC_DEPENDENCIES_DIR}")
-        set(EPCD_BUILD_TESTS
-            OFF
-            CACHE BOOL "Do not build EPCD tests from the AMC checkout" FORCE)
-        set(EPCD_INSTALL
-            OFF
-            CACHE BOOL "Do not install fetched EPCD" FORCE)
-        FetchContent_Declare(
+        set(EPCD_BUILD_TESTS OFF CACHE BOOL "Do not build EPCD tests from the AMC checkout" FORCE)
+        set(EPCD_INSTALL OFF CACHE BOOL "Do not install fetched EPCD" FORCE)
+        fetchcontent_declare(
             epcd
             GIT_REPOSITORY https://github.com/Sukanle/EPCD.git
             GIT_TAG ${AMC_EPCD_REF}
             GIT_SHALLOW TRUE
             GIT_PROGRESS TRUE
             SOURCE_DIR ${AMC_DEPENDENCIES_DIR}/EPCD)
-        FetchContent_MakeAvailable(epcd)
+        fetchcontent_makeavailable(epcd)
     endif()
 endif()
 if(NOT TARGET EPCD::Core)
@@ -217,9 +206,7 @@ endif()
 # unsupported).
 option(AMC_LLVM_DYNAMIC "Link AMC providers against the shared LLVM library when available" ON)
 set(AMC_LLVM_LINK_LIBRARIES ${AMC_LLVM_SUPPORT_LIBS})
-if(AMC_LLVM_DYNAMIC
-   AND TARGET LLVM
-   AND LLVM_LINK_LLVM_DYLIB)
+if(AMC_LLVM_DYNAMIC AND TARGET LLVM AND LLVM_LINK_LLVM_DYLIB)
     set(AMC_LLVM_LINK_LIBRARIES LLVM)
     message(STATUS "LLVM providers: dynamic LLVM (${LLVM_PACKAGE_VERSION})")
 else()
@@ -236,7 +223,9 @@ add_library(AMC::llvm ALIAS amc-llvm)
 # consumer's own installation (see AMCConfig.cmake.in) instead of embedding
 # this machine's prefix.
 target_include_directories(
-    amc-llvm SYSTEM INTERFACE $<BUILD_INTERFACE:${LLVM_INCLUDE_DIRS}> $<BUILD_INTERFACE:${CLANG_INCLUDE_DIRS}>)
+    amc-llvm
+    SYSTEM
+    INTERFACE $<BUILD_INTERFACE:${LLVM_INCLUDE_DIRS}> $<BUILD_INTERFACE:${CLANG_INCLUDE_DIRS}>)
 target_compile_options(amc-llvm INTERFACE ${AMC_LLVM_DEFINITIONS})
 target_link_libraries(amc-llvm INTERFACE ${AMC_LLVM_LINK_LIBRARIES})
 set_target_properties(amc-llvm PROPERTIES EXPORT_NAME llvm)
@@ -245,10 +234,7 @@ set_target_properties(amc-llvm PROPERTIES EXPORT_NAME llvm)
 # (notably MSYS2) export Clang target files that reference static archives they
 # do not ship, so configuring fails even though clang-cpp is installed. Clang
 # headers live under the same include root as LLVM's.
-find_library(
-    AMC_CLANG_CPP_LIBRARY
-    NAMES clang-cpp
-    HINTS ${LLVM_LIBRARY_DIRS})
+find_library(AMC_CLANG_CPP_LIBRARY NAMES clang-cpp HINTS ${LLVM_LIBRARY_DIRS})
 if(NOT AMC_CLANG_CPP_LIBRARY)
     message(
         FATAL_ERROR
@@ -265,15 +251,11 @@ set(AMC_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(AMC_INCLUDE_DIR ${AMC_SOURCE_DIR}/include)
 set(SKL_ABIX_INC_DIR ${ABIX_INCLUDE_DIR})
 
-find_program(
-    AMC_CLANG_EXECUTABLE
-    NAMES clang
-    HINTS ${LLVM_TOOLS_BINARY_DIR})
+find_program(AMC_CLANG_EXECUTABLE NAMES clang HINTS ${LLVM_TOOLS_BINARY_DIR})
 if(AMC_CLANG_EXECUTABLE)
     execute_process(
-        COMMAND ${AMC_CLANG_EXECUTABLE} -print-resource-dir
-        OUTPUT_VARIABLE AMC_CLANG_RESOURCE_DIR
-        OUTPUT_STRIP_TRAILING_WHITESPACE)
+        COMMAND ${AMC_CLANG_EXECUTABLE} -print-resource-dir OUTPUT_VARIABLE AMC_CLANG_RESOURCE_DIR
+                                                                            OUTPUT_STRIP_TRAILING_WHITESPACE)
 endif()
 if(NOT AMC_CLANG_RESOURCE_DIR)
     message(WARNING "Could not detect the Clang resource directory; amc-cpp may not find built-in headers")
@@ -284,24 +266,25 @@ endif()
 # MICS. This keeps the AMC release independent without splitting the AMC core
 # headers/namespaces across two repositories.
 add_library(
-    libabix-format STATIC
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Core.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Diagnostics/Error.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Diagnostics/Diagnostics.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Diagnostics/Verify.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Error.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/Condition.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Semantic/Identity.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Semantic/Serialize.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Semantic/Sync.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/LoweringJson.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/Artifact.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/TypeMapping.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Support/Json.cpp
-    ${AMC_SOURCE_DIR}/src/ljson/json.c
-    ${AMC_SOURCE_DIR}/src/ljson/jnum.c
-    ${AMC_SOURCE_DIR}/src/ljson/grisu2.c
-    ${AMC_SOURCE_DIR}/src/ljson/dragonbox.c)
+    libabix-format
+    STATIC
+        ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Core.cpp
+        ${AMC_SOURCE_DIR}/src/SKL/AMC/Diagnostics/Error.cpp
+        ${AMC_SOURCE_DIR}/src/SKL/AMC/Diagnostics/Diagnostics.cpp
+        ${AMC_SOURCE_DIR}/src/SKL/AMC/Diagnostics/Verify.cpp
+        ${AMC_SOURCE_DIR}/src/SKL/AMC/Error.cpp
+        ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/Condition.cpp
+        ${AMC_SOURCE_DIR}/src/SKL/AMC/Semantic/Identity.cpp
+        ${AMC_SOURCE_DIR}/src/SKL/AMC/Semantic/Serialize.cpp
+        ${AMC_SOURCE_DIR}/src/SKL/AMC/Semantic/Sync.cpp
+        ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/LoweringJson.cpp
+        ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/Artifact.cpp
+        ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/TypeMapping.cpp
+        ${AMC_SOURCE_DIR}/src/SKL/AMC/Support/Json.cpp
+        ${AMC_SOURCE_DIR}/src/ljson/json.c
+        ${AMC_SOURCE_DIR}/src/ljson/jnum.c
+        ${AMC_SOURCE_DIR}/src/ljson/grisu2.c
+        ${AMC_SOURCE_DIR}/src/ljson/dragonbox.c)
 target_include_directories(
     libabix-format PUBLIC $<BUILD_INTERFACE:${AMC_INCLUDE_DIR}> $<BUILD_INTERFACE:${AMC_SOURCE_DIR}/include/ljson>
                           $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
@@ -309,100 +292,91 @@ target_link_libraries(libabix-format PUBLIC ABIX::runtime fmt::fmt MICS::MICS ${
 target_compile_features(libabix-format PUBLIC cxx_std_17)
 set_target_properties(
     libabix-format
-    PROPERTIES EXPORT_NAME format
-               C_STANDARD 23
-               C_STANDARD_REQUIRED ON
-               POSITION_INDEPENDENT_CODE ON
-               OUTPUT_NAME abix-format)
+    PROPERTIES
+        EXPORT_NAME
+        format
+        C_STANDARD
+        23
+        C_STANDARD_REQUIRED
+        ON
+        POSITION_INDEPENDENT_CODE
+        ON
+        OUTPUT_NAME
+        abix-format)
 if(AMC_HAS_EPCD_INTERFACE)
     target_compile_definitions(libabix-format PRIVATE AMC_HAS_EPCD_INTERFACE=1)
 endif()
 target_compile_definitions(
     libabix-format
-    PRIVATE JSON_PARSE_SKIP_COMMENT=1
-            JSON_PARSE_LAST_COMMA=1
-            JSON_PARSE_SPECIAL_CHAR=1
-            JSON_PARSE_SPECIAL_QUOTES=0
-            JSON_PARSE_HEX_NUM=0
-            JSON_PARSE_SPECIAL_NUM=0
-            JSON_PARSE_SPECIAL_DOUBLE=0
-            JSON_PARSE_SINGLE_VALUE=1
-            JSON_PARSE_FINISHED_CHAR=0
-            JSON_ERROR_PRINT_ENABLE=0)
+    PRIVATE
+        JSON_PARSE_SKIP_COMMENT=1
+        JSON_PARSE_LAST_COMMA=1
+        JSON_PARSE_SPECIAL_CHAR=1
+        JSON_PARSE_SPECIAL_QUOTES=0
+        JSON_PARSE_HEX_NUM=0
+        JSON_PARSE_SPECIAL_NUM=0
+        JSON_PARSE_SPECIAL_DOUBLE=0
+        JSON_PARSE_SINGLE_VALUE=1
+        JSON_PARSE_FINISHED_CHAR=0
+        JSON_ERROR_PRINT_ENABLE=0)
 
 add_library(
-    libabix-abi STATIC
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/Verify.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/Compatibility.cpp)
+    libabix-abi STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/Verify.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/Compatibility.cpp)
 target_link_libraries(libabix-abi PUBLIC libabix-format)
-set_target_properties(
-    libabix-abi
-    PROPERTIES EXPORT_NAME abi
-               POSITION_INDEPENDENT_CODE ON
-               OUTPUT_NAME abix-abi)
+set_target_properties(libabix-abi PROPERTIES EXPORT_NAME abi POSITION_INDEPENDENT_CODE ON OUTPUT_NAME abix-abi)
 
 add_library(
-    amc-platform STATIC
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Platform/ELF.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Platform/Symbol.cpp)
+    amc-platform
+    STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Platform/ELF.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Platform/Symbol.cpp)
 target_include_directories(amc-platform PUBLIC ${AMC_INCLUDE_DIR})
 target_link_libraries(amc-platform PUBLIC ABIX::runtime fmt::fmt)
 target_compile_features(amc-platform PUBLIC cxx_std_17)
 set_target_properties(
-    amc-platform
-    PROPERTIES EXPORT_NAME platform
-               POSITION_INDEPENDENT_CODE ON
-               OUTPUT_NAME amc-platform)
+    amc-platform PROPERTIES EXPORT_NAME platform POSITION_INDEPENDENT_CODE ON OUTPUT_NAME amc-platform)
 
 add_library(
-    libabix-metadata STATIC
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Artifact/Metadata.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Artifact/Materialize.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Query/Context.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Query/Query.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Query/Compatibility.cpp)
+    libabix-metadata
+    STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Artifact/Metadata.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Artifact/Materialize.cpp
+           ${AMC_SOURCE_DIR}/src/SKL/AMC/Query/Context.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Query/Query.cpp
+           ${AMC_SOURCE_DIR}/src/SKL/AMC/Query/Compatibility.cpp)
 # The query/context public headers expose llvm::raw_ostream, so the artifact
 # library needs LLVM's include paths (and LLVM Support at link time) both for
 # its own translation units and for anything that consumes AMC::metadata.
 target_link_libraries(libabix-metadata PUBLIC libabix-abi amc-platform amc-llvm)
 set_target_properties(
-    libabix-metadata
-    PROPERTIES EXPORT_NAME metadata
-               POSITION_INDEPENDENT_CODE ON
-               OUTPUT_NAME abix-metadata)
+    libabix-metadata PROPERTIES EXPORT_NAME metadata POSITION_INDEPENDENT_CODE ON OUTPUT_NAME abix-metadata)
 
 add_library(
-    libabix-tools STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Adapter.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Lua/Lua.cpp)
+    libabix-tools STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Core/Adapter.cpp
+                         ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Lua/Lua.cpp)
 target_link_libraries(libabix-tools PUBLIC libabix-metadata)
-set_target_properties(
-    libabix-tools
-    PROPERTIES EXPORT_NAME tools
-               POSITION_INDEPENDENT_CODE ON
-               OUTPUT_NAME abix-tools)
+set_target_properties(libabix-tools PROPERTIES EXPORT_NAME tools POSITION_INDEPENDENT_CODE ON OUTPUT_NAME abix-tools)
 
 # M4: semantic -> ABI lowering pass. It links the semantic model to the ABI
 # view without rewriting either; backends consume the resulting contract.
 add_library(
-    amc-pass STATIC
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Lowering.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Verify.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Semantic.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Artifact.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Compatibility.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/TypeMapping.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Pipeline.cpp)
+    amc-pass
+    STATIC
+        ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Lowering.cpp
+        ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Verify.cpp
+        ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Semantic.cpp
+        ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Artifact.cpp
+        ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Compatibility.cpp
+        ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/TypeMapping.cpp
+        ${AMC_SOURCE_DIR}/src/SKL/AMC/Pass/Pipeline.cpp)
 target_include_directories(amc-pass PUBLIC ${AMC_INCLUDE_DIR})
 target_link_libraries(amc-pass PUBLIC libabix-format libabix-abi amc-llvm)
 
 # A4 Compilation module: configuration parsing and, later, the shared build
 # pipeline. It is a build-tree library consumed by the CLI.
 add_library(
-    amc-compilation STATIC
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Config.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Provider.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Meta.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Build.cpp
-    ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Cache.cpp)
+    amc-compilation
+    STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Config.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Provider.cpp
+           ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Meta.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Build.cpp
+           ${AMC_SOURCE_DIR}/src/SKL/AMC/Compilation/Cache.cpp)
 target_include_directories(amc-compilation PUBLIC ${AMC_INCLUDE_DIR})
 target_link_libraries(
-    amc-compilation PUBLIC libabix-format libabix-metadata amc-util amc-pass tomlplusplus::tomlplusplus
-                          AMC::llvm)
+    amc-compilation PUBLIC libabix-format libabix-metadata amc-util amc-pass tomlplusplus::tomlplusplus AMC::llvm)
 target_compile_definitions(amc-compilation PRIVATE AMC_DEFAULT_PROVIDERS_FILE="${AMC_SOURCE_DIR}/providers.toml")
 
 add_library(AMC::format ALIAS libabix-format)
@@ -413,42 +387,52 @@ add_library(AMC::platform ALIAS amc-platform)
 
 # AMC helpers (hex/name rendering, JSON text helpers and the structured error
 # envelope).
-add_library(amc-util STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Util/Names.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Util/Json.cpp
-                            ${AMC_SOURCE_DIR}/src/SKL/AMC/Util/Error.cpp
-                            ${AMC_SOURCE_DIR}/src/SKL/AMC/Support/Process.cpp)
+add_library(
+    amc-util STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Util/Names.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Util/Json.cpp
+                    ${AMC_SOURCE_DIR}/src/SKL/AMC/Util/Error.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Support/Process.cpp)
 target_include_directories(amc-util PUBLIC ${AMC_INCLUDE_DIR})
 target_link_libraries(amc-util PUBLIC libabix-format fmt::fmt)
 
-add_library(amc-lang STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Lang.cpp
-                             ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/CodeIn.cpp
-                             ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Codegen.cpp)
+add_library(
+    amc-lang STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Lang.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/CodeIn.cpp
+                    ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Codegen.cpp)
 target_include_directories(amc-lang PUBLIC ${AMC_INCLUDE_DIR})
 target_include_directories(amc-lang PRIVATE ${AMC_GENERATED_INCLUDE_DIR})
 target_link_libraries(amc-lang PUBLIC amc-util amc-llvm fmt::fmt tomlplusplus::tomlplusplus)
 
 add_library(amc-core INTERFACE)
 target_link_libraries(
-    amc-core INTERFACE libabix-format libabix-abi libabix-metadata libabix-tools amc-platform amc-util amc-llvm
-                          fmt::fmt)
+    amc-core
+    INTERFACE
+        libabix-format
+        libabix-abi
+        libabix-metadata
+        libabix-tools
+        amc-platform
+        amc-util
+        amc-llvm
+        fmt::fmt)
 
 add_executable(
-    amc-cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/C++/C++.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Frontend/Cpp/Frontend.cpp
-            ${AMC_SOURCE_DIR}/src/SKL/AMC/Frontend/Cpp/Toolchain.cpp
-            ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Frontend/Cpp/Native.cpp
-            ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Frontend/Cpp/Extractor.cpp
-            ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Frontend/Cpp/Thunks.cpp
-            ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Cpp/Backend.cpp
-            ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Backend/Cpp/CppNames.cpp
-            ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Backend/Cpp/Preamble.cpp
-            ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Backend/Cpp/Projection.cpp
-            ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Backend/Cpp/Interfaces.cpp
-            ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Backend/Cpp/Handles.cpp
-            ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Backend/Cpp/Errors.cpp
-            ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Backend/Cpp/StaticChecks.cpp)
+    amc-cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Cpp/Cpp.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Frontend/Cpp/Frontend.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Frontend/Cpp/Toolchain.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Frontend/Cpp/Native.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Frontend/Cpp/Extractor.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Frontend/Cpp/Thunks.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Cpp/Backend.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Backend/Cpp/CppNames.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Backend/Cpp/Preamble.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Backend/Cpp/Projection.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Backend/Cpp/Interfaces.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Backend/Cpp/Handles.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Backend/Cpp/Errors.cpp
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Backend/Cpp/StaticChecks.cpp)
 target_include_directories(amc-cpp PRIVATE ${AMC_INCLUDE_DIR})
 target_compile_definitions(amc-cpp PRIVATE ABIX_CLANG_RESOURCE_DIR="${AMC_CLANG_RESOURCE_DIR}")
-target_link_libraries(amc-cpp PRIVATE amc-core amc-lang amc-llvm ${AMC_CLANG_CPP_LIBRARY} fmt::fmt
-                                      tomlplusplus::tomlplusplus)
+target_link_libraries(
+    amc-cpp PRIVATE amc-core amc-lang amc-llvm ${AMC_CLANG_CPP_LIBRARY} fmt::fmt tomlplusplus::tomlplusplus)
 # clang-cpp may need the full LLVM dylib even when AMC_LLVM_LINK_LIBRARIES uses
 # component libraries; keep the historical explicit target when available.
 if(TARGET LLVM)
@@ -457,12 +441,12 @@ endif()
 
 add_executable(
     amc-rust ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Rust/Rust.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Frontend/Rust/Frontend.cpp
-             ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Rust/Backend.cpp)
+    ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Rust/Backend.cpp)
 target_include_directories(amc-rust PRIVATE ${AMC_INCLUDE_DIR} ${AMC_GENERATED_INCLUDE_DIR})
 target_link_libraries(amc-rust PRIVATE amc-core amc-lang amc-llvm fmt::fmt)
 
 add_executable(amc-zig ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Zig/Zig.cpp
-                       ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Zig/Backend.cpp)
+               ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Zig/Backend.cpp)
 target_include_directories(amc-zig PRIVATE ${AMC_INCLUDE_DIR})
 target_link_libraries(amc-zig PRIVATE amc-core amc-lang amc-llvm fmt::fmt)
 
@@ -489,20 +473,18 @@ target_include_directories(amc PRIVATE ${AMC_INCLUDE_DIR})
 target_compile_definitions(amc PRIVATE AMC_DEFAULT_PROVIDERS_FILE="${AMC_SOURCE_DIR}/providers.toml")
 target_link_libraries(amc PRIVATE amc-core amc-compilation tomlplusplus::tomlplusplus)
 
-add_executable(
-    amc-dump ${AMC_SOURCE_DIR}/src/SKL/AMC/Tool/Dump/Dump.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Tool/Dump/Json.cpp
-             ${AMC_SOURCE_DIR}/src/SKL/AMC/Tool/Dump/Text.cpp)
+add_executable(amc-dump ${AMC_SOURCE_DIR}/src/SKL/AMC/Tool/Dump/Dump.cpp
+               ${AMC_SOURCE_DIR}/src/SKL/AMC/Tool/Dump/Json.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Tool/Dump/Text.cpp)
 target_include_directories(amc-dump PRIVATE ${AMC_INCLUDE_DIR})
 target_link_libraries(amc-dump PRIVATE amc-core)
 
-add_executable(
-    amc-mcp ${AMC_SOURCE_DIR}/src/SKL/AMC/Tool/MCP/MCP.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Tool/MCP/State.cpp
-            ${AMC_SOURCE_DIR}/src/SKL/AMC/Tool/MCP/Tools.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Tool/MCP/Server.cpp)
+add_executable(amc-mcp ${AMC_SOURCE_DIR}/src/SKL/AMC/Tool/MCP/MCP.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Tool/MCP/State.cpp
+               ${AMC_SOURCE_DIR}/src/SKL/AMC/Tool/MCP/Tools.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Tool/MCP/Server.cpp)
 target_include_directories(amc-mcp PRIVATE ${AMC_INCLUDE_DIR})
 target_link_libraries(amc-mcp PRIVATE amc-core)
 
-set_target_properties(amc amc-cpp amc-rust amc-zig amc-dump amc-mcp PROPERTIES RUNTIME_OUTPUT_DIRECTORY
-                                                                               ${CMAKE_BINARY_DIR}/bin)
+set_target_properties(
+    amc amc-cpp amc-rust amc-zig amc-dump amc-mcp PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 if(AMC_LLVM_DYNAMIC AND AMC_LLVM_LINK_LIBRARIES STREQUAL "LLVM")
     # Keep the LLVM shared-library directory in the installed RPATH so a
     # provider outside the default loader path still finds libLLVM.
@@ -513,15 +495,13 @@ configure_file(${AMC_SOURCE_DIR}/providers.toml ${CMAKE_BINARY_DIR}/bin/amc-prov
 if(AMC_ENABLE_LLDB_PLUGIN)
     find_path(AMC_LLDB_INCLUDE_DIR NAMES lldb/API/LLDB.h)
     find_library(AMC_LLDB_LIBRARY NAMES lldb)
-    if(AMC_LLDB_INCLUDE_DIR
-       AND AMC_LLDB_LIBRARY
-       AND EXISTS ${AMC_SOURCE_DIR}/tools/lldb_abix.cpp)
+    if(AMC_LLDB_INCLUDE_DIR AND AMC_LLDB_LIBRARY AND EXISTS ${AMC_SOURCE_DIR}/tools/lldb_abix.cpp)
         add_library(amc-lldb MODULE ${AMC_SOURCE_DIR}/tools/lldb_abix.cpp)
         target_include_directories(amc-lldb PRIVATE ${AMC_INCLUDE_DIR})
         target_include_directories(amc-lldb SYSTEM PRIVATE ${AMC_LLDB_INCLUDE_DIR})
         target_link_libraries(amc-lldb PRIVATE amc-core ${AMC_LLDB_LIBRARY})
-        set_target_properties(amc-lldb PROPERTIES OUTPUT_NAME abix_lldb LIBRARY_OUTPUT_DIRECTORY
-                                                                        ${CMAKE_BINARY_DIR}/bin)
+        set_target_properties(
+            amc-lldb PROPERTIES OUTPUT_NAME abix_lldb LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
     else()
         message(STATUS "LLDB not found: the AMC LLDB plugin will not be built")
     endif()
@@ -614,21 +594,29 @@ if(AMC_INSTALL)
         install(TARGETS amc amc-cpp amc-rust amc-zig amc-dump amc-mcp RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
     else()
         install(
-            TARGETS amc amc-cpp amc-rust amc-zig amc-dump amc-mcp
+            TARGETS
+            amc
+            amc-cpp
+            amc-rust
+            amc-zig
+            amc-dump
+            amc-mcp
             EXPORT AMCTargets
             RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
         install(
-            TARGETS libabix-format libabix-abi libabix-metadata libabix-tools amc-platform amc-llvm
+            TARGETS
+            libabix-format
+            libabix-abi
+            libabix-metadata
+            libabix-tools
+            amc-platform
+            amc-llvm
             EXPORT AMCTargets
             ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
             LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
             RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-        install(
-            EXPORT AMCTargets
-            FILE AMCTargets.cmake
-            NAMESPACE AMC::
-            DESTINATION ${AMC_CMAKE_INSTALL_DIR})
+        install(EXPORT AMCTargets FILE AMCTargets.cmake NAMESPACE AMC:: DESTINATION ${AMC_CMAKE_INSTALL_DIR})
 
         configure_package_config_file(
             ${AMC_SOURCE_DIR}/cmake/AMCConfig.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/AMCConfig.cmake
@@ -640,37 +628,41 @@ if(AMC_INSTALL)
             VERSION ${PROJECT_VERSION}
             COMPATIBILITY SameMinorVersion)
 
-        install(FILES ${CMAKE_CURRENT_BINARY_DIR}/AMCConfig.cmake ${CMAKE_CURRENT_BINARY_DIR}/AMCConfigVersion.cmake
-                      ${AMC_SOURCE_DIR}/cmake/AMC.cmake DESTINATION ${AMC_CMAKE_INSTALL_DIR})
+        install(
+            FILES ${CMAKE_CURRENT_BINARY_DIR}/AMCConfig.cmake ${CMAKE_CURRENT_BINARY_DIR}/AMCConfigVersion.cmake
+            ${AMC_SOURCE_DIR}/cmake/AMC.cmake DESTINATION ${AMC_CMAKE_INSTALL_DIR})
     endif()
 
-    install(
-        FILES ${AMC_SOURCE_DIR}/providers.toml
-        DESTINATION ${CMAKE_INSTALL_BINDIR}
-        RENAME amc-providers.toml)
+    install(FILES ${AMC_SOURCE_DIR}/providers.toml DESTINATION ${CMAKE_INSTALL_BINDIR} RENAME amc-providers.toml)
     install(DIRECTORY ${AMC_CODEIN_DIR}/ DESTINATION ${CMAKE_INSTALL_DATADIR}/AMC/CodeIn)
-    install(DIRECTORY ${AMC_SOURCE_DIR}/include/SKL/AMC DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/SKL
-            PATTERN "Private" EXCLUDE)
+    install(
+        DIRECTORY ${AMC_SOURCE_DIR}/include/SKL/AMC
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/SKL
+        PATTERN "Private" EXCLUDE)
     if(AMC_INSTALL_PRIVATE_HEADERS)
         # Private implementation headers are only useful to embedders that build
         # against AMC internals; they are opt-in and never part of the public
         # include surface.
-        install(DIRECTORY ${AMC_SOURCE_DIR}/include/SKL/AMC/Private
-                DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/SKL/AMC)
+        install(DIRECTORY ${AMC_SOURCE_DIR}/include/SKL/AMC/Private DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/SKL/AMC)
     endif()
     install(DIRECTORY ${AMC_SOURCE_DIR}/include/ljson DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-    install(FILES ${AMC_SOURCE_DIR}/LICENSE ${AMC_SOURCE_DIR}/NOTICE ${AMC_SOURCE_DIR}/THIRD_PARTY_NOTICES.md
-            DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/licenses/AMC)
+    install(
+        FILES ${AMC_SOURCE_DIR}/LICENSE ${AMC_SOURCE_DIR}/NOTICE ${AMC_SOURCE_DIR}/THIRD_PARTY_NOTICES.md
+        DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/licenses/AMC)
 endif()
 
 find_program(AMC_PYTHON_EXECUTABLE NAMES python3 python)
-if(AMC_BUILD_TESTS
-   AND AMC_INSTALL
-   AND AMC_PYTHON_EXECUTABLE
-   AND NOT AMC_ABIX_FETCHED)
-    add_test(NAME amc-package-test
-             COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/cli/amc_package_test.py ${CMAKE_BINARY_DIR}
-                     ${AMC_SOURCE_DIR} --abix-dir=${ABIX_DIR} --fmt-dir=${fmt_DIR} --cxx=${CMAKE_CXX_COMPILER})
+if(AMC_BUILD_TESTS AND AMC_INSTALL AND AMC_PYTHON_EXECUTABLE AND NOT AMC_ABIX_FETCHED)
+    add_test(
+        NAME amc-package-test
+        COMMAND
+            ${AMC_PYTHON_EXECUTABLE}
+            ${AMC_SOURCE_DIR}/tests/cli/amc_package_test.py
+            ${CMAKE_BINARY_DIR}
+            ${AMC_SOURCE_DIR}
+            --abix-dir=${ABIX_DIR}
+            --fmt-dir=${fmt_DIR}
+            --cxx=${CMAKE_CXX_COMPILER})
     set_tests_properties(amc-package-test PROPERTIES TIMEOUT 180)
     if(DEFINED ENV{KEEP_ARTIFACTS} AND "$ENV{KEEP_ARTIFACTS}" STREQUAL "1")
         set_tests_properties(amc-package-test PROPERTIES ENVIRONMENT "KEEP_ARTIFACTS=1")
@@ -680,59 +672,75 @@ endif()
 if(AMC_BUILD_TESTS AND AMC_PYTHON_EXECUTABLE)
     set(_amc_test_env "ABIX_INCLUDE_DIRS=${AMC_ABIX_INCLUDE_DIRS_ENV}" "CXX=${CMAKE_CXX_COMPILER}")
 
-    add_test(NAME amc-feature-test COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/cli/feature_test.py
-                                           ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
-    add_test(NAME amc-rust-test
-             COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/providers/rust/conformance_test.py
-                     ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
-    add_test(NAME amc-rust-layout-probe-test
-             COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/providers/rust/layout_probe_test.py
-                     ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
-    add_test(NAME amc-rust-semantic-schema-test
-             COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/providers/rust/semantic_schema_test.py
-                     ${AMC_SOURCE_DIR})
-    add_test(NAME amc-rust-helper-test
-             COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/providers/rust/helper_skeleton_test.py
-                     ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
-    add_test(NAME amc-rust-expose-test
-             COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/providers/rust/expose_handoff_test.py
-                     ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
-    add_test(NAME amc-rust-contract-test
-             COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/providers/rust/contract_handoff_test.py
-                     ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
-    add_test(NAME amc-rust-clong-test
-             COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/providers/rust/c_long_default_test.py
-                     ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
-    add_test(NAME amc-rust-panic-test COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/interop/panic_test.py
-                                              ${CMAKE_BINARY_DIR}/bin)
-    add_test(NAME amc-cancellation-test
-             COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/providers/cancellation/cancellation_test.py
-                     ${CMAKE_BINARY_DIR}/bin)
-    add_test(NAME amc-interop-test COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/interop/interop_test.py
-                                           ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
-    add_test(NAME amc-expose-interop-test
-             COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/interop/expose_test.py ${CMAKE_BINARY_DIR}/bin
-                     ${AMC_SOURCE_DIR})
-    add_test(NAME amc-m7-interop-test COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/interop/m7/m7_test.py
-                                              ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
-    add_test(NAME amc-lease-interop-test COMMAND ${AMC_PYTHON_EXECUTABLE}
-                                                 ${AMC_SOURCE_DIR}/tests/interop/lease/lease_test.py
-                                                 ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
-    add_test(NAME amc-cmake-integration-test
-             COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/cli/cmake_integration_test.py
-                     ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
-    add_test(NAME amc-elf-pe-metadata-test
-             COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/cli/elf_pe_metadata_test.py
-                     ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
-    add_test(NAME amc-bootstrap-test COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/cli/bootstrap_test.py
+    add_test(
+        NAME amc-feature-test COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/cli/feature_test.py
+                                      ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
+    add_test(
+        NAME amc-rust-test COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/providers/rust/conformance_test.py
+                                   ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
+    add_test(
+        NAME amc-rust-layout-probe-test
+        COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/providers/rust/layout_probe_test.py
+                ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
+    add_test(
+        NAME amc-rust-semantic-schema-test
+        COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/providers/rust/semantic_schema_test.py
+                ${AMC_SOURCE_DIR})
+    add_test(
+        NAME amc-rust-helper-test
+        COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/providers/rust/helper_skeleton_test.py
+                ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
+    add_test(
+        NAME amc-rust-expose-test
+        COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/providers/rust/expose_handoff_test.py
+                ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
+    add_test(
+        NAME amc-rust-contract-test
+        COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/providers/rust/contract_handoff_test.py
+                ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
+    add_test(
+        NAME amc-rust-clong-test
+        COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/providers/rust/c_long_default_test.py
+                ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
+    add_test(
+        NAME amc-rust-panic-test COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/interop/panic_test.py
+                                         ${CMAKE_BINARY_DIR}/bin)
+    add_test(
+        NAME amc-cancellation-test
+        COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/providers/cancellation/cancellation_test.py
+                ${CMAKE_BINARY_DIR}/bin)
+    add_test(
+        NAME amc-interop-test COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/interop/interop_test.py
+                                      ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
+    add_test(
+        NAME amc-expose-interop-test COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/interop/expose_test.py
                                              ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
-    add_test(NAME amc-provider-path-test
-             COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/cli/provider_path_test.py
-                     ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
-    add_test(NAME amc-boundary-contracts COMMAND ${AMC_PYTHON_EXECUTABLE}
-                                                 ${AMC_SOURCE_DIR}/tools/check_module_boundaries.py --contracts-only)
-    add_test(NAME amc-boundary-edges COMMAND ${AMC_PYTHON_EXECUTABLE}
-                                             ${AMC_SOURCE_DIR}/tools/check_module_boundaries.py --strict)
+    add_test(
+        NAME amc-m7-interop-test COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/interop/m7/m7_test.py
+                                         ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
+    add_test(
+        NAME amc-lease-interop-test COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/interop/lease/lease_test.py
+                                            ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
+    add_test(
+        NAME amc-cmake-integration-test
+        COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/cli/cmake_integration_test.py ${CMAKE_BINARY_DIR}/bin
+                ${AMC_SOURCE_DIR})
+    add_test(
+        NAME amc-elf-pe-metadata-test
+        COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/cli/elf_pe_metadata_test.py ${CMAKE_BINARY_DIR}/bin
+                ${AMC_SOURCE_DIR})
+    add_test(
+        NAME amc-bootstrap-test COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/cli/bootstrap_test.py
+                                        ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
+    add_test(
+        NAME amc-provider-path-test COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/cli/provider_path_test.py
+                                            ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
+    add_test(
+        NAME amc-boundary-contracts COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tools/check_module_boundaries.py
+                                            --contracts-only)
+    add_test(
+        NAME amc-boundary-edges COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tools/check_module_boundaries.py
+                                        --strict)
     set_tests_properties(amc-boundary-contracts amc-boundary-edges PROPERTIES TIMEOUT 60)
 
     set_tests_properties(

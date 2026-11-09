@@ -82,7 +82,7 @@ Rules:
 
 ### Optional rustc helper (v0.4.0 skeleton)
 
-The v0.4.0 helper process is available as a minimal skeleton. It links `rustc_driver` in an isolated process, reports target/crate facts, extracts `repr(C)` / `repr(transparent)` / packed / union records and public `extern "C"` functions, and emits the stable `amc.rust.semantic/1` envelope. Generics, traits and errors are filled by later increments. Building it requires a Rust toolchain with `rustc-dev`.
+The v0.4.0 helper process links `rustc_driver` in an isolated process. It reports target/crate facts, walks nested modules and impls, extracts `repr(C)` / `repr(transparent)` / packed / union records, concrete generic instances, public `extern "C"` functions, generic declarations, traits/impls, and `Result` error enums, and emits the stable `amc.rust.semantic/1` envelope. When a Cargo manifest is available it also fills workspace and feature facts from `cargo metadata`. AMC imports the helper's types and functions into ABIX/Semantic IR and cross-checks their layouts against the source parser. Building the helper requires a Rust toolchain with `rustc-dev`.
 
 ```toml
 [rust]
