@@ -33,6 +33,11 @@ pub struct Wrapper<T> {
 
 pub type WrapperI32 = Wrapper<i32>;
 
+#[repr(C)]
+pub struct Buffer<const N: usize> {
+    pub values: [u8; N],
+}
+
 pub trait Named {
     fn name(&self) -> i32;
 }

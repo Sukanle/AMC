@@ -97,7 +97,7 @@ args = ["u64"]
 as = "WrapperU64"
 ```
 
-`[rust] manifest` 会作为 `--manifest-path` 转发，使 helper 能通过 `cargo metadata` 解析 workspace 成员、默认成员、依赖和 target directory。`[rust] target` 会作为 `--target` 转发，用于选择布局和 target facts 的 rustc target。`[rust] features` 会作为 `--features` 转发给 helper。每个 `[[instantiate]]` 条目会作为 `--instantiate` 转发，强制输出一个参数为 primitive 的本地具体泛型实例；helper 仍不会枚举所有 monomorphization。
+`[rust] manifest` 会作为 `--manifest-path` 转发，使 helper 能通过 `cargo metadata` 解析 workspace 成员、默认成员、依赖和 target directory。`[rust] target` 会作为 `--target` 转发，用于选择布局和 target facts 的 rustc target。`[rust] features` 会作为 `--features` 转发给 helper。每个 `[[instantiate]]` 条目会作为 `--instantiate` 转发，强制输出一个本地具体泛型实例；类型参数可以是 primitive 或非泛型本地类型，const generic 参数使用十进制整数字面量；helper 仍不会枚举所有 monomorphization。
 
 配置后，`amc-rust` 会运行 helper 并使用其 target facts。如果 helper 失败且 `[target]` 已提供 `pointer_bits`、endianness 和 `c_long_bits`，AMC 会给出警告并回退到 parser/probe 路径。
 

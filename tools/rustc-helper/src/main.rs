@@ -30,7 +30,7 @@ use rustc_hir::{ForeignItemKind, ItemKind, Mutability};
 use rustc_interface::interface;
 use rustc_middle::middle::codegen_fn_attrs::CodegenFnAttrFlags;
 use rustc_middle::ty::print::{FmtPrinter, Print};
-use rustc_middle::ty::{AssocKind, Clause, GenericParamDefKind, Ty, TyCtxt, TyKind, TypingEnv, Visibility};
+use rustc_middle::ty::{AssocKind, Clause, GenericArg, GenericParamDefKind, Ty, TyCtxt, TyKind, TypingEnv, Visibility};
 use rustc_span::sym;
 use serde_json::{json, Value};
 
@@ -961,6 +961,88 @@ fn parse_instance_spec(spec: &str) -> Option<(String, Vec<String>)> {
     Some((name.trim().to_string(), arguments))
 }
 
+// Resolve one explicit type argument: a primitive or a non-generic local type.
+// Arbitrary paths and generic types are intentionally rejected so the helper
+// never guesses a monomorphization the user did not spell out.
+fn instance_type_argument<'tcx>(tcx: TyCtxt<'tcx>, name: &str, types: &BTreeMap<String, DefId>) -> Option<Ty<'tcx>> {
+    if let Some(ty) = primitive_ty(tcx, name) {
+        return Some(ty);
+    }
+    let def_id = types.get(name).copied()?;
+    if !matches!(
+        tcx.def_kind(def_id),
+        DefKind::Struct | DefKind::Union | DefKind::Enum | DefKind::TyAlias
+    ) {
+        return None;
+    }
+    let generics = tcx.generics_of(def_id);
+    if generics
+        .own_params
+        .iter()
+        .any(|parameter| !matches!(parameter.kind, GenericParamDefKind::Lifetime))
+    {
+        return None;
+    }
+    Some(tcx.type_of(def_id).instantiate_identity().skip_normalization())
+}
+
+// Resolve one const argument for the declared const parameter type. Decimal and
+// negative integer literals are supported; expressions are not evaluated.
+fn instance_const_argument<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    parameter: &rustc_middle::ty::GenericParamDef,
+    text: &str,
+) -> Option<rustc_middle::ty::Const<'tcx>> {
+    let (negative, digits) = match text.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, text),
+    };
+    let value: u128 = digits.parse().ok()?;
+    let value = if negative {
+        (value as i128).wrapping_neg() as u128
+    } else {
+        value
+    };
+    let ty = tcx
+        .type_of(parameter.def_id)
+        .instantiate_identity()
+        .skip_normalization();
+    Some(rustc_middle::ty::Const::from_bits(
+        tcx,
+        value,
+        TypingEnv::fully_monomorphized(),
+        ty,
+    ))
+}
+
+fn instance_generic_args<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    def_id: DefId,
+    arguments: &[String],
+    types: &BTreeMap<String, DefId>,
+) -> Option<Vec<GenericArg<'tcx>>> {
+    let generics = tcx.generics_of(def_id);
+    let mut supplied = arguments.iter();
+    let mut args = Vec::with_capacity(generics.own_params.len());
+    for parameter in &generics.own_params {
+        match parameter.kind {
+            GenericParamDefKind::Lifetime => args.push(tcx.lifetimes.re_erased.into()),
+            GenericParamDefKind::Type { .. } => {
+                let text = supplied.next()?;
+                args.push(instance_type_argument(tcx, text, types)?.into());
+            }
+            GenericParamDefKind::Const { .. } => {
+                let text = supplied.next()?;
+                args.push(instance_const_argument(tcx, parameter, text)?.into());
+            }
+        }
+    }
+    if supplied.next().is_some() {
+        return None;
+    }
+    Some(args)
+}
+
 struct HelperCallbacks {
     output: Option<PathBuf>,
     source: PathBuf,
@@ -1167,22 +1249,14 @@ impl Callbacks for HelperCallbacks {
             let Some(def_id) = generic_defs.get(&name).copied() else {
                 continue;
             };
-            let mut type_args: Vec<rustc_middle::ty::GenericArg<'_>> = Vec::new();
-            let mut valid = true;
-            for argument in &arguments {
-                match primitive_ty(tcx, argument) {
-                    Some(ty) => type_args.push(ty.into()),
-                    None => {
-                        valid = false;
-                        break;
-                    }
-                }
-            }
-            if !valid {
+            if !matches!(tcx.def_kind(def_id), DefKind::Struct | DefKind::Union | DefKind::Enum) {
                 continue;
             }
+            let Some(generic_args) = instance_generic_args(tcx, def_id, &arguments, &generic_defs) else {
+                continue;
+            };
             let adt = tcx.adt_def(def_id);
-            let ty = Ty::new_adt(tcx, adt, tcx.mk_args(&type_args));
+            let ty = Ty::new_adt(tcx, adt, tcx.mk_args(&generic_args));
             collect_type_instances(tcx, ty, &mut instances, &mut instances_by_decl, &mut seen_instances);
         }
         for (id, value) in instances {

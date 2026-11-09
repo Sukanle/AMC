@@ -231,7 +231,7 @@ helper 只描述语义实体；ABI status 映射仍由 AMC 的 error pass 和显
 
 ### 显式泛型实例
 
-`--instantiate Template=arg1,arg2` 可重复。AMC 将每个 `[[instantiate]]` 传给 helper；helper 即使源码从未引用，也会输出该具体本地泛型实例（参数目前支持 primitive）。这是显式选择路径，helper 不枚举所有 monomorphization。
+`--instantiate Template=arg1,arg2` 可重复。AMC 将每个 `[[instantiate]]` 传给 helper；helper 即使源码从未引用，也会输出该具体本地泛型实例。类型参数可以是 primitive 或非泛型本地类型，const generic 参数使用十进制整数字面量；未知名称和非法 const 值会被忽略而不是猜测。这是显式选择路径，helper 不枚举所有 monomorphization。
 
 ### `.semantic` Rust 扩展区
 

@@ -231,7 +231,7 @@ The helper only describes the semantic entity. The ABI status mapping remains in
 
 ### Explicit generic instances
 
-`--instantiate Template=arg1,arg2` is repeatable. AMC forwards each `[[instantiate]]` entry to the helper, which emits the concrete local generic instance (primitive arguments only) even if the source never references it. This is the explicit-selection path; the helper does not enumerate all monomorphizations.
+`--instantiate Template=arg1,arg2` is repeatable. AMC forwards each `[[instantiate]]` entry to the helper, which emits the concrete local generic instance even if the source never references it. Type arguments may be primitives or non-generic local types; const-generic arguments are decimal integer literals. Unknown names and malformed const values are ignored rather than guessed. This is the explicit-selection path; the helper does not enumerate all monomorphizations.
 
 ### `.semantic` Rust extension
 

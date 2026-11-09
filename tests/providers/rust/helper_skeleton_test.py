@@ -184,6 +184,7 @@ def main():
         semantic_json = os.path.join(work, "semantic_advanced.json")
         result = run([helper, "--crate-name", "rust_semantic", "--edition", "2021",
                       "--source", str(semantic_fixture), "--instantiate", "Wrapper=u64",
+                      "--instantiate", "Buffer=4", "--instantiate", "Wrapper=NestedPoint",
                       "--output", semantic_json])
         if check(result.returncode == 0 and os.path.isfile(semantic_json),
                  "helper extracted the advanced fixture", output(result)[-400:]):
@@ -211,13 +212,43 @@ def main():
             check(any(name.endswith("Wrapper<i32>") for name in wrapper.get("instances", [])),
                   "generic instance is linked to its declaration")
             check("Wrapper<u64>" in advanced_types, "explicit generic instance extracted")
+            buffer = generics.get("Buffer", {})
+            check(any(parameter.get("name") == "N" and parameter.get("kind") == "const"
+                      for parameter in buffer.get("parameters", [])),
+                  "const generic parameter extracted")
+            check(any(name.endswith("Buffer<4>") for name in buffer.get("instances", [])),
+                  "const generic instance is linked to its declaration")
             check(advanced_types.get("Wrapper<u64>", {}).get("size") == 8,
                   "explicit generic instance layout")
+            check("Buffer<4>" in advanced_types, "const generic instance extracted")
+            check(advanced_types.get("Buffer<4>", {}).get("size") == 4
+                  and advanced_types.get("Buffer<4>", {}).get("align") == 1,
+                  "const generic instance layout")
+            check("Wrapper<nested::NestedPoint>" in advanced_types,
+                  "non-primitive generic argument extracted")
+            check(advanced_types.get("Wrapper<nested::NestedPoint>", {}).get("size") == 8,
+                  "non-primitive generic argument layout")
             check(bool(advanced.get("lifetimes")), "lifetime metadata extracted")
             check(bool(advanced.get("trait_objects")), "trait object metadata extracted")
             check(any(item.get("name") == "async_answer"
                       for item in advanced.get("async_functions", [])),
                   "async function metadata extracted")
+
+            # Explicit instance arguments fail closed: unknown type names and
+            # malformed const values do not create a fake instance.
+            rejected_json = os.path.join(work, "instances_rejected.json")
+            result = run([helper, "--crate-name", "rust_semantic", "--edition", "2021",
+                          "--source", str(semantic_fixture), "--instantiate", "Wrapper=NoSuchType",
+                          "--instantiate", "Buffer=notanumber",
+                          "--output", rejected_json])
+            if check(result.returncode == 0 and os.path.isfile(rejected_json),
+                     "invalid instance arguments fail closed", output(result)[-300:]):
+                rejected = json.load(open(rejected_json, encoding="utf-8"))
+                rejected_names = {item.get("name") for item in rejected.get("types", [])}
+                check(not any("NoSuchType" in name for name in rejected_names),
+                      "unknown type argument is ignored")
+                check(not any(name.startswith("Buffer<notanumber>") for name in rejected_names),
+                      "invalid const argument is ignored")
 
             traits = advanced.get("traits", [])
             trait_decl = next((item for item in traits
@@ -398,8 +429,9 @@ def main():
             import_config.write_text(
                 "[package]\nname = \"rust_semantic\"\nversion = \"0.1\"\n\n"
                 "[[import]]\nlanguage = \"rust\"\nfiles = [\"rust_semantic.rs\"]\n"
-                "symbols = [\"Circle\", \"NestedPoint\", \"WrapperI32\", \"Wrapper<u64>\", \"nested_sum\", \"rust_status\"]\n\n"
+                "symbols = [\"Circle\", \"NestedPoint\", \"WrapperI32\", \"Wrapper<u64>\", \"Buffer<4>\", \"nested_sum\", \"rust_status\"]\n\n"
                 "[[instantiate]]\ntemplate = \"Wrapper\"\nargs = [\"u64\"]\nas = \"WrapperU64\"\n\n"
+                "[[instantiate]]\ntemplate = \"Buffer\"\nargs = [\"4\"]\nas = \"Buffer4\"\n\n"
                 "[rust]\nhelper = \"" + helper_toml + "\"\nfeatures = [\"default\", \"fast\"]\n\n"
                 "[[error]]\nfunction = \"rust_status\"\nstatus = \"return\"\nsuccess = 0\nvalue = -1\n"
                 "domain = 0x1003000000000001\n\n"
@@ -419,7 +451,7 @@ def main():
                 if semantic_path.is_file():
                     semantic = json.loads(semantic_path.read_text(encoding="utf-8"))
                     names = {item.get("name") for item in semantic.get("types", [])}
-                    check({"NestedPoint", "WrapperI32", "Wrapper<i32>", "Wrapper<u64>"} <= names,
+                    check({"NestedPoint", "WrapperI32", "Wrapper<i32>", "Wrapper<u64>", "Buffer<4>"} <= names,
                           "helper types reached Semantic IR")
                     check(bool(semantic.get("functions")), "helper functions reached Semantic IR")
                     rust = semantic.get("rust", {})
@@ -444,6 +476,13 @@ def main():
                     match = json.loads(query.stdout).get("matches", [{}])[0]
                     check(match.get("size") == 8 and match.get("align") == 8,
                           "explicit generic instance keeps the helper layout")
+                query = run([str(amc), "query", str(import_artifact), "--type", "Buffer<4>",
+                             "--format", "json", "--layout"])
+                if check(query.returncode == 0, "AMC queries a const generic instance",
+                         output(query)[-300:]):
+                    match = json.loads(query.stdout).get("matches", [{}])[0]
+                    check(match.get("size") == 4 and match.get("align") == 1,
+                          "const generic instance keeps the helper layout")
                 query = run([str(amc), "query", str(import_artifact), "--type", "NestedPoint",
                              "--format", "json", "--layout"])
                 if check(query.returncode == 0, "AMC queries the imported nested record", output(query)[-300:]):
