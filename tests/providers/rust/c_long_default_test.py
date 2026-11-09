@@ -108,7 +108,7 @@ def main():
         return layout.get("size"), layout.get("align"), fields
 
     try:
-        shutil.copyfile(os.path.join(fixtures, "rust_clongs.rs"),
+        shutil.copyfile(os.path.join(fixtures, "rust", "layouts", "rust_clongs.rs"),
                         os.path.join(work, "rust_clongs.rs"))
 
         linux = build_case("linux", 0)

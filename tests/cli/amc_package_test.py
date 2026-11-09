@@ -45,7 +45,7 @@ def main() -> int:
     try:
         run([cmake, "--install", os.path.abspath(args.build_dir), "--prefix", prefix])
 
-        fixture_dir = os.path.join(os.path.abspath(args.source_root), "tests", "fixtures")
+        fixture_dir = os.path.join(os.path.abspath(args.source_root), "tests", "fixtures", "cpp", "basics")
         cli_dir = os.path.join(os.path.abspath(args.source_root), "tests", "cli", "cmake_fixture")
         shutil.copy(os.path.join(fixture_dir, "amc_test.abic.toml"), consumer)
         shutil.copy(os.path.join(fixture_dir, "amc_test_types.hpp"), consumer)

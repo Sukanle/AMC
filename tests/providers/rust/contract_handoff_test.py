@@ -69,7 +69,7 @@ def main():
 
     try:
         for name in ("rust_contracts.rs", "rust_contracts.abic.toml"):
-            shutil.copyfile(os.path.join(fixtures, name), os.path.join(work, name))
+            shutil.copyfile(os.path.join(fixtures, "rust", "handoff", name), os.path.join(work, name))
         config = os.path.join(work, "rust_contracts.abic.toml")
         out = os.path.join(work, "out")
         artifact = os.path.join(out, "rust_contracts.abix")

@@ -55,8 +55,8 @@ def main():
     source_root = Path(argv[1]).resolve() if len(argv) > 1 else bin_dir.parent.parent
     helper_manifest = source_root / "tools" / "rustc-helper" / "Cargo.toml"
     helper_target = source_root / "tools" / "rustc-helper" / "target"
-    fixture = source_root / "tests" / "fixtures" / "rust_demo.rs"
-    fixture_config = source_root / "tests" / "fixtures" / "rust_demo.abic.toml"
+    fixture = source_root / "tests" / "fixtures" / "rust" / "demo" / "rust_demo.rs"
+    fixture_config = source_root / "tests" / "fixtures" / "rust" / "demo" / "rust_demo.abic.toml"
     amc = bin_dir / exe("amc")
     rustc = shutil.which("rustc")
     cargo = shutil.which("cargo")
@@ -180,7 +180,7 @@ def main():
 
         # Advanced semantics: nested modules, impl methods, generics, traits and
         # Result error types.
-        semantic_fixture = source_root / "tests" / "fixtures" / "rust_semantic.rs"
+        semantic_fixture = source_root / "tests" / "fixtures" / "rust" / "semantics" / "rust_semantic.rs"
         semantic_json = os.path.join(work, "semantic_advanced.json")
         result = run([helper, "--crate-name", "rust_semantic", "--edition", "2021",
                       "--source", str(semantic_fixture), "--instantiate", "Wrapper=u64",
@@ -322,7 +322,7 @@ def main():
 
         # Standard containers are recorded as semantics that need an explicit
         # contract. The helper does not assume their layout or ownership.
-        container_fixture = source_root / "tests" / "fixtures" / "rust_containers.rs"
+        container_fixture = source_root / "tests" / "fixtures" / "rust" / "containers" / "rust_containers.rs"
         container_json = os.path.join(work, "containers.json")
         result = run([helper, "--crate-name", "rust_containers", "--edition", "2021",
                       "--source", str(container_fixture), "--output", container_json])
@@ -348,7 +348,7 @@ def main():
 
         # Trait objects stay semantic metadata; AMC must not map their fat
         # pointers as thin ABI pointers.
-        trait_object_fixture = source_root / "tests" / "fixtures" / "rust_trait_object.rs"
+        trait_object_fixture = source_root / "tests" / "fixtures" / "rust" / "semantics" / "rust_trait_object.rs"
         trait_object_json = os.path.join(work, "trait_object.json")
         result = run([helper, "--crate-name", "rust_trait_object", "--edition", "2021",
                       "--source", str(trait_object_fixture), "--output", trait_object_json])
@@ -391,7 +391,7 @@ def main():
 
         # Cargo workspace facts: members, default members, dependencies and the
         # cross-compilation target are recorded in the `cargo` extension.
-        workspace_root = source_root / "tests" / "fixtures" / "rust_workspace"
+        workspace_root = source_root / "tests" / "fixtures" / "rust" / "workspace"
         workspace_manifest = workspace_root / "app" / "Cargo.toml"
         workspace_source = workspace_root / "app" / "src" / "lib.rs"
         workspace_json = os.path.join(work, "cargo_workspace.json")
@@ -404,7 +404,7 @@ def main():
                  "helper reads cargo workspace metadata", output(result)[-400:]):
             workspace = json.load(open(workspace_json, encoding="utf-8"))
             workspace_cargo = workspace.get("cargo", {})
-            check(Path(workspace_cargo.get("workspace_root", "")).name == "rust_workspace",
+            check(Path(workspace_cargo.get("workspace_root", "")).name == "workspace",
                   "cargo workspace root is recorded")
             members = workspace_cargo.get("workspace_members", [])
             check(len(members) == 2 and any("rust_workspace_core" in item for item in members)
@@ -587,7 +587,7 @@ def main():
                 if check(workspace_semantic.is_file(), "workspace semantic sidecar written"):
                     semantic = json.loads(workspace_semantic.read_text(encoding="utf-8"))
                     cargo = semantic.get("rust", {}).get("cargo", {})
-                    check(Path(cargo.get("workspace_root", "")).name == "rust_workspace",
+                    check(Path(cargo.get("workspace_root", "")).name == "workspace",
                           "AMC stores the cargo workspace root")
                     check(len(cargo.get("workspace_members", [])) == 2,
                           "AMC stores cargo workspace members")

@@ -73,6 +73,12 @@ def main() -> int:
     fixtures = source_root / "tests" / "fixtures"
     if not fixtures.is_dir():
         fixtures = source_root / "AMC" / "tests" / "fixtures"
+    fixture_configs = {
+        "amc_test": fixtures / "cpp" / "basics" / "amc_test.abic.toml",
+        "rust_demo": fixtures / "rust" / "demo" / "rust_demo.abic.toml",
+        "templates": fixtures / "cpp" / "templates" / "templates.abic.toml",
+        "inheritance": fixtures / "cpp" / "templates" / "inheritance.abic.toml",
+    }
     amc = bin_dir / exe_name("amc")
 
     def bin_path(name: str) -> str:
@@ -208,7 +214,7 @@ def main() -> int:
         artifacts: dict[str, Path] = {}
         for name in ("amc_test", "rust_demo", "templates", "inheritance"):
             out = work / name
-            built = run([str(amc), "build", "-c", str(fixtures / f"{name}.abic.toml"), "-B", str(out)])
+            built = run([str(amc), "build", "-c", str(fixture_configs[name]), "-B", str(out)])
             found = next(iter(out.rglob("*.abix")), None)
             if built.returncode == 0 and found is not None:
                 artifacts[name] = found
@@ -286,10 +292,10 @@ def main() -> int:
         # The v2 error contract requires a domain; a v1 declaration (no domain)
         # must be rejected instead of being read with an implicit contract.
         legacy_config = work / "legacy_error.abic.toml"
-        legacy_text = (fixtures / "amc_test.abic.toml").read_text(encoding="utf-8")
+        legacy_text = fixture_configs["amc_test"].read_text(encoding="utf-8")
         legacy_text = legacy_text.replace(
             'files = ["amc_test_types.hpp"]',
-            f'files = ["{(fixtures / "amc_test_types.hpp").as_posix()}"]',
+            f'files = ["{(fixtures / "cpp" / "basics" / "amc_test_types.hpp").as_posix()}"]',
         )
         legacy_text += '\n[[error]]\nfunction = "amc_test_compute"\nsuccess = 0\n'
         legacy_config.write_text(legacy_text, encoding="utf-8")
@@ -332,7 +338,7 @@ def main() -> int:
         mismatch_text = (
             '[package]\nname = "mismatch"\nversion = "1.0"\n'
             '[[import]]\nlanguage = "cpp"\nflags = ["-std=c++17"]\n'
-            f'files = ["{(fixtures / "amc_test_types.hpp").as_posix()}"]\n'
+            f'files = ["{(fixtures / "cpp" / "basics" / "amc_test_types.hpp").as_posix()}"]\n'
             'symbols = ["amc_test_compute"]\n'
             '[[error-set]]\nname = "DemoErrors"\ndomain = "0x1003000000000002"\n'
             '[[error]]\nfunction = "amc_test_compute"\n'
@@ -414,7 +420,7 @@ def main() -> int:
                 report.fail("inheritance context is readable", context.stderr)
 
         overload_config = work / "overloads.abic.toml"
-        overload_header = (fixtures / "overloads.hpp").as_posix()
+        overload_header = (fixtures / "cpp" / "templates" / "overloads.hpp").as_posix()
         overload_config.write_text(
             '[package]\nname = "overloads"\nversion = "1.0"\n'
             '[[import]]\nlanguage = "cpp"\nflags = ["-std=c++17"]\n'

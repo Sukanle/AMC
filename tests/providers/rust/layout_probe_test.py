@@ -38,7 +38,7 @@ def preserved_directory(prefix: str):
             shutil.rmtree(work, ignore_errors=True)
 
 
-# Types/fields in tests/fixtures/rust_demo.rs that participate in the probe.
+# Types/fields in tests/fixtures/rust/demo/rust_demo.rs that participate in the probe.
 CASES = {
     "RustPoint": ["x", "y"],
     "RustRect": ["origin", "width", "height"],
@@ -164,8 +164,8 @@ def main() -> int:
         return 1
 
     fixture_dir = source_root / "tests" / "fixtures"
-    config = fixture_dir / "rust_demo.abic.toml"
-    source = fixture_dir / "rust_demo.rs"
+    config = fixture_dir / "rust" / "demo" / "rust_demo.abic.toml"
+    source = fixture_dir / "rust" / "demo" / "rust_demo.rs"
 
     # R0 toolchain facts: the configured target must agree with rustc's Host
     # facts for the Host layout probe. Cross-target probe is a later step.
@@ -277,8 +277,8 @@ def main() -> int:
         # Packed structs are layout-only for now: the backends do not yet emit
         # repr(C, packed), so this fixture is not sent through amc generate.
         try:
-            packed_config = fixture_dir / "rust_packed.abic.toml"
-            packed_source = fixture_dir / "rust_packed.rs"
+            packed_config = fixture_dir / "rust" / "layouts" / "rust_packed.abic.toml"
+            packed_source = fixture_dir / "rust" / "layouts" / "rust_packed.rs"
             packed_artifact = build_artifact(amc, packed_config, work / "packed-build", "rust_packed.abix")
             packed_probe_source = work / "probe_packed.rs"
             packed_probe_exe = work / exe_name("probe_packed")
@@ -318,8 +318,8 @@ def main() -> int:
         # packed(N) and unions are layout-only too: the backends do not emit
         # them yet, so they stay out of the projection conformance path.
         try:
-            advanced_config = fixture_dir / "rust_advanced.abic.toml"
-            advanced_source = fixture_dir / "rust_advanced.rs"
+            advanced_config = fixture_dir / "rust" / "semantics" / "rust_advanced.abic.toml"
+            advanced_source = fixture_dir / "rust" / "semantics" / "rust_advanced.rs"
             advanced_artifact = build_artifact(amc, advanced_config, work / "advanced-build",
                                                "rust_advanced.abix")
             advanced_probe_source = work / "probe_advanced.rs"

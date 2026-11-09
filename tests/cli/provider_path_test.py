@@ -58,7 +58,7 @@ def main():
 
     try:
         for name in ("rust_demo.rs", "rust_demo.abic.toml"):
-            shutil.copyfile(os.path.join(fixtures, name), os.path.join(work, name))
+            shutil.copyfile(os.path.join(fixtures, "rust", "demo", name), os.path.join(work, name))
         config = os.path.join(work, "rust_demo.abic.toml")
         out = os.path.join(work, "out")
         result = subprocess.run(

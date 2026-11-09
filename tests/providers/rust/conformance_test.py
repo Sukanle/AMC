@@ -32,7 +32,7 @@ def make_case(source_root: str) -> ProviderCase:
         fixtures = os.path.join(source_root, "AMC", "tests", "fixtures")
     return ProviderCase(
         language="rust",
-        config=os.path.join(fixtures, "rust_demo.abic.toml"),
+        config=os.path.join(fixtures, "rust", "demo", "rust_demo.abic.toml"),
         artifact_name="rust_demo.abix",
         expected_functions=5,
         layout_checks=[

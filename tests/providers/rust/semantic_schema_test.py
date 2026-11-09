@@ -125,7 +125,7 @@ def check(name: str, doc: object, should_pass: bool) -> int:
 
 def main() -> int:
     source_root = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path(__file__).resolve().parents[3]
-    fixture = source_root / "tests" / "fixtures" / "rust_semantic_v1.json"
+    fixture = source_root / "tests" / "fixtures" / "rust" / "semantics" / "rust_semantic_v1.json"
     try:
         sample = json.loads(fixture.read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:

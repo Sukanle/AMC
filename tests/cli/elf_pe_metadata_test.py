@@ -533,7 +533,7 @@ def run_elf_pe_tests(
     print("=" * 60)
 
     amc = amc_bin_dir / exe_name("amc")
-    fixture_config = source_root / "tests" / "fixtures" / "amc_test.abic.toml"
+    fixture_config = source_root / "tests" / "fixtures" / "cpp" / "basics" / "amc_test.abic.toml"
 
     print(f"AMC binary: {amc}")
     print(f"Fixture:    {fixture_config}")

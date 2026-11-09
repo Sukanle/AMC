@@ -49,13 +49,13 @@ def main() -> None:
         module_dir = os.path.join(amc_root, "cmake")
         if not os.path.isfile(os.path.join(module_dir, "AMC.cmake")):
             module_dir = os.path.join(amc_root, "CMake")
-        fixture_dir = os.path.join(amc_root, "tests", "fixtures")
+        fixture_dir = os.path.join(amc_root, "tests", "fixtures", "cpp", "basics")
         if not os.path.isdir(fixture):
             fixture = os.path.join(amc_root, "AMC", "tests", "cli", "cmake_fixture")
             module_dir = os.path.join(amc_root, "AMC", "cmake")
             if not os.path.isfile(os.path.join(module_dir, "AMC.cmake")):
                 module_dir = os.path.join(amc_root, "AMC", "CMake")
-            fixture_dir = os.path.join(amc_root, "AMC", "tests", "fixtures")
+            fixture_dir = os.path.join(amc_root, "AMC", "tests", "fixtures", "cpp", "basics")
         amc = os.path.join(amc_bin, "amc.exe" if sys.platform == "win32" else "amc")
         cmake_cmd = [
             "cmake",
