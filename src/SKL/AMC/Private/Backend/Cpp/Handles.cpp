@@ -19,6 +19,7 @@
 #include "SKL/AMC/Core/Core.h"
 #include "SKL/AMC/IR/Lowering.h"
 
+#include <set>
 #include <string>
 
 namespace skl::amc::lang::backend::cpp {
@@ -148,6 +149,115 @@ void Emit::handles(const amc::ir::LoweringResult &lowering) {
         const amc::Function *destroy = find_function(record.destroy);
         if (create == nullptr && destroy == nullptr && record.methods.empty()) continue;
         handle(record, create, destroy, self_type_of(create, destroy, record));
+    }
+}
+
+namespace {
+
+const amc::Field *visible_field(const amc::ABIModule &module, const amc::Type &type, const char *name) {
+    for (uint32_t i = 0; i < type.field_count; ++i) {
+        const amc::Field &field = module.fields[type.field_begin + i];
+        if ((field.flags & amc::field_base) == 0 && (field.flags & amc::field_bitfield) == 0 && field.name == name)
+            return &field;
+    }
+    return nullptr;
+}
+
+std::string suffix_after(const std::string &name, const char *prefix) {
+    const std::string p(prefix);
+    return name.rfind(p, 0) == 0 ? name.substr(p.size()) : std::string{};
+}
+
+}   // namespace
+
+void Emit::owner_views() {
+    std::set<std::string> emitted;
+    for (const auto &record : _m.lowerings) {
+        const auto kind = static_cast<amc::LoweringKind>(record.kind);
+        if (kind != amc::LoweringKind::OWNER
+            && kind != amc::LoweringKind::OWNED_STRING
+            && kind != amc::LoweringKind::OWNED_SPAN)
+            continue;
+        const amc::Type *type = nullptr;
+        for (const auto &candidate : _m.types)
+            if (candidate.id == record.type_id) {
+                type = &candidate;
+                break;
+            }
+        if (type == nullptr || type->kind != amc::TypeKind::RECORD) continue;
+        const std::string raw_name = type->name;
+        if (!emitted.emplace(raw_name).second) continue;
+
+        if (kind == amc::LoweringKind::OWNER) {
+            _o.print("using {} = ::abix_owner_handle;\n", raw_name);
+            const std::string suffix = suffix_after(raw_name, "abix_owner_");
+            std::string wrapper_suffix = cpp_name(suffix);
+            if (!wrapper_suffix.empty())
+                wrapper_suffix[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(wrapper_suffix[0])));
+            const std::string wrapper = "OwnerOf" + wrapper_suffix;
+            _o.print(
+                "\n// ABIX owner handle `{0}`: move-only RAII, released through the\n"
+                "// creator-provided destroy entry.\n"
+                "class {1} {{\npublic:\n"
+                "    {1}() = default;\n"
+                "    explicit {1}({0} raw) : _raw(raw) {{}}\n"
+                "    {1}(const {1} &) = delete;\n"
+                "    {1} &operator=(const {1} &) = delete;\n"
+                "    {1}({1} &&other) noexcept : _raw(other._raw) {{ other._raw = {{}}; }}\n"
+                "    {1} &operator=({1} &&other) noexcept {{\n"
+                "        if (this != &other) {{ reset(); _raw = other._raw; other._raw = {{}}; }}\n"
+                "        return *this;\n    }}\n"
+                "    ~{1}() {{ reset(); }}\n"
+                "    void reset() {{\n"
+                "        if (_raw.object != nullptr && (_raw.mode == 1 || _raw.mode == 2)\n"
+                "            && _raw.destroy != nullptr)\n"
+                "            reinterpret_cast<void (*)(void *)>(_raw.destroy)(_raw.object);\n"
+                "        _raw = {{}};\n    }}\n"
+                "    void *object() const {{ return _raw.object; }}\n"
+                "    {0} native_handle() const {{ return _raw; }}\n"
+                "    {0} release() {{ auto raw = _raw; _raw = {{}}; return raw; }}\n"
+                "    explicit operator bool() const {{ return _raw.object != nullptr; }}\n"
+                "private:\n    {0} _raw{{}};\n}};\n",
+                raw_name, wrapper);
+        } else {
+            // ABIX v0.4.0 only defines the int32 owned-span instance in its C
+            // header. Arbitrary element instances need a projection-owned
+            // definition, so their C++ RAII wrapper is a follow-up.
+            if (kind == amc::LoweringKind::OWNED_SPAN && raw_name != "abix_owned_span_i32") continue;
+            const amc::Field *view = visible_field(_m, *type, "view");
+            const amc::Field *owner = visible_field(_m, *type, "owner");
+            if (view == nullptr || owner == nullptr) continue;
+            const std::string suffix = kind == amc::LoweringKind::OWNED_STRING
+                                         ? suffix_after(raw_name, "abix_owned_str_")
+                                         : suffix_after(raw_name, "abix_owned_span_");
+            std::string wrapper_suffix = cpp_name(suffix);
+            if (!wrapper_suffix.empty())
+                wrapper_suffix[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(wrapper_suffix[0])));
+            const std::string wrapper =
+                (kind == amc::LoweringKind::OWNED_STRING ? "OwnedString" : "OwnedSpan") + wrapper_suffix;
+            _o.print(
+                "\n// ABIX owned view `{0}`: borrowed view + owner handle.\n"
+                "class {1} {{\npublic:\n"
+                "    explicit {1}({0} raw) : _raw(raw) {{}}\n"
+                "    {1}(const {1} &) = delete;\n"
+                "    {1} &operator=(const {1} &) = delete;\n"
+                "    {1}({1} &&other) noexcept : _raw(other._raw) {{ other._raw = {{}}; }}\n"
+                "    {1} &operator=({1} &&other) noexcept {{\n"
+                "        if (this != &other) {{ reset(); _raw = other._raw; other._raw = {{}}; }}\n"
+                "        return *this;\n    }}\n"
+                "    ~{1}() {{ reset(); }}\n"
+                "    void reset() {{\n"
+                "        if (_raw.owner.object != nullptr && (_raw.owner.mode == 1 || _raw.owner.mode == 2)\n"
+                "            && _raw.owner.destroy != nullptr)\n"
+                "            reinterpret_cast<void (*)(void *)>(_raw.owner.destroy)(_raw.owner.object);\n"
+                "        _raw = {{}};\n    }}\n"
+                "    const {2} &view() const {{ return _raw.view; }}\n"
+                "    {0} native_handle() const {{ return _raw; }}\n"
+                "    {0} release() {{ auto raw = _raw; _raw = {{}}; return raw; }}\n"
+                "    explicit operator bool() const {{ return _raw.owner.object != nullptr; }}\n"
+                "private:\n    {0} _raw{{}};\n}};\n",
+                raw_name, wrapper, cpp_type_of(_m, view->type_id));
+        }
     }
 }
 

@@ -158,6 +158,27 @@ def main():
         if not check(result.returncode == 0, "generated container wrappers compile", output(result)[-600:]):
             return 1
 
+        cpp_header = os.path.join(work, "owner_gen.hpp")
+        result = run([str(amc), "generate", artifact, "-l", "cpp", "-o", cpp_header])
+        if check(result.returncode == 0, "owned view C++ projection generated", output(result)[-400:]):
+            header = open(cpp_header, encoding="utf-8").read()
+            check("class OwnedStringUtf8" in header and "reinterpret_cast<void (*)(void *)>" in header,
+                  "C++ owned string RAII wrapper is generated")
+            cxx = os.environ.get("CXX") or shutil.which("clang++") or shutil.which("c++")
+            if cxx:
+                cpp_consumer = os.path.join(work, "owner_consumer.cpp")
+                with open(cpp_consumer, "w", encoding="utf-8") as handle:
+                    handle.write('#include "owner_gen.hpp"\nint main() { return 0; }\n')
+                include_flags = [
+                    "-I" + work,
+                    "-I" + str(source_root / "include"),
+                    "-I" + str(source_root / "dependencies" / "ABIX" / "include"),
+                    "-I" + str(source_root / "dependencies" / "ABIX" / "MICS" / "include"),
+                    "-I" + str(source_root / "dependencies" / "ABIX" / "MICS" / "HLMD"),
+                ]
+                result = run([cxx, "-std=c++17", "-fsyntax-only"] + include_flags + [cpp_consumer])
+                check(result.returncode == 0, "C++ owned view projection compiles", output(result)[-500:])
+
         owner_consumer = os.path.join(work, "owner_consumer.rs")
         with open(owner_consumer, "w", encoding="utf-8") as handle:
             handle.write("""#[path = "gen_owner/amc_generated.rs"]

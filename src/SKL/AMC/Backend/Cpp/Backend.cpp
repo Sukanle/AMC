@@ -61,6 +61,7 @@ int run_backend(const char *input, const char *output) {
     if (const int status = emit.projection(error); status != 0) return report(status);
     emit.interfaces();
     emit.handles(lowering);
+    emit.owner_views();
     emit.named_error_sets();
     emit.error_boundaries();
     emit.native_type_traits();

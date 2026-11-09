@@ -35,6 +35,16 @@ int Emit::preamble(std::string &error) {
     // `InterfaceId` / `mics::util::array`, so pull in those headers only when the
     // module actually declares interfaces; the proxy API is added only when a
     // proxy class is actually generated.
+    bool any_owner_handle = false;
+    bool any_owned_string = false;
+    for (const auto &lowering : _m.lowerings) {
+        const auto kind = static_cast<amc::LoweringKind>(lowering.kind);
+        if (kind == amc::LoweringKind::OWNER) any_owner_handle = true;
+        if (kind == amc::LoweringKind::OWNED_STRING) any_owned_string = true;
+    }
+    if (any_owner_handle || any_owned_string) _o.print("#include <SKL/ABIX/Interface/OwnerABI.h>\n");
+    if (any_owned_string) _o.print("#include <SKL/ABIX/STD/OwnedString.h>\n");
+
     bool any_interface_proxy = false;
     for (const auto &record : _m.interfaces)
         if (interface_has_handle_methods(_m, record)) {

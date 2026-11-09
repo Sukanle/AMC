@@ -271,6 +271,27 @@ print('owner box: OK')
                 check(result.returncode == 0 and "owner box: OK" in output(result),
                       "owner handle create/consume/destroy runs", output(result)[-500:])
 
+            cpp_header = os.path.join(owner_dir, "owner_gen.hpp")
+            result = run([str(amc), "generate", owner_artifact, "-l", "cpp", "-o", cpp_header])
+            if check(result.returncode == 0, "owner handle C++ projection generated", output(result)[-400:]):
+                header = open(cpp_header, encoding="utf-8").read()
+                check("class OwnerOfBoxWidget" in header,
+                      "C++ owner handle RAII wrapper is generated")
+                cxx = os.environ.get("CXX") or shutil.which("clang++") or shutil.which("c++")
+                if cxx:
+                    cpp_consumer = os.path.join(owner_dir, "owner_consumer.cpp")
+                    with open(cpp_consumer, "w", encoding="utf-8") as handle:
+                        handle.write('#include "owner_gen.hpp"\nint main() { return 0; }\n')
+                    include_flags = [
+                        "-I" + owner_dir,
+                        "-I" + str(source_root / "include"),
+                        "-I" + str(source_root / "dependencies" / "ABIX" / "include"),
+                        "-I" + str(source_root / "dependencies" / "ABIX" / "MICS" / "include"),
+                        "-I" + str(source_root / "dependencies" / "ABIX" / "MICS" / "HLMD"),
+                    ]
+                    result = run([cxx, "-std=c++17", "-fsyntax-only"] + include_flags + [cpp_consumer])
+                    check(result.returncode == 0, "C++ owner handle projection compiles", output(result)[-500:])
+
             owner_rs = os.path.join(owner_dir, "consumer.rs")
             with open(owner_rs, "w", encoding="utf-8") as handle:
                 handle.write("""#[path = "gen/amc_generated.rs"]

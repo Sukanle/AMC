@@ -57,6 +57,9 @@ public:
     // Exposed-handle RAII wrappers from the lowering result.
     void handles(const amc::ir::LoweringResult &lowering);
 
+    // ABIX owner-handle and owned-view RAII wrappers.
+    void owner_views();
+
     // Named error sets with stable numeric codes.
     void named_error_sets();
 
