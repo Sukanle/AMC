@@ -233,7 +233,7 @@ helper 只描述语义实体；ABI status 映射仍由 AMC 的 error pass 和显
 
 ### `containers`
 
-`containers[]` 记录 `Option<T>`、`Box<T>`、`String` 和 `Vec<T>` 出现的位置：`owner`、`context`（`parameter` / `return` / `field` / `alias`）、完整类型、`container` 类别和可选的 `element` 类型。helper 不假设 niche 布局、所有权或缓冲区表示；这些类型被 ABI 选中时必须由用户提供显式契约：owned `[[contract]]`，或由 `[[rust.expose]]` 消费的 `[[adapt]]` 映射（`String`/`&str` → StringView，`Vec<T>` → SequenceView，`Option<T>` → Optional，`Box<T>` → 显式 `*mut T` + `[[owned]]`）。否则 AMC 以明确诊断拒绝。
+`containers[]` 记录 `Option<T>`、`Box<T>`、`String` 和 `Vec<T>` 出现的位置：`owner`、`context`（`parameter` / `return` / `field` / `alias`）、完整类型、`container` 类别和可选的 `element` 类型。helper 不假设 niche 布局、所有权或缓冲区表示；这些类型被 ABI 选中时必须由用户提供显式契约：owned `[[contract]]`，或由 `[[rust.expose]]` 消费的 `[[adapt]]` 映射（`String`/`&str` → StringView，`Vec<T>` → SequenceView，`Option<T>` → Optional，`Box<T>` → `abix_owner_<T>` 或显式 `*mut T` + `[[owned]]`；owned `String`/`Vec` 返回值 → `abix_owned_str_utf8` / `abix_owned_span_<T>`）。否则 AMC 以明确诊断拒绝。
 
 ### 显式泛型实例
 
