@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "SKL/AMC/Support/CommandLine.h"
 #include "SKL/AMC/CLI/Support.h"
 #include "SKL/AMC/Support/Process.h"
 #include "SKL/AMC/Core/Adapter.h"
@@ -32,6 +33,8 @@
 #include <string>
 #include <vector>
 
+#include <llvm/Support/CommandLine.h>
+
 #include <fmt/format.h>
 
 namespace fs = std::filesystem;
@@ -41,30 +44,28 @@ using skl::amc::util::read_error_category;
 using skl::amc::util::usage_error;
 
 namespace skl::amc::cli {
+namespace {
 
-int cmd_verify(char **args, int arg_count, const fs::path &provider) {
-    const std::string command = args[1];
-    if (command == "verify") {
-        fs::path config_path;
-        fs::path build_dir;
-        std::vector<std::string> positionals;
-        std::string format = "text";
-        for (int i = 2; i < arg_count; ++i) {
-            const std::string argument = args[i];
-            if ((argument == "-c" || argument == "-B" || argument == "--format") && i + 1 < arg_count) {
-                const std::string value = args[++i];
-                if (argument == "-c")
-                    config_path = value;
-                else if (argument == "-B")
-                    build_dir = fs::absolute(value);
-                else
-                    format = value;
-            } else if (argument.rfind("--format=", 0) == 0) {
-                format = argument.substr(std::string("--format=").size());
-            } else {
-                positionals.push_back(argument);
-            }
-        }
+llvm::cl::SubCommand verify_subcommand("verify", "Verify a contract against an implementation");
+llvm::cl::list<std::string> verify_inputs(llvm::cl::Positional,
+    llvm::cl::desc("[<contract.abix> <implementation.abix>]"), llvm::cl::ZeroOrMore,
+    llvm::cl::cat(support::cli_category()), llvm::cl::sub(verify_subcommand));
+llvm::cl::opt<std::string> verify_config("c", llvm::cl::desc("Build a frontend result from a configuration"),
+    llvm::cl::value_desc("file.abic.toml"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(verify_subcommand));
+llvm::cl::opt<std::string> verify_build_dir("B", llvm::cl::desc("Build directory"), llvm::cl::value_desc("dir"),
+    llvm::cl::cat(support::cli_category()), llvm::cl::sub(verify_subcommand));
+llvm::cl::opt<std::string> verify_format("format", llvm::cl::desc("Output format"),
+    llvm::cl::value_desc("text|json|diagnostics|diagnostics-json"), llvm::cl::init("text"),
+    llvm::cl::cat(support::cli_category()), llvm::cl::sub(verify_subcommand));
+
+}   // namespace
+
+int cmd_verify(const fs::path &provider) {
+    const fs::path config_path = verify_config.getValue();
+    const fs::path build_dir = verify_build_dir.empty() ? fs::path{} : fs::absolute(verify_build_dir.getValue());
+    const std::vector<std::string> positionals(verify_inputs.begin(), verify_inputs.end());
+    const std::string &format = verify_format;
+    {
         if (format != "text" && format != "json" && format != "diagnostics" && format != "diagnostics-json")
             return usage_error("verify --format must be text, json, diagnostics or diagnostics-json");
         const bool json_output = format == "json";
@@ -190,10 +191,17 @@ int cmd_verify(char **args, int arg_count, const fs::path &provider) {
             return fail(amc::ErrorCategory::CONFIG, "verify", std::string(error.description()), config_path.string());
         }
     }
-    return usage_error(command + ": unsupported subcommand");
 }
 
 namespace {
+
+llvm::cl::SubCommand target_subcommand("target", "Inspect or verify target facts");
+llvm::cl::opt<std::string> target_input(llvm::cl::Positional, llvm::cl::desc("<file.abix|binary>"), llvm::cl::Required,
+    llvm::cl::cat(support::cli_category()), llvm::cl::sub(target_subcommand));
+llvm::cl::opt<std::string> target_expect("expect", llvm::cl::desc("Expected target facts"),
+    llvm::cl::value_desc("arch=..,os=.."), llvm::cl::cat(support::cli_category()), llvm::cl::sub(target_subcommand));
+llvm::cl::opt<std::string> target_format("format", llvm::cl::desc("Output format"), llvm::cl::value_desc("text|json"),
+    llvm::cl::init("text"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(target_subcommand));
 
 const char *target_status_name(amc::TargetVerificationStatus status) {
     return skl::amc::reflect::enum_name(status, "unverifiable");
@@ -242,30 +250,10 @@ amc::TargetExpectation parse_expectation(const std::string &spec) {
 // target. Verification reports platform / layout / calling convention
 // independently; an unknown fact is `unverifiable`, never `compatible`. Exit
 // status is 1 when any checked dimension is incompatible.
-int cmd_target(char **args, int arg_count) {
-    fs::path input;
-    std::string expect;
-    std::string format = "text";
-    for (int i = 2; i < arg_count; ++i) {
-        const std::string argument = args[i];
-        if ((argument == "--expect" || argument == "--format") && i + 1 < arg_count) {
-            const std::string value = args[++i];
-            if (argument == "--expect")
-                expect = value;
-            else
-                format = value;
-        } else if (argument.rfind("--expect=", 0) == 0) {
-            expect = argument.substr(std::string("--expect=").size());
-        } else if (argument.rfind("--format=", 0) == 0) {
-            format = argument.substr(std::string("--format=").size());
-        } else if (input.empty()) {
-            input = argument;
-        } else {
-            return usage_error("target expects <file.abix|binary> [--expect arch=..,os=..] [--format text|json]");
-        }
-    }
-    if (input.empty())
-        return usage_error("target expects <file.abix|binary> [--expect arch=..,os=..] [--format text|json]");
+int cmd_target() {
+    const fs::path input = target_input.getValue();
+    const std::string &expect = target_expect;
+    const std::string &format = target_format;
     if (format != "text" && format != "json") return usage_error("target --format must be text or json");
 
     amc::ABIModule module;

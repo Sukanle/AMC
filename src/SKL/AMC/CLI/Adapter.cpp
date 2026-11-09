@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "SKL/AMC/Support/CommandLine.h"
 #include "SKL/AMC/CLI/Support.h"
 #include "SKL/AMC/Core/Adapter.h"
 #include "SKL/AMC/Pass/TypeMapping.h"
@@ -26,6 +27,8 @@
 #include <string>
 #include <vector>
 
+#include <llvm/Support/CommandLine.h>
+
 #include <fmt/format.h>
 #include <fmt/os.h>
 
@@ -36,41 +39,35 @@ using skl::amc::util::read_error_category;
 using skl::amc::util::usage_error;
 
 namespace skl::amc::cli {
+namespace {
 
-int cmd_adapter(char **args, int arg_count) {
-    const std::string command = args[1];
-    if (command == "adapter") {
-        fs::path source_path, target_path, output;
-        amc::AdapterOptions options;
-        for (int i = 2; i < arg_count; ++i) {
-            const std::string argument = args[i];
-            if ((argument == "-o" || argument == "--output") && i + 1 < arg_count) {
-                output = args[++i];
-            } else if (argument.rfind("-o=", 0) == 0) {
-                output = argument.substr(3);
-            } else if (argument.rfind("--output=", 0) == 0) {
-                output = argument.substr(std::string("--output=").size());
-            } else if (argument == "--typed") {
-                options.typed = true;
-            } else if (argument == "--shim") {
-                options.shim = true;
-            } else if (argument == "--typed-namespace" && i + 1 < arg_count) {
-                options.typed = true;
-                options.typed_namespace = args[++i];
-            } else if (argument.rfind("--typed-namespace=", 0) == 0) {
-                options.typed = true;
-                options.typed_namespace = argument.substr(std::string("--typed-namespace=").size());
-            } else if (source_path.empty()) {
-                source_path = argument;
-            } else if (target_path.empty()) {
-                target_path = argument;
-            } else {
-                return usage_error("adapter accepts <source.abix> <target.abix>");
-            }
-        }
-        if (source_path.empty() || target_path.empty())
-            return usage_error("adapter requires <source.abix> <target.abix> [-o <file>]");
+llvm::cl::SubCommand adapter_subcommand("adapter", "Generate an adapter between two artifacts");
+llvm::cl::opt<std::string> adapter_source(llvm::cl::Positional, llvm::cl::desc("<source.abix>"), llvm::cl::Required,
+    llvm::cl::cat(support::cli_category()), llvm::cl::sub(adapter_subcommand));
+llvm::cl::opt<std::string> adapter_target(llvm::cl::Positional, llvm::cl::desc("<target.abix>"), llvm::cl::Required,
+    llvm::cl::cat(support::cli_category()), llvm::cl::sub(adapter_subcommand));
+llvm::cl::opt<std::string> adapter_output("o", llvm::cl::desc("Write output to a file"), llvm::cl::value_desc("file"),
+    llvm::cl::cat(support::cli_category()), llvm::cl::sub(adapter_subcommand));
+llvm::cl::alias adapter_output_alias("output", llvm::cl::desc("Alias for -o"), llvm::cl::aliasopt(adapter_output),
+    llvm::cl::cat(support::cli_category()));
+llvm::cl::opt<bool> adapter_typed("typed", llvm::cl::desc("Emit typed adapters"),
+    llvm::cl::cat(support::cli_category()), llvm::cl::sub(adapter_subcommand));
+llvm::cl::opt<bool> adapter_shim(
+    "shim", llvm::cl::desc("Emit a shim"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(adapter_subcommand));
+llvm::cl::opt<std::string> adapter_typed_namespace("typed-namespace", llvm::cl::desc("Typed adapter namespace"),
+    llvm::cl::value_desc("name"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(adapter_subcommand));
 
+}   // namespace
+
+int cmd_adapter() {
+    const fs::path source_path = adapter_source.getValue();
+    const fs::path target_path = adapter_target.getValue();
+    const fs::path output = adapter_output.getValue();
+    amc::AdapterOptions options;
+    options.typed = adapter_typed || !adapter_typed_namespace.empty();
+    options.shim = adapter_shim;
+    options.typed_namespace = adapter_typed_namespace;
+    {
         amc::ABIModule source, target, report;
         std::string error;
         if (!amc::load_module_source(source_path.string(), source, error))
@@ -105,7 +102,6 @@ int cmd_adapter(char **args, int arg_count) {
         }
         return 0;
     }
-    return usage_error(command + ": unsupported subcommand");
 }
 
 }   // namespace skl::amc::cli

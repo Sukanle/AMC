@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "SKL/AMC/Support/CommandLine.h"
 #include "SKL/AMC/CLI/Support.h"
 #include "SKL/AMC/Core/Adapter.h"
 #include "SKL/AMC/Core/Core.h"
@@ -25,6 +26,8 @@
 #include <string>
 #include <vector>
 
+#include <llvm/Support/CommandLine.h>
+
 #include <fmt/format.h>
 
 namespace fs = std::filesystem;
@@ -34,18 +37,32 @@ using skl::amc::util::read_error_category;
 using skl::amc::util::usage_error;
 
 namespace skl::amc::cli {
+namespace {
 
-int cmd_diff(char **args, int arg_count) {
-    const std::string command = args[1];
-    if (command == "diff" || command == "compatibility") {
-        if (arg_count != 4 && !(command == "diff" && arg_count == 6 && std::string(args[4]) == "-o"))
-            return usage_error(command + " expects two .abix inputs");
+llvm::cl::SubCommand diff_subcommand("diff", "Compare two artifacts");
+llvm::cl::SubCommand compatibility_subcommand("compatibility", "Compare two artifacts");
+llvm::cl::SubCommandGroup diff_group{&diff_subcommand, &compatibility_subcommand};
+llvm::cl::opt<std::string> diff_source(llvm::cl::Positional, llvm::cl::desc("<source.abix>"), llvm::cl::Required,
+    llvm::cl::cat(support::cli_category()), llvm::cl::sub(diff_group));
+llvm::cl::opt<std::string> diff_target(llvm::cl::Positional, llvm::cl::desc("<target.abix>"), llvm::cl::Required,
+    llvm::cl::cat(support::cli_category()), llvm::cl::sub(diff_group));
+llvm::cl::opt<std::string> diff_output("o", llvm::cl::desc("Write the compatibility report"),
+    llvm::cl::value_desc("report.abix"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(diff_group));
+
+}   // namespace
+
+int cmd_diff(bool compatibility) {
+    const fs::path source_path = diff_source.getValue();
+    const fs::path target_path = diff_target.getValue();
+    const fs::path output = diff_output.getValue();
+    {
+        if (compatibility && !output.empty()) return usage_error("compatibility does not accept -o; use diff");
         amc::ABIModule source, target, report;
         std::string error;
-        if (!amc::load_module_source(args[2], source, error))
-            return fail(read_error_category(error), "read_abix", error, args[2]);
-        if (!amc::load_module_source(args[3], target, error))
-            return fail(read_error_category(error), "read_abix", error, args[3]);
+        if (!amc::load_module_source(source_path, source, error))
+            return fail(read_error_category(error), "read_abix", error, source_path);
+        if (!amc::load_module_source(target_path, target, error))
+            return fail(read_error_category(error), "read_abix", error, target_path);
         amc::pass::Context context;
         context.strict = false;
         amc::diagnostics::DiagnosticList diagnostics;
@@ -61,11 +78,10 @@ int cmd_diff(char **args, int arg_count) {
             fmt::print("\n");
             incompatible = incompatible || record.kind == amc::CompatibilityKind::INCOMP;
         }
-        if (command == "diff" && arg_count == 6 && !amc::write_abix(report, args[5], error))
-            return fail(amc::ErrorCategory::IO, "write_abix", error, args[5]);
-        return command == "compatibility" && incompatible ? 1 : 0;
+        if (!output.empty() && !amc::write_abix(report, output, error))
+            return fail(amc::ErrorCategory::IO, "write_abix", error, output);
+        return compatibility && incompatible ? 1 : 0;
     }
-    return usage_error(command + ": unsupported subcommand");
 }
 
 }   // namespace skl::amc::cli

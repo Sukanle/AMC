@@ -28,6 +28,7 @@
 
 ### Changed
 
+- The `amc` CLI and the `amc-cpp` / `amc-rust` / `amc-zig` providers now parse arguments with LLVM `CommandLine`. Each command is a registered subcommand with typed options and automatic `--help` / `--version`; the hand-written argv loops and the manual `--format=` splitting are gone. `--error-format` is still resolved before parsing so parse failures use the selected envelope.
 - Trait objects (`&dyn Trait` / `*const dyn Trait`) are rejected in function signatures and record fields. They are fat pointers, so AMC no longer lowers them as thin pointers without an explicit contract.
 - Rust semantic reload now restores async functions as well as the other language extensions.
 - C++ namespaces are unified as `skl::amc` (generated code: `skl::amc::generated`) and C++ enum values use `UPPER_SNAKE_CASE`.

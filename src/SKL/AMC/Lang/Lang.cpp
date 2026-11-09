@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "SKL/AMC/Lang/Lang.h"
+#include "SKL/AMC/Support/CommandLine.h"
 
 #include <condition_variable>
 #include <stdio.h>
@@ -23,6 +24,9 @@
 #include <mutex>
 #include <string>
 #include <thread>
+
+#include <llvm/Support/CommandLine.h>
+#include <llvm/Support/raw_ostream.h>
 
 #include <fmt/format.h>
 #include <toml++/toml.h>
@@ -266,20 +270,57 @@ std::string json_value(const std::string &line, const char *key) {
     return out;
 }
 
+namespace {
+
+llvm::cl::opt<bool> provider_ipc(
+    "ipc", llvm::cl::desc("Run the JSONL IPC protocol"), llvm::cl::cat(amc::support::cli_category()));
+llvm::cl::opt<std::string> provider_capability(
+    llvm::cl::Positional, llvm::cl::desc("<capability>"), llvm::cl::cat(amc::support::cli_category()));
+llvm::cl::opt<std::string> provider_input(
+    llvm::cl::Positional, llvm::cl::desc("<input>"), llvm::cl::cat(amc::support::cli_category()));
+llvm::cl::opt<std::string> provider_output(
+    llvm::cl::Positional, llvm::cl::desc("<output>"), llvm::cl::cat(amc::support::cli_category()));
+
+std::string provider_capability_names(const Provider &provider) {
+    std::string names;
+    for (const auto &capability : provider.capabilities) {
+        if (!names.empty()) names += "|";
+        names += capability.name;
+    }
+    return names;
+}
+
+void print_provider_usage(const Provider &provider) {
+    fmt::print(stderr, "usage: amc-{} <{}> <input> <output>\n", provider.language, provider_capability_names(provider));
+}
+
+}   // namespace
+
 int run_provider(int argc, char **argv, const Provider &provider) {
-    if (argc == 2 && std::string(argv[1]) == "--ipc") return ipc(provider);
-    if (argc != 4) {
-        std::string names;
-        for (const auto &capability : provider.capabilities) {
-            if (!names.empty()) names += "|";
-            names += capability.name;
-        }
-        fmt::print(stderr, "usage: amc-{} <{}> <input> <output>\n", provider.language, names);
+    llvm::cl::HideUnrelatedOptions(amc::support::cli_category());
+    llvm::cl::SetVersionPrinter(
+        [&provider](llvm::raw_ostream &out) { out << "amc-" << provider.language << " " << provider.version << "\n"; });
+    std::string error;
+    llvm::raw_string_ostream stream(error);
+    const std::string overview = "AMC " + provider.language + " provider";
+    if (!llvm::cl::ParseCommandLineOptions(argc, argv, overview, &stream)) {
+        fmt::print(stderr, "{}", error);
         return 2;
     }
-    const std::string capability = argv[1];
+    if (provider_ipc) {
+        if (!provider_capability.empty() || !provider_input.empty() || !provider_output.empty()) {
+            print_provider_usage(provider);
+            return 2;
+        }
+        return ipc(provider);
+    }
+    if (provider_capability.empty() || provider_input.empty() || provider_output.empty()) {
+        print_provider_usage(provider);
+        return 2;
+    }
     for (const auto &candidate : provider.capabilities)
-        if (candidate.name == capability) return candidate.run(argv[2], argv[3]);
+        if (candidate.name == provider_capability)
+            return candidate.run(provider_input.getValue().c_str(), provider_output.getValue().c_str());
     fmt::print(stderr, "unknown capability\n");
     return 2;
 }

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "SKL/AMC/Compilation/Build.h"
+#include "SKL/AMC/Support/CommandLine.h"
 #include "SKL/AMC/Support/Process.h"
 #include "SKL/AMC/Compilation/Config.h"
 #include "SKL/AMC/Compilation/Meta.h"
@@ -26,6 +27,8 @@
 #include "SKL/AMC/Semantic/Serialize.h"
 #include "SKL/AMC/Semantic/Sync.h"
 #include "SKL/AMC/Util/Error.h"
+
+#include <llvm/Support/CommandLine.h>
 
 #include <algorithm>
 #include <cerrno>
@@ -768,40 +771,44 @@ bool write_bytes(const fs::path &to, const std::string &bytes, std::string &erro
 
 }   // namespace
 
-int build_command(char **args, int arg_count, const fs::path &provider) {
-    const std::string command = args[1];
-    if (command == "build") {
-        fs::path config_path;
-        fs::path build_dir;
-        fs::path cache_dir;
-        std::vector<std::string> cli_deps;
-        for (int i = 2; i < arg_count; ++i) {
-            const std::string argument = args[i];
-            if ((argument == "-c" || argument == "-B" || argument == "--cache") && i + 1 < arg_count) {
-                const fs::path value = args[++i];
-                if (argument == "-c")
-                    config_path = value;
-                else if (argument == "-B")
-                    build_dir = fs::absolute(value);
-                else
-                    cache_dir = fs::absolute(value);
-            } else if (argument == "--deps" && i + 1 < arg_count) {
-                std::string list = args[++i];
-                size_t start = 0;
-                while (start <= list.size()) {
-                    const size_t comma = list.find(',', start);
-                    const std::string item = list.substr(start, comma == std::string::npos ? comma : comma - start);
-                    if (!item.empty()) cli_deps.push_back(item);
-                    if (comma == std::string::npos) break;
-                    start = comma + 1;
-                }
-            } else if (config_path.empty()) {
-                config_path = argument;
-            } else {
-                return usage_error("unexpected build argument: " + argument);
-            }
+namespace {
+
+llvm::cl::SubCommand build_subcommand("build", "Compile a .abic.toml configuration");
+llvm::cl::opt<std::string> build_config("c", llvm::cl::desc("Configuration file"),
+    llvm::cl::value_desc("file.abic.toml"), llvm::cl::cat(amc::support::cli_category()),
+    llvm::cl::sub(build_subcommand));
+llvm::cl::opt<std::string> build_config_positional(llvm::cl::Positional, llvm::cl::desc("[file.abic.toml]"),
+    llvm::cl::cat(amc::support::cli_category()), llvm::cl::sub(build_subcommand));
+llvm::cl::opt<std::string> build_build_dir("B", llvm::cl::desc("Build directory"), llvm::cl::value_desc("dir"),
+    llvm::cl::cat(amc::support::cli_category()), llvm::cl::sub(build_subcommand));
+llvm::cl::opt<std::string> build_cache_dir("cache", llvm::cl::desc("Instantiation cache directory"),
+    llvm::cl::value_desc("dir"), llvm::cl::cat(amc::support::cli_category()), llvm::cl::sub(build_subcommand));
+llvm::cl::opt<std::string> build_deps("deps", llvm::cl::desc("Comma-separated dependency files"),
+    llvm::cl::value_desc("files"), llvm::cl::cat(amc::support::cli_category()), llvm::cl::sub(build_subcommand));
+
+}   // namespace
+
+int build_command(const fs::path &provider) {
+    if (!build_config.empty() && !build_config_positional.empty())
+        return usage_error("build accepts either -c <config> or one positional config");
+    const fs::path config_path =
+        !build_config.empty() ? fs::path(build_config.getValue()) : fs::path(build_config_positional.getValue());
+    const fs::path build_dir = build_build_dir.empty() ? fs::path{} : fs::absolute(build_build_dir.getValue());
+    fs::path cache_dir = build_cache_dir.empty() ? fs::path{} : fs::absolute(build_cache_dir.getValue());
+    std::vector<std::string> cli_deps;
+    {
+        std::string list = build_deps;
+        size_t start = 0;
+        while (start <= list.size()) {
+            const size_t comma = list.find(',', start);
+            const std::string item = list.substr(start, comma == std::string::npos ? comma : comma - start);
+            if (!item.empty()) cli_deps.push_back(item);
+            if (comma == std::string::npos) break;
+            start = comma + 1;
         }
-        if (config_path.empty()) return usage_error("build expects -c <file>.abic.toml");
+    }
+    if (config_path.empty()) return usage_error("build expects -c <file>.abic.toml");
+    {
         try {
             const auto config = toml::parse_file(config_path.string());
             const auto *imports = config["import"].as_array();
@@ -1270,7 +1277,6 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
             return fail(amc::ErrorCategory::CONFIG, "build", std::string(error.description()), config_path.string());
         }
     }
-    return usage_error(command + ": unsupported subcommand");
 }
 
 }   // namespace skl::amc::compilation

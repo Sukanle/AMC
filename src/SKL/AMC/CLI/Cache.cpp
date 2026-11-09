@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "SKL/AMC/Support/CommandLine.h"
 #include "SKL/AMC/CLI/Support.h"
 #include "SKL/AMC/Core/Adapter.h"
 #include "SKL/AMC/Compilation/Cache.h"
@@ -25,6 +26,8 @@
 #include <filesystem>
 #include <string>
 #include <vector>
+
+#include <llvm/Support/CommandLine.h>
 
 #include <fmt/format.h>
 
@@ -93,56 +96,49 @@ std::string human_age(uint64_t seconds) {
 
 }   // namespace
 
+namespace {
+
+llvm::cl::SubCommand cache_subcommand("cache", "Inspect or prune the instantiation cache");
+llvm::cl::opt<std::string> cache_root(llvm::cl::Positional, llvm::cl::desc("<dir>"), llvm::cl::Required,
+    llvm::cl::cat(support::cli_category()), llvm::cl::sub(cache_subcommand));
+llvm::cl::opt<std::string> cache_action(llvm::cl::Positional, llvm::cl::desc("[stats|prune]"),
+    llvm::cl::cat(support::cli_category()), llvm::cl::sub(cache_subcommand));
+llvm::cl::opt<bool> cache_verify("verify", llvm::cl::desc("Verify every cache entry"),
+    llvm::cl::cat(support::cli_category()), llvm::cl::sub(cache_subcommand));
+llvm::cl::opt<bool> cache_clear("clear", llvm::cl::desc("Clear the cache"), llvm::cl::cat(support::cli_category()),
+    llvm::cl::sub(cache_subcommand));
+llvm::cl::opt<bool> cache_dry_run("dry-run", llvm::cl::desc("Report prune actions without deleting"),
+    llvm::cl::cat(support::cli_category()), llvm::cl::sub(cache_subcommand));
+llvm::cl::opt<std::string> cache_max_size("max-size", llvm::cl::desc("Prune above this size"),
+    llvm::cl::value_desc("size"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(cache_subcommand));
+llvm::cl::opt<std::string> cache_max_age("max-age", llvm::cl::desc("Prune entries older than this many days"),
+    llvm::cl::value_desc("days"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(cache_subcommand));
+llvm::cl::opt<std::string> cache_format("format", llvm::cl::desc("Output format"), llvm::cl::value_desc("text|json"),
+    llvm::cl::init("text"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(cache_subcommand));
+
+}   // namespace
+
 // `amc cache <dir> [stats|prune] [--verify|--clear] [--format text|json]`
 //
 // Inspects the M3.4 instantiation request cache: entry count, integrity
 // verification, clearing, usage statistics and LRU pruning. Building is what
 // populates the cache; this command is the diagnostic and CI surface over it.
-int cmd_cache(char **args, int arg_count) {
-    fs::path root;
-    std::string command;
-    bool verify = false;
-    bool clear = false;
-    bool json = false;
-    bool dry_run = false;
+int cmd_cache() {
+    const fs::path root = cache_root.getValue();
+    const std::string &command = cache_action;
+    const bool verify = cache_verify;
+    const bool clear = cache_clear;
+    const bool json = cache_format == "json";
+    const bool dry_run = cache_dry_run;
     uint64_t max_bytes = 0;
     uint64_t max_age_days = 0;
-    for (int i = 2; i < arg_count; ++i) {
-        const std::string argument = args[i];
-        if (argument == "--verify") {
-            verify = true;
-        } else if (argument == "--clear") {
-            clear = true;
-        } else if (argument == "--dry-run") {
-            dry_run = true;
-        } else if (argument == "stats" || argument == "prune") {
-            if (!command.empty()) return usage_error("cache accepts a single command");
-            command = argument;
-        } else if (argument == "--max-size" && i + 1 < arg_count) {
-            if (!parse_size(args[++i], max_bytes)) return usage_error("--max-size expects a size like 512M");
-        } else if (argument.rfind("--max-size=", 0) == 0) {
-            if (!parse_size(argument.substr(std::string("--max-size=").size()), max_bytes))
-                return usage_error("--max-size expects a size like 512M");
-        } else if (argument == "--max-age" && i + 1 < arg_count) {
-            if (!parse_days(args[++i], max_age_days)) return usage_error("--max-age expects a number of days");
-        } else if (argument.rfind("--max-age=", 0) == 0) {
-            if (!parse_days(argument.substr(std::string("--max-age=").size()), max_age_days))
-                return usage_error("--max-age expects a number of days");
-        } else if (argument == "--format" && i + 1 < arg_count) {
-            const std::string value = args[++i];
-            if (value != "text" && value != "json") return usage_error("--format must be text or json");
-            json = value == "json";
-        } else if (argument.rfind("--format=", 0) == 0) {
-            const std::string value = argument.substr(std::string("--format=").size());
-            if (value != "text" && value != "json") return usage_error("--format must be text or json");
-            json = value == "json";
-        } else if (root.empty()) {
-            root = argument;
-        } else {
-            return usage_error("cache accepts a single directory");
-        }
-    }
-    if (root.empty()) return usage_error("cache requires a directory");
+    if (cache_format != "text" && cache_format != "json") return usage_error("--format must be text or json");
+    if (!cache_max_size.empty() && !parse_size(cache_max_size, max_bytes))
+        return usage_error("--max-size expects a size like 512M");
+    if (!cache_max_age.empty() && !parse_days(cache_max_age, max_age_days))
+        return usage_error("--max-age expects a number of days");
+    if (!command.empty() && command != "stats" && command != "prune")
+        return usage_error("cache accepts only stats or prune");
     if (!command.empty() && (clear || verify))
         return usage_error("stats/prune cannot be combined with --clear or --verify");
 

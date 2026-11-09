@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "SKL/AMC/Support/CommandLine.h"
 #include "SKL/AMC/CLI/Support.h"
 #include "SKL/AMC/Core/Adapter.h"
 #include "SKL/AMC/Core/Core.h"
@@ -31,6 +32,8 @@
 #include <string>
 #include <vector>
 
+#include <llvm/Support/CommandLine.h>
+
 #include <fmt/format.h>
 #include <fmt/os.h>
 
@@ -41,37 +44,31 @@ using skl::amc::util::read_error_category;
 using skl::amc::util::usage_error;
 
 namespace skl::amc::cli {
+namespace {
 
-int cmd_symbols(char **args, int arg_count) {
-    const std::string command = args[1];
-    if (command == "publish" || command == "fetch") {
-        fs::path input;
-        fs::path output;
-        fs::path root;
-        std::string explicit_build_id;
-        for (int i = 2; i < arg_count; ++i) {
-            const std::string argument = args[i];
-            if ((argument == "--root" || argument == "-o" || argument == "--build-id") && i + 1 < arg_count) {
-                const std::string value = args[++i];
-                if (argument == "--root")
-                    root = value;
-                else if (argument == "-o")
-                    output = value;
-                else
-                    explicit_build_id = value;
-            } else if (argument.rfind("--root=", 0) == 0) {
-                root = argument.substr(std::string("--root=").size());
-            } else if (argument.rfind("--build-id=", 0) == 0) {
-                explicit_build_id = argument.substr(std::string("--build-id=").size());
-            } else if (input.empty()) {
-                input = argument;
-            } else {
-                return usage_error(command + " accepts a single input");
-            }
-        }
-        if (root.empty()) root = amc::default_symbol_store_root();
+llvm::cl::SubCommand publish_subcommand("publish", "Publish an artifact to the symbol store");
+llvm::cl::SubCommand fetch_subcommand("fetch", "Fetch an artifact from the symbol store");
+llvm::cl::SubCommandGroup symbol_group{&publish_subcommand, &fetch_subcommand};
+llvm::cl::opt<std::string> symbol_input(llvm::cl::Positional, llvm::cl::desc("[file.abix|binary]"),
+    llvm::cl::cat(support::cli_category()), llvm::cl::sub(symbol_group));
+llvm::cl::opt<std::string> symbol_root("root", llvm::cl::desc("Symbol store root"), llvm::cl::value_desc("dir"),
+    llvm::cl::cat(support::cli_category()), llvm::cl::sub(symbol_group));
+llvm::cl::opt<std::string> symbol_output("o", llvm::cl::desc("Write the fetched artifact to a file"),
+    llvm::cl::value_desc("file"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(symbol_group));
+llvm::cl::opt<std::string> symbol_build_id("build-id", llvm::cl::desc("Build id or metadata key"),
+    llvm::cl::value_desc("hex"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(symbol_group));
 
-        if (command == "publish") {
+}   // namespace
+
+int cmd_symbols(bool publish) {
+    {
+        const fs::path input = symbol_input.getValue();
+        const fs::path output = symbol_output.getValue();
+        const fs::path root =
+            symbol_root.empty() ? fs::path(amc::default_symbol_store_root()) : fs::path(symbol_root.getValue());
+        const std::string &explicit_build_id = symbol_build_id;
+
+        if (publish) {
             if (input.empty()) return usage_error("publish requires an input .abix or binary");
             std::ifstream file(input, std::ios::binary);
             if (!file) return fail(amc::ErrorCategory::IO, "publish", "cannot open input", input.string());
@@ -164,7 +161,6 @@ int cmd_symbols(char **args, int arg_count) {
         fmt::print("fetched {} -> {}\n", path, output.string());
         return 0;
     }
-    return usage_error(command + ": unsupported subcommand");
 }
 
 }   // namespace skl::amc::cli

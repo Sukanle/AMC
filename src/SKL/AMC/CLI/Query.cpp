@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "SKL/AMC/Support/CommandLine.h"
 #include "SKL/AMC/CLI/Support.h"
 #include "SKL/AMC/Core/Adapter.h"
 #include "SKL/AMC/Core/Core.h"
@@ -22,108 +23,87 @@
 #include "SKL/AMC/Query/Compatibility.h"
 #include "SKL/AMC/Util/Error.h"
 
+#include <llvm/Support/CommandLine.h>
+
 #include <filesystem>
 #include <string>
-#include <vector>
 
 #include <fmt/format.h>
 
 namespace fs = std::filesystem;
 using skl::amc::util::fail;
-using skl::amc::util::g_error_format;
 using skl::amc::util::read_error_category;
 using skl::amc::util::usage_error;
 
 namespace skl::amc::cli {
+namespace {
 
-int cmd_query(char **args, int arg_count) {
-    const std::string command = args[1];
-    if (command == "query") {
-        fs::path input;
-        fs::path other;
-        std::string needle;
-        std::string mode;
-        std::string format = "text";
-        bool include_layout = false;
-        for (int i = 2; i < arg_count; ++i) {
-            const std::string argument = args[i];
-            if ((argument == "--type"
-                    || argument == "--function"
-                    || argument == "--compatible"
-                    || argument == "--format")
-                && i + 1 < arg_count) {
-                const std::string value = args[++i];
-                if (argument == "--type") {
-                    mode = "type";
-                    needle = value;
-                } else if (argument == "--function") {
-                    mode = "function";
-                    needle = value;
-                } else if (argument == "--compatible") {
-                    mode = "compatible";
-                    other = value;
-                } else
-                    format = value;
-            } else if (argument == "--layout") {
-                include_layout = true;
-            } else if (argument.rfind("--format=", 0) == 0) {
-                format = argument.substr(std::string("--format=").size());
-            } else if (input.empty()) {
-                input = argument;
-            } else {
-                return usage_error("query accepts a single .abix input");
-            }
-        }
-        if (input.empty()) return usage_error("query requires a .abix input");
-        if (mode.empty()) return usage_error("query requires --type, --function or --compatible");
-        if (format != "text" && format != "json") return usage_error("query --format must be text or json");
-        const bool json = format == "json";
+llvm::cl::SubCommand query_subcommand("query", "Query types, functions or compatibility");
+llvm::cl::opt<std::string> query_input(llvm::cl::Positional, llvm::cl::desc("<file.abix>"), llvm::cl::Required,
+    llvm::cl::cat(support::cli_category()), llvm::cl::sub(query_subcommand));
+llvm::cl::opt<std::string> query_type("type", llvm::cl::desc("Match a type name"), llvm::cl::value_desc("name"),
+    llvm::cl::cat(support::cli_category()), llvm::cl::sub(query_subcommand));
+llvm::cl::opt<std::string> query_function("function", llvm::cl::desc("Match a function name"),
+    llvm::cl::value_desc("name"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(query_subcommand));
+llvm::cl::opt<std::string> query_compatible("compatible", llvm::cl::desc("Compare against another artifact"),
+    llvm::cl::value_desc("other.abix"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(query_subcommand));
+llvm::cl::opt<std::string> query_format("format", llvm::cl::desc("Output format"), llvm::cl::value_desc("text|json"),
+    llvm::cl::init("text"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(query_subcommand));
+llvm::cl::opt<bool> query_layout("layout", llvm::cl::desc("Include layout details"),
+    llvm::cl::cat(support::cli_category()), llvm::cl::sub(query_subcommand));
 
-        amc::ABIModule module;
-        std::string error;
-        if (!amc::load_module_source(input.string(), module, error))
-            return fail(read_error_category(error), "read_abix", error, input.string());
+llvm::cl::SubCommand inspect_subcommand("inspect", "Summarize a .abix artifact");
+llvm::cl::SubCommand validate_subcommand("validate", "Validate a .abix artifact");
+llvm::cl::SubCommandGroup artifact_group{&inspect_subcommand, &validate_subcommand};
+llvm::cl::opt<std::string> artifact_input(llvm::cl::Positional, llvm::cl::desc("<file.abix>"), llvm::cl::Required,
+    llvm::cl::cat(support::cli_category()), llvm::cl::sub(artifact_group));
 
-        if (mode == "type") {
-            const auto indices = amc::query_type_indices(module, needle);
-            fmt::print("{}", json ? amc::query_types_json(module, indices, include_layout, needle)
-                                  : amc::query_types_text(module, indices, include_layout));
-            return indices.empty() ? 1 : 0;
-        }
-        if (mode == "function") {
-            const auto indices = amc::query_function_indices(module, needle);
-            fmt::print("{}",
-                json ? amc::query_functions_json(module, indices, needle) : amc::query_functions_text(module, indices));
-            return indices.empty() ? 1 : 0;
-        }
+}   // namespace
 
-        amc::ABIModule target;
-        if (!amc::load_module_source(other.string(), target, error))
-            return fail(read_error_category(error), "read_abix", error, other.string());
-        amc::ir::CompatibilityResult result;
-        if (!amc::query::compare(module, target, result, error))
-            return fail(amc::ErrorCategory::INTERNAL, "verify", error);
-        fmt::print("{}", json ? amc::compatibility_query_json(module, target, result)
-                              : amc::compatibility_query_text(module, target, result));
-        return result.consistent ? 0 : 1;
+int cmd_query() {
+    const int modes =
+        (query_type.empty() ? 0 : 1) + (query_function.empty() ? 0 : 1) + (query_compatible.empty() ? 0 : 1);
+    if (modes != 1) return usage_error("query requires exactly one of --type, --function or --compatible");
+    if (query_format != "text" && query_format != "json") return usage_error("query --format must be text or json");
+    const bool json = query_format == "json";
+
+    amc::ABIModule module;
+    std::string error;
+    if (!amc::load_module_source(query_input, module, error))
+        return fail(read_error_category(error), "read_abix", error, query_input);
+
+    if (!query_type.empty()) {
+        const auto indices = amc::query_type_indices(module, query_type);
+        fmt::print("{}", json ? amc::query_types_json(module, indices, query_layout, query_type)
+                              : amc::query_types_text(module, indices, query_layout));
+        return indices.empty() ? 1 : 0;
     }
-    return usage_error(command + ": unsupported subcommand");
+    if (!query_function.empty()) {
+        const auto indices = amc::query_function_indices(module, query_function);
+        fmt::print("{}", json ? amc::query_functions_json(module, indices, query_function)
+                              : amc::query_functions_text(module, indices));
+        return indices.empty() ? 1 : 0;
+    }
+
+    amc::ABIModule target;
+    if (!amc::load_module_source(query_compatible, target, error))
+        return fail(read_error_category(error), "read_abix", error, query_compatible);
+    amc::ir::CompatibilityResult result;
+    if (!amc::query::compare(module, target, result, error)) return fail(amc::ErrorCategory::INTERNAL, "verify", error);
+    fmt::print("{}", json ? amc::compatibility_query_json(module, target, result)
+                          : amc::compatibility_query_text(module, target, result));
+    return result.consistent ? 0 : 1;
 }
 
-int cmd_inspect(char **args, int arg_count) {
-    const std::string command = args[1];
-    if (command == "inspect" || command == "validate") {
-        if (arg_count != 3) return usage_error(command + " expects exactly one .abix input");
-        amc::ABIModule module;
-        std::string error;
-        if (!amc::load_module_source(args[2], module, error))
-            return fail(read_error_category(error), "read_abix", error, args[2]);
-        if (command == "inspect")
-            fmt::print("package={} types={} fields={} functions={}\n", module.package_name, module.types.size(),
-                module.fields.size(), module.functions.size());
-        return 0;
-    }
-    return usage_error(command + ": unsupported subcommand");
+int cmd_inspect(bool validate) {
+    amc::ABIModule module;
+    std::string error;
+    if (!amc::load_module_source(artifact_input, module, error))
+        return fail(read_error_category(error), "read_abix", error, artifact_input);
+    if (!validate)
+        fmt::print("package={} types={} fields={} functions={}\n", module.package_name, module.types.size(),
+            module.fields.size(), module.functions.size());
+    return 0;
 }
 
 }   // namespace skl::amc::cli

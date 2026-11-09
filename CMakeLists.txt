@@ -505,7 +505,8 @@ add_executable(
     ${AMC_SOURCE_DIR}/src/SKL/AMC/CLI/Cache.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/CLI/Support.cpp)
 target_include_directories(amc PRIVATE ${AMC_INCLUDE_DIR})
-target_compile_definitions(amc PRIVATE AMC_DEFAULT_PROVIDERS_FILE="${AMC_SOURCE_DIR}/providers.toml")
+target_compile_definitions(
+    amc PRIVATE AMC_DEFAULT_PROVIDERS_FILE="${AMC_SOURCE_DIR}/providers.toml" AMC_VERSION="${PROJECT_VERSION}")
 target_link_libraries(amc PRIVATE amc-core amc-compilation tomlplusplus::tomlplusplus)
 
 add_executable(amc-dump ${AMC_SOURCE_DIR}/src/SKL/AMC/Tool/Dump/Dump.cpp

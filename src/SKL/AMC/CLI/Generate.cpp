@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "SKL/AMC/Support/CommandLine.h"
 #include "SKL/AMC/CLI/Support.h"
 #include "SKL/AMC/Core/Adapter.h"
 #include "SKL/AMC/Core/Core.h"
@@ -28,6 +29,8 @@
 #include <string>
 #include <vector>
 
+#include <llvm/Support/CommandLine.h>
+
 #include <fmt/format.h>
 #include <fmt/os.h>
 
@@ -38,24 +41,47 @@ using skl::amc::util::read_error_category;
 using skl::amc::util::usage_error;
 
 namespace skl::amc::cli {
+namespace {
 
-int cmd_generate(char **args, int arg_count, const fs::path &provider) {
-    const std::string command = args[1];
-    if (command == "generate" || command == "backend") {
-        if (arg_count != 7 || std::string(args[3]) != "-l" || std::string(args[5]) != "-o")
-            return usage_error(command + " expects -l cpp|lua|rust -o <directory|file>");
-        const std::string language = args[4];
+llvm::cl::SubCommand generate_subcommand("generate", "Project an artifact to a language backend");
+llvm::cl::SubCommand backend_subcommand("backend", "Run a language backend directly");
+llvm::cl::SubCommandGroup generate_group{&generate_subcommand, &backend_subcommand};
+llvm::cl::opt<std::string> generate_input(llvm::cl::Positional, llvm::cl::desc("<file.abix>"), llvm::cl::Required,
+    llvm::cl::cat(support::cli_category()), llvm::cl::sub(generate_group));
+llvm::cl::opt<std::string> generate_language("l", llvm::cl::desc("Projection language"),
+    llvm::cl::value_desc("cpp|lua|rust|zig"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(generate_group));
+llvm::cl::opt<std::string> generate_output("o", llvm::cl::desc("Output directory or file"),
+    llvm::cl::value_desc("path"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(generate_group));
+
+llvm::cl::SubCommand frontend_subcommand("frontend", "Run one language frontend");
+llvm::cl::opt<std::string> frontend_language("l", llvm::cl::desc("Source language"),
+    llvm::cl::value_desc("cpp|rust|zig"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(frontend_subcommand));
+llvm::cl::opt<std::string> frontend_config("c", llvm::cl::desc("Frontend configuration"),
+    llvm::cl::value_desc("file.abic.toml"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(frontend_subcommand));
+llvm::cl::opt<std::string> frontend_output("o", llvm::cl::desc("Output .abix artifact"),
+    llvm::cl::value_desc("file.abix"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(frontend_subcommand));
+
+}   // namespace
+
+int cmd_generate(bool backend, const fs::path &provider) {
+    const fs::path input = generate_input.getValue();
+    const std::string &language = generate_language;
+    const fs::path output = generate_output.getValue();
+    if (language.empty() || output.empty()) {
+        return usage_error("generate expects -l cpp|lua|rust|zig -o <directory|file>");
+    }
+    {
         if (language == "lua") {
-            if (command == "backend") return usage_error("backend is a C++ provider capability; use generate for lua");
+            if (backend) return usage_error("backend is a C++ provider capability; use generate for lua");
             amc::ABIModule module;
             std::string error;
-            if (!amc::load_module_source(args[2], module, error))
-                return fail(read_error_category(error), "read_abix", error, args[2]);
-            const fs::path requested = args[6];
+            if (!amc::load_module_source(input, module, error))
+                return fail(read_error_category(error), "read_abix", error, input);
+            const fs::path requested = output;
             const bool conformance = requested.extension() == ".lua";
             const std::string contract =
                 conformance ? amc::generate_lua_conformance(module, error) : amc::generate_lua_contract(module, error);
-            if (!error.empty()) return fail(amc::ErrorCategory::INTERNAL, "generate_lua", error, args[2]);
+            if (!error.empty()) return fail(amc::ErrorCategory::INTERNAL, "generate_lua", error, input);
             fs::path output = requested;
             if (output.extension() != ".hpp" && output.extension() != ".lua") output /= "amc_lua_contract.hpp";
             std::error_code ec;
@@ -74,58 +100,45 @@ int cmd_generate(char **args, int arg_count, const fs::path &provider) {
             return 0;
         }
         if (language == "cpp") {
-            if (command == "backend") {
+            if (backend) {
                 std::string error;
-                if (!amc::compilation::dispatch_provider(provider, "backend", args[2], args[6], error))
-                    return fail(amc::ErrorCategory::PROVIDER, "backend", error, args[2]);
+                if (!amc::compilation::dispatch_provider(provider, "backend", input, output, error))
+                    return fail(amc::ErrorCategory::PROVIDER, "backend", error, input);
                 return 0;
             }
-            return amc::compilation::generate(provider, args[2], args[6], ".hpp");
+            return amc::compilation::generate(provider, input, output, ".hpp");
         }
         if (language == "rust") {
             const fs::path rust_provider = amc::compilation::provider_executable(provider, "rust");
-            if (command == "backend") {
+            if (backend) {
                 std::string error;
-                if (!amc::compilation::dispatch_provider(rust_provider, "backend", args[2], args[6], error))
-                    return fail(amc::ErrorCategory::PROVIDER, "backend", error, args[2]);
+                if (!amc::compilation::dispatch_provider(rust_provider, "backend", input, output, error))
+                    return fail(amc::ErrorCategory::PROVIDER, "backend", error, input);
                 return 0;
             }
-            return amc::compilation::generate(rust_provider, args[2], args[6], ".rs");
+            return amc::compilation::generate(rust_provider, input, output, ".rs");
         }
         if (language == "zig") {
             const fs::path zig_provider = amc::compilation::provider_executable(provider, "zig");
-            if (command == "backend") {
+            if (backend) {
                 std::string error;
-                if (!amc::compilation::dispatch_provider(zig_provider, "backend", args[2], args[6], error))
-                    return fail(amc::ErrorCategory::PROVIDER, "backend", error, args[2]);
+                if (!amc::compilation::dispatch_provider(zig_provider, "backend", input, output, error))
+                    return fail(amc::ErrorCategory::PROVIDER, "backend", error, input);
                 return 0;
             }
-            return amc::compilation::generate(zig_provider, args[2], args[6], ".zig");
+            return amc::compilation::generate(zig_provider, input, output, ".zig");
         }
-        return usage_error(command + " expects -l cpp|lua|rust|zig -o <directory|file>");
+        return usage_error("generate expects -l cpp|lua|rust|zig -o <directory|file>");
     }
-    return usage_error(command + ": unsupported subcommand");
 }
 
-int cmd_frontend(char **args, int arg_count, const fs::path &provider) {
-    const std::string command = args[1];
-    if (command == "frontend") {
-        std::string language;
-        fs::path config_path;
-        fs::path output_path;
-        for (int i = 2; i < arg_count; ++i) {
-            const std::string argument = args[i];
-            if (argument == "-l" && i + 1 < arg_count)
-                language = args[++i];
-            else if (argument == "-c" && i + 1 < arg_count)
-                config_path = args[++i];
-            else if (argument == "-o" && i + 1 < arg_count)
-                output_path = args[++i];
-            else
-                return usage_error("frontend expects -l <language> -c <config> -o <output>");
-        }
-        if (language.empty() || config_path.empty() || output_path.empty())
-            return usage_error("frontend expects -l <language> -c <config> -o <output>");
+int cmd_frontend(const fs::path &provider) {
+    const std::string &language = frontend_language;
+    const fs::path config_path = frontend_config.getValue();
+    const fs::path output_path = frontend_output.getValue();
+    if (language.empty() || config_path.empty() || output_path.empty())
+        return usage_error("frontend expects -l <language> -c <config> -o <output>");
+    {
         std::string error;
         const fs::path selected = amc::compilation::provider_executable(provider, language);
         if (!amc::compilation::dispatch_provider(selected, "frontend", config_path, output_path, error))
@@ -143,7 +156,6 @@ int cmd_frontend(char **args, int arg_count, const fs::path &provider) {
         }
         return 0;
     }
-    return usage_error(command + ": unsupported subcommand");
 }
 
 }   // namespace skl::amc::cli

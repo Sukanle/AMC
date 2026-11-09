@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "SKL/AMC/Support/CommandLine.h"
 #include "SKL/AMC/CLI/Support.h"
 #include "SKL/AMC/Core/Adapter.h"
 #include "SKL/AMC/Core/Core.h"
@@ -28,6 +29,8 @@
 #include <string>
 #include <vector>
 
+#include <llvm/Support/CommandLine.h>
+
 #include <fmt/format.h>
 #include <fmt/os.h>
 
@@ -40,6 +43,26 @@ using skl::amc::util::usage_error;
 namespace skl::amc::cli {
 
 namespace {
+
+llvm::cl::SubCommand metadata_subcommand("metadata", "Read, verify or extract a metadata region");
+llvm::cl::opt<std::string> metadata_input(llvm::cl::Positional, llvm::cl::desc("<file.abix|binary>"),
+    llvm::cl::Required, llvm::cl::cat(support::cli_category()), llvm::cl::sub(metadata_subcommand));
+llvm::cl::opt<std::string> metadata_format("format", llvm::cl::desc("Output format"),
+    llvm::cl::value_desc("bin|meta|json|text"), llvm::cl::init("bin"), llvm::cl::cat(support::cli_category()),
+    llvm::cl::sub(metadata_subcommand));
+llvm::cl::opt<std::string> metadata_output("o", llvm::cl::desc("Write output to a file"), llvm::cl::value_desc("file"),
+    llvm::cl::cat(support::cli_category()), llvm::cl::sub(metadata_subcommand));
+llvm::cl::opt<std::string> metadata_build_id("build-id", llvm::cl::desc("Override the build id"),
+    llvm::cl::value_desc("hex"), llvm::cl::cat(support::cli_category()), llvm::cl::sub(metadata_subcommand));
+llvm::cl::opt<bool> metadata_verify("verify", llvm::cl::desc("Verify an existing region or binary"),
+    llvm::cl::cat(support::cli_category()), llvm::cl::sub(metadata_subcommand));
+llvm::cl::opt<bool> metadata_from_elf("from-elf", llvm::cl::desc("Read the region from an ELF/Mach-O binary"),
+    llvm::cl::cat(support::cli_category()), llvm::cl::sub(metadata_subcommand));
+llvm::cl::opt<bool> metadata_no_names("no-names", llvm::cl::desc("Omit names"), llvm::cl::cat(support::cli_category()),
+    llvm::cl::sub(metadata_subcommand));
+llvm::cl::opt<bool> metadata_no_hash_index("no-hash-index", llvm::cl::desc("Omit the hash index"),
+    llvm::cl::cat(support::cli_category()), llvm::cl::sub(metadata_subcommand));
+
 void write_bytes(const fs::path &path, const std::vector<uint8_t> &bytes, const char *stage, int &rc) {
     // Binary mode: the region is a binary image and the Windows CRT text mode
     // would translate 0x0A into 0x0D 0x0A and corrupt it.
@@ -57,44 +80,18 @@ void write_bytes(const fs::path &path, const std::vector<uint8_t> &bytes, const 
 }
 }   // namespace
 
-int cmd_metadata(char **args, int arg_count) {
-    const std::string command = args[1];
-    if (command == "metadata") {
-        fs::path input;
-        fs::path output;
-        std::string format = "bin";
-        bool include_names = true;
-        bool include_hash_index = true;
-        bool verify = false;
-        bool from_elf_flag = false;
+int cmd_metadata() {
+    {
+        const fs::path input = metadata_input.getValue();
+        const fs::path output = metadata_output.getValue();
+        const std::string &format = metadata_format;
+        const bool include_names = !metadata_no_names;
+        const bool include_hash_index = !metadata_no_hash_index;
+        const bool verify = metadata_verify;
+        const bool from_elf_flag = metadata_from_elf;
         amc::Hash128 build_id{};
-        for (int i = 2; i < arg_count; ++i) {
-            const std::string argument = args[i];
-            if (argument == "--verify") {
-                verify = true;
-            } else if (argument == "--from-elf") {
-                from_elf_flag = true;
-            } else if (argument == "--no-names") {
-                include_names = false;
-            } else if (argument == "--no-hash-index") {
-                include_hash_index = false;
-            } else if ((argument == "--format" || argument == "-o" || argument == "--build-id") && i + 1 < arg_count) {
-                const std::string value = args[++i];
-                if (argument == "--format")
-                    format = value;
-                else if (argument == "-o")
-                    output = value;
-                else if (!parse_hash128(value, build_id))
-                    return usage_error("--build-id expects 32 hexadecimal digits");
-            } else if (argument.rfind("--format=", 0) == 0) {
-                format = argument.substr(std::string("--format=").size());
-            } else if (input.empty()) {
-                input = argument;
-            } else {
-                return usage_error("metadata accepts a single input file");
-            }
-        }
-        if (input.empty()) return usage_error("metadata requires an input file");
+        if (!metadata_build_id.empty() && !parse_hash128(metadata_build_id, build_id))
+            return usage_error("--build-id expects 32 hexadecimal digits");
 
         if (verify) {
             if (format != "text" && format != "json" && format != "bin")
@@ -196,7 +193,6 @@ int cmd_metadata(char **args, int arg_count) {
         }
         return 0;
     }
-    return usage_error(command + ": unsupported subcommand");
 }
 
 }   // namespace skl::amc::cli

@@ -34,20 +34,47 @@ using amc::util::g_error_format;
 using amc::util::read_error_category;
 using amc::util::usage_error;
 
+// Top-level commands and aliases. `run` selects one from the argument vector
+// after LLVM's CommandLine parser has filled in the per-command options.
+enum class Command {
+    NONE,
+    BUILD,
+    CONTEXT,
+    METADATA,
+    ADAPTER,
+    QUERY,
+    INSPECT,
+    VALIDATE,
+    PUBLISH,
+    FETCH,
+    VERIFY,
+    TARGET,
+    DIFF,
+    COMPATIBILITY,
+    CACHE,
+    GENERATE,
+    BACKEND,
+    FRONTEND,
+};
+
 void print_usage();
 
-int cmd_context(char **args, int arg_count);
-int cmd_metadata(char **args, int arg_count);
-int cmd_adapter(char **args, int arg_count);
-int cmd_query(char **args, int arg_count);
-int cmd_symbols(char **args, int arg_count);
-int cmd_verify(char **args, int arg_count, const fs::path &provider);
-int cmd_target(char **args, int arg_count);
-int cmd_diff(char **args, int arg_count);
-int cmd_cache(char **args, int arg_count);
-int cmd_generate(char **args, int arg_count, const fs::path &provider);
-int cmd_frontend(char **args, int arg_count, const fs::path &provider);
-int cmd_inspect(char **args, int arg_count);
+// Parse the pre-filtered argument vector (without --error-format) and execute
+// the selected command. `executable_dir` is where the language providers live.
+int run(int argc, char **argv, const fs::path &executable_dir);
+
+int cmd_context();
+int cmd_metadata();
+int cmd_adapter();
+int cmd_query();
+int cmd_symbols(bool publish);
+int cmd_verify(const fs::path &provider);
+int cmd_target();
+int cmd_diff(bool compatibility);
+int cmd_cache();
+int cmd_generate(bool backend, const fs::path &provider);
+int cmd_frontend(const fs::path &provider);
+int cmd_inspect(bool validate);
 
 }   // namespace skl::amc::cli
 
