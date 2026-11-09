@@ -35,7 +35,8 @@ using amc::util::read_error_category;
 using amc::util::usage_error;
 
 // Top-level commands and aliases. `run` selects one from the argument vector
-// after LLVM's CommandLine parser has filled in the per-command options.
+// after LLVM's CommandLine parser has filled in the per-command options. The
+// command-to-spelling table lives in `SKL/AMC/CLI/Reflect.h`.
 enum class Command {
     NONE,
     BUILD,
@@ -56,8 +57,6 @@ enum class Command {
     BACKEND,
     FRONTEND,
 };
-
-void print_usage();
 
 // Parse the pre-filtered argument vector (without --error-format) and execute
 // the selected command. `executable_dir` is where the language providers live.

@@ -16,6 +16,7 @@
 #include "SKL/AMC/CLI/CLI.h"
 
 #include "SKL/AMC/CLI/CommandLine.h"
+#include "SKL/AMC/CLI/Reflect.h"
 #include "SKL/AMC/Compilation/Build.h"
 #include "SKL/AMC/Compilation/Provider.h"
 #include "SKL/AMC/Support/CommandLine.h"
@@ -23,6 +24,7 @@
 #include <llvm/Support/raw_ostream.h>
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <fmt/format.h>
@@ -57,32 +59,6 @@ std::string trim(std::string text) {
 
 }   // namespace
 
-void print_usage() {
-    fmt::print(stderr,
-        "usage: amc <command> [options]\n"
-        "  build       compile a .abic.toml configuration\n"
-        "  generate    project a .abix artifact to a language backend\n"
-        "  frontend    run one language frontend\n"
-        "  verify      verify a contract against an implementation\n"
-        "  query       query types, functions or compatibility\n"
-        "  inspect     summarize a .abix artifact\n"
-        "  validate    validate a .abix artifact\n"
-        "  context     emit LLM/JSON context\n"
-        "  metadata    read, verify or extract a metadata region\n"
-        "  adapter     generate an adapter between two artifacts\n"
-        "  publish     publish an artifact to the symbol store\n"
-        "  fetch       fetch an artifact from the symbol store\n"
-        "  target      inspect or verify target facts\n"
-        "  diff        compare two artifacts\n"
-        "  compatibility  compare two artifacts\n"
-        "  cache       inspect or prune the instantiation cache\n"
-        "global options:\n"
-        "  --error-format text|json   structured error envelope (default text)\n"
-        "  --list-languages           list installed language providers\n"
-        "  --describe-language <l>    describe one language provider\n"
-        "  --help                     show command-specific options\n");
-}
-
 bool parse_command_line(const std::vector<std::string> &arguments, std::string &error) {
     llvm::cl::HideUnrelatedOptions(support::cli_category());
     llvm::cl::SetVersionPrinter([](llvm::raw_ostream &out) { out << "amc " AMC_VERSION "\n"; });
@@ -103,23 +79,9 @@ Command selected_command() {
     for (llvm::cl::SubCommand *subcommand : llvm::cl::getRegisteredSubcommands()) {
         if (!*subcommand) continue;
         const llvm::StringRef name = subcommand->getName();
-        if (name == "build") return Command::BUILD;
-        if (name == "context") return Command::CONTEXT;
-        if (name == "metadata") return Command::METADATA;
-        if (name == "adapter") return Command::ADAPTER;
-        if (name == "query") return Command::QUERY;
-        if (name == "inspect") return Command::INSPECT;
-        if (name == "validate") return Command::VALIDATE;
-        if (name == "publish") return Command::PUBLISH;
-        if (name == "fetch") return Command::FETCH;
-        if (name == "verify") return Command::VERIFY;
-        if (name == "target") return Command::TARGET;
-        if (name == "diff") return Command::DIFF;
-        if (name == "compatibility") return Command::COMPATIBILITY;
-        if (name == "cache") return Command::CACHE;
-        if (name == "generate") return Command::GENERATE;
-        if (name == "backend") return Command::BACKEND;
-        if (name == "frontend") return Command::FRONTEND;
+        const Command command =
+            amc::reflect::enum_value<Command>(std::string_view(name.data(), name.size()), Command::NONE);
+        if (command != Command::NONE) return command;
     }
     return Command::NONE;
 }
@@ -211,7 +173,8 @@ int run(int argc, char **argv, const fs::path &executable_dir) {
         case Command::FRONTEND:      return cmd_frontend(provider);
         case Command::NONE:          break;
     }
-    print_usage();
+    // No command selected: let LLVM render the subcommand/option overview.
+    llvm::cl::PrintHelpMessage(false, true);
     return 2;
 }
 
