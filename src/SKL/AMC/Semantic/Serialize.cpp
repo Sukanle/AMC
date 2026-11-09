@@ -318,6 +318,18 @@ void append_rust_json(Json &root, const RustSemantic &rust) {
     }
     out.set("async_functions", std::move(async_functions));
 
+    Json containers = Json::array();
+    for (const auto &container : rust.containers) {
+        Json value = Json::object();
+        value.set("owner", container.owner);
+        value.set("context", container.context);
+        value.set("type", container.type);
+        value.set("container", container.container);
+        if (!container.element.empty()) value.set("element", container.element);
+        containers.push_back(std::move(value));
+    }
+    out.set("containers", std::move(containers));
+
     root.set("rust", std::move(out));
 }
 
@@ -499,6 +511,21 @@ void rust_cargo(const Json &section, RustSemantic &rust) {
     }
 }
 
+void rust_containers(const Json &section, RustSemantic &rust) {
+
+    if (const Json *containers = field(section, "containers"); containers != nullptr && containers->is_array()) {
+        for (const auto &value : containers->items()) {
+            RustContainer container;
+            container.owner = string_field(value, "owner");
+            container.context = string_field(value, "context");
+            container.type = string_field(value, "type");
+            container.container = string_field(value, "container");
+            container.element = string_field(value, "element");
+            rust.containers.push_back(std::move(container));
+        }
+    }
+}
+
 void read_rust_json(const Json &root, RustSemantic &rust) {
     const Json *section = field(root, "rust");
     if (section == nullptr || !section->is_object()) return;
@@ -510,6 +537,7 @@ void read_rust_json(const Json &root, RustSemantic &rust) {
     rust_lifetime(*section, rust);
     rust_traits_obj(*section, rust);
     rust_async(*section, rust);
+    rust_containers(*section, rust);
 }
 
 }   // namespace

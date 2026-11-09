@@ -333,6 +333,18 @@ amc::semantic::RustSemantic helper_rust_semantic(const HelperDocument &document)
             rust.async_functions.push_back(std::move(function));
         }
     }
+
+    if (const amc::Json *containers = root.find("containers"); containers != nullptr && containers->is_array()) {
+        for (const amc::Json &value : containers->items()) {
+            amc::semantic::RustContainer container;
+            if (const amc::Json *field = value.find("owner")) container.owner = field->as_string();
+            if (const amc::Json *field = value.find("context")) container.context = field->as_string();
+            if (const amc::Json *field = value.find("type")) container.type = field->as_string();
+            if (const amc::Json *field = value.find("container")) container.container = field->as_string();
+            if (const amc::Json *field = value.find("element")) container.element = field->as_string();
+            rust.containers.push_back(std::move(container));
+        }
+    }
     return rust;
 }
 
@@ -1140,6 +1152,23 @@ private:
     }
 };
 
+std::string unsupported_abi_type_hint(const std::string &spelling) {
+    struct Entry {
+        const char *prefix;
+        const char *hint;
+    };
+    static const Entry entries[] = {
+        {"Option<", "Rust Option<T> has no implicit ABI layout; add an explicit [[contract]] or wrap it in repr(C)"},
+        {   "Box<",         "Rust Box<T> is an owned pointer; add an explicit [[contract]]/[[owned]] or use *mut T"},
+        {   "Vec<",    "Rust Vec<T> is an owned buffer; add an explicit [[contract]] or pass a pointer plus length"},
+        { "String",      "Rust String is an owned buffer; add an explicit [[contract]] or use abix_str/*const char"},
+    };
+    for (const Entry &entry : entries)
+        if (spelling.rfind(entry.prefix, 0) == 0) return entry.hint;
+    if (spelling.rfind("dyn ", 0) == 0) return "Rust trait objects need an explicit contract or a repr(C) wrapper";
+    return {};
+}
+
 struct Resolved {
     amc::Hash128 id{};
     uint32_t size = 0;
@@ -1393,7 +1422,8 @@ private:
         }
         // Named type.
         if (!by_name_.count(spelling)) {
-            set_error("unknown type: " + spelling);
+            const std::string hint = unsupported_abi_type_hint(spelling);
+            set_error("unknown type: " + spelling + (hint.empty() ? std::string{} : " (" + hint + ")"));
             return {};
         }
         const int index = resolve_item(spelling);

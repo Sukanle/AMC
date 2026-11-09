@@ -314,6 +314,32 @@ def main():
                         probe_ok &= offsets.get(field) == facts.get(f"{name}.{field}.offset")
                 check(probe_ok, "helper layout matches the rustc probe")
 
+        # Standard containers are recorded as semantics that need an explicit
+        # contract. The helper does not assume their layout or ownership.
+        container_fixture = source_root / "tests" / "fixtures" / "rust_containers.rs"
+        container_json = os.path.join(work, "containers.json")
+        result = run([helper, "--crate-name", "rust_containers", "--edition", "2021",
+                      "--source", str(container_fixture), "--output", container_json])
+        if check(result.returncode == 0 and os.path.isfile(container_json),
+                 "helper extracted the container fixture", output(result)[-400:]):
+            container_document = json.load(open(container_json, encoding="utf-8"))
+            containers = {item.get("container"): item
+                          for item in container_document.get("containers", [])}
+            check(set(containers) == {"option", "box", "string", "vec"},
+                  "standard containers are recorded")
+            option = containers.get("option", {})
+            check(option.get("context") == "parameter" and option.get("element") == "rust:i32",
+                  "Option element type is recorded")
+            check(containers.get("box", {}).get("element") == "rust:rust_containers::ContainerPayload",
+                  "Box element type is recorded")
+            check(containers.get("string", {}).get("element") is None,
+                  "String has no element type")
+            check(containers.get("vec", {}).get("element") == "rust:u8",
+                  "Vec element type is recorded")
+            check(any(item.get("owner", "").endswith("::container_option")
+                      for item in container_document.get("containers", [])),
+                  "container owner is recorded")
+
         # Cargo metadata fills workspace facts when a manifest is available.
         cargo_dir = Path(work) / "cargo-demo"
         (cargo_dir / "src").mkdir(parents=True)
@@ -523,6 +549,47 @@ def main():
                               for item in cargo.get("dependencies", [])),
                           "AMC stores cargo dependencies")
                     check(cargo.get("target_directory") != "", "AMC stores the cargo target directory")
+
+            # Standard containers are fail-closed when selected for ABI, but
+            # their facts still reach the semantic sidecar.
+            container_dir = Path(work) / "container_import"
+            container_dir.mkdir()
+            shutil.copyfile(container_fixture, container_dir / "rust_containers.rs")
+            container_config = container_dir / "container.abic.toml"
+            container_config.write_text(
+                "[package]\nname = \"rust_containers\"\nversion = \"0.1\"\n\n"
+                "[[import]]\nlanguage = \"rust\"\nfiles = [\"rust_containers.rs\"]\n"
+                "symbols = [\"ContainerPayload\"]\n\n"
+                "[rust]\nhelper = \"" + helper_toml + "\"\n\n"
+                "[[export]]\noutput = \"rust_containers.abix\"\n",
+                encoding="utf-8")
+            container_out = container_dir / "out"
+            result = run([str(amc), "build", "-c", str(container_config), "-B", str(container_out)])
+            container_artifact = container_out / "rust_containers.abix"
+            if check(result.returncode == 0 and container_artifact.is_file(),
+                     "container facts do not block unselected helpers", output(result)[-500:]):
+                container_semantic = Path(str(container_artifact) + ".semantic")
+                if check(container_semantic.is_file(), "container semantic sidecar written"):
+                    semantic = json.loads(container_semantic.read_text(encoding="utf-8"))
+                    recorded = {item.get("container")
+                                for item in semantic.get("rust", {}).get("containers", [])}
+                    check(recorded == {"option", "box", "string", "vec"},
+                          "container facts reached Semantic IR")
+
+            selected_config = container_dir / "container_selected.abic.toml"
+            selected_config.write_text(
+                "[package]\nname = \"rust_containers\"\nversion = \"0.1\"\n\n"
+                "[[import]]\nlanguage = \"rust\"\nfiles = [\"rust_containers.rs\"]\n"
+                "symbols = [\"ContainerPayload\", \"container_option\"]\n\n"
+                "[rust]\nhelper = \"" + helper_toml + "\"\n\n"
+                "[[export]]\noutput = \"rust_containers.abix\"\n",
+                encoding="utf-8")
+            result = run([str(amc), "build", "-c", str(selected_config),
+                          "-B", str(container_dir / "selected_out")])
+            selected_output = output(result)
+            check(result.returncode != 0 and "Option<T>" in selected_output
+                  and "explicit [[contract]]" in selected_output,
+                  "selected container requires an explicit contract", selected_output[-500:])
 
         if keep:
             print("  kept artifacts in " + work)

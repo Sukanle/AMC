@@ -101,6 +101,8 @@ as = "WrapperU64"
 
 When configured, `amc-rust` runs the helper and uses its target facts. If the helper fails and `[target]` already provides `pointer_bits`, endianness and `c_long_bits`, AMC falls back to the parser/probe path with a warning.
 
+`Option<T>`, `Box<T>`, `String` and `Vec<T>` are recorded as semantic facts, not as implicit ABI layouts. Selecting a function or field that uses one of them requires an explicit `[[contract]]`; otherwise the build fails with a diagnostic naming the container instead of silently guessing an owner or buffer representation.
+
 ### Ownership and error contracts
 
 The generic `[[owned]]`, `[[contract]]` and `[[error]]` declarations apply to Rust functions too. They are resolved after the frontend records the ABI, so the Rust projection emits the same RAII and `Result` wrappers as the C++ path.

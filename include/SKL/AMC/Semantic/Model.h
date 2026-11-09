@@ -420,6 +420,16 @@ struct RustAsyncFunc {
     std::string return_type;
 };
 
+// Standard containers that need an explicit ABI contract. The language fact
+// records where the container appears; it does not decide its layout.
+struct RustContainer {
+    std::string owner;
+    std::string context;   // parameter | return | field | alias
+    std::string type;
+    std::string container;   // option | box | string | vec
+    std::string element;
+};
+
 struct RustCargoDependency {
     std::string name;
     std::string requirement;
@@ -446,6 +456,7 @@ struct RustSemantic {
     std::vector<RustLifetime> lifetimes;
     std::vector<RustTraitObj> trait_objects;
     std::vector<RustAsyncFunc> async_functions;
+    std::vector<RustContainer> containers;
 };
 
 struct SemanticModule {

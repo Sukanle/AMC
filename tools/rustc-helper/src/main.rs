@@ -859,12 +859,15 @@ fn collect_function_metadata<'tcx>(
     trait_objects: &mut Vec<Value>,
     seen: &mut BTreeSet<String>,
     async_functions: &mut Vec<Value>,
+    containers: &mut Vec<Value>,
+    seen_containers: &mut BTreeSet<String>,
 ) {
     collect_lifetimes(tcx, def_id, lifetimes);
     let owner = item_id(tcx, def_id);
     let signature = tcx.fn_sig(def_id).skip_binder();
     for input in signature.inputs().skip_binder() {
         collect_trait_objects(tcx, &owner, "parameter", *input, trait_objects, seen);
+        collect_standard_containers(tcx, &owner, "parameter", *input, containers, seen_containers);
     }
     collect_trait_objects(
         tcx,
@@ -873,6 +876,14 @@ fn collect_function_metadata<'tcx>(
         signature.output().skip_binder(),
         trait_objects,
         seen,
+    );
+    collect_standard_containers(
+        tcx,
+        &owner,
+        "return",
+        signature.output().skip_binder(),
+        containers,
+        seen_containers,
     );
     if tcx.asyncness(def_id).is_async() {
         async_functions.push(json!({
@@ -921,6 +932,79 @@ fn collect_trait_objects<'tcx>(
         TyKind::Tuple(elements) => {
             for element in elements.iter() {
                 collect_trait_objects(tcx, owner, context, element, out, seen);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn standard_container<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> Option<(&'static str, String)> {
+    let TyKind::Adt(adt, args) = ty.kind() else {
+        return None;
+    };
+    let def_id = adt.did();
+    let path = tcx.def_path_str(def_id);
+    if !(path.starts_with("core::") || path.starts_with("alloc::") || path.starts_with("std::")) {
+        return None;
+    }
+    let name = tcx.item_name(def_id).to_string();
+    let container = match name.as_str() {
+        "Option" => "option",
+        "Box" => "box",
+        "String" => "string",
+        "Vec" => "vec",
+        _ => return None,
+    };
+    let element = if name == "String" {
+        String::new()
+    } else {
+        args.types().next().map(|ty| type_id(tcx, ty)).unwrap_or_default()
+    };
+    Some((container, element))
+}
+
+// Record standard containers that need an explicit ABI contract. The helper
+// never assumes their niche layout or ownership; it only reports the fact.
+fn collect_standard_containers<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    owner: &str,
+    context: &str,
+    ty: Ty<'tcx>,
+    out: &mut Vec<Value>,
+    seen: &mut BTreeSet<String>,
+) {
+    if let Some((container, element)) = standard_container(tcx, ty) {
+        let key = format!("{}|{}|{}|{}", owner, context, container, element);
+        if seen.insert(key) {
+            out.push(json!({
+                "owner": owner,
+                "context": context,
+                "type": type_id(tcx, ty),
+                "container": container,
+                "element": if element.is_empty() { Value::Null } else { json!(element) },
+            }));
+        }
+        if let TyKind::Adt(_, args) = ty.kind() {
+            for argument in args.types() {
+                collect_standard_containers(tcx, owner, context, argument, out, seen);
+            }
+        }
+        return;
+    }
+    match ty.kind() {
+        TyKind::Adt(adt, args) => {
+            for field in adt.all_fields() {
+                let field_ty = tcx.type_of(field.did).instantiate(tcx, args).skip_normalization();
+                collect_standard_containers(tcx, owner, context, field_ty, out, seen);
+            }
+        }
+        TyKind::RawPtr(pointee, _) | TyKind::Ref(_, pointee, _) | TyKind::Slice(pointee) => {
+            collect_standard_containers(tcx, owner, context, *pointee, out, seen);
+        }
+        TyKind::Array(element, _) => collect_standard_containers(tcx, owner, context, *element, out, seen),
+        TyKind::Tuple(elements) => {
+            for element in elements.iter() {
+                collect_standard_containers(tcx, owner, context, element, out, seen);
             }
         }
         _ => {}
@@ -1082,6 +1166,8 @@ impl Callbacks for HelperCallbacks {
         let mut trait_objects: Vec<Value> = Vec::new();
         let mut seen_trait_objects: BTreeSet<String> = BTreeSet::new();
         let mut async_functions: Vec<Value> = Vec::new();
+        let mut containers: Vec<Value> = Vec::new();
+        let mut seen_containers: BTreeSet<String> = BTreeSet::new();
 
         for free_item_id in tcx.hir_free_items() {
             let item = tcx.hir_item(free_item_id);
@@ -1109,9 +1195,18 @@ impl Callbacks for HelperCallbacks {
                                 &mut trait_objects,
                                 &mut seen_trait_objects,
                             );
+                            collect_standard_containers(
+                                tcx,
+                                &owner,
+                                "field",
+                                field_ty,
+                                &mut containers,
+                                &mut seen_containers,
+                            );
                         }
                     } else {
                         collect_trait_objects(tcx, &owner, "alias", ty, &mut trait_objects, &mut seen_trait_objects);
+                        collect_standard_containers(tcx, &owner, "alias", ty, &mut containers, &mut seen_containers);
                     }
                 }
                 ItemKind::Fn { .. } => {
@@ -1139,6 +1234,14 @@ impl Callbacks for HelperCallbacks {
                             &mut trait_objects,
                             &mut seen_trait_objects,
                         );
+                        collect_standard_containers(
+                            tcx,
+                            &owner,
+                            "parameter",
+                            *input,
+                            &mut containers,
+                            &mut seen_containers,
+                        );
                     }
                     collect_trait_objects(
                         tcx,
@@ -1147,6 +1250,14 @@ impl Callbacks for HelperCallbacks {
                         signature.output().skip_binder(),
                         &mut trait_objects,
                         &mut seen_trait_objects,
+                    );
+                    collect_standard_containers(
+                        tcx,
+                        &owner,
+                        "return",
+                        signature.output().skip_binder(),
+                        &mut containers,
+                        &mut seen_containers,
                     );
                     if tcx.asyncness(def_id).is_async() {
                         async_functions.push(json!({
@@ -1174,6 +1285,8 @@ impl Callbacks for HelperCallbacks {
                             &mut trait_objects,
                             &mut seen_trait_objects,
                             &mut async_functions,
+                            &mut containers,
+                            &mut seen_containers,
                         );
                     }
                 }
@@ -1200,6 +1313,8 @@ impl Callbacks for HelperCallbacks {
                                 &mut trait_objects,
                                 &mut seen_trait_objects,
                                 &mut async_functions,
+                                &mut containers,
+                                &mut seen_containers,
                             );
                         }
                     }
@@ -1342,6 +1457,7 @@ impl Callbacks for HelperCallbacks {
             "lifetimes": lifetimes,
             "trait_objects": trait_objects,
             "async_functions": async_functions,
+            "containers": containers,
             "provenance": {
                 "source": self.source.to_string_lossy(),
                 "rustc": self.rustc,

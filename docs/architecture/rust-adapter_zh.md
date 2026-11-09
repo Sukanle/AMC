@@ -123,6 +123,7 @@ schema: "amc.rust.semantic/1"
   "lifetimes": [],
   "trait_objects": [],
   "async_functions": [],
+  "containers": [],
   "provenance": {
     "source": "src/lib.rs",
     "rustc": "1.99.1"
@@ -229,13 +230,17 @@ helper 只描述语义实体；ABI status 映射仍由 AMC 的 error pass 和显
 
 `async_functions[]` 记录 async 函数的 path、name 和返回类型。async 是语义元数据，AMC 不会把它直接映射成 C ABI 调用。
 
+### `containers`
+
+`containers[]` 记录 `Option<T>`、`Box<T>`、`String` 和 `Vec<T>` 出现的位置：`owner`、`context`（`parameter` / `return` / `field` / `alias`）、完整类型、`container` 类别和可选的 `element` 类型。helper 不假设 niche 布局、所有权或缓冲区表示；这些类型被 ABI 选中时必须由用户提供显式 `[[contract]]`，否则 AMC 以明确诊断拒绝。
+
 ### 显式泛型实例
 
 `--instantiate Template=arg1,arg2` 可重复。AMC 将每个 `[[instantiate]]` 传给 helper；helper 即使源码从未引用，也会输出该具体本地泛型实例。类型参数可以是 primitive 或非泛型本地类型，const generic 参数使用十进制整数字面量；未知名称和非法 const 值会被忽略而不是猜测。这是显式选择路径，helper 不枚举所有 monomorphization。
 
 ### `.semantic` Rust 扩展区
 
-AMC 将 `cargo`、`generics`、`traits`、`errors`、`lifetimes`、`trait_objects` 和 `async_functions` 写入 semantic sidecar 的 `"rust"` 对象。ABIX 可投影的 types/functions 仍走 ABI 与 lowering 视图；纯语言事实保留在该扩展区。
+AMC 将 `cargo`、`generics`、`traits`、`errors`、`lifetimes`、`trait_objects`、`async_functions` 和 `containers` 写入 semantic sidecar 的 `"rust"` 对象。ABIX 可投影的 types/functions 仍走 ABI 与 lowering 视图；纯语言事实保留在该扩展区。
 
 ### `provenance`
 

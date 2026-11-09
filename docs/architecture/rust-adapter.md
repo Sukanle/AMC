@@ -123,6 +123,7 @@ Rules:
   "lifetimes": [],
   "trait_objects": [],
   "async_functions": [],
+  "containers": [],
   "provenance": {
     "source": "src/lib.rs",
     "rustc": "1.99.1"
@@ -229,13 +230,17 @@ The helper only describes the semantic entity. The ABI status mapping remains in
 
 `async_functions[]` records async functions with their path, name and return type. Async is semantic metadata; AMC does not map it to a direct C ABI call.
 
+### `containers`
+
+`containers[]` records where `Option<T>`, `Box<T>`, `String` and `Vec<T>` appear: `owner`, `context` (`parameter` / `return` / `field` / `alias`), full type, `container` kind and an optional `element` type. The helper does not assume niche layout, ownership or buffer representation. Selecting one of these types for the ABI requires an explicit `[[contract]]`; otherwise AMC rejects it with a targeted diagnostic.
+
 ### Explicit generic instances
 
 `--instantiate Template=arg1,arg2` is repeatable. AMC forwards each `[[instantiate]]` entry to the helper, which emits the concrete local generic instance even if the source never references it. Type arguments may be primitives or non-generic local types; const-generic arguments are decimal integer literals. Unknown names and malformed const values are ignored rather than guessed. This is the explicit-selection path; the helper does not enumerate all monomorphizations.
 
 ### `.semantic` Rust extension
 
-AMC copies `cargo`, `generics`, `traits`, `errors`, `lifetimes`, `trait_objects` and `async_functions` into the semantic sidecar under `"rust"`. ABIX-compatible types/functions still go through the ABI and lowering views; language-only facts stay in this extension.
+AMC copies `cargo`, `generics`, `traits`, `errors`, `lifetimes`, `trait_objects`, `async_functions` and `containers` into the semantic sidecar under `"rust"`. ABIX-compatible types/functions still go through the ABI and lowering views; language-only facts stay in this extension.
 
 ### `provenance`
 
