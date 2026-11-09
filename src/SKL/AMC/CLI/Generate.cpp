@@ -158,4 +158,13 @@ int cmd_frontend(const fs::path &provider) {
     }
 }
 
+namespace {
+const bool generate_registered = amc::support::register_command_handler(amc::support::Command::GENERATE,
+    [](const fs::path &executable_dir) { return cmd_generate(false, executable_dir / "amc-cpp"); });
+const bool backend_registered = amc::support::register_command_handler(amc::support::Command::BACKEND,
+    [](const fs::path &executable_dir) { return cmd_generate(true, executable_dir / "amc-cpp"); });
+const bool frontend_registered = amc::support::register_command_handler(amc::support::Command::FRONTEND,
+    [](const fs::path &executable_dir) { return cmd_frontend(executable_dir / "amc-cpp"); });
+}   // namespace
+
 }   // namespace skl::amc::cli

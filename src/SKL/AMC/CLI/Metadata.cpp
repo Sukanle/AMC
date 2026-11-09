@@ -195,4 +195,9 @@ int cmd_metadata() {
     }
 }
 
+namespace {
+const bool metadata_registered = amc::support::register_command_handler(
+    amc::support::Command::METADATA, [](const fs::path &) { return cmd_metadata(); });
+}   // namespace
+
 }   // namespace skl::amc::cli

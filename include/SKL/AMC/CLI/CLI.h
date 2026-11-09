@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "SKL/AMC/CLI/Support.h"
+#include "SKL/AMC/Support/Command.h"
 #include "SKL/AMC/Util/Error.h"
 
 namespace fs = std::filesystem;
@@ -35,29 +36,14 @@ using amc::util::g_error_format_invalid;
 using amc::util::read_error_category;
 using amc::util::usage_error;
 
-// Top-level commands and aliases. `run` selects one from the argument vector
-// after LLVM's CommandLine parser has filled in the per-command options. The
-// command-to-spelling table lives in `SKL/AMC/CLI/Reflect.h`.
-enum class Command {
-    NONE,
-    BUILD,
-    CONTEXT,
-    METADATA,
-    ADAPTER,
-    QUERY,
-    INSPECT,
-    VALIDATE,
-    PUBLISH,
-    FETCH,
-    VERIFY,
-    TARGET,
-    DIFF,
-    COMPATIBILITY,
-    CACHE,
-    GENERATE,
-    BACKEND,
-    FRONTEND,
-};
+// Top-level commands and aliases. The command-to-spelling table lives in
+// `SKL/AMC/CLI/Reflect.h`; each command registers its handler with
+// `support::register_command_handler` next to its implementation.
+using support::Command;
+using support::command_handler;
+using support::CommandHandler;
+using support::register_command_handler;
+
 
 // Parse the argument vector and execute the selected command.
 // `executable_dir` is where the language providers live.

@@ -104,4 +104,9 @@ int cmd_adapter() {
     }
 }
 
+namespace {
+const bool adapter_registered = amc::support::register_command_handler(
+    amc::support::Command::ADAPTER, [](const fs::path &) { return cmd_adapter(); });
+}   // namespace
+
 }   // namespace skl::amc::cli

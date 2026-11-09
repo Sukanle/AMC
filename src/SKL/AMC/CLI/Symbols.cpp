@@ -163,4 +163,11 @@ int cmd_symbols(bool publish) {
     }
 }
 
+namespace {
+const bool publish_registered = amc::support::register_command_handler(
+    amc::support::Command::PUBLISH, [](const fs::path &) { return cmd_symbols(true); });
+const bool fetch_registered = amc::support::register_command_handler(
+    amc::support::Command::FETCH, [](const fs::path &) { return cmd_symbols(false); });
+}   // namespace
+
 }   // namespace skl::amc::cli

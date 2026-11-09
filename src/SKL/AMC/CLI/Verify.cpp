@@ -311,4 +311,11 @@ int cmd_target() {
     return incompatible ? 1 : 0;
 }
 
+namespace {
+const bool verify_registered = amc::support::register_command_handler(amc::support::Command::VERIFY,
+    [](const fs::path &executable_dir) { return cmd_verify(executable_dir / "amc-cpp"); });
+const bool target_registered = amc::support::register_command_handler(
+    amc::support::Command::TARGET, [](const fs::path &) { return cmd_target(); });
+}   // namespace
+
 }   // namespace skl::amc::cli

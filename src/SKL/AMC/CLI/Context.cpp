@@ -82,4 +82,9 @@ int cmd_context() {
     return 0;
 }
 
+namespace {
+const bool context_registered = amc::support::register_command_handler(
+    amc::support::Command::CONTEXT, [](const fs::path &) { return cmd_context(); });
+}   // namespace
+
 }   // namespace skl::amc::cli

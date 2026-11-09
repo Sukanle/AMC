@@ -1,5 +1,6 @@
 #pragma once
 
+#include "SKL/AMC/Support/Command.h"
 #include "SKL/AMC/Util/Error.h"
 
 #include <llvm/Support/CommandLine.h>

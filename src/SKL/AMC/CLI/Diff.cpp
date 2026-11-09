@@ -84,4 +84,11 @@ int cmd_diff(bool compatibility) {
     }
 }
 
+namespace {
+const bool diff_registered = amc::support::register_command_handler(
+    amc::support::Command::DIFF, [](const fs::path &) { return cmd_diff(false); });
+const bool compatibility_registered = amc::support::register_command_handler(
+    amc::support::Command::COMPATIBILITY, [](const fs::path &) { return cmd_diff(true); });
+}   // namespace
+
 }   // namespace skl::amc::cli

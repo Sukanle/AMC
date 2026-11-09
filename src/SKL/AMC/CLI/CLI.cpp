@@ -46,6 +46,11 @@ llvm::cl::opt<std::string> error_format_option("error-format", llvm::cl::desc("S
     llvm::cl::value_desc("text|json"), llvm::cl::init("text"), llvm::cl::cat(support::cli_category()),
     llvm::cl::sub(llvm::cl::SubCommand::getAll()), support::error_format_callback());
 
+// `build_command` lives in the amc-compilation static library; registering it
+// here keeps the object file linked now that the dispatcher has no switch.
+const bool build_command_registered = amc::support::register_command_handler(amc::support::Command::BUILD,
+    [](const fs::path &executable_dir) { return amc::compilation::build_command(executable_dir / "amc-cpp"); });
+
 std::string trim(std::string text) {
     while (!text.empty() && (text.back() == '\n' || text.back() == '\r' || text.back() == ' '))
         text.pop_back();
@@ -117,27 +122,8 @@ int run(int argc, char **argv, const fs::path &executable_dir) {
         return usage_error("--describe-language expects one of: " + supported);
     }
 
-    const fs::path provider = executable_dir / "amc-cpp";
-    switch (command) {
-        case Command::BUILD:         return amc::compilation::build_command(provider);
-        case Command::CONTEXT:       return cmd_context();
-        case Command::METADATA:      return cmd_metadata();
-        case Command::ADAPTER:       return cmd_adapter();
-        case Command::QUERY:         return cmd_query();
-        case Command::INSPECT:
-        case Command::VALIDATE:      return cmd_inspect(command == Command::VALIDATE);
-        case Command::PUBLISH:
-        case Command::FETCH:         return cmd_symbols(command == Command::PUBLISH);
-        case Command::VERIFY:        return cmd_verify(provider);
-        case Command::TARGET:        return cmd_target();
-        case Command::DIFF:
-        case Command::COMPATIBILITY: return cmd_diff(command == Command::COMPATIBILITY);
-        case Command::CACHE:         return cmd_cache();
-        case Command::GENERATE:
-        case Command::BACKEND:       return cmd_generate(command == Command::BACKEND, provider);
-        case Command::FRONTEND:      return cmd_frontend(provider);
-        case Command::NONE:          break;
-    }
+    if (const CommandHandler handler = command_handler(command)) return handler(executable_dir);
+
     // No command selected: let LLVM render the subcommand/option overview.
     llvm::cl::PrintHelpMessage(false, true);
     return 2;

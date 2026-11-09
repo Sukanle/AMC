@@ -107,4 +107,13 @@ int cmd_inspect(bool validate) {
     return 0;
 }
 
+namespace {
+const bool query_registered =
+    amc::support::register_command_handler(amc::support::Command::QUERY, [](const fs::path &) { return cmd_query(); });
+const bool inspect_registered = amc::support::register_command_handler(
+    amc::support::Command::INSPECT, [](const fs::path &) { return cmd_inspect(false); });
+const bool validate_registered = amc::support::register_command_handler(
+    amc::support::Command::VALIDATE, [](const fs::path &) { return cmd_inspect(true); });
+}   // namespace
+
 }   // namespace skl::amc::cli

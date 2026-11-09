@@ -221,4 +221,9 @@ int cmd_cache() {
     return 0;
 }
 
+namespace {
+const bool cache_registered =
+    amc::support::register_command_handler(amc::support::Command::CACHE, [](const fs::path &) { return cmd_cache(); });
+}   // namespace
+
 }   // namespace skl::amc::cli
