@@ -137,7 +137,29 @@ AMC 会合成边界 record，在 thunk 源码中生成对应的 `#[repr(C)]` 结
 - `Vec<T>` → `abix_span_<T>`（`to_vec()`；使用 `native = "&[T]"` 可获得零拷贝 slice）；
 - `Option<T>` → `abix_optional_<T>`（wrapper 侧用 `MaybeUninit`，仅在判别为 `Some` 时读取值）。
 
-目前只适配参数。容器返回值需要显式 owned 契约；`Box<T>` 等待 owned-handle 契约。`Vec`/`Option` 的元素类型在本版本中必须是 primitive。
+`Box<T>` 走显式 owned-handle 路径：声明指针 target、`[[owned]]` release policy 以及每个交互的 `[[contract]]` 模式。AMC 不会自动合成 create/destroy。
+
+```toml
+[[adapt]]
+native = "Box"
+target = "*mut Widget"
+
+[[owned]]
+type = "Widget"
+create = "widget_make"
+destroy = "widget_destroy"
+
+[[contract]]
+function = "widget_make"
+returns = "owned"
+release = "widget_destroy"
+
+[[contract]]
+function = "widget_use"
+params = ["owned"]
+```
+
+wrapper 会把返回的 `Box<T>` 转成 `Box::into_raw`，把 `Box<T>` 参数转成 `Box::from_raw`；create/destroy 仍由生产者显式提供。owned `String`/`Vec`/`Option` 返回值仍需要自己的 owned 契约。`Vec`/`Option` 的元素类型在本版本中必须是 primitive。
 
 ### 所有权与错误契约
 

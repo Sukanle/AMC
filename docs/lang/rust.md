@@ -137,7 +137,29 @@ AMC synthesizes the boundary record, emits the matching `#[repr(C)]` struct in t
 - `Vec<T>` → `abix_span_<T>` (`to_vec()`; use `native = "&[T]"` for a zero-copy slice);
 - `Option<T>` → `abix_optional_<T>` (the wrapper reads the value through `MaybeUninit` only when the discriminant is `Some`).
 
-Only parameters are adapted. Container returns need an explicit owned contract, and `Box<T>` awaits the owned-handle contract. `Vec`/`Option` elements must be primitive in this version.
+`Box<T>` uses the explicit owned-handle path: declare the pointer target, an `[[owned]]` release policy, and the per-interaction `[[contract]]` modes. AMC does not synthesize create/destroy.
+
+```toml
+[[adapt]]
+native = "Box"
+target = "*mut Widget"
+
+[[owned]]
+type = "Widget"
+create = "widget_make"
+destroy = "widget_destroy"
+
+[[contract]]
+function = "widget_make"
+returns = "owned"
+release = "widget_destroy"
+
+[[contract]]
+function = "widget_use"
+params = ["owned"]
+```
+
+The wrapper turns a returned `Box<T>` into `Box::into_raw` and a `Box<T>` parameter into `Box::from_raw`; the create/destroy functions remain explicit producer code. Owned `String`/`Vec`/`Option` returns still need their own owned contract. `Vec`/`Option` elements must be primitive in this version.
 
 ### Ownership and error contracts
 

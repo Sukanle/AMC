@@ -774,7 +774,27 @@ ContainerKind adapt_kind(const std::string &native) {
     if (native == "String" || native == "&str" || native == "rust.string") return ContainerKind::STRING;
     if (native == "Vec" || native == "&[T]" || native == "rust.vec") return ContainerKind::VEC;
     if (native == "Option" || native == "rust.option") return ContainerKind::OPTION;
+    if (native == "Box" || native == "rust.box") return ContainerKind::BOX;
     return ContainerKind::NONE;
+}
+
+bool type_name_matches(const std::string &declared, const std::string &element) {
+    if (declared == element) return true;
+    const std::string suffix = "::" + declared;
+    return element.size() > suffix.size()
+        && element.compare(element.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
+const amc::lang::OwnedDecl *find_owned(const amc::lang::Config &config, const std::string &type) {
+    for (const auto &owned : config.owned)
+        if (type_name_matches(owned.type, type)) return &owned;
+    return nullptr;
+}
+
+const amc::lang::ContractDecl *find_contract(const amc::lang::Config &config, const std::string &function) {
+    for (const auto &contract : config.contracts)
+        if (contract.function == function) return &contract;
+    return nullptr;
 }
 
 std::string compact_spelling(const std::string &text) {
@@ -831,6 +851,13 @@ std::vector<std::string> tokens_of(const std::string &text) {
     for (const Token &token : lex(text))
         if (token.kind != Tok::END) out.push_back(token.text);
     return out;
+}
+
+std::string pointer_pointee(const std::vector<std::string> &tokens) {
+    size_t index = 1;
+    while (index < tokens.size() && (tokens[index] == "mut" || tokens[index] == "const"))
+        ++index;
+    return compact_tokens(std::vector<std::string>(tokens.begin() + static_cast<std::ptrdiff_t>(index), tokens.end()));
 }
 
 bool ensure_container_boundary(std::vector<RawItem> &items, std::unordered_map<std::string, bool> &seen,
@@ -927,6 +954,7 @@ std::string container_adapter_expression(
         return fmt::format(
             "if {0}.discriminant == 1 {{ Some(unsafe {{ {0}.value.assume_init() }}) }} else {{ None }}", var);
     }
+    if (kind == ContainerKind::BOX) return fmt::format("unsafe {{ Box::from_raw({}) }}", var);
     return var;
 }
 
@@ -2124,6 +2152,13 @@ int run_frontend(const char *config_path, const char *output_path) {
             fmt::print(stderr, "[[adapt]] requires an element spelling for {}\n", adapt.native);
             return EXIT_FAILURE;
         }
+        if (kind == ContainerKind::BOX) {
+            const std::vector<std::string> target_tokens = tokens_of(adapt.target);
+            if (target_tokens.empty() || target_tokens[0] != "*") {
+                fmt::print(stderr, "[[adapt]] Box target must be a raw pointer spelling\n");
+                return EXIT_FAILURE;
+            }
+        }
     }
     for (const auto &decl : config.rust_exposed) {
         const RawFunction *source = nullptr;
@@ -2156,8 +2191,30 @@ int run_frontend(const char *config_path, const char *output_path) {
             if (adapt == nullptr) continue;
             parameter_adapts[i] = adapt;
             any_adapted = true;
-            if (type.kind == ContainerKind::BOX) continue;
-            const std::string element = adapt->element.empty() ? type.element : adapt->element;
+            const std::string element = adapt->element.empty() ? type.element : compact_spelling(adapt->element);
+            if (type.kind == ContainerKind::BOX) {
+                const std::string pointee = pointer_pointee(tokens_of(adapt->target));
+                if (!type_name_matches(pointee, element)) {
+                    fmt::print(
+                        stderr, "[[rust.expose]] Box target '*mut {}' does not match Box<{}>\n", pointee, element);
+                    return EXIT_FAILURE;
+                }
+                const amc::lang::OwnedDecl *owned = find_owned(config, element);
+                if (owned == nullptr || owned->destroy.empty()) {
+                    fmt::print(stderr,
+                        "[[rust.expose]] Box parameter '{}' requires [[owned]] type = \"{}\" with a destroy entry\n",
+                        decl.function, element);
+                    return EXIT_FAILURE;
+                }
+                const amc::lang::ContractDecl *contract = find_contract(config, decl.function);
+                if (contract == nullptr || i >= contract->params.size() || contract->params[i] != "owned") {
+                    fmt::print(stderr,
+                        "[[rust.expose]] Box parameter '{}' requires [[contract]] params[{}] = \"owned\"\n",
+                        decl.function, i);
+                    return EXIT_FAILURE;
+                }
+                continue;
+            }
             std::string boundary_error;
             if (!ensure_container_boundary(
                     items, seen_items, adapt->target, type.kind, element, target.pointer_size, boundary_error)) {
@@ -2168,8 +2225,36 @@ int run_frontend(const char *config_path, const char *output_path) {
                 boundary_source += container_boundary_definition(adapt->target, type.kind, element);
         }
         const ContainerType return_container = detect_container(source->return_type);
-        if (return_container.kind != ContainerKind::NONE
-            && find_adapt(return_container, config.adaptations) != nullptr) {
+        const amc::lang::AdaptDecl *return_adapt = nullptr;
+        if (return_container.kind == ContainerKind::BOX) {
+            if (const amc::lang::AdaptDecl *adapt = find_adapt(return_container, config.adaptations)) {
+                const std::string element =
+                    adapt->element.empty() ? return_container.element : compact_spelling(adapt->element);
+                const std::string pointee = pointer_pointee(tokens_of(adapt->target));
+                if (!type_name_matches(pointee, element)) {
+                    fmt::print(
+                        stderr, "[[rust.expose]] Box target '*mut {}' does not match Box<{}>\n", pointee, element);
+                    return EXIT_FAILURE;
+                }
+                const amc::lang::OwnedDecl *owned = find_owned(config, element);
+                if (owned == nullptr || owned->destroy.empty()) {
+                    fmt::print(stderr,
+                        "[[rust.expose]] Box return '{}' requires [[owned]] type = \"{}\" with a destroy entry\n",
+                        decl.function, element);
+                    return EXIT_FAILURE;
+                }
+                const amc::lang::ContractDecl *contract = find_contract(config, decl.function);
+                if (contract == nullptr || contract->returns != "owned" || contract->release.empty()) {
+                    fmt::print(stderr,
+                        "[[rust.expose]] Box return '{}' requires [[contract]] returns = \"owned\" and release\n",
+                        decl.function);
+                    return EXIT_FAILURE;
+                }
+                return_adapt = adapt;
+                any_adapted = true;
+            }
+        } else if (return_container.kind != ContainerKind::NONE
+                   && find_adapt(return_container, config.adaptations) != nullptr) {
             fmt::print(stderr, "[[rust.expose]] container return '{}' needs an explicit owned contract\n",
                 spell_type(source->return_type));
             return EXIT_FAILURE;
@@ -2200,7 +2285,8 @@ int run_frontend(const char *config_path, const char *output_path) {
                 || (source->return_type.size() == 2 && source->return_type[0] == "(" && source->return_type[1] == ")");
             if (!void_return) {
                 wrapper_source += " -> ";
-                wrapper_source += spell_type(source->return_type);
+                wrapper_source += return_adapt != nullptr ? spell_type(tokens_of(return_adapt->target))
+                                                          : spell_type(source->return_type);
             }
             wrapper_source += " {\n";
             for (size_t i = 0; i < source->parameters.size(); ++i) {
@@ -2211,16 +2297,17 @@ int run_frontend(const char *config_path, const char *output_path) {
                     "    let p{} = {};\n", i, container_adapter_expression(*adapt, kind, fmt::format("p{}", i)));
             }
             wrapper_source += "    ";
-            if (source->is_unsafe) wrapper_source += "unsafe { ";
-            wrapper_source += "crate::";
-            wrapper_source += decl.function;
-            wrapper_source += "(";
+            std::string call = "crate::" + decl.function + "(";
             for (size_t i = 0; i < source->parameters.size(); ++i) {
-                if (i != 0) wrapper_source += ", ";
-                wrapper_source += fmt::format("p{}", i);
+                if (i != 0) call += ", ";
+                call += fmt::format("p{}", i);
             }
-            wrapper_source += ")";
-            if (source->is_unsafe) wrapper_source += " }";
+            call += ")";
+            if (source->is_unsafe) call = "unsafe { " + call + " }";
+            if (return_adapt != nullptr)
+                wrapper_source += "Box::into_raw(" + call + ")";
+            else
+                wrapper_source += call;
             wrapper_source += "\n}\n\n";
 
             RawFunction wrapper = *source;
@@ -2229,6 +2316,7 @@ int run_frontend(const char *config_path, const char *output_path) {
             wrapper.has_receiver = false;
             for (size_t i = 0; i < parameter_adapts.size(); ++i)
                 if (parameter_adapts[i] != nullptr) wrapper.parameters[i].type = tokens_of(parameter_adapts[i]->target);
+            if (return_adapt != nullptr) wrapper.return_type = tokens_of(return_adapt->target);
             functions.push_back(std::move(wrapper));
         }
         exposed_names.push_back(exported);
