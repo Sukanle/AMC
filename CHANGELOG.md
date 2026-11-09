@@ -4,6 +4,10 @@
 
 ### Added
 
+- Rust semantic IR extension: `.semantic` now carries a `rust` object with generics, traits/impls, `Result` errors, lifetimes, trait objects and async functions. ABIX-compatible types/functions remain in the ABI view.
+- Explicit Rust generic selection: `--instantiate Template=arg1,arg2` and `[[instantiate]]` emit a concrete local instance on request instead of enumerating monomorphizations.
+- `[rust] features` in `.abic.toml` is forwarded to the helper; without a Cargo manifest the helper still records CLI features.
+- Rust `[[error]]` contracts now reuse a matching helper error enum as an error set (name and non-zero variant codes) while the explicit contract still selects the domain, success value and value slot.
 - `tools/rustc-helper/`: `amc-rustc-helper` is now a real `rustc_driver` semantic producer. It emits the `amc.rust.semantic/1` envelope and extracts `repr(C)` / `repr(transparent)` / packed / align / union / enum records from nested modules, concrete generic instances, public `extern "C"` functions (including `impl` associated functions), generic declarations, trait/impl metadata and `Result` error enums. Building it requires `rustc-dev`.
 - `[rust] helper` config: `amc-rust` imports the helper's types and functions into ABIX/Semantic IR, cross-checks their layouts against the source parser, and writes the semantic sidecar. Parser errors for syntax the helper already proved are downgraded to warnings. The parser/probe remains the fallback when the helper is unavailable.
 - Cargo metadata integration: the helper fills crate name, edition and declared features from `cargo metadata` through `--manifest-path` (or a manifest discovered above `--source`), with additive `--features`.

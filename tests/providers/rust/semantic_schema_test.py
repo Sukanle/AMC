@@ -106,7 +106,7 @@ def validate(doc: object) -> list[str]:
                         require(parameter["mode"] in ("borrowed", "owned", "copy", "unspecified"), errors,
                                 f"{parameter_path}.mode", "must be a known ownership mode")
 
-    for optional in ("generics", "traits", "errors"):
+    for optional in ("generics", "traits", "errors", "lifetimes", "trait_objects", "async_functions"):
         if optional in doc:
             require(isinstance(doc[optional], list), errors, optional, "must be an array when present")
 

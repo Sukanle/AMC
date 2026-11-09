@@ -102,6 +102,7 @@ struct HelperDocument {
     bool loaded = false;
     std::vector<HelperType> types;
     std::vector<HelperFunction> functions;
+    amc::Json root;
 };
 
 uint64_t json_uint(const amc::Json *value, uint64_t fallback = 0) {
@@ -164,7 +165,154 @@ void parse_helper_document(const amc::Json &root, HelperDocument &document) {
             if (!function.name.empty()) document.functions.push_back(std::move(function));
         }
     }
+    document.root = root;
     document.loaded = true;
+}
+
+std::vector<std::string> helper_strings(const amc::Json *array) {
+    std::vector<std::string> out;
+    if (array != nullptr && array->is_array())
+        for (const amc::Json &item : array->items())
+            out.push_back(item.as_string());
+    return out;
+}
+
+std::vector<amc::semantic::RustGenericParameter> helper_parameters(const amc::Json &value) {
+    std::vector<amc::semantic::RustGenericParameter> out;
+    const amc::Json *array = value.find("parameters");
+    if (array == nullptr || !array->is_array()) return out;
+    for (const amc::Json &item : array->items()) {
+        amc::semantic::RustGenericParameter parameter;
+        parameter.index = static_cast<uint32_t>(json_uint(item.find("index")));
+        if (const amc::Json *field = item.find("name")) parameter.name = field->as_string();
+        if (const amc::Json *field = item.find("kind")) parameter.kind = field->as_string();
+        if (const amc::Json *field = item.find("default")) parameter.default_value = field->as_string();
+        out.push_back(std::move(parameter));
+    }
+    return out;
+}
+
+amc::semantic::RustSemantic helper_rust_semantic(const HelperDocument &document) {
+    amc::semantic::RustSemantic rust;
+    if (!document.loaded) return rust;
+    const amc::Json &root = document.root;
+
+    if (const amc::Json *generics = root.find("generics"); generics != nullptr && generics->is_array()) {
+        for (const amc::Json &value : generics->items()) {
+            amc::semantic::RustGeneric generic;
+            if (const amc::Json *field = value.find("id")) generic.id = field->as_string();
+            if (const amc::Json *field = value.find("name")) generic.name = field->as_string();
+            if (const amc::Json *field = value.find("path")) generic.path = field->as_string();
+            if (const amc::Json *field = value.find("kind")) generic.kind = field->as_string();
+            generic.parameters = helper_parameters(value);
+            generic.where_clause = helper_strings(value.find("where_clause"));
+            generic.instances = helper_strings(value.find("instances"));
+            rust.generics.push_back(std::move(generic));
+        }
+    }
+
+    if (const amc::Json *traits = root.find("traits"); traits != nullptr && traits->is_array()) {
+        for (const amc::Json &value : traits->items()) {
+            amc::semantic::RustTrait trait;
+            if (const amc::Json *field = value.find("id")) trait.id = field->as_string();
+            if (const amc::Json *field = value.find("name")) trait.name = field->as_string();
+            if (const amc::Json *field = value.find("path")) trait.path = field->as_string();
+            if (const amc::Json *field = value.find("kind")) trait.kind = field->as_string();
+            if (const amc::Json *field = value.find("self_type")) trait.self_type = field->as_string();
+            if (const amc::Json *field = value.find("trait")) trait.trait_ref = field->as_string();
+            if (const amc::Json *field = value.find("negative")) trait.negative = field->as_bool();
+            trait.parameters = helper_parameters(value);
+            trait.where_clause = helper_strings(value.find("where_clause"));
+            trait.supertraits = helper_strings(value.find("supertraits"));
+            if (const amc::Json *associated = value.find("associated_types");
+                associated != nullptr && associated->is_array()) {
+                for (const amc::Json &item : associated->items()) {
+                    amc::semantic::RustAssociatedType entry;
+                    if (const amc::Json *field = item.find("name")) entry.name = field->as_string();
+                    if (const amc::Json *field = item.find("kind")) entry.kind = field->as_string();
+                    entry.bounds = helper_strings(item.find("bounds"));
+                    trait.associated_types.push_back(std::move(entry));
+                }
+            }
+            if (const amc::Json *methods = value.find("methods"); methods != nullptr && methods->is_array()) {
+                for (const amc::Json &item : methods->items()) {
+                    amc::semantic::RustTraitMethod method;
+                    if (const amc::Json *field = item.find("name")) method.name = field->as_string();
+                    if (const amc::Json *field = item.find("path")) method.path = field->as_string();
+                    if (const amc::Json *field = item.find("abi")) method.abi = field->as_string();
+                    if (const amc::Json *field = item.find("return_type")) method.return_type = field->as_string();
+                    if (const amc::Json *field = item.find("has_receiver")) method.has_receiver = field->as_bool();
+                    if (const amc::Json *field = item.find("required")) method.required = field->as_bool();
+                    if (const amc::Json *parameters = item.find("parameters");
+                        parameters != nullptr && parameters->is_array()) {
+                        for (const amc::Json &parameter : parameters->items()) {
+                            amc::semantic::RustTraitParameter entry;
+                            if (const amc::Json *field = parameter.find("name")) entry.name = field->as_string();
+                            if (const amc::Json *field = parameter.find("type")) entry.type = field->as_string();
+                            method.parameters.push_back(std::move(entry));
+                        }
+                    }
+                    trait.methods.push_back(std::move(method));
+                }
+            }
+            rust.traits.push_back(std::move(trait));
+        }
+    }
+
+    if (const amc::Json *errors = root.find("errors"); errors != nullptr && errors->is_array()) {
+        for (const amc::Json &value : errors->items()) {
+            amc::semantic::RustError error;
+            if (const amc::Json *field = value.find("id")) error.id = field->as_string();
+            if (const amc::Json *field = value.find("name")) error.name = field->as_string();
+            if (const amc::Json *field = value.find("path")) error.path = field->as_string();
+            if (const amc::Json *field = value.find("kind")) error.kind = field->as_string();
+            if (const amc::Json *variants = value.find("variants"); variants != nullptr && variants->is_array()) {
+                for (const amc::Json &item : variants->items()) {
+                    amc::semantic::RustErrorVariant variant;
+                    if (const amc::Json *field = item.find("name")) variant.name = field->as_string();
+                    if (const amc::Json *field = item.find("discriminant")) variant.discriminant = field->as_string();
+                    if (const amc::Json *field = item.find("payload")) variant.payload = field->as_string();
+                    error.variants.push_back(std::move(variant));
+                }
+            }
+            error.functions = helper_strings(value.find("functions"));
+            rust.errors.push_back(std::move(error));
+        }
+    }
+
+    if (const amc::Json *lifetimes = root.find("lifetimes"); lifetimes != nullptr && lifetimes->is_array()) {
+        for (const amc::Json &value : lifetimes->items()) {
+            amc::semantic::RustLifetime lifetime;
+            if (const amc::Json *field = value.find("owner")) lifetime.owner = field->as_string();
+            if (const amc::Json *field = value.find("name")) lifetime.name = field->as_string();
+            if (const amc::Json *field = value.find("kind")) lifetime.kind = field->as_string();
+            lifetime.bounds = helper_strings(value.find("bounds"));
+            rust.lifetimes.push_back(std::move(lifetime));
+        }
+    }
+
+    if (const amc::Json *objects = root.find("trait_objects"); objects != nullptr && objects->is_array()) {
+        for (const amc::Json &value : objects->items()) {
+            amc::semantic::RustTraitObject object;
+            if (const amc::Json *field = value.find("owner")) object.owner = field->as_string();
+            if (const amc::Json *field = value.find("context")) object.context = field->as_string();
+            if (const amc::Json *field = value.find("type")) object.type = field->as_string();
+            object.traits = helper_strings(value.find("traits"));
+            rust.trait_objects.push_back(std::move(object));
+        }
+    }
+
+    if (const amc::Json *functions = root.find("async_functions"); functions != nullptr && functions->is_array()) {
+        for (const amc::Json &value : functions->items()) {
+            amc::semantic::RustAsyncFunction function;
+            if (const amc::Json *field = value.find("id")) function.id = field->as_string();
+            if (const amc::Json *field = value.find("path")) function.path = field->as_string();
+            if (const amc::Json *field = value.find("name")) function.name = field->as_string();
+            if (const amc::Json *field = value.find("return_type")) function.return_type = field->as_string();
+            rust.async_functions.push_back(std::move(function));
+        }
+    }
+    return rust;
 }
 
 bool target_facts_from(const amc::lang::Config &config, TargetFacts &target, std::string &error) {
@@ -236,8 +384,34 @@ bool query_rust_helper(
     args.push_back("--output");
     args.push_back(temporary.str());
 
+    std::string feature_list;
+    for (const std::string &feature : config.rust_features) {
+        if (!feature_list.empty()) feature_list += ',';
+        feature_list += feature;
+    }
+    std::vector<std::string> instance_specs;
+    instance_specs.reserve(config.instantiations.size());
+    for (const auto &instantiation : config.instantiations) {
+        std::string spec = instantiation.template_name + "=";
+        for (size_t i = 0; i < instantiation.args.size(); ++i) {
+            if (i != 0) spec += ',';
+            spec += instantiation.args[i];
+        }
+        instance_specs.push_back(std::move(spec));
+    }
+
+    llvm::SmallVector<llvm::StringRef, 16> helper_args(args.begin(), args.end());
+    if (!feature_list.empty()) {
+        helper_args.push_back("--features");
+        helper_args.push_back(feature_list);
+    }
+    for (const std::string &spec : instance_specs) {
+        helper_args.push_back("--instantiate");
+        helper_args.push_back(spec);
+    }
+
     std::string exec_error;
-    const int status = llvm::sys::ExecuteAndWait(helper.str(), args, std::nullopt, {}, 0, 0, &exec_error);
+    const int status = llvm::sys::ExecuteAndWait(helper.str(), helper_args, std::nullopt, {}, 0, 0, &exec_error);
     if (status != 0) {
         llvm::sys::fs::remove(temporary);
         error = "rust helper failed";
@@ -1755,6 +1929,7 @@ int run_frontend(const char *config_path, const char *output_path) {
     amc::semantic::SemanticModule semantic;
     semantic.package_name = "rust";
     semantic.rules_version = amc::semantic::semantic_rules_version;
+    semantic.rust = helper_rust_semantic(helper);
     amc::semantic::synchronize_from_abi(module, semantic);
     const std::string semantic_path = std::string(output_path) + ".semantic";
     if (!amc::semantic::write_semantic_json(semantic, semantic_path, error)) {

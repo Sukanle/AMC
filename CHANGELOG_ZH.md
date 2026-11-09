@@ -4,6 +4,10 @@
 
 ### 新增
 
+- Rust Semantic IR 扩展：`.semantic` 新增 `rust` 对象，保存 generics、traits/impls、`Result` errors、lifetimes、trait objects 和 async functions；ABIX 可投影的 types/functions 仍在 ABI 视图中。
+- Rust 显式泛型选择：`--instantiate Template=arg1,arg2` / `[[instantiate]]` 按请求输出具体本地实例，不再枚举所有 monomorphization。
+- `.abic.toml` 的 `[rust] features` 会转发给 helper；没有 Cargo manifest 时仍记录 CLI features。
+- Rust `[[error]]` 契约会自动复用匹配的 helper error enum 作为 error set（名称和非零 variant code），domain、success 和 value slot 仍由显式契约决定。
 - `tools/rustc-helper/`：`amc-rustc-helper` 现在是真正的 `rustc_driver` 语义生产者。它输出 `amc.rust.semantic/1` envelope，并提取嵌套 module 中的 `repr(C)` / `repr(transparent)` / packed / align / union / enum 记录、具体泛型实例、public `extern "C"` 函数（含 `impl` 关联函数）、泛型声明、trait/impl 元数据和 `Result` error enum。构建需要 `rustc-dev`。
 - `[rust] helper` 配置：`amc-rust` 将 helper 的 types/functions 导入 ABIX/Semantic IR，与源码 parser 交叉校验布局，并写出 semantic sidecar。helper 已证明的语法如果 parser 无法建模，parser 错误会降级为 warning；helper 不可用时仍回退到 parser/probe。
 - Cargo metadata 集成：helper 通过 `--manifest-path`（或从 `--source` 向上发现的 manifest）读取 `cargo metadata`，填充 crate name、edition 和声明的 features，并支持 additive `--features`。

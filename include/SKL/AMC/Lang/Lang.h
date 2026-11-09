@@ -131,6 +131,7 @@ struct Config {
     std::vector<ExposeDecl> exposed;               // [[expose]] automatic capability generation
     std::vector<RustExposeDecl> rust_exposed;      // [[rust.expose]] explicit Rust export handoff
     std::string rust_helper;                       // [rust] helper: amc-rustc-helper path (optional)
+    std::vector<std::string> rust_features;        // [rust] features: additive Cargo features
 };
 
 // A capability returns this value when it observed a cooperative cancellation

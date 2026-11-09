@@ -33,6 +33,18 @@ pub struct Wrapper<T> {
 
 pub type WrapperI32 = Wrapper<i32>;
 
+pub trait Named {
+    fn name(&self) -> i32;
+}
+
+pub struct Holder<'a> {
+    pub value: &'a dyn Named,
+}
+
+pub async fn async_answer(value: i32) -> i32 {
+    value
+}
+
 pub mod nested {
     #[repr(C)]
     pub struct NestedPoint {
@@ -56,6 +68,15 @@ pub enum RustFailure {
     None = 0,
     InvalidInput = 1,
     Overflow = 2,
+}
+
+#[no_mangle]
+pub extern "C" fn rust_status(value: i32) -> RustFailure {
+    if value < 0 {
+        RustFailure::InvalidInput
+    } else {
+        RustFailure::None
+    }
 }
 
 #[no_mangle]

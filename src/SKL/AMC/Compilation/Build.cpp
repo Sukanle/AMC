@@ -322,7 +322,63 @@ bool resolve_error_sets(const toml::table &config, amc::AbiModule &module, std::
 }
 
 // Resolve `[[error]]` declarations into per-function error-boundary records.
-bool resolve_errors(const toml::table &config, amc::AbiModule &module, std::string &error) {
+bool auto_link_rust_error_set(const amc::semantic::SemanticModule &semantic, const std::string &function_name,
+    amc::ErrorContract &contract, amc::AbiModule &module) {
+    if (contract.error_set.lo != 0 || contract.error_set.hi != 0) return true;
+    const amc::semantic::RustError *matched = nullptr;
+    for (const auto &candidate : semantic.rust.errors) {
+        for (const auto &function : candidate.functions) {
+            const std::string suffix = "::" + function_name;
+            const bool same = function == function_name
+                           || (function.size() >= suffix.size()
+                               && function.compare(function.size() - suffix.size(), suffix.size(), suffix) == 0);
+            if (same) {
+                matched = &candidate;
+                break;
+            }
+        }
+        if (matched != nullptr) break;
+    }
+    if (matched == nullptr || matched->name.empty()) return true;
+
+    amc::ErrorSet *set = nullptr;
+    for (auto &candidate : module.error_sets)
+        if (candidate.name == matched->name) {
+            set = &candidate;
+            break;
+        }
+    if (set == nullptr) {
+        amc::ErrorSet created;
+        created.id = amc::error_set_identity(matched->name);
+        created.name = matched->name;
+        created.domain = contract.domain;
+        created.condition = static_cast<int32_t>(amc::GenericCondition::unknown);
+        created.code_begin = static_cast<uint32_t>(module.error_codes.size());
+        for (const auto &variant : matched->variants) {
+            int64_t value = 0;
+            try {
+                value = std::stoll(variant.discriminant);
+            } catch (...) {
+                continue;
+            }
+            if (value <= 0 || value > INT32_MAX) continue;
+            amc::ErrorCode code;
+            code.set_id = created.id;
+            code.name = variant.name;
+            code.value = static_cast<int32_t>(value);
+            code.condition = static_cast<int32_t>(amc::GenericCondition::unknown);
+            module.error_codes.push_back(std::move(code));
+            ++created.code_count;
+        }
+        module.error_sets.push_back(std::move(created));
+        set = &module.error_sets.back();
+    }
+    contract.error_set = set->id;
+    return true;
+}
+
+bool resolve_errors(const toml::table &config, amc::AbiModule &module, const amc::semantic::SemanticModule &semantic,
+    std::string &error) {
     if (!resolve_error_sets(config, module, error)) return false;
     const auto *errors = config["error"].as_array();
     if (!errors) return true;
@@ -372,6 +428,7 @@ bool resolve_errors(const toml::table &config, amc::AbiModule &module, std::stri
             error = "[[error]] value parameter is out of range: " + function_name;
             return false;
         }
+        auto_link_rust_error_set(semantic, function_name, contract, module);
         module.errors.push_back(contract);
     }
     return true;
@@ -899,7 +956,7 @@ int build_command(char **args, int arg_count, const fs::path &provider) {
                 return fail(amc::ErrorCategory::config, "build", error, config_path.string());
             if (!resolve_contracts(config, full, error))
                 return fail(amc::ErrorCategory::config, "build", error, config_path.string());
-            if (!resolve_errors(config, full, error))
+            if (!resolve_errors(config, full, semantic, error))
                 return fail(amc::ErrorCategory::config, "build", error, config_path.string());
             if (!resolve_interfaces(config, full, error))
                 return fail(amc::ErrorCategory::config, "build", error, config_path.string());

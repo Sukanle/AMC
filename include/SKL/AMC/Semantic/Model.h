@@ -327,6 +327,107 @@ struct ExposedType {
     std::vector<ExposedMethod> methods;
 };
 
+// Rust-specific semantic facts. These are language extensions, not ABI facts:
+// generics, trait declarations/impls, error enums, lifetimes, trait objects and
+// async functions. The ABI mapping remains a separate lowering decision.
+struct RustGenericParameter {
+    uint32_t index = 0;
+    std::string name;
+    std::string kind;   // type | const | lifetime
+    std::string default_value;
+};
+
+struct RustGeneric {
+    std::string id;
+    std::string name;
+    std::string path;
+    std::string kind;   // type | function | trait | item
+    std::vector<RustGenericParameter> parameters;
+    std::vector<std::string> where_clause;
+    std::vector<std::string> instances;
+};
+
+struct RustTraitParameter {
+    std::string name;
+    std::string type;
+};
+
+struct RustTraitMethod {
+    std::string name;
+    std::string path;
+    std::string abi;
+    std::string return_type;
+    bool has_receiver = false;
+    bool required = false;
+    std::vector<RustTraitParameter> parameters;
+};
+
+struct RustAssociatedType {
+    std::string name;
+    std::string kind;   // type | const
+    std::vector<std::string> bounds;
+};
+
+struct RustTrait {
+    std::string id;
+    std::string name;
+    std::string path;
+    std::string kind;   // trait | impl
+    std::string self_type;
+    std::string trait_ref;
+    bool negative = false;
+    std::vector<RustGenericParameter> parameters;
+    std::vector<std::string> where_clause;
+    std::vector<std::string> supertraits;
+    std::vector<RustAssociatedType> associated_types;
+    std::vector<RustTraitMethod> methods;
+};
+
+struct RustErrorVariant {
+    std::string name;
+    std::string discriminant;
+    std::string payload;
+};
+
+struct RustError {
+    std::string id;
+    std::string name;
+    std::string path;
+    std::string kind;   // enum | record | primitive
+    std::vector<RustErrorVariant> variants;
+    std::vector<std::string> functions;
+};
+
+struct RustLifetime {
+    std::string owner;
+    std::string name;
+    std::string kind;   // param | late_bound | outlives
+    std::vector<std::string> bounds;
+};
+
+struct RustTraitObject {
+    std::string owner;
+    std::string context;   // parameter | return | field | alias
+    std::string type;
+    std::vector<std::string> traits;
+};
+
+struct RustAsyncFunction {
+    std::string id;
+    std::string path;
+    std::string name;
+    std::string return_type;
+};
+
+struct RustSemantic {
+    std::vector<RustGeneric> generics;
+    std::vector<RustTrait> traits;
+    std::vector<RustError> errors;
+    std::vector<RustLifetime> lifetimes;
+    std::vector<RustTraitObject> trait_objects;
+    std::vector<RustAsyncFunction> async_functions;
+};
+
 struct SemanticModule {
     std::string package_name;
     std::string package_version;
@@ -338,6 +439,7 @@ struct SemanticModule {
     std::vector<TemplateInstance> instances;
     std::vector<SemanticOwnership> ownership;
     std::vector<ExposedType> exposed;
+    RustSemantic rust;
 };
 
 }   // namespace amc::semantic

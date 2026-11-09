@@ -67,6 +67,9 @@ struct Cli {
     /// Additional Cargo features (comma separated, additive).
     #[arg(long, value_delimiter = ',')]
     features: Vec<String>,
+    /// Explicit generic instance, repeatable: Template=arg1,arg2
+    #[arg(long = "instantiate", action = clap::ArgAction::Append)]
+    instantiate: Vec<String>,
 }
 
 struct CargoFacts {
@@ -141,6 +144,11 @@ fn path_string(tcx: TyCtxt<'_>, def_id: DefId) -> String {
     }
 }
 
+fn printed_type<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> String {
+    FmtPrinter::print_string(tcx, Namespace::TypeNS, |printer| ty.print(printer))
+        .unwrap_or_else(|_| format!("{:?}", ty))
+}
+
 fn type_spelling<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> String {
     match ty.kind() {
         TyKind::Adt(adt, args) => format!(
@@ -167,7 +175,7 @@ fn type_spelling<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> String {
                 .unwrap_or_else(|| format!("{:?}", length));
             format!("[{}; {}]", type_spelling(tcx, *element), count)
         }
-        _ => format!("{:?}", ty),
+        _ => printed_type(tcx, ty),
     }
 }
 
@@ -514,6 +522,7 @@ fn emit_function<'tcx>(tcx: TyCtxt<'tcx>, def_id: DefId) -> Option<Value> {
         "visibility": visibility_text,
         "kind": kind_text,
         "has_receiver": has_receiver,
+        "async": tcx.asyncness(def_id).is_async(),
         "owner": owner,
         "return_type": type_id(tcx, signature.output().skip_binder()),
         "parameters": parameters,
@@ -546,6 +555,7 @@ fn method_json<'tcx>(tcx: TyCtxt<'tcx>, def_id: DefId, required: bool) -> Option
         "has_receiver": has_receiver,
         "required": required,
         "abi": abi_name(signature.abi()),
+        "async": tcx.asyncness(def_id).is_async(),
         "return_type": type_id(tcx, signature.output().skip_binder()),
         "parameters": parameters,
     }))
@@ -675,13 +685,24 @@ fn emit_impl<'tcx>(tcx: TyCtxt<'tcx>, def_id: DefId) -> Option<Value> {
 }
 
 fn error_type<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> Option<Ty<'tcx>> {
-    let TyKind::Adt(adt, args) = ty.kind() else {
+    if let TyKind::Adt(adt, args) = ty.kind() {
+        if tcx.is_diagnostic_item(sym::Result, adt.did()) && args.len() >= 2 {
+            return Some(args.type_at(1));
+        }
+    }
+    // A local `#[repr(...)]` enum used as an extern return value is a status
+    // enum in practice. Record it as a candidate error entity; AMC still
+    // decides whether an explicit `[[error]]` contract maps it.
+    let TyKind::Adt(adt, _) = ty.kind() else {
         return None;
     };
-    if !tcx.is_diagnostic_item(sym::Result, adt.did()) || args.len() < 2 {
-        return None;
+    if adt.did().krate == LOCAL_CRATE
+        && adt.is_enum()
+        && (adt.repr().c() || adt.repr().int.is_some() || adt.repr().transparent())
+    {
+        return Some(ty);
     }
-    Some(args.type_at(1))
+    None
 }
 
 fn emit_error<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>, functions: &[String]) -> Option<Value> {
@@ -753,11 +774,158 @@ fn collect_function_semantics<'tcx>(
     }
 }
 
+fn collect_lifetimes<'tcx>(tcx: TyCtxt<'tcx>, def_id: DefId, out: &mut Vec<Value>) {
+    let owner = item_id(tcx, def_id);
+    for parameter in &tcx.generics_of(def_id).own_params {
+        if matches!(parameter.kind, GenericParamDefKind::Lifetime) {
+            out.push(json!({
+                "owner": owner,
+                "name": parameter.name.to_string(),
+                "kind": "param",
+                "bounds": [],
+            }));
+        }
+    }
+    for (clause, _) in tcx.explicit_clauses_of(def_id).clauses.iter() {
+        let text = clause_string(tcx, *clause);
+        if text.contains('\'') {
+            out.push(json!({
+                "owner": owner,
+                "name": "",
+                "kind": "outlives",
+                "bounds": [text],
+            }));
+        }
+    }
+    if matches!(tcx.def_kind(def_id), DefKind::Fn | DefKind::AssocFn) {
+        let late_bound = tcx.fn_sig(def_id).skip_binder().bound_vars().len();
+        if late_bound > 0 {
+            out.push(json!({
+                "owner": owner,
+                "name": "<late_bound>",
+                "kind": "late_bound",
+                "bounds": [late_bound.to_string()],
+            }));
+        }
+    }
+}
+
+fn collect_function_metadata<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    def_id: DefId,
+    lifetimes: &mut Vec<Value>,
+    trait_objects: &mut Vec<Value>,
+    seen: &mut BTreeSet<String>,
+    async_functions: &mut Vec<Value>,
+) {
+    collect_lifetimes(tcx, def_id, lifetimes);
+    let owner = item_id(tcx, def_id);
+    let signature = tcx.fn_sig(def_id).skip_binder();
+    for input in signature.inputs().skip_binder() {
+        collect_trait_objects(tcx, &owner, "parameter", *input, trait_objects, seen);
+    }
+    collect_trait_objects(
+        tcx,
+        &owner,
+        "return",
+        signature.output().skip_binder(),
+        trait_objects,
+        seen,
+    );
+    if tcx.asyncness(def_id).is_async() {
+        async_functions.push(json!({
+            "id": owner,
+            "path": path_string(tcx, def_id),
+            "name": tcx.item_name(def_id).to_string(),
+            "return_type": type_id(tcx, signature.output().skip_binder()),
+        }));
+    }
+}
+
+fn collect_trait_objects<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    owner: &str,
+    context: &str,
+    ty: Ty<'tcx>,
+    out: &mut Vec<Value>,
+    seen: &mut BTreeSet<String>,
+) {
+    match ty.kind() {
+        TyKind::Dynamic(bounds, _) => {
+            let key = format!("{}|{}|{}", owner, context, type_spelling(tcx, ty));
+            if seen.insert(key) {
+                let traits = bounds
+                    .iter()
+                    .map(|bound| format!("{:?}", bound.skip_binder()))
+                    .collect::<Vec<_>>();
+                out.push(json!({
+                    "owner": owner,
+                    "context": context,
+                    "type": type_spelling(tcx, ty),
+                    "traits": traits,
+                }));
+            }
+        }
+        TyKind::Adt(adt, args) => {
+            for field in adt.all_fields() {
+                let field_ty = tcx.type_of(field.did).instantiate(tcx, args).skip_normalization();
+                collect_trait_objects(tcx, owner, context, field_ty, out, seen);
+            }
+        }
+        TyKind::RawPtr(pointee, _) | TyKind::Ref(_, pointee, _) | TyKind::Slice(pointee) => {
+            collect_trait_objects(tcx, owner, context, *pointee, out, seen);
+        }
+        TyKind::Array(element, _) => collect_trait_objects(tcx, owner, context, *element, out, seen),
+        TyKind::Tuple(elements) => {
+            for element in elements.iter() {
+                collect_trait_objects(tcx, owner, context, element, out, seen);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn primitive_ty<'tcx>(tcx: TyCtxt<'tcx>, name: &str) -> Option<Ty<'tcx>> {
+    Some(match name {
+        "bool" => tcx.types.bool,
+        "char" => tcx.types.char,
+        "i8" => tcx.types.i8,
+        "i16" => tcx.types.i16,
+        "i32" => tcx.types.i32,
+        "i64" => tcx.types.i64,
+        "i128" => tcx.types.i128,
+        "isize" => tcx.types.isize,
+        "u8" => tcx.types.u8,
+        "u16" => tcx.types.u16,
+        "u32" => tcx.types.u32,
+        "u64" => tcx.types.u64,
+        "u128" => tcx.types.u128,
+        "usize" => tcx.types.usize,
+        "f32" => tcx.types.f32,
+        "f64" => tcx.types.f64,
+        "str" => tcx.types.str_,
+        _ => return None,
+    })
+}
+
+fn parse_instance_spec(spec: &str) -> Option<(String, Vec<String>)> {
+    let (name, arguments) = spec.split_once('=')?;
+    let arguments = arguments
+        .split(',')
+        .map(str::trim)
+        .filter(|argument| !argument.is_empty())
+        .map(str::to_string)
+        .collect();
+    Some((name.trim().to_string(), arguments))
+}
+
 struct HelperCallbacks {
     output: Option<PathBuf>,
     source: PathBuf,
     rustc: String,
     cargo: Option<CargoFacts>,
+    features: Vec<String>,
+    instantiate: Vec<String>,
 }
 
 impl Callbacks for HelperCallbacks {
@@ -781,10 +949,15 @@ impl Callbacks for HelperCallbacks {
         let mut traits: BTreeMap<String, Value> = BTreeMap::new();
         let mut impls: BTreeMap<String, Value> = BTreeMap::new();
         let mut generic_items: BTreeMap<String, DefId> = BTreeMap::new();
+        let mut generic_defs: BTreeMap<String, DefId> = BTreeMap::new();
         let mut instances: BTreeMap<String, Value> = BTreeMap::new();
         let mut instances_by_decl: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
         let mut seen_instances: BTreeSet<String> = BTreeSet::new();
         let mut errors: BTreeMap<String, (Ty<'_>, BTreeSet<String>)> = BTreeMap::new();
+        let mut lifetimes: Vec<Value> = Vec::new();
+        let mut trait_objects: Vec<Value> = Vec::new();
+        let mut seen_trait_objects: BTreeSet<String> = BTreeSet::new();
+        let mut async_functions: Vec<Value> = Vec::new();
 
         for free_item_id in tcx.hir_free_items() {
             let item = tcx.hir_item(free_item_id);
@@ -792,11 +965,30 @@ impl Callbacks for HelperCallbacks {
             match item.kind {
                 ItemKind::Struct(..) | ItemKind::Union(..) | ItemKind::Enum(..) | ItemKind::TyAlias(..) => {
                     generic_items.insert(item_id(tcx, def_id), def_id);
+                    generic_defs.insert(path_string(tcx, def_id), def_id);
+                    generic_defs.insert(tcx.item_name(def_id).to_string(), def_id);
                     if let Some((id, value)) = emit_type(tcx, def_id) {
                         types.insert(id, value);
                     }
                     let ty = tcx.type_of(def_id).instantiate_identity().skip_normalization();
                     collect_type_instances(tcx, ty, &mut instances, &mut instances_by_decl, &mut seen_instances);
+                    collect_lifetimes(tcx, def_id, &mut lifetimes);
+                    let owner = item_id(tcx, def_id);
+                    if let TyKind::Adt(adt, args) = ty.kind() {
+                        for field in adt.all_fields() {
+                            let field_ty = tcx.type_of(field.did).instantiate(tcx, args).skip_normalization();
+                            collect_trait_objects(
+                                tcx,
+                                &owner,
+                                "field",
+                                field_ty,
+                                &mut trait_objects,
+                                &mut seen_trait_objects,
+                            );
+                        }
+                    } else {
+                        collect_trait_objects(tcx, &owner, "alias", ty, &mut trait_objects, &mut seen_trait_objects);
+                    }
                 }
                 ItemKind::Fn { .. } => {
                     generic_items.insert(item_id(tcx, def_id), def_id);
@@ -811,11 +1003,54 @@ impl Callbacks for HelperCallbacks {
                         &mut seen_instances,
                         &mut errors,
                     );
+                    collect_lifetimes(tcx, def_id, &mut lifetimes);
+                    let owner = item_id(tcx, def_id);
+                    let signature = tcx.fn_sig(def_id).skip_binder();
+                    for input in signature.inputs().skip_binder() {
+                        collect_trait_objects(
+                            tcx,
+                            &owner,
+                            "parameter",
+                            *input,
+                            &mut trait_objects,
+                            &mut seen_trait_objects,
+                        );
+                    }
+                    collect_trait_objects(
+                        tcx,
+                        &owner,
+                        "return",
+                        signature.output().skip_binder(),
+                        &mut trait_objects,
+                        &mut seen_trait_objects,
+                    );
+                    if tcx.asyncness(def_id).is_async() {
+                        async_functions.push(json!({
+                            "id": owner,
+                            "path": path_string(tcx, def_id),
+                            "name": tcx.item_name(def_id).to_string(),
+                            "return_type": type_id(tcx, signature.output().skip_binder()),
+                        }));
+                    }
                 }
                 ItemKind::Trait { .. } => {
                     generic_items.insert(item_id(tcx, def_id), def_id);
                     if let Some(value) = emit_trait(tcx, def_id) {
                         traits.insert(item_id(tcx, def_id), value);
+                    }
+                    collect_lifetimes(tcx, def_id, &mut lifetimes);
+                    for associated in tcx.associated_items(def_id).in_definition_order() {
+                        if !associated.is_fn() {
+                            continue;
+                        }
+                        collect_function_metadata(
+                            tcx,
+                            associated.def_id,
+                            &mut lifetimes,
+                            &mut trait_objects,
+                            &mut seen_trait_objects,
+                            &mut async_functions,
+                        );
                     }
                 }
                 ItemKind::Impl(..) => {
@@ -831,6 +1066,19 @@ impl Callbacks for HelperCallbacks {
                         &mut instances_by_decl,
                         &mut seen_instances,
                     );
+                    collect_lifetimes(tcx, def_id, &mut lifetimes);
+                    for associated in tcx.associated_items(def_id).in_definition_order() {
+                        if associated.is_fn() {
+                            collect_function_metadata(
+                                tcx,
+                                associated.def_id,
+                                &mut lifetimes,
+                                &mut trait_objects,
+                                &mut seen_trait_objects,
+                                &mut async_functions,
+                            );
+                        }
+                    }
                 }
                 _ => {}
             }
@@ -870,6 +1118,31 @@ impl Callbacks for HelperCallbacks {
                 &mut errors,
             );
         }
+        for spec in &self.instantiate {
+            let Some((name, arguments)) = parse_instance_spec(spec) else {
+                continue;
+            };
+            let Some(def_id) = generic_defs.get(&name).copied() else {
+                continue;
+            };
+            let mut type_args: Vec<rustc_middle::ty::GenericArg<'_>> = Vec::new();
+            let mut valid = true;
+            for argument in &arguments {
+                match primitive_ty(tcx, argument) {
+                    Some(ty) => type_args.push(ty.into()),
+                    None => {
+                        valid = false;
+                        break;
+                    }
+                }
+            }
+            if !valid {
+                continue;
+            }
+            let adt = tcx.adt_def(def_id);
+            let ty = Ty::new_adt(tcx, adt, tcx.mk_args(&type_args));
+            collect_type_instances(tcx, ty, &mut instances, &mut instances_by_decl, &mut seen_instances);
+        }
         for (id, value) in instances {
             types.entry(id).or_insert(value);
         }
@@ -903,7 +1176,7 @@ impl Callbacks for HelperCallbacks {
             .cargo
             .as_ref()
             .map(|cargo| cargo.features.clone())
-            .unwrap_or_default();
+            .unwrap_or_else(|| self.features.clone());
 
         let document = json!({
             "schema": SCHEMA,
@@ -931,6 +1204,9 @@ impl Callbacks for HelperCallbacks {
             "generics": generics.into_values().collect::<Vec<_>>(),
             "traits": traits.into_values().chain(impls.into_values()).collect::<Vec<_>>(),
             "errors": error_documents.into_values().collect::<Vec<_>>(),
+            "lifetimes": lifetimes,
+            "trait_objects": trait_objects,
+            "async_functions": async_functions,
             "provenance": {
                 "source": self.source.to_string_lossy(),
                 "rustc": self.rustc,
@@ -984,6 +1260,8 @@ fn main() {
         source: cli.source,
         rustc: rustc_release(),
         cargo,
+        features: cli.features,
+        instantiate: cli.instantiate,
     };
     rustc_driver::run_compiler(&args, &mut callbacks);
     let _ = fs::remove_file(&metadata);

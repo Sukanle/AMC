@@ -13,6 +13,7 @@ also checks that AMC imports the helper types/functions into ABIX/Semantic IR.
 import json
 import os
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -21,6 +22,26 @@ from pathlib import Path
 
 def exe(name):
     return name + ".exe" if sys.platform == "win32" else name
+
+
+def abix_error_codes(artifact: Path) -> set[int]:
+    """Read section 30 (error codes) from an ABIX v4 artifact."""
+    data = artifact.read_bytes()
+    if len(data) < 20 or data[:4] != b"ABIX":
+        return set()
+    _, _, _, section_count, directory = struct.unpack_from("<HHIII", data, 4)
+    sections = {}
+    for index in range(section_count):
+        section_id, offset, length, count, entry_size, _ = struct.unpack_from(
+            "<IIIIII", data, directory + index * 24)
+        sections[section_id] = (offset, length, count, entry_size)
+    if 30 not in sections:
+        return set()
+    offset, _length, count, entry_size = sections[30]
+    return {
+        struct.unpack_from("<i", data, offset + index * entry_size + 24)[0]
+        for index in range(count)
+    }
 
 
 def main():
@@ -162,7 +183,8 @@ def main():
         semantic_fixture = source_root / "tests" / "fixtures" / "rust_semantic.rs"
         semantic_json = os.path.join(work, "semantic_advanced.json")
         result = run([helper, "--crate-name", "rust_semantic", "--edition", "2021",
-                      "--source", str(semantic_fixture), "--output", semantic_json])
+                      "--source", str(semantic_fixture), "--instantiate", "Wrapper=u64",
+                      "--output", semantic_json])
         if check(result.returncode == 0 and os.path.isfile(semantic_json),
                  "helper extracted the advanced fixture", output(result)[-400:]):
             advanced = json.load(open(semantic_json, encoding="utf-8"))
@@ -188,9 +210,18 @@ def main():
                   "generic type parameter extracted")
             check(any(name.endswith("Wrapper<i32>") for name in wrapper.get("instances", [])),
                   "generic instance is linked to its declaration")
+            check("Wrapper<u64>" in advanced_types, "explicit generic instance extracted")
+            check(advanced_types.get("Wrapper<u64>", {}).get("size") == 8,
+                  "explicit generic instance layout")
+            check(bool(advanced.get("lifetimes")), "lifetime metadata extracted")
+            check(bool(advanced.get("trait_objects")), "trait object metadata extracted")
+            check(any(item.get("name") == "async_answer"
+                      for item in advanced.get("async_functions", [])),
+                  "async function metadata extracted")
 
             traits = advanced.get("traits", [])
-            trait_decl = next((item for item in traits if item.get("kind") == "trait"), {})
+            trait_decl = next((item for item in traits
+                               if item.get("kind") == "trait" and item.get("name") == "Shape"), {})
             check(trait_decl.get("name") == "Shape", "trait declaration extracted")
             check({method.get("name") for method in trait_decl.get("methods", [])} == {"area", "perimeter"},
                   "trait methods extracted")
@@ -275,6 +306,16 @@ def main():
             check(set(cargo_crate.get("features", [])) == {"default", "fast", "slow"},
                   "cargo features are recorded")
 
+        feature_json = os.path.join(work, "features-without-manifest.json")
+        result = run([helper, "--crate-name", "rust_semantic", "--edition", "2021",
+                      "--source", str(semantic_fixture), "--features", "default,fast",
+                      "--output", feature_json])
+        if check(result.returncode == 0 and os.path.isfile(feature_json),
+                 "helper records CLI features without a manifest", output(result)[-400:]):
+            feature_crate = json.load(open(feature_json, encoding="utf-8")).get("crate", {})
+            check(set(feature_crate.get("features", [])) == {"default", "fast"},
+                  "CLI features survive a missing Cargo manifest")
+
         # AMC integration: the Rust frontend fills missing target facts from the
         # helper. Remove [target] so a successful build proves the helper path.
         if amc.is_file():
@@ -320,8 +361,11 @@ def main():
             import_config.write_text(
                 "[package]\nname = \"rust_semantic\"\nversion = \"0.1\"\n\n"
                 "[[import]]\nlanguage = \"rust\"\nfiles = [\"rust_semantic.rs\"]\n"
-                "symbols = [\"Circle\", \"NestedPoint\", \"WrapperI32\", \"nested_sum\"]\n\n"
-                "[rust]\nhelper = \"" + helper_toml + "\"\n\n"
+                "symbols = [\"Circle\", \"NestedPoint\", \"WrapperI32\", \"Wrapper<u64>\", \"nested_sum\", \"rust_status\"]\n\n"
+                "[[instantiate]]\ntemplate = \"Wrapper\"\nargs = [\"u64\"]\nas = \"WrapperU64\"\n\n"
+                "[rust]\nhelper = \"" + helper_toml + "\"\nfeatures = [\"default\", \"fast\"]\n\n"
+                "[[error]]\nfunction = \"rust_status\"\nstatus = \"return\"\nsuccess = 0\nvalue = -1\n"
+                "domain = 0x1003000000000001\n\n"
                 "[[export]]\noutput = \"rust_semantic.abix\"\n",
                 encoding="utf-8")
             import_out = import_dir / "out"
@@ -331,20 +375,38 @@ def main():
                      "AMC imports helper semantic entities", output(result)[-400:]):
                 check("layout differs from the source parser" not in output(result),
                       "AMC cross-validates helper and parser layouts")
+                check(abix_error_codes(import_artifact) == {1, 2},
+                      "explicit [[error]] reuses helper error variants")
                 semantic_path = Path(str(import_artifact) + ".semantic")
                 check(semantic_path.is_file(), "AMC writes the imported semantic sidecar")
                 if semantic_path.is_file():
                     semantic = json.loads(semantic_path.read_text(encoding="utf-8"))
                     names = {item.get("name") for item in semantic.get("types", [])}
-                    check({"NestedPoint", "WrapperI32", "Wrapper<i32>"} <= names,
+                    check({"NestedPoint", "WrapperI32", "Wrapper<i32>", "Wrapper<u64>"} <= names,
                           "helper types reached Semantic IR")
                     check(bool(semantic.get("functions")), "helper functions reached Semantic IR")
+                    rust = semantic.get("rust", {})
+                    check(bool(rust.get("generics")), "Rust generics reached Semantic IR")
+                    check(bool(rust.get("traits")), "Rust traits reached Semantic IR")
+                    check(bool(rust.get("errors")), "Rust errors reached Semantic IR")
+                    check(bool(rust.get("lifetimes")), "Rust lifetimes reached Semantic IR")
+                    check(bool(rust.get("trait_objects")), "Rust trait objects reached Semantic IR")
+                    check(any(item.get("name") == "async_answer"
+                              for item in rust.get("async_functions", [])),
+                          "Rust async functions reached Semantic IR")
                 query = run([str(amc), "query", str(import_artifact), "--type", "WrapperI32",
                              "--format", "json", "--layout"])
                 if check(query.returncode == 0, "AMC queries the imported alias", output(query)[-300:]):
                     match = json.loads(query.stdout).get("matches", [{}])[0]
                     check(match.get("size") == 4 and match.get("align") == 4,
                           "imported alias keeps the helper layout")
+                query = run([str(amc), "query", str(import_artifact), "--type", "Wrapper<u64>",
+                             "--format", "json", "--layout"])
+                if check(query.returncode == 0, "AMC queries an explicit generic instance",
+                         output(query)[-300:]):
+                    match = json.loads(query.stdout).get("matches", [{}])[0]
+                    check(match.get("size") == 8 and match.get("align") == 8,
+                          "explicit generic instance keeps the helper layout")
                 query = run([str(amc), "query", str(import_artifact), "--type", "NestedPoint",
                              "--format", "json", "--layout"])
                 if check(query.returncode == 0, "AMC queries the imported nested record", output(query)[-300:]):

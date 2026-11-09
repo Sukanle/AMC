@@ -100,6 +100,9 @@ schema: "amc.rust.semantic/1"
   "generics": [],
   "traits": [],
   "errors": [],
+  "lifetimes": [],
+  "trait_objects": [],
+  "async_functions": [],
   "provenance": {
     "source": "src/lib.rs",
     "rustc": "1.99.1"
@@ -185,6 +188,30 @@ AMC 将这些作为语言元数据保留，不运行 trait solver，也不假设
 ```
 
 helper 只描述语义实体；ABI status 映射仍由 AMC 的 error pass 和显式 `[[error]]` 契约完成。
+
+### `lifetimes`
+
+`lifetimes[]` 记录 lifetime 参数、outlives clause 和函数的 late-bound 数量。 lifetime 只是语言元数据，不会变成 ABI 字段：
+
+```json
+{ "owner": "rust:demo::Holder", "name": "'a", "kind": "param", "bounds": [] }
+```
+
+### `trait_objects`
+
+`trait_objects[]` 记录字段、参数、返回值或 alias 中出现的 `dyn Trait`： owner、context、完整类型拼写和 trait bounds。trait object 没有显式契约时不能直接 ABI 投影，helper 只保留语义事实。
+
+### `async_functions`
+
+`async_functions[]` 记录 async 函数的 path、name 和返回类型。async 是语义元数据，AMC 不会把它直接映射成 C ABI 调用。
+
+### 显式泛型实例
+
+`--instantiate Template=arg1,arg2` 可重复。AMC 将每个 `[[instantiate]]` 传给 helper；helper 即使源码从未引用，也会输出该具体本地泛型实例（参数目前支持 primitive）。这是显式选择路径，helper 不枚举所有 monomorphization。
+
+### `.semantic` Rust 扩展区
+
+AMC 将 `generics`、`traits`、`errors`、`lifetimes`、`trait_objects` 和 `async_functions` 写入 semantic sidecar 的 `"rust"` 对象。ABIX 可投影的 types/functions 仍走 ABI 与 lowering 视图；纯语言事实保留在该扩展区。
 
 ### `provenance`
 

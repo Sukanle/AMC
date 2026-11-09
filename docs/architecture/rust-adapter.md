@@ -100,6 +100,9 @@ Rules:
   "generics": [],
   "traits": [],
   "errors": [],
+  "lifetimes": [],
+  "trait_objects": [],
+  "async_functions": [],
   "provenance": {
     "source": "src/lib.rs",
     "rustc": "1.99.1"
@@ -185,6 +188,30 @@ AMC records these as language metadata. It does not run a trait solver and does 
 ```
 
 The helper only describes the semantic entity. The ABI status mapping remains in AMC's error pass and requires the explicit `[[error]]` contract.
+
+### `lifetimes`
+
+`lifetimes[]` records lifetime parameters, outlives clauses and the late-bound count of a function. Lifetimes are language metadata; they never become ABI fields:
+
+```json
+{ "owner": "rust:demo::Holder", "name": "'a", "kind": "param", "bounds": [] }
+```
+
+### `trait_objects`
+
+`trait_objects[]` records `dyn Trait` occurrences found in fields, parameters, returns or aliases. The entry names the owner, context, full type spelling and the trait bounds. Trait objects are not ABI-projectable without an explicit contract; the helper only preserves the semantic fact.
+
+### `async_functions`
+
+`async_functions[]` records async functions with their path, name and return type. Async is semantic metadata; AMC does not map it to a direct C ABI call.
+
+### Explicit generic instances
+
+`--instantiate Template=arg1,arg2` is repeatable. AMC forwards each `[[instantiate]]` entry to the helper, which emits the concrete local generic instance (primitive arguments only) even if the source never references it. This is the explicit-selection path; the helper does not enumerate all monomorphizations.
+
+### `.semantic` Rust extension
+
+AMC copies `generics`, `traits`, `errors`, `lifetimes`, `trait_objects` and `async_functions` into the semantic sidecar under `"rust"`. ABIX-compatible types/functions still go through the ABI and lowering views; language-only facts stay in this extension.
 
 ### `provenance`
 

@@ -162,6 +162,11 @@ bool config_load(const std::string &path, const std::string &expected_language, 
         }
         if (auto *rust = t["rust"].as_table()) {
             c.rust_helper = (*rust)["helper"].value_or("");
+            if (auto *features = (*rust)["features"].as_array())
+                for (auto &&value : *features) {
+                    const std::string feature = value.value_or("");
+                    if (!feature.empty()) c.rust_features.push_back(feature);
+                }
             if (auto *expose = (*rust)["expose"].as_array()) {
                 for (auto &&entry : *expose) {
                     auto *table = entry.as_table();

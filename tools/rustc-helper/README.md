@@ -13,7 +13,8 @@ The helper now extracts:
 
 - `repr(C)` / `repr(transparent)` / packed / align / union / enum records, including nested modules, generic declarations and concrete generic instances;
 - public `extern "C"` functions, including associated functions in `impl` blocks;
-- generic declarations/instances, trait/impl metadata and `Result` error enums;
+- generic declarations/instances, trait/impl metadata, `Result` error enums and lifetimes;
+- trait objects and async functions as semantic metadata (they are not ABI-projectable by default);
 - Cargo workspace facts from `cargo metadata` when `--manifest-path` (or a discoverable `Cargo.toml`) is available.
 
 ## Requirements
@@ -40,9 +41,12 @@ amc-rustc-helper --crate-name demo --edition 2021 \
 amc-rustc-helper --crate-name demo --edition 2021 \
   --source src/lib.rs --manifest-path Cargo.toml \
   --features default,fast --output demo.semantic.json
+
+amc-rustc-helper --crate-name demo --edition 2021 \
+  --source src/lib.rs --instantiate 'Wrapper=u64' --output demo.semantic.json
 ```
 
-If `--output` is omitted, the document is written to stdout. `--manifest-path` is optional: without it the helper searches upwards from `--source` for a `Cargo.toml`. `--features` is additive; declared Cargo feature names are also recorded.
+If `--output` is omitted, the document is written to stdout. `--manifest-path` is optional: without it the helper searches upwards from `--source` for a `Cargo.toml`. `--features` is additive; declared Cargo feature names are also recorded. `--instantiate` is repeatable and requests one concrete local generic instance for primitive arguments (`Template=arg1,arg2`).
 
 ## AMC integration
 
@@ -53,6 +57,8 @@ If `--output` is omitted, the document is written to stdout. `--manifest-path` i
 helper = "path/to/amc-rustc-helper"
 ```
 
-The helper fills missing `target` facts and validates the ones already present in `[target]`. AMC imports its types and functions into ABIX/Semantic IR, compares their layouts with the source parser and writes the semantic sidecar. If the helper fails and `[target]` provides the facts, AMC falls back to the existing parser/probe path with a warning.
+The helper fills missing `target` facts and validates the ones already present in `[target]`. AMC imports its types and functions into ABIX/Semantic IR, copies generics/traits/errors/lifetimes/trait objects/async functions into the `rust` extension of the semantic sidecar, compares layouts with the source parser and writes the sidecar. If the helper fails and `[target]` provides the facts, AMC falls back to the existing parser/probe path with a warning.
+
+`[rust] features` is forwarded as `--features`; an `[[instantiate]]` entry is forwarded as `--instantiate` for Rust generic selection.
 
 The helper is not installed by the AMC CMake package yet; the v0.4.0 development tree builds it from this directory.

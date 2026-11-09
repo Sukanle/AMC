@@ -87,7 +87,15 @@ The v0.4.0 helper process links `rustc_driver` in an isolated process. It report
 ```toml
 [rust]
 helper = "path/to/amc-rustc-helper"
+features = ["default", "std"]
+
+[[instantiate]]
+template = "Wrapper"
+args = ["u64"]
+as = "WrapperU64"
 ```
+
+`[rust] features` is forwarded to the helper as `--features`. Each `[[instantiate]]` entry is forwarded as `--instantiate` and forces one concrete local generic instance with primitive arguments. The helper still does not enumerate every monomorphization.
 
 When configured, `amc-rust` runs the helper and uses its target facts. If the helper fails and `[target]` already provides `pointer_bits`, endianness and `c_long_bits`, AMC falls back to the parser/probe path with a warning.
 

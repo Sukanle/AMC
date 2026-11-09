@@ -293,6 +293,293 @@ Hash128 hash_field(const Json &object, const char *name) {
     return node != nullptr ? hash_from_hex(node->as_string()) : Hash128{};
 }
 
+Json string_array_json(const std::vector<std::string> &values) {
+    Json array = Json::array();
+    for (const auto &value : values)
+        array.push_back(value);
+    return array;
+}
+
+Json rust_generic_parameters_json(const std::vector<RustGenericParameter> &parameters) {
+    Json array = Json::array();
+    for (const auto &parameter : parameters) {
+        Json value = Json::object();
+        value.set("index", static_cast<long long>(parameter.index));
+        value.set("name", parameter.name);
+        value.set("kind", parameter.kind);
+        if (!parameter.default_value.empty()) value.set("default", parameter.default_value);
+        array.push_back(std::move(value));
+    }
+    return array;
+}
+
+Json rust_trait_method_json(const RustTraitMethod &method) {
+    Json value = Json::object();
+    value.set("name", method.name);
+    value.set("path", method.path);
+    value.set("abi", method.abi);
+    value.set("return_type", method.return_type);
+    value.set("has_receiver", method.has_receiver);
+    value.set("required", method.required);
+    Json parameters = Json::array();
+    for (const auto &parameter : method.parameters) {
+        Json item = Json::object();
+        item.set("name", parameter.name);
+        item.set("type", parameter.type);
+        parameters.push_back(std::move(item));
+    }
+    value.set("parameters", std::move(parameters));
+    return value;
+}
+
+void append_rust_json(Json &root, const RustSemantic &rust) {
+    Json out = Json::object();
+
+    Json generics = Json::array();
+    for (const auto &generic : rust.generics) {
+        Json value = Json::object();
+        value.set("id", generic.id);
+        value.set("name", generic.name);
+        value.set("path", generic.path);
+        value.set("kind", generic.kind);
+        value.set("parameters", rust_generic_parameters_json(generic.parameters));
+        value.set("where_clause", string_array_json(generic.where_clause));
+        value.set("instances", string_array_json(generic.instances));
+        generics.push_back(std::move(value));
+    }
+    out.set("generics", std::move(generics));
+
+    Json traits = Json::array();
+    for (const auto &trait : rust.traits) {
+        Json value = Json::object();
+        value.set("id", trait.id);
+        value.set("name", trait.name);
+        value.set("path", trait.path);
+        value.set("kind", trait.kind);
+        if (!trait.self_type.empty()) value.set("self_type", trait.self_type);
+        if (!trait.trait_ref.empty()) value.set("trait", trait.trait_ref);
+        value.set("negative", trait.negative);
+        value.set("parameters", rust_generic_parameters_json(trait.parameters));
+        value.set("where_clause", string_array_json(trait.where_clause));
+        value.set("supertraits", string_array_json(trait.supertraits));
+        Json associated = Json::array();
+        for (const auto &item : trait.associated_types) {
+            Json entry = Json::object();
+            entry.set("name", item.name);
+            entry.set("kind", item.kind);
+            entry.set("bounds", string_array_json(item.bounds));
+            associated.push_back(std::move(entry));
+        }
+        value.set("associated_types", std::move(associated));
+        Json methods = Json::array();
+        for (const auto &method : trait.methods)
+            methods.push_back(rust_trait_method_json(method));
+        value.set("methods", std::move(methods));
+        traits.push_back(std::move(value));
+    }
+    out.set("traits", std::move(traits));
+
+    Json errors = Json::array();
+    for (const auto &error : rust.errors) {
+        Json value = Json::object();
+        value.set("id", error.id);
+        value.set("name", error.name);
+        value.set("path", error.path);
+        value.set("kind", error.kind);
+        Json variants = Json::array();
+        for (const auto &variant : error.variants) {
+            Json item = Json::object();
+            item.set("name", variant.name);
+            item.set("discriminant", variant.discriminant);
+            if (!variant.payload.empty()) item.set("payload", variant.payload);
+            variants.push_back(std::move(item));
+        }
+        value.set("variants", std::move(variants));
+        value.set("functions", string_array_json(error.functions));
+        errors.push_back(std::move(value));
+    }
+    out.set("errors", std::move(errors));
+
+    Json lifetimes = Json::array();
+    for (const auto &lifetime : rust.lifetimes) {
+        Json value = Json::object();
+        value.set("owner", lifetime.owner);
+        value.set("name", lifetime.name);
+        value.set("kind", lifetime.kind);
+        value.set("bounds", string_array_json(lifetime.bounds));
+        lifetimes.push_back(std::move(value));
+    }
+    out.set("lifetimes", std::move(lifetimes));
+
+    Json trait_objects = Json::array();
+    for (const auto &object : rust.trait_objects) {
+        Json value = Json::object();
+        value.set("owner", object.owner);
+        value.set("context", object.context);
+        value.set("type", object.type);
+        value.set("traits", string_array_json(object.traits));
+        trait_objects.push_back(std::move(value));
+    }
+    out.set("trait_objects", std::move(trait_objects));
+
+    Json async_functions = Json::array();
+    for (const auto &function : rust.async_functions) {
+        Json value = Json::object();
+        value.set("id", function.id);
+        value.set("path", function.path);
+        value.set("name", function.name);
+        value.set("return_type", function.return_type);
+        async_functions.push_back(std::move(value));
+    }
+    out.set("async_functions", std::move(async_functions));
+
+    root.set("rust", std::move(out));
+}
+
+std::vector<std::string> read_string_array(const Json &value, const char *key) {
+    std::vector<std::string> out;
+    if (const Json *array = field(value, key); array != nullptr && array->is_array())
+        for (const auto &item : array->items())
+            out.push_back(item.as_string());
+    return out;
+}
+
+std::vector<RustGenericParameter> read_rust_generic_parameters(const Json &value) {
+    std::vector<RustGenericParameter> out;
+    if (const Json *array = field(value, "parameters"); array != nullptr && array->is_array()) {
+        for (const auto &item : array->items()) {
+            RustGenericParameter parameter;
+            parameter.index = static_cast<uint32_t>(number_field(item, "index"));
+            parameter.name = string_field(item, "name");
+            parameter.kind = string_field(item, "kind");
+            parameter.default_value = string_field(item, "default");
+            out.push_back(std::move(parameter));
+        }
+    }
+    return out;
+}
+
+void read_rust_json(const Json &root, RustSemantic &rust) {
+    const Json *section = field(root, "rust");
+    if (section == nullptr || !section->is_object()) return;
+
+    if (const Json *generics = field(*section, "generics"); generics != nullptr && generics->is_array()) {
+        for (const auto &value : generics->items()) {
+            RustGeneric generic;
+            generic.id = string_field(value, "id");
+            generic.name = string_field(value, "name");
+            generic.path = string_field(value, "path");
+            generic.kind = string_field(value, "kind");
+            generic.parameters = read_rust_generic_parameters(value);
+            generic.where_clause = read_string_array(value, "where_clause");
+            generic.instances = read_string_array(value, "instances");
+            rust.generics.push_back(std::move(generic));
+        }
+    }
+
+    if (const Json *traits = field(*section, "traits"); traits != nullptr && traits->is_array()) {
+        for (const auto &value : traits->items()) {
+            RustTrait trait;
+            trait.id = string_field(value, "id");
+            trait.name = string_field(value, "name");
+            trait.path = string_field(value, "path");
+            trait.kind = string_field(value, "kind");
+            trait.self_type = string_field(value, "self_type");
+            trait.trait_ref = string_field(value, "trait");
+            trait.negative = bool_field(value, "negative");
+            trait.parameters = read_rust_generic_parameters(value);
+            trait.where_clause = read_string_array(value, "where_clause");
+            trait.supertraits = read_string_array(value, "supertraits");
+            if (const Json *associated = field(value, "associated_types");
+                associated != nullptr && associated->is_array()) {
+                for (const auto &item : associated->items()) {
+                    RustAssociatedType entry;
+                    entry.name = string_field(item, "name");
+                    entry.kind = string_field(item, "kind");
+                    entry.bounds = read_string_array(item, "bounds");
+                    trait.associated_types.push_back(std::move(entry));
+                }
+            }
+            if (const Json *methods = field(value, "methods"); methods != nullptr && methods->is_array()) {
+                for (const auto &item : methods->items()) {
+                    RustTraitMethod method;
+                    method.name = string_field(item, "name");
+                    method.path = string_field(item, "path");
+                    method.abi = string_field(item, "abi");
+                    method.return_type = string_field(item, "return_type");
+                    method.has_receiver = bool_field(item, "has_receiver");
+                    method.required = bool_field(item, "required");
+                    if (const Json *parameters = field(item, "parameters");
+                        parameters != nullptr && parameters->is_array()) {
+                        for (const auto &parameter : parameters->items()) {
+                            RustTraitParameter entry;
+                            entry.name = string_field(parameter, "name");
+                            entry.type = string_field(parameter, "type");
+                            method.parameters.push_back(std::move(entry));
+                        }
+                    }
+                    trait.methods.push_back(std::move(method));
+                }
+            }
+            rust.traits.push_back(std::move(trait));
+        }
+    }
+
+    if (const Json *errors = field(*section, "errors"); errors != nullptr && errors->is_array()) {
+        for (const auto &value : errors->items()) {
+            RustError error;
+            error.id = string_field(value, "id");
+            error.name = string_field(value, "name");
+            error.path = string_field(value, "path");
+            error.kind = string_field(value, "kind");
+            if (const Json *variants = field(value, "variants"); variants != nullptr && variants->is_array()) {
+                for (const auto &item : variants->items()) {
+                    RustErrorVariant variant;
+                    variant.name = string_field(item, "name");
+                    variant.discriminant = string_field(item, "discriminant");
+                    variant.payload = string_field(item, "payload");
+                    error.variants.push_back(std::move(variant));
+                }
+            }
+            error.functions = read_string_array(value, "functions");
+            rust.errors.push_back(std::move(error));
+        }
+    }
+
+    if (const Json *lifetimes = field(*section, "lifetimes"); lifetimes != nullptr && lifetimes->is_array()) {
+        for (const auto &value : lifetimes->items()) {
+            RustLifetime lifetime;
+            lifetime.owner = string_field(value, "owner");
+            lifetime.name = string_field(value, "name");
+            lifetime.kind = string_field(value, "kind");
+            lifetime.bounds = read_string_array(value, "bounds");
+            rust.lifetimes.push_back(std::move(lifetime));
+        }
+    }
+
+    if (const Json *objects = field(*section, "trait_objects"); objects != nullptr && objects->is_array()) {
+        for (const auto &value : objects->items()) {
+            RustTraitObject object;
+            object.owner = string_field(value, "owner");
+            object.context = string_field(value, "context");
+            object.type = string_field(value, "type");
+            object.traits = read_string_array(value, "traits");
+            rust.trait_objects.push_back(std::move(object));
+        }
+    }
+
+    if (const Json *functions = field(*section, "async_functions"); functions != nullptr && functions->is_array()) {
+        for (const auto &value : functions->items()) {
+            RustAsyncFunction function;
+            function.id = string_field(value, "id");
+            function.path = string_field(value, "path");
+            function.name = string_field(value, "name");
+            function.return_type = string_field(value, "return_type");
+            rust.async_functions.push_back(std::move(function));
+        }
+    }
+}
+
 }   // namespace
 
 bool write_semantic_json(const SemanticModule &module, const std::string &path, std::string &error) {
@@ -466,6 +753,7 @@ bool write_semantic_json(const SemanticModule &module, const std::string &path, 
         instances.push_back(std::move(value));
     }
     root.set("instances", std::move(instances));
+    append_rust_json(root, module.rust);
 
     try {
         std::ofstream output(path, std::ios::binary | std::ios::trunc);
@@ -693,6 +981,7 @@ bool read_semantic_json(const std::string &path, SemanticModule &module, std::st
         }
     }
 
+    read_rust_json(root, module.rust);
     return true;
 }
 

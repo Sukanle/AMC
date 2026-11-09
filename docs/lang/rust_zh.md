@@ -87,7 +87,15 @@ v0.4.0 的 helper 进程在独立进程中链接 `rustc_driver`。它报告 targ
 ```toml
 [rust]
 helper = "path/to/amc-rustc-helper"
+features = ["default", "std"]
+
+[[instantiate]]
+template = "Wrapper"
+args = ["u64"]
+as = "WrapperU64"
 ```
+
+`[rust] features` 会作为 `--features` 转发给 helper。每个 `[[instantiate]]` 条目会作为 `--instantiate` 转发，强制输出一个参数为 primitive 的本地具体泛型实例；helper 仍不会枚举所有 monomorphization。
 
 配置后，`amc-rust` 会运行 helper 并使用其 target facts。如果 helper 失败且 `[target]` 已提供 `pointer_bits`、endianness 和 `c_long_bits`，AMC 会给出警告并回退到 parser/probe 路径。
 
