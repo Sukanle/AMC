@@ -192,26 +192,6 @@ Hash128 hash_from_hex(const std::string &text) {
     return value;
 }
 
-const char *type_kind_name(SemanticTypeKind kind) { return reflected_enum_name(kind, "unknown"); }
-
-const char *template_kind_name(TemplateTypeKind kind) { return reflected_enum_name(kind, "function"); }
-
-const char *parameter_kind_name(TemplateParamKind kind) { return reflected_enum_name(kind, "type"); }
-
-const char *argument_kind_name(TemplateArgKind kind) { return reflected_enum_name(kind, "other"); }
-
-const char *origin_name(InstOrigin origin) { return reflected_enum_name(origin, "implicit_compiler"); }
-
-const char *function_kind_name(SemanticFuncKind kind) { return reflected_enum_name(kind, "free_function"); }
-
-const char *ownership_kind_name(OwnershipKind kind) { return reflected_enum_name(kind, "unspecified"); }
-
-const char *lifetime_kind_name(LifetimeKind kind) { return reflected_enum_name(kind, "unknown"); }
-
-const char *mutability_name(Mutability value) { return reflected_enum_name(value, "immutable"); }
-
-const char *interaction_name(InteractionKind kind) { return reflected_enum_name(kind, "parameter"); }
-
 Json source_json(const SourceLocation &source) {
     Json value = Json::object();
     value.set("file", source.file);
@@ -222,7 +202,7 @@ Json source_json(const SourceLocation &source) {
 
 Json parameter_json(const TemplateParam &parameter) {
     Json value = Json::object();
-    value.set("kind", parameter_kind_name(parameter.kind));
+    value.set("kind", reflected_enum_name(parameter.kind, "type"));
     value.set("index", static_cast<long long>(parameter.index));
     value.set("name", parameter.name);
     if (parameter.default_argument.lo != 0 || parameter.default_argument.hi != 0)
@@ -235,7 +215,7 @@ Json parameter_json(const TemplateParam &parameter) {
 
 Json argument_json(const TemplateArg &argument) {
     Json value = Json::object();
-    value.set("kind", argument_kind_name(argument.kind));
+    value.set("kind", reflected_enum_name(argument.kind, "other"));
     if (argument.type.valid()) value.set("type", id_hex(argument.type.value));
     if (argument.kind == decltype(argument.kind)::INTEGRAL) value.set("value", static_cast<long long>(argument.value));
     if (argument.template_decl.valid()) value.set("template_decl", id_hex(argument.template_decl.value));
@@ -629,7 +609,7 @@ bool write_semantic_json(const SemanticModule &module, const std::string &path, 
     for (const auto &type : module.types) {
         Json value = Json::object();
         value.set("id", id_hex(type.id.value));
-        value.set("kind", type_kind_name(type.kind));
+        value.set("kind", reflected_enum_name(type.kind, "unknown"));
         value.set("name", type.qualified);
         value.set("const", type.qualifiers.is_const);
         value.set("volatile", type.qualifiers.is_volatile);
@@ -680,7 +660,7 @@ bool write_semantic_json(const SemanticModule &module, const std::string &path, 
     for (const auto &function : module.functions) {
         Json value = Json::object();
         value.set("id", id_hex(function.id.value));
-        value.set("kind", function_kind_name(function.kind));
+        value.set("kind", reflected_enum_name(function.kind, "free_function"));
         value.set("name", function.qualified);
         value.set("unqualified_name", function.unqualified);
         if (function.owner.valid()) value.set("owner", id_hex(function.owner.value));
@@ -715,11 +695,11 @@ bool write_semantic_json(const SemanticModule &module, const std::string &path, 
     for (const auto &contract : module.ownership) {
         Json value = Json::object();
         value.set("function", id_hex(contract.function.value));
-        value.set("interaction", interaction_name(contract.interaction));
+        value.set("interaction", reflected_enum_name(contract.interaction, "parameter"));
         value.set("index", static_cast<long long>(contract.index));
-        value.set("ownership", ownership_kind_name(contract.ownership));
-        value.set("lifetime", lifetime_kind_name(contract.lifetime));
-        value.set("mutability", mutability_name(contract.mutability));
+        value.set("ownership", reflected_enum_name(contract.ownership, "unspecified"));
+        value.set("lifetime", reflected_enum_name(contract.lifetime, "unknown"));
+        value.set("mutability", reflected_enum_name(contract.mutability, "immutable"));
         if (contract.release.valid()) value.set("release", id_hex(contract.release.value));
         if (!contract.invalidation.empty()) value.set("invalidation", contract.invalidation);
         ownership.push_back(std::move(value));
@@ -730,7 +710,7 @@ bool write_semantic_json(const SemanticModule &module, const std::string &path, 
     for (const auto &declaration : module.templates) {
         Json value = Json::object();
         value.set("id", id_hex(declaration.id.value));
-        value.set("kind", template_kind_name(declaration.kind));
+        value.set("kind", reflected_enum_name(declaration.kind, "function"));
         value.set("name", declaration.qualified_name);
         if (!declaration.requires_source.empty()) value.set("requires", declaration.requires_source);
         if (declaration.requires_hash.lo != 0 || declaration.requires_hash.hi != 0)
@@ -773,7 +753,7 @@ bool write_semantic_json(const SemanticModule &module, const std::string &path, 
         Json value = Json::object();
         value.set("id", id_hex(instance.id.value));
         value.set("declaration", id_hex(instance.declaration.value));
-        value.set("origin", origin_name(instance.origin));
+        value.set("origin", reflected_enum_name(instance.origin, "implicit_compiler"));
         value.set("explicit_specialization", instance.is_explicit_specialization);
         if (instance.result.lo != 0 || instance.result.hi != 0) value.set("result", id_hex(instance.result));
         Json arguments = Json::array();
