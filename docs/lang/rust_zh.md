@@ -173,7 +173,7 @@ returns = "owned"
 release = "auto"
 ```
 
-`create = "auto"` 生成 `fn(T) -> *mut T` 工厂（`Box::new`），`destroy = "auto"` 生成 `Box::from_raw` + drop，`release = "auto"` 复用匹配 `[[owned]]` 的 destroy 签名。owned `String`/`Vec`/`Option` 返回值仍需要自己的 owned 契约。`Vec`/`Option` 的元素类型在本版本中必须是 primitive。
+`create = "auto"` 生成 `fn(T) -> *mut T` 工厂（`Box::new`），`destroy = "auto"` 生成 `Box::from_raw` + drop，`release = "auto"` 复用匹配 `[[owned]]` 的 destroy 签名。owned `String`/`Vec`/`Option` 返回值仍需要自己的 owned 契约。`Vec<T>`/`Option<T>` 的元素可以是 primitive 或本地 `#[repr(C)]` record；owned `Vec<T>` marshal 要求 `T: Clone`。
 
 ### 所有权与错误契约
 

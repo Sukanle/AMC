@@ -815,38 +815,6 @@ const amc::lang::AdaptDecl *find_adapt(const ContainerType &type, const std::vec
     return nullptr;
 }
 
-uint32_t round_up_layout(uint32_t value, uint32_t align) {
-    return align <= 1 ? value : (value + align - 1) / align * align;
-}
-
-bool primitive_layout(const std::string &name, uint32_t pointer_size, uint32_t &size, uint32_t &align) {
-    if (name == "u8" || name == "i8" || name == "bool") {
-        size = align = 1;
-        return true;
-    }
-    if (name == "u16" || name == "i16") {
-        size = align = 2;
-        return true;
-    }
-    if (name == "u32" || name == "i32" || name == "f32" || name == "char") {
-        size = align = 4;
-        return true;
-    }
-    if (name == "u64" || name == "i64" || name == "f64") {
-        size = align = 8;
-        return true;
-    }
-    if (name == "u128" || name == "i128") {
-        size = align = 16;
-        return true;
-    }
-    if (name == "usize" || name == "isize") {
-        size = align = pointer_size;
-        return true;
-    }
-    return false;
-}
-
 std::vector<std::string> tokens_of(const std::string &text) {
     std::vector<std::string> out;
     for (const Token &token : lex(text))
@@ -862,49 +830,26 @@ std::string pointer_pointee(const std::vector<std::string> &tokens) {
 }
 
 bool ensure_container_boundary(std::vector<RawItem> &items, std::unordered_map<std::string, bool> &seen,
-    const std::string &target, ContainerKind kind, const std::string &element, uint32_t pointer_size,
-    std::string &error) {
+    const std::string &target, ContainerKind kind, const std::string &element, std::string &error) {
+    (void)error;
     if (target.empty() || kind == ContainerKind::NONE || kind == ContainerKind::BOX) return true;
     if (seen.find(target) != seen.end()) return true;
-
-    uint32_t element_size = 1;
-    uint32_t element_align = 1;
-    const std::string element_type = element.empty() ? "u8" : element;
-    if (!primitive_layout(element_type, pointer_size, element_size, element_align)) {
-        error = "[[adapt]] element type must be a primitive for generated boundary types: " + element_type;
-        return false;
-    }
 
     RawItem item;
     item.name = target;
     item.kind = RawItem::Kind::RECORD;
-    item.explicit_layout = true;
     if (kind == ContainerKind::STRING) {
-        const uint32_t len_offset = round_up_layout(pointer_size, 8);
-        const uint32_t encoding_offset = len_offset + 8;
-        const uint32_t reserved_offset = encoding_offset + 4;
         item.fields.push_back({"data", tokens_of("*const u8")});
         item.fields.push_back({"len", tokens_of("u64")});
         item.fields.push_back({"encoding", tokens_of("u32")});
         item.fields.push_back({"reserved", tokens_of("u32")});
-        item.explicit_offsets = {0, len_offset, encoding_offset, reserved_offset};
-        item.explicit_align = 8;
-        item.explicit_size = round_up_layout(reserved_offset + 4, 8);
     } else if (kind == ContainerKind::VEC) {
-        const uint32_t len_offset = round_up_layout(pointer_size, 8);
-        item.fields.push_back({"data", tokens_of("*const " + element_type)});
+        item.fields.push_back({"data", tokens_of("*const " + element)});
         item.fields.push_back({"len", tokens_of("u64")});
-        item.explicit_offsets = {0, len_offset};
-        item.explicit_align = 8;
-        item.explicit_size = round_up_layout(len_offset + 8, 8);
     } else {
-        const uint32_t value_offset = round_up_layout(8, element_align);
         item.fields.push_back({"discriminant", tokens_of("u32")});
         item.fields.push_back({"reserved", tokens_of("u32")});
-        item.fields.push_back({"value", tokens_of(element_type)});
-        item.explicit_offsets = {0, 4, value_offset};
-        item.explicit_align = std::max(4u, element_align);
-        item.explicit_size = round_up_layout(value_offset + element_size, item.explicit_align);
+        item.fields.push_back({"value", tokens_of(element)});
     }
     seen.emplace(target, true);
     items.push_back(std::move(item));
@@ -1751,17 +1696,26 @@ private:
         type.kind = amc::TypeKind::RECORD;
         type.id = amc::hash_text(item.name, kTypeDomain);
         const int index = static_cast<int>(module_.types.size());
-        type.field_begin = static_cast<uint32_t>(module_.fields.size());
         module_.types.push_back(type);
 
+        // Resolve every field before reserving the record's field range. A
+        // nested record can add its own fields during resolution; reserving
+        // first would make the parent's field range overlap the child's.
+        std::vector<Resolved> field_types;
+        field_types.reserve(item.fields.size());
+        for (const auto &raw : item.fields) {
+            const std::string context = fmt::format("field '{}::{}'", item.name, raw.name);
+            if (reject_trait_object(raw.type, context)) return -1;
+            field_types.push_back(resolve_type(raw.type));
+            if (!ok()) return -1;
+        }
+        auto &record = module_.types[static_cast<size_t>(index)];
+        record.field_begin = static_cast<uint32_t>(module_.fields.size());
         uint32_t size = 0;
         uint32_t align = 1;
-        for (const auto &raw : item.fields) {
-            const std::string context = fmt::format("field '{}::{}'", item.name,
-                raw.name.empty() ? fmt::format("field{}", module_.fields.size()) : raw.name);
-            if (reject_trait_object(raw.type, context)) return -1;
-            const Resolved field_type = resolve_type(raw.type);
-            if (!ok()) return -1;
+        for (size_t field_index = 0; field_index < item.fields.size(); ++field_index) {
+            const auto &raw = item.fields[field_index];
+            const Resolved &field_type = field_types[field_index];
             amc::Field field;
             field.owner_type = type.id;
             field.name = raw.name.empty() ? fmt::format("field{}", module_.fields.size()) : raw.name;
@@ -1774,7 +1728,6 @@ private:
         if (item.packed_align != 0) align = std::min(align, item.packed_align);
         if (item.align_override != 0) align = std::max(align, item.align_override);
         if (size == 0) size = 1;
-        auto &record = module_.types[static_cast<size_t>(index)];
         record.field_count = static_cast<uint32_t>(module_.fields.size()) - record.field_begin;
         record.size = item.explicit_layout ? static_cast<uint32_t>(item.explicit_size) : round_up(size, align);
         record.align =
@@ -1791,18 +1744,17 @@ private:
         type.kind = amc::TypeKind::ALIAS;
         type.id = amc::hash_text(item.name, kTypeDomain);
         const int index = static_cast<int>(module_.types.size());
-        type.field_begin = static_cast<uint32_t>(module_.fields.size());
-        type.field_count = 1;
         module_.types.push_back(type);
         const Resolved underlying =
             resolve_type(item.fields.empty() ? std::vector<std::string>{} : item.fields[0].type);
         if (!ok()) return -1;
-        module_.types[static_cast<size_t>(index)].size =
-            item.explicit_layout ? static_cast<uint32_t>(item.explicit_size) : underlying.size;
-        module_.types[static_cast<size_t>(index)].align = item.explicit_layout
-                                                            ? (item.explicit_align == 0 ? 1 : item.explicit_align)
-                                                            : (underlying.align == 0 ? 1 : underlying.align);
-        module_.fields.push_back({module_.types[static_cast<size_t>(index)].id, "underlying", underlying.id, 0, 0});
+        auto &record = module_.types[static_cast<size_t>(index)];
+        record.field_begin = static_cast<uint32_t>(module_.fields.size());
+        record.field_count = 1;
+        record.size = item.explicit_layout ? static_cast<uint32_t>(item.explicit_size) : underlying.size;
+        record.align = item.explicit_layout ? (item.explicit_align == 0 ? 1 : item.explicit_align)
+                                            : (underlying.align == 0 ? 1 : underlying.align);
+        module_.fields.push_back({record.id, "underlying", underlying.id, 0, 0});
         resolved_[item.name] = index;
         return index;
     }
@@ -1813,22 +1765,30 @@ private:
         type.kind = amc::TypeKind::RECORD;
         type.id = amc::hash_text(item.name, kTypeDomain);
         const int index = static_cast<int>(module_.types.size());
-        type.field_begin = static_cast<uint32_t>(module_.fields.size());
         module_.types.push_back(type);
 
         if (item.transparent && item.fields.size() != 1) {
             set_error("repr(transparent) requires exactly one field: " + item.name);
             return -1;
         }
+        // Resolve every field before reserving the record's field range. A
+        // nested record can add its own fields during resolution; reserving
+        // first would make the parent's field range overlap the child's.
+        std::vector<Resolved> field_types;
+        field_types.reserve(item.fields.size());
+        for (const auto &raw : item.fields) {
+            const std::string context = fmt::format("field '{}::{}'", item.name, raw.name);
+            if (reject_trait_object(raw.type, context)) return -1;
+            field_types.push_back(resolve_type(raw.type));
+            if (!ok()) return -1;
+        }
+        auto &record = module_.types[static_cast<size_t>(index)];
+        record.field_begin = static_cast<uint32_t>(module_.fields.size());
         uint32_t offset = 0;
         uint32_t align = 1;
-        for (size_t index = 0; index < item.fields.size(); ++index) {
-            const auto &raw = item.fields[index];
-            const std::string context = fmt::format("field '{}::{}'", item.name,
-                raw.name.empty() ? fmt::format("field{}", module_.fields.size() + index) : raw.name);
-            if (reject_trait_object(raw.type, context)) return -1;
-            const Resolved field_type = resolve_type(raw.type);
-            if (!ok()) return -1;
+        for (size_t field_index = 0; field_index < item.fields.size(); ++field_index) {
+            const auto &raw = item.fields[field_index];
+            const Resolved &field_type = field_types[field_index];
             const uint32_t natural_align = field_type.align == 0 ? 1 : field_type.align;
             const uint32_t field_align =
                 item.packed_align != 0 ? std::min(item.packed_align, natural_align) : natural_align;
@@ -1837,8 +1797,8 @@ private:
             field.owner_type = type.id;
             field.name = raw.name.empty() ? fmt::format("field{}", module_.fields.size()) : raw.name;
             field.type_id = field_type.id;
-            field.offset = item.explicit_layout && index < item.explicit_offsets.size()
-                             ? static_cast<uint32_t>(item.explicit_offsets[index])
+            field.offset = item.explicit_layout && field_index < item.explicit_offsets.size()
+                             ? static_cast<uint32_t>(item.explicit_offsets[field_index])
                              : offset;
             offset += field_type.size;
             align = std::max(align, field_align);
@@ -1847,7 +1807,6 @@ private:
         if (item.packed_align != 0) align = std::min(align, item.packed_align);
         if (item.align_override != 0) align = std::max(align, item.align_override);
         const uint32_t size = round_up(offset, align);
-        auto &record = module_.types[static_cast<size_t>(index)];
         record.field_count = static_cast<uint32_t>(module_.fields.size()) - record.field_begin;
         record.size = item.explicit_layout ? static_cast<uint32_t>(item.explicit_size) : (size == 0 ? 1 : size);
         record.align =
@@ -2268,8 +2227,7 @@ int run_frontend(const char *config_path, const char *output_path) {
                 continue;
             }
             std::string boundary_error;
-            if (!ensure_container_boundary(
-                    items, seen_items, adapt->target, type.kind, element, target.pointer_size, boundary_error)) {
+            if (!ensure_container_boundary(items, seen_items, adapt->target, type.kind, element, boundary_error)) {
                 fmt::print(stderr, "{}\n", boundary_error);
                 return EXIT_FAILURE;
             }

@@ -9,6 +9,13 @@ pub struct ContainerApi {
     pub value: i32,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ContainerPoint {
+    pub x: i32,
+    pub y: i32,
+}
+
 pub fn container_string_len(value: String) -> usize {
     value.len()
 }
@@ -31,4 +38,12 @@ pub fn container_slice_sum(value: &[i32]) -> i32 {
 
 pub fn container_make_string(value: i32) -> String {
     value.to_string()
+}
+
+pub fn container_points_sum(value: Vec<ContainerPoint>) -> i32 {
+    value.iter().map(|point| point.x + point.y).sum()
+}
+
+pub fn container_option_point(value: Option<ContainerPoint>) -> i32 {
+    value.map(|point| point.x + point.y).unwrap_or(-1)
 }

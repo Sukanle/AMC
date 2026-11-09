@@ -96,6 +96,12 @@ def main():
         check("discriminant == 1" in thunks and "assume_init()" in thunks,
               "Option parameter is marshalled from the Optional boundary")
         check("from_utf8_unchecked" in thunks, "borrowed &str parameter is zero-copy")
+        check("pub struct abix_span_ContainerPoint" in thunks
+              and "pub data: *const ContainerPoint" in thunks,
+              "non-primitive SequenceView element is generated")
+        check("pub struct abix_optional_ContainerPoint" in thunks
+              and "MaybeUninit<ContainerPoint>" in thunks,
+              "non-primitive Optional element is generated")
 
         for function, expected in (
             ("container_string_len", "abix_str_utf8"),
@@ -103,6 +109,8 @@ def main():
             ("container_option_value", "abix_optional_i32"),
             ("container_str_view_len", "abix_str_utf8"),
             ("container_slice_sum", "abix_span_i32"),
+            ("container_points_sum", "abix_span_ContainerPoint"),
+            ("container_option_point", "abix_optional_ContainerPoint"),
         ):
             result = run([str(amc), "query", artifact, "--function", function,
                           "--format", "json"])
@@ -136,6 +144,18 @@ def main():
                         ("reserved", ctypes.c_uint32),
                         ("value", ctypes.c_int32)]
 
+        class ContainerPoint(ctypes.Structure):
+            _fields_ = [("x", ctypes.c_int32), ("y", ctypes.c_int32)]
+
+        class AbixSpanPoint(ctypes.Structure):
+            _fields_ = [("data", ctypes.POINTER(ContainerPoint)),
+                        ("len", ctypes.c_uint64)]
+
+        class AbixOptionalPoint(ctypes.Structure):
+            _fields_ = [("discriminant", ctypes.c_uint32),
+                        ("reserved", ctypes.c_uint32),
+                        ("value", ContainerPoint)]
+
         lib = ctypes.CDLL(library)
 
         text = b"hello"
@@ -168,6 +188,19 @@ def main():
         lib.container_slice_sum.restype = ctypes.c_int32
         check(lib.container_slice_sum(span) == 10,
               "borrowed &[T] parameter is zero-copy")
+
+        points = (ContainerPoint * 2)(ContainerPoint(1, 2), ContainerPoint(3, 4))
+        point_span = AbixSpanPoint(points, 2)
+        lib.container_points_sum.argtypes = [AbixSpanPoint]
+        lib.container_points_sum.restype = ctypes.c_int32
+        check(lib.container_points_sum(point_span) == 10,
+              "non-primitive SequenceView reaches the Rust Vec function")
+        lib.container_option_point.argtypes = [AbixOptionalPoint]
+        lib.container_option_point.restype = ctypes.c_int32
+        check(lib.container_option_point(AbixOptionalPoint(1, 0, ContainerPoint(5, 6))) == 11,
+              "non-primitive Optional reaches the Rust Option function")
+        check(lib.container_option_point(AbixOptionalPoint(0, 0, ContainerPoint(0, 0))) == -1,
+              "non-primitive Optional None is preserved")
 
         # A container parameter without a declared mapping still fails closed.
         no_adapt = os.path.join(work, "no_adapt.abic.toml")

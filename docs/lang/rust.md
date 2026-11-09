@@ -173,7 +173,7 @@ returns = "owned"
 release = "auto"
 ```
 
-`create = "auto"` emits a `fn(T) -> *mut T` factory (`Box::new`), and `destroy = "auto"` emits `Box::from_raw` plus drop. `release = "auto"` reuses the matching `[[owned]]` destroy signature. Owned `String`/`Vec`/`Option` returns still need their own owned contract. `Vec`/`Option` elements must be primitive in this version.
+`create = "auto"` emits a `fn(T) -> *mut T` factory (`Box::new`), and `destroy = "auto"` emits `Box::from_raw` plus drop. `release = "auto"` reuses the matching `[[owned]]` destroy signature. Owned `String`/`Vec`/`Option` returns still need their own owned contract. `Vec<T>`/`Option<T>` elements may be primitives or local `#[repr(C)]` records; owned `Vec<T>` marshalling requires `T: Clone`.
 
 ### Ownership and error contracts
 

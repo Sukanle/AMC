@@ -26,6 +26,16 @@ target = "abix_span_i32"
 element = "i32"
 
 [[adapt]]
+native = "Vec"
+target = "abix_span_ContainerPoint"
+element = "ContainerPoint"
+
+[[adapt]]
+native = "Option"
+target = "abix_optional_ContainerPoint"
+element = "ContainerPoint"
+
+[[adapt]]
 native = "Option"
 target = "abix_optional_i32"
 element = "i32"
@@ -49,6 +59,14 @@ as = "container_str_view_len"
 [[rust.expose]]
 function = "container_slice_sum"
 as = "container_slice_sum"
+
+[[rust.expose]]
+function = "container_points_sum"
+as = "container_points_sum"
+
+[[rust.expose]]
+function = "container_option_point"
+as = "container_option_point"
 
 [target]
 arch = 0
