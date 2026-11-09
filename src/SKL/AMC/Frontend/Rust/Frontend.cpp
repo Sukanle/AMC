@@ -722,6 +722,214 @@ std::string spell_type(const std::vector<std::string> &tokens) {
     return out;
 }
 
+enum class ContainerKind {
+    NONE,
+    STRING,
+    VEC,
+    OPTION,
+    BOX,
+};
+
+struct ContainerType {
+    ContainerKind kind = ContainerKind::NONE;
+    std::string element;     // compact element spelling, e.g. "i32"
+    bool borrowed = false;   // &str / &[T] instead of an owned value
+};
+
+std::string compact_tokens(const std::vector<std::string> &tokens) {
+    std::string out;
+    for (const std::string &token : tokens)
+        out += token;
+    return out;
+}
+
+ContainerType detect_container(const std::vector<std::string> &tokens) {
+    if (tokens.size() == 1 && tokens[0] == "String") return {ContainerKind::STRING, {}, false};
+    if (tokens.size() == 2 && tokens[0] == "&" && tokens[1] == "str") return {ContainerKind::STRING, {}, true};
+    if (tokens.size() == 3 && tokens[0] == "&" && tokens[1] == "mut" && tokens[2] == "str")
+        return {ContainerKind::STRING, {}, true};
+    if (tokens.size() >= 4 && tokens[1] == "<" && tokens.back() == ">") {
+        ContainerKind kind = ContainerKind::NONE;
+        if (tokens[0] == "Vec")
+            kind = ContainerKind::VEC;
+        else if (tokens[0] == "Option")
+            kind = ContainerKind::OPTION;
+        else if (tokens[0] == "Box")
+            kind = ContainerKind::BOX;
+        if (kind != ContainerKind::NONE) {
+            const std::vector<std::string> inner(tokens.begin() + 2, tokens.end() - 1);
+            return {kind, compact_tokens(inner), false};
+        }
+    }
+    if (tokens.size() >= 4 && tokens[0] == "&" && tokens[1] == "[" && tokens.back() == "]") {
+        const std::vector<std::string> inner(tokens.begin() + 2, tokens.end() - 1);
+        return {ContainerKind::VEC, compact_tokens(inner), true};
+    }
+    return {};
+}
+
+bool adapt_borrowed(const std::string &native) { return native == "&str" || native == "&[T]"; }
+
+ContainerKind adapt_kind(const std::string &native) {
+    if (native == "String" || native == "&str" || native == "rust.string") return ContainerKind::STRING;
+    if (native == "Vec" || native == "&[T]" || native == "rust.vec") return ContainerKind::VEC;
+    if (native == "Option" || native == "rust.option") return ContainerKind::OPTION;
+    return ContainerKind::NONE;
+}
+
+std::string compact_spelling(const std::string &text) {
+    std::string out;
+    for (const Token &token : lex(text))
+        if (token.kind != Tok::END) out += token.text;
+    return out;
+}
+
+const amc::lang::AdaptDecl *find_adapt(const ContainerType &type, const std::vector<amc::lang::AdaptDecl> &adapts) {
+    for (const auto &adapt : adapts) {
+        if (adapt_kind(adapt.native) != type.kind) continue;
+        if (adapt_borrowed(adapt.native) != type.borrowed) continue;
+        if (!adapt.element.empty() && compact_spelling(adapt.element) != type.element) continue;
+        return &adapt;
+    }
+    return nullptr;
+}
+
+uint32_t round_up_layout(uint32_t value, uint32_t align) {
+    return align <= 1 ? value : (value + align - 1) / align * align;
+}
+
+bool primitive_layout(const std::string &name, uint32_t pointer_size, uint32_t &size, uint32_t &align) {
+    if (name == "u8" || name == "i8" || name == "bool") {
+        size = align = 1;
+        return true;
+    }
+    if (name == "u16" || name == "i16") {
+        size = align = 2;
+        return true;
+    }
+    if (name == "u32" || name == "i32" || name == "f32" || name == "char") {
+        size = align = 4;
+        return true;
+    }
+    if (name == "u64" || name == "i64" || name == "f64") {
+        size = align = 8;
+        return true;
+    }
+    if (name == "u128" || name == "i128") {
+        size = align = 16;
+        return true;
+    }
+    if (name == "usize" || name == "isize") {
+        size = align = pointer_size;
+        return true;
+    }
+    return false;
+}
+
+std::vector<std::string> tokens_of(const std::string &text) {
+    std::vector<std::string> out;
+    for (const Token &token : lex(text))
+        if (token.kind != Tok::END) out.push_back(token.text);
+    return out;
+}
+
+bool ensure_container_boundary(std::vector<RawItem> &items, std::unordered_map<std::string, bool> &seen,
+    const std::string &target, ContainerKind kind, const std::string &element, uint32_t pointer_size,
+    std::string &error) {
+    if (target.empty() || kind == ContainerKind::NONE || kind == ContainerKind::BOX) return true;
+    if (seen.find(target) != seen.end()) return true;
+
+    uint32_t element_size = 1;
+    uint32_t element_align = 1;
+    const std::string element_type = element.empty() ? "u8" : element;
+    if (!primitive_layout(element_type, pointer_size, element_size, element_align)) {
+        error = "[[adapt]] element type must be a primitive for generated boundary types: " + element_type;
+        return false;
+    }
+
+    RawItem item;
+    item.name = target;
+    item.kind = RawItem::Kind::RECORD;
+    item.explicit_layout = true;
+    if (kind == ContainerKind::STRING) {
+        const uint32_t len_offset = round_up_layout(pointer_size, 8);
+        const uint32_t encoding_offset = len_offset + 8;
+        const uint32_t reserved_offset = encoding_offset + 4;
+        item.fields.push_back({"data", tokens_of("*const u8")});
+        item.fields.push_back({"len", tokens_of("u64")});
+        item.fields.push_back({"encoding", tokens_of("u32")});
+        item.fields.push_back({"reserved", tokens_of("u32")});
+        item.explicit_offsets = {0, len_offset, encoding_offset, reserved_offset};
+        item.explicit_align = 8;
+        item.explicit_size = round_up_layout(reserved_offset + 4, 8);
+    } else if (kind == ContainerKind::VEC) {
+        const uint32_t len_offset = round_up_layout(pointer_size, 8);
+        item.fields.push_back({"data", tokens_of("*const " + element_type)});
+        item.fields.push_back({"len", tokens_of("u64")});
+        item.explicit_offsets = {0, len_offset};
+        item.explicit_align = 8;
+        item.explicit_size = round_up_layout(len_offset + 8, 8);
+    } else {
+        const uint32_t value_offset = round_up_layout(8, element_align);
+        item.fields.push_back({"discriminant", tokens_of("u32")});
+        item.fields.push_back({"reserved", tokens_of("u32")});
+        item.fields.push_back({"value", tokens_of(element_type)});
+        item.explicit_offsets = {0, 4, value_offset};
+        item.explicit_align = std::max(4u, element_align);
+        item.explicit_size = round_up_layout(value_offset + element_size, item.explicit_align);
+    }
+    seen.emplace(target, true);
+    items.push_back(std::move(item));
+    return true;
+}
+
+std::string container_boundary_definition(const std::string &target, ContainerKind kind, const std::string &element) {
+    const std::string element_type = element.empty() ? "u8" : element;
+    if (kind == ContainerKind::STRING) {
+        return fmt::format(
+            "#[repr(C)]\n#[allow(non_camel_case_types)]\npub struct {} {{\n"
+            "    pub data: *const u8,\n    pub len: u64,\n    pub encoding: u32,\n    pub reserved: u32,\n}}\n\n",
+            target);
+    }
+    if (kind == ContainerKind::VEC) {
+        return fmt::format(
+            "#[repr(C)]\n#[allow(non_camel_case_types)]\npub struct {} {{\n"
+            "    pub data: *const {},\n    pub len: u64,\n}}\n\n",
+            target, element_type);
+    }
+    if (kind == ContainerKind::OPTION) {
+        return fmt::format(
+            "#[repr(C)]\n#[allow(non_camel_case_types)]\npub struct {} {{\n"
+            "    pub discriminant: u32,\n    pub reserved: u32,\n    pub value: core::mem::MaybeUninit<{}>,\n}}\n\n",
+            target, element_type);
+    }
+    return {};
+}
+
+std::string container_adapter_expression(
+    const amc::lang::AdaptDecl &adapt, ContainerKind kind, const std::string &var) {
+    if (kind == ContainerKind::STRING) {
+        if (adapt.native == "String" || adapt.native == "rust.string")
+            return fmt::format(
+                "String::from_utf8_lossy(unsafe {{ core::slice::from_raw_parts({}.data, {}.len as usize) }}"
+                ").into_owned()",
+                var, var);
+        return fmt::format(
+            "unsafe {{ core::str::from_utf8_unchecked(core::slice::from_raw_parts({}.data, {}.len as usize)) }}", var,
+            var);
+    }
+    if (kind == ContainerKind::VEC) {
+        if (adapt.native == "&[T]")
+            return fmt::format("unsafe {{ core::slice::from_raw_parts({}.data, {}.len as usize) }}", var, var);
+        return fmt::format("unsafe {{ core::slice::from_raw_parts({}.data, {}.len as usize) }}.to_vec()", var, var);
+    }
+    if (kind == ContainerKind::OPTION) {
+        return fmt::format(
+            "if {0}.discriminant == 1 {{ Some(unsafe {{ {0}.value.assume_init() }}) }} else {{ None }}", var);
+    }
+    return var;
+}
+
 struct Attrs {
     bool repr_c = false;
     uint32_t packed_align = 0;
@@ -1898,8 +2106,25 @@ int run_frontend(const char *config_path, const char *output_path) {
 
     std::vector<std::string> exposed_names;
     std::string wrapper_source;
+    std::string boundary_source;
+    std::unordered_map<std::string, bool> emitted_boundaries;
     std::unordered_map<std::string, bool> exposed_seen;
     std::unordered_map<std::string, size_t> wrapper_item_counts;
+    for (const auto &adapt : config.adaptations) {
+        const ContainerKind kind = adapt_kind(adapt.native);
+        if (kind == ContainerKind::NONE) {
+            fmt::print(stderr, "[[adapt]] native kind is not supported for Rust: {}\n", adapt.native);
+            return EXIT_FAILURE;
+        }
+        if (adapt.target.empty()) {
+            fmt::print(stderr, "[[adapt]] requires a boundary target type\n");
+            return EXIT_FAILURE;
+        }
+        if ((kind == ContainerKind::VEC || kind == ContainerKind::OPTION) && adapt.element.empty()) {
+            fmt::print(stderr, "[[adapt]] requires an element spelling for {}\n", adapt.native);
+            return EXIT_FAILURE;
+        }
+    }
     for (const auto &decl : config.rust_exposed) {
         const RawFunction *source = nullptr;
         for (const auto &function : functions) {
@@ -1922,10 +2147,40 @@ int run_frontend(const char *config_path, const char *output_path) {
             return EXIT_FAILURE;
         }
 
+        std::vector<const amc::lang::AdaptDecl *> parameter_adapts(source->parameters.size(), nullptr);
+        bool any_adapted = false;
+        for (size_t i = 0; i < source->parameters.size(); ++i) {
+            const ContainerType type = detect_container(source->parameters[i].type);
+            if (type.kind == ContainerKind::NONE) continue;
+            const amc::lang::AdaptDecl *adapt = find_adapt(type, config.adaptations);
+            if (adapt == nullptr) continue;
+            parameter_adapts[i] = adapt;
+            any_adapted = true;
+            if (type.kind == ContainerKind::BOX) continue;
+            const std::string element = adapt->element.empty() ? type.element : adapt->element;
+            std::string boundary_error;
+            if (!ensure_container_boundary(
+                    items, seen_items, adapt->target, type.kind, element, target.pointer_size, boundary_error)) {
+                fmt::print(stderr, "{}\n", boundary_error);
+                return EXIT_FAILURE;
+            }
+            if (emitted_boundaries.emplace(adapt->target, true).second)
+                boundary_source += container_boundary_definition(adapt->target, type.kind, element);
+        }
+        const ContainerType return_container = detect_container(source->return_type);
+        if (return_container.kind != ContainerKind::NONE
+            && find_adapt(return_container, config.adaptations) != nullptr) {
+            fmt::print(stderr, "[[rust.expose]] container return '{}' needs an explicit owned contract\n",
+                spell_type(source->return_type));
+            return EXIT_FAILURE;
+        }
+
         // A source function that is already `extern "C"` and keeps its name
         // needs no wrapper. Everything else gets a tiny C-ABI forwarding
-        // wrapper so the producer never hand-writes the export.
-        const bool needs_wrapper = !source->extern_c || exported != decl.function;
+        // wrapper so the producer never hand-writes the export. A parameter
+        // with a declared [[adapt]] always needs the wrapper because the
+        // exported signature differs from the Rust source signature.
+        const bool needs_wrapper = !source->extern_c || exported != decl.function || any_adapted;
         if (needs_wrapper) {
             // The wrapper's Rust item name must not collide with the source
             // function; `#[export_name]` controls the C symbol instead.
@@ -1935,7 +2190,9 @@ int run_frontend(const char *config_path, const char *output_path) {
             wrapper_source += fmt::format("#[export_name = \"{}\"]\npub extern \"C\" fn {}(", exported, item);
             for (size_t i = 0; i < source->parameters.size(); ++i) {
                 if (i != 0) wrapper_source += ", ";
-                wrapper_source += fmt::format("p{}: {}", i, spell_type(source->parameters[i].type));
+                const auto *adapt = parameter_adapts[i];
+                wrapper_source += fmt::format("p{}: {}", i,
+                    adapt != nullptr ? spell_type(tokens_of(adapt->target)) : spell_type(source->parameters[i].type));
             }
             wrapper_source += ")";
             const bool void_return =
@@ -1945,7 +2202,15 @@ int run_frontend(const char *config_path, const char *output_path) {
                 wrapper_source += " -> ";
                 wrapper_source += spell_type(source->return_type);
             }
-            wrapper_source += " {\n    ";
+            wrapper_source += " {\n";
+            for (size_t i = 0; i < source->parameters.size(); ++i) {
+                const auto *adapt = parameter_adapts[i];
+                if (adapt == nullptr) continue;
+                const ContainerKind kind = detect_container(source->parameters[i].type).kind;
+                wrapper_source += fmt::format(
+                    "    let p{} = {};\n", i, container_adapter_expression(*adapt, kind, fmt::format("p{}", i)));
+            }
+            wrapper_source += "    ";
             if (source->is_unsafe) wrapper_source += "unsafe { ";
             wrapper_source += "crate::";
             wrapper_source += decl.function;
@@ -1962,6 +2227,8 @@ int run_frontend(const char *config_path, const char *output_path) {
             wrapper.name = exported;
             wrapper.extern_c = true;
             wrapper.has_receiver = false;
+            for (size_t i = 0; i < parameter_adapts.size(); ++i)
+                if (parameter_adapts[i] != nullptr) wrapper.parameters[i].type = tokens_of(parameter_adapts[i]->target);
             functions.push_back(std::move(wrapper));
         }
         exposed_names.push_back(exported);
@@ -1982,6 +2249,7 @@ int run_frontend(const char *config_path, const char *output_path) {
         }
         out << "// Generated by `amc` - explicit Rust export wrappers for [[rust.expose]].\n"
                "// Compile this file as a module in the same crate as the source functions.\n\n";
+        out << boundary_source;
         out << wrapper_source;
         out.close();
         if (out.has_error()) {

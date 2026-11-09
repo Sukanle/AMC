@@ -269,13 +269,13 @@ Required when `[[expose]]` is present.
 
 ### `[[adapt]]` — native↔ABIX-STD parameter adaptation
 
-| Field     | Type   | Description                                                                                     |
-| --------- | ------ | ----------------------------------------------------------------------------------------------- |
-| `native`  | string | Native kind: `std::string`, `std::string_view`, `std::vector` or `std::span`                    |
-| `target`  | string | ABIX-STD boundary type the parameter is marshalled onto (e.g. `abix_str_utf8`, `abix_span_i32`) |
-| `element` | string | Element spelling for `std::vector`/`std::span` (e.g. `int32_t`); ignored otherwise              |
+| Field     | Type   | Description                                                                                                             |
+| --------- | ------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `native`  | string | Native kind: `std::string`, `std::string_view`, `std::vector`, `std::span`, `String`, `&str`, `Vec`, `&[T]` or `Option` |
+| `target`  | string | ABIX-STD boundary type the parameter is marshalled onto (e.g. `abix_str_utf8`, `abix_span_i32`)                         |
+| `element` | string | Element spelling for `std::vector`/`std::span` (e.g. `int32_t`); ignored otherwise                                      |
 
-An STL type must not cross the boundary raw (see [`ABI-SPEC.md`](https://github.com/Sukanle/ABIX/blob/main/.agents/ABI-SPEC.md) §18): a declared mapping is required before `[[expose]]` will adapt a method that takes it. On a match the generated thunk takes the boundary type and marshals it onto the native type (`std::string(data, len)`, `std::vector<T>(data, data + len)`, ...); the adapter is generated and linked, never inferred. Only **parameters** are adapted — a return value mapped to a borrowed view would dangle, so returns still need their own contract. A non-const lvalue reference and a mutable `std::span<T>` are not adapted (writing back through a borrowed view is not modelled).
+An STL type must not cross the boundary raw (see [`ABI-SPEC.md`](https://github.com/Sukanle/ABIX/blob/main/.agents/ABI-SPEC.md) §18): a declared mapping is required before `[[expose]]` will adapt a method that takes it. On a match the generated thunk takes the boundary type and marshals it onto the native type (`std::string(data, len)`, `std::vector<T>(data, data + len)`, ...); the adapter is generated and linked, never inferred. Only **parameters** are adapted — a return value mapped to a borrowed view would dangle, so returns still need their own contract. Rust `String`/`&str`/`Vec`/`&[T]`/`Option` use the `[[rust.expose]]` wrapper and a generated `#[repr(C)]` boundary struct; `Vec`/`Option` require a primitive `element`, and `Box::from_raw` is deferred to the owned-handle contract. A non-const lvalue reference and a mutable `std::span<T>` are not adapted (writing back through a borrowed view is not modelled).
 
 ### `[[interface]]` — a named interface contract
 

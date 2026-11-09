@@ -268,13 +268,13 @@ C++ 前端生成 `abix_<Type>_create/_destroy/_<method>` **thunk** 并登记为 
 
 ### `[[adapt]]` — native↔ABIX-STD 参数适配
 
-| 字段      | 类型   | 说明                                                                      |
-| --------- | ------ | ------------------------------------------------------------------------- |
-| `native`  | string | 原生种类：`std::string`、`std::string_view`、`std::vector` 或 `std::span` |
-| `target`  | string | 参数被马歇尔到的 ABIX-STD 边界类型（如 `abix_str_utf8`、`abix_span_i32`） |
-| `element` | string | `std::vector`/`std::span` 的元素拼写（如 `int32_t`）；其它种类忽略        |
+| 字段      | 类型   | 说明                                                                                                                 |
+| --------- | ------ | -------------------------------------------------------------------------------------------------------------------- |
+| `native`  | string | 原生种类：`std::string`、`std::string_view`、`std::vector`、`std::span`、`String`、`&str`、`Vec`、`&[T]` 或 `Option` |
+| `target`  | string | 参数被马歇尔到的 ABIX-STD 边界类型（如 `abix_str_utf8`、`abix_span_i32`）                                            |
+| `element` | string | `std::vector`/`std::span` 的元素拼写（如 `int32_t`）；其它种类忽略                                                   |
 
-STL 类型不能裸穿边界（见 [`ABI-SPEC.md`](https://github.com/Sukanle/ABIX/blob/main/.agents/ABI-SPEC.md) §18）：必须显式声明映射，`[[expose]]` 才会适配使用它的方法。命中后生成的 thunk 参数取边界类型，并在调用点马歇尔回原生类型（`std::string(data, len)`、`std::vector<T>(data, data + len)` 等）；适配器被真正生成并链接，绝不推断。**仅适配参数**——返回值映射为借用视图会悬垂，仍需自己的契约。非常量左值引用与可变的 `std::span<T>` 不适配（不建模通过借用视图回写）。
+STL 类型不能裸穿边界（见 [`ABI-SPEC.md`](https://github.com/Sukanle/ABIX/blob/main/.agents/ABI-SPEC.md) §18）：必须显式声明映射，`[[expose]]` 才会适配使用它的方法。命中后生成的 thunk 参数取边界类型，并在调用点马歇尔回原生类型（`std::string(data, len)`、`std::vector<T>(data, data + len)` 等）；适配器被真正生成并链接，绝不推断。**仅适配参数**——返回值映射为借用视图会悬垂，仍需自己的契约。非常量左值引用与可变的 `std::span<T>` 不适配（不建模通过借用视图回写）。Rust 的 `String`/`&str`/`Vec`/`&[T]`/`Option` 通过 `[[rust.expose]]` 生成 wrapper 和 `#[repr(C)]` 边界结构；`Vec`/`Option` 需要 primitive `element`，`Box` 仍等待 owned-handle 契约。
 
 ### `[[interface]]` — 命名接口契约
 

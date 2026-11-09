@@ -734,6 +734,10 @@ if(AMC_BUILD_TESTS AND AMC_PYTHON_EXECUTABLE)
         COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/providers/rust/expose_handoff_test.py
                 ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
     add_test(
+        NAME amc-rust-container-adapt-test
+        COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/providers/rust/container_adapt_test.py
+                ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
+    add_test(
         NAME amc-rust-contract-test
         COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/providers/rust/contract_handoff_test.py
                 ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
@@ -786,6 +790,7 @@ if(AMC_BUILD_TESTS AND AMC_PYTHON_EXECUTABLE)
         amc-feature-test
         amc-rust-test
         amc-rust-expose-test
+        amc-rust-container-adapt-test
         amc-rust-contract-test
         amc-rust-clong-test
         amc-rust-panic-test

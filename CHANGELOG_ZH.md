@@ -14,6 +14,7 @@
 - Rust edition 选择：`[rust] edition`（2015/2018/2021/2024）会转发给 helper；未设置时由 Cargo manifest 提供 package edition，否则使用 2021。helper 报告 rustc 实际编译使用的 edition，并在 `cargo.edition` 保留 Cargo package edition。
 - Cargo workspace 事实：helper 记录 package id、manifest 路径、workspace root、target directory、workspace/default members 和依赖（kind、requirement、optional、path）。`[rust] manifest` 与 `[rust] target` 会转发给 helper，事实保存在 `.semantic` 的 `rust.cargo`。
 - 显式泛型实例现在支持 primitive、非泛型本地类型和 const generic 十进制整数。未知名称、多余参数和非法 const 值会 fail closed，不再生成猜测的实例。
+- Rust 容器契约：`[[adapt]]` 将 `[[rust.expose]]` 暴露的 `String`/`&str`、`Vec<T>`/`&[T]`、`Option<T>` 参数映射到 ABIX-STD StringView、SequenceView、Optional 边界类型。AMC 合成边界 record，生成 `#[repr(C)]` 结构和 marshal 代码，并记录 lowering。容器返回值和 `Box<T>` 在 owned-handle 契约落地前明确拒绝。
 - 标准容器事实：`Option<T>`、`Box<T>`、`String`、`Vec<T>` 的出现位置记录在 `.semantic` 的 `rust.containers`。选中进入 ABI 时会要求显式 `[[contract]]`，不会假设 niche 布局或所有权。
 - `AMC_BUILD_RUST_HELPER=ON` 会用 Cargo 把 `tools/rustc-helper` 构建到 build 目录（仅在 helper 进程内设置 `RUSTC_BOOTSTRAP=1`），并安装到 AMC 工具旁边；未开启时测试仍按需构建 helper。
 - `amc-rust-helper-test`：用 Cargo 构建 helper，验证 generics/traits/errors/cargo metadata，用 rustc `size_of`/`align_of`/`offset_of!` probe 交叉校验布局，并检查 AMC 导入路径。

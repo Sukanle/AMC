@@ -233,7 +233,7 @@ The helper only describes the semantic entity. The ABI status mapping remains in
 
 ### `containers`
 
-`containers[]` records where `Option<T>`, `Box<T>`, `String` and `Vec<T>` appear: `owner`, `context` (`parameter` / `return` / `field` / `alias`), full type, `container` kind and an optional `element` type. The helper does not assume niche layout, ownership or buffer representation. Selecting one of these types for the ABI requires an explicit `[[contract]]`; otherwise AMC rejects it with a targeted diagnostic.
+`containers[]` records where `Option<T>`, `Box<T>`, `String` and `Vec<T>` appear: `owner`, `context` (`parameter` / `return` / `field` / `alias`), full type, `container` kind and an optional `element` type. The helper does not assume niche layout, ownership or buffer representation. Selecting one of these types for the ABI requires an explicit contract: either an owned `[[contract]]`, or a `[[adapt]]` mapping consumed by `[[rust.expose]]` (`String`/`&str` → StringView, `Vec<T>` → SequenceView, `Option<T>` → Optional). Without one, AMC rejects it with a targeted diagnostic.
 
 ### Explicit generic instances
 

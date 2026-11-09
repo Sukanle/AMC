@@ -1095,6 +1095,63 @@ int build_command(const fs::path &provider) {
                     full.lowerings.push_back(result);
                 }
             }
+            // A declared native↔ABIX-STD parameter adaptation also lowers the
+            // boundary type, so the artifact records the contract the thunk
+            // marshals onto. The language frontend synthesized the boundary
+            // type; here we only validate its layout.
+            if (const auto *adapts = config["adapt"].as_array()) {
+                for (auto &&entry : *adapts) {
+                    const auto *table = entry.as_table();
+                    if (!table) continue;
+                    const std::string native = (*table)["native"].value_or("");
+                    const std::string target = (*table)["target"].value_or("");
+                    const std::string element_name = (*table)["element"].value_or("");
+                    if (target.empty()) continue;
+                    const amc::Hash128 type_id = amc::find_type_id_by_spelling(full, target);
+                    if (type_id == amc::Hash128{}) continue;
+                    amc::Hash128 element_id{};
+                    std::string element_spelling;
+                    if (!element_name.empty()) {
+                        element_id = amc::find_type_id_by_spelling(full, element_name);
+                        // The language frontend already matched the native
+                        // element; only constrain the lowering when the
+                        // spelling is a recorded ABI type.
+                        if (!(element_id == amc::Hash128{})) element_spelling = element_name;
+                    }
+                    amc::LoweringResult result;
+                    bool evaluated = true;
+                    if (native == "String"
+                        || native == "&str"
+                        || native == "std::string"
+                        || native == "std::string_view") {
+                        result = amc::evaluate_string_view(full, type_id, element_id, element_spelling, false);
+                    } else if (native == "Vec"
+                               || native == "&[T]"
+                               || native == "std::vector"
+                               || native == "std::span") {
+                        result = amc::evaluate_sequence_view(full, type_id, element_id, element_spelling, false);
+                    } else if (native == "Option") {
+                        result = amc::evaluate_optional(full, type_id, element_id, element_spelling);
+                    } else {
+                        evaluated = false;
+                    }
+                    if (!evaluated) continue;
+                    if (result.status == static_cast<uint32_t>(amc::LoweringStatus::UNSUPPORTED)) {
+                        error = "[[adapt]] target does not satisfy its ABIX-STD contract: " + target;
+                        return fail(amc::ErrorCategory::VALIDATION, "build", error, config_path.string());
+                    }
+                    bool replaced = false;
+                    for (auto &existing : full.lowerings) {
+                        if (existing.type_id == result.type_id && existing.kind == result.kind) {
+                            existing = result;
+                            replaced = true;
+                            break;
+                        }
+                    }
+                    if (!replaced) full.lowerings.push_back(result);
+                }
+            }
+
             // Container -> sequence-view adapters (for example a vector-like type
             // exposed through data()/size()). The container layout is not exposed.
             if (const auto *views = config["view"].as_array()) {

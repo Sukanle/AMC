@@ -104,6 +104,41 @@ When configured, `amc-rust` runs the helper and uses its target facts. If the he
 
 `Option<T>`, `Box<T>`, `String` and `Vec<T>` are recorded as semantic facts, not as implicit ABI layouts. Selecting a function or field that uses one of them requires an explicit `[[contract]]`; otherwise the build fails with a diagnostic naming the container instead of silently guessing an owner or buffer representation. Trait objects are rejected the same way because `&dyn Trait` is a fat pointer and cannot be lowered as a plain pointer without an explicit contract.
 
+### Container contracts (`String`, `Vec<T>`, `Option<T>`)
+
+Rust containers must not cross the boundary raw. Declare a `[[adapt]]` mapping and expose an ordinary Rust function through `[[rust.expose]]`:
+
+```toml
+[[adapt]]
+native = "String"
+target = "abix_str_utf8"
+
+[[adapt]]
+native = "Vec"
+target = "abix_span_i32"
+element = "i32"
+
+[[adapt]]
+native = "Option"
+target = "abix_optional_i32"
+element = "i32"
+
+[[rust.expose]]
+function = "container_string_len"
+as = "container_string_len"
+
+[thunks]
+output = "container_thunks.rs"
+```
+
+AMC synthesizes the boundary record, emits the matching `#[repr(C)]` struct in the thunk source, and generates the marshalling code:
+
+- `String` / `&str` → `abix_str_utf8` (`&str` is zero-copy; `String` copies into an owned value);
+- `Vec<T>` → `abix_span_<T>` (`to_vec()`; use `native = "&[T]"` for a zero-copy slice);
+- `Option<T>` → `abix_optional_<T>` (the wrapper reads the value through `MaybeUninit` only when the discriminant is `Some`).
+
+Only parameters are adapted. Container returns need an explicit owned contract, and `Box<T>` awaits the owned-handle contract. `Vec`/`Option` elements must be primitive in this version.
+
 ### Ownership and error contracts
 
 The generic `[[owned]]`, `[[contract]]` and `[[error]]` declarations apply to Rust functions too. They are resolved after the frontend records the ABI, so the Rust projection emits the same RAII and `Result` wrappers as the C++ path.

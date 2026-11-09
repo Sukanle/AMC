@@ -104,6 +104,41 @@ as = "WrapperU64"
 
 `Option<T>`、`Box<T>`、`String`、`Vec<T>` 会作为语义事实记录，而不会被当作隐式 ABI 布局。选择包含这些类型的函数或字段时必须提供显式 `[[contract]]`；否则构建会以点名容器的诊断失败，而不是静默猜测所有权或缓冲区表示。trait object 也会被同样拒绝，因为 `&dyn Trait` 是 fat pointer，没有显式契约时不能当作普通指针降级。
 
+### 容器契约（`String`、`Vec<T>`、`Option<T>`）
+
+Rust 容器不能裸跨边界。通过 `[[adapt]]` 声明映射，并用 `[[rust.expose]]` 暴露普通 Rust 函数：
+
+```toml
+[[adapt]]
+native = "String"
+target = "abix_str_utf8"
+
+[[adapt]]
+native = "Vec"
+target = "abix_span_i32"
+element = "i32"
+
+[[adapt]]
+native = "Option"
+target = "abix_optional_i32"
+element = "i32"
+
+[[rust.expose]]
+function = "container_string_len"
+as = "container_string_len"
+
+[thunks]
+output = "container_thunks.rs"
+```
+
+AMC 会合成边界 record，在 thunk 源码中生成对应的 `#[repr(C)]` 结构，并生成 marshal 代码：
+
+- `String` / `&str` → `abix_str_utf8`（`&str` 零拷贝；`String` 复制为 owned 值）；
+- `Vec<T>` → `abix_span_<T>`（`to_vec()`；使用 `native = "&[T]"` 可获得零拷贝 slice）；
+- `Option<T>` → `abix_optional_<T>`（wrapper 侧用 `MaybeUninit`，仅在判别为 `Some` 时读取值）。
+
+目前只适配参数。容器返回值需要显式 owned 契约；`Box<T>` 等待 owned-handle 契约。`Vec`/`Option` 的元素类型在本版本中必须是 primitive。
+
 ### 所有权与错误契约
 
 通用的 `[[owned]]`、`[[contract]]` 与 `[[error]]` 声明同样适用于 Rust 函数。它们在前端记录 ABI 之后解析，因此 Rust 投影会生成与 C++ 路径一致的 RAII 和 `Result` wrapper。

@@ -1,0 +1,64 @@
+[package]
+name = "rust_container_api"
+version = "0.1"
+
+[[import]]
+language = "rust"
+files = ["rust_container_api.rs"]
+symbols = ["ContainerApi"]
+
+[[adapt]]
+native = "String"
+target = "abix_str_utf8"
+
+[[adapt]]
+native = "&str"
+target = "abix_str_utf8"
+
+[[adapt]]
+native = "Vec"
+target = "abix_span_i32"
+element = "i32"
+
+[[adapt]]
+native = "&[T]"
+target = "abix_span_i32"
+element = "i32"
+
+[[adapt]]
+native = "Option"
+target = "abix_optional_i32"
+element = "i32"
+
+[[rust.expose]]
+function = "container_string_len"
+as = "container_string_len"
+
+[[rust.expose]]
+function = "container_vec_sum"
+as = "container_vec_sum"
+
+[[rust.expose]]
+function = "container_option_value"
+as = "container_option_value"
+
+[[rust.expose]]
+function = "container_str_view_len"
+as = "container_str_view_len"
+
+[[rust.expose]]
+function = "container_slice_sum"
+as = "container_slice_sum"
+
+[target]
+arch = 0
+os = 0
+abi = 1
+pointer_bits = 64
+endianness = "little"
+
+[thunks]
+output = "container_thunks.rs"
+
+[[export]]
+output = "rust_container_api.abix"
