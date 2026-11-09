@@ -101,7 +101,7 @@ as = "WrapperU64"
 
 When configured, `amc-rust` runs the helper and uses its target facts. If the helper fails and `[target]` already provides `pointer_bits`, endianness and `c_long_bits`, AMC falls back to the parser/probe path with a warning.
 
-`Option<T>`, `Box<T>`, `String` and `Vec<T>` are recorded as semantic facts, not as implicit ABI layouts. Selecting a function or field that uses one of them requires an explicit `[[contract]]`; otherwise the build fails with a diagnostic naming the container instead of silently guessing an owner or buffer representation.
+`Option<T>`, `Box<T>`, `String` and `Vec<T>` are recorded as semantic facts, not as implicit ABI layouts. Selecting a function or field that uses one of them requires an explicit `[[contract]]`; otherwise the build fails with a diagnostic naming the container instead of silently guessing an owner or buffer representation. Trait objects are rejected the same way because `&dyn Trait` is a fat pointer and cannot be lowered as a plain pointer without an explicit contract.
 
 ### Ownership and error contracts
 

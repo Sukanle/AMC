@@ -101,7 +101,7 @@ as = "WrapperU64"
 
 配置后，`amc-rust` 会运行 helper 并使用其 target facts。如果 helper 失败且 `[target]` 已提供 `pointer_bits`、endianness 和 `c_long_bits`，AMC 会给出警告并回退到 parser/probe 路径。
 
-`Option<T>`、`Box<T>`、`String`、`Vec<T>` 会作为语义事实记录，而不会被当作隐式 ABI 布局。选择包含这些类型的函数或字段时必须提供显式 `[[contract]]`；否则构建会以点名容器的诊断失败，而不是静默猜测所有权或缓冲区表示。
+`Option<T>`、`Box<T>`、`String`、`Vec<T>` 会作为语义事实记录，而不会被当作隐式 ABI 布局。选择包含这些类型的函数或字段时必须提供显式 `[[contract]]`；否则构建会以点名容器的诊断失败，而不是静默猜测所有权或缓冲区表示。trait object 也会被同样拒绝，因为 `&dyn Trait` 是 fat pointer，没有显式契约时不能当作普通指针降级。
 
 ### 所有权与错误契约
 

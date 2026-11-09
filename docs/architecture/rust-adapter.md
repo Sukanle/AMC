@@ -224,7 +224,7 @@ The helper only describes the semantic entity. The ABI status mapping remains in
 
 ### `trait_objects`
 
-`trait_objects[]` records `dyn Trait` occurrences found in fields, parameters, returns or aliases. The entry names the owner, context, full type spelling and the trait bounds. Trait objects are not ABI-projectable without an explicit contract; the helper only preserves the semantic fact.
+`trait_objects[]` records `dyn Trait` occurrences found in fields, parameters, returns or aliases. The entry names the owner, context, full type spelling and the trait bounds. Trait objects are not ABI-projectable without an explicit contract. `&dyn Trait` is a fat pointer, so AMC rejects it in function signatures and record fields instead of lowering it as a thin pointer; the helper only preserves the semantic fact.
 
 ### `async_functions`
 

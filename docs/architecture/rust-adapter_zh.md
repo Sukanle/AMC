@@ -224,7 +224,7 @@ helper 只描述语义实体；ABI status 映射仍由 AMC 的 error pass 和显
 
 ### `trait_objects`
 
-`trait_objects[]` 记录字段、参数、返回值或 alias 中出现的 `dyn Trait`： owner、context、完整类型拼写和 trait bounds。trait object 没有显式契约时不能直接 ABI 投影，helper 只保留语义事实。
+`trait_objects[]` 记录字段、参数、返回值或 alias 中出现的 `dyn Trait`： owner、context、完整类型拼写和 trait bounds。trait object 没有显式契约时不能直接 ABI 投影。`&dyn Trait` 是 fat pointer，因此 AMC 会在函数签名和 record 字段中拒绝它，而不是降级成 thin pointer；helper 只保留语义事实。
 
 ### `async_functions`
 

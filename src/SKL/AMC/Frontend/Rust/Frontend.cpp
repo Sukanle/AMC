@@ -1248,6 +1248,18 @@ private:
         if (error_.empty()) error_ = message;
     }
 
+    // `&dyn Trait` and `*const dyn Trait` are fat pointers. Mapping them as a
+    // thin pointer would silently change the ABI, so reject them until the user
+    // supplies an explicit contract or a repr(C) wrapper.
+    bool reject_trait_object(const std::vector<std::string> &tokens, const std::string &context) {
+        for (const std::string &token : tokens) {
+            if (token != "dyn") continue;
+            set_error(context + " uses a trait object (dyn Trait); add an explicit [[contract]] or wrap it in repr(C)");
+            return true;
+        }
+        return false;
+    }
+
     int find_type(amc::Hash128 id) const {
         for (size_t i = 0; i < module_.types.size(); ++i)
             if (module_.types[i].id == id) return static_cast<int>(i);
@@ -1500,6 +1512,9 @@ private:
         uint32_t size = 0;
         uint32_t align = 1;
         for (const auto &raw : item.fields) {
+            const std::string context = fmt::format("field '{}::{}'", item.name,
+                raw.name.empty() ? fmt::format("field{}", module_.fields.size()) : raw.name);
+            if (reject_trait_object(raw.type, context)) return -1;
             const Resolved field_type = resolve_type(raw.type);
             if (!ok()) return -1;
             amc::Field field;
@@ -1564,6 +1579,9 @@ private:
         uint32_t align = 1;
         for (size_t index = 0; index < item.fields.size(); ++index) {
             const auto &raw = item.fields[index];
+            const std::string context = fmt::format("field '{}::{}'", item.name,
+                raw.name.empty() ? fmt::format("field{}", module_.fields.size() + index) : raw.name);
+            if (reject_trait_object(raw.type, context)) return -1;
             const Resolved field_type = resolve_type(raw.type);
             if (!ok()) return -1;
             const uint32_t natural_align = field_type.align == 0 ? 1 : field_type.align;
@@ -1597,6 +1615,10 @@ private:
 
     void add_function(const RawFunction &raw) {
         if (!added_functions_.emplace(raw.name, true).second) return;
+        const std::string context = fmt::format("function '{}'", raw.name);
+        if (reject_trait_object(raw.return_type, context)) return;
+        for (const auto &parameter : raw.parameters)
+            if (reject_trait_object(parameter.type, context)) return;
         const bool void_return =
             raw.return_type.empty()
             || (raw.return_type.size() == 2 && raw.return_type[0] == "(" && raw.return_type[1] == ")");

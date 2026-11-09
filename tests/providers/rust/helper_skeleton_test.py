@@ -340,6 +340,26 @@ def main():
                       for item in container_document.get("containers", [])),
                   "container owner is recorded")
 
+        # Trait objects stay semantic metadata; AMC must not map their fat
+        # pointers as thin ABI pointers.
+        trait_object_fixture = source_root / "tests" / "fixtures" / "rust_trait_object.rs"
+        trait_object_json = os.path.join(work, "trait_object.json")
+        result = run([helper, "--crate-name", "rust_trait_object", "--edition", "2021",
+                      "--source", str(trait_object_fixture), "--output", trait_object_json])
+        if check(result.returncode == 0 and os.path.isfile(trait_object_json),
+                 "helper extracted the trait-object fixture", output(result)[-400:]):
+            trait_object_document = json.load(open(trait_object_json, encoding="utf-8"))
+            objects = trait_object_document.get("trait_objects", [])
+            check(any(item.get("owner", "").endswith("::trait_object_name")
+                      and item.get("context") == "parameter"
+                      and "dyn Named" in item.get("type", "")
+                      for item in objects),
+                  "trait object parameter is recorded")
+            check(any(item.get("owner", "").endswith("::DynField")
+                      and item.get("context") == "field"
+                      for item in objects),
+                  "trait object field is recorded")
+
         # Cargo metadata fills workspace facts when a manifest is available.
         cargo_dir = Path(work) / "cargo-demo"
         (cargo_dir / "src").mkdir(parents=True)
@@ -590,6 +610,37 @@ def main():
             check(result.returncode != 0 and "Option<T>" in selected_output
                   and "explicit [[contract]]" in selected_output,
                   "selected container requires an explicit contract", selected_output[-500:])
+
+            # Trait objects must be rejected instead of being lowered as thin
+            # pointers, both in function signatures and record fields.
+            trait_dir = Path(work) / "trait_object_import"
+            trait_dir.mkdir()
+            shutil.copyfile(trait_object_fixture, trait_dir / "rust_trait_object.rs")
+            trait_config = trait_dir / "trait.abic.toml"
+            trait_config.write_text(
+                "[package]\nname = \"rust_trait_object\"\nversion = \"0.1\"\n\n"
+                "[[import]]\nlanguage = \"rust\"\nfiles = [\"rust_trait_object.rs\"]\n"
+                "symbols = [\"DynPayload\", \"trait_object_name\"]\n\n"
+                "[rust]\nhelper = \"" + helper_toml + "\"\n\n"
+                "[[export]]\noutput = \"rust_trait_object.abix\"\n",
+                encoding="utf-8")
+            result = run([str(amc), "build", "-c", str(trait_config), "-B", str(trait_dir / "out")])
+            trait_output = output(result)
+            check(result.returncode != 0 and "trait object (dyn Trait)" in trait_output,
+                  "trait-object parameter is rejected", trait_output[-500:])
+
+            field_config = trait_dir / "trait_field.abic.toml"
+            field_config.write_text(
+                "[package]\nname = \"rust_trait_object\"\nversion = \"0.1\"\n\n"
+                "[[import]]\nlanguage = \"rust\"\nfiles = [\"rust_trait_object.rs\"]\n"
+                "symbols = [\"DynField\"]\n\n"
+                "[rust]\nhelper = \"" + helper_toml + "\"\n\n"
+                "[[export]]\noutput = \"rust_trait_field.abix\"\n",
+                encoding="utf-8")
+            result = run([str(amc), "build", "-c", str(field_config), "-B", str(trait_dir / "field_out")])
+            field_output = output(result)
+            check(result.returncode != 0 and "field 'DynField::name'" in field_output,
+                  "trait-object field is rejected", field_output[-500:])
 
         if keep:
             print("  kept artifacts in " + work)
