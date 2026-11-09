@@ -191,7 +191,7 @@ Each entry describes one declaration:
 
 Trait declarations and impls share the array and are distinguished by `kind`:
 
-- `trait`: `parameters`, `where_clause`, `supertraits`, `associated_types[]` and `methods[]`; each method carries `name`, `path`, `has_receiver`, `required`, `abi`, `return_type` and `parameters`.
+- `trait`: `parameters`, `where_clause`, `supertraits`, `associated_types[]` and `methods[]`; each method carries `name`, `path`, `has_receiver`, `required`, `abi`, `return_type` and `parameters`. An impl entry also uses this shape, and its `associated_types[]` carries the concrete `value` (type identity) in addition to the declared `name` and `kind`.
 - `impl`: `self_type`, `trait` (or `null`), `negative`, `parameters`, `where_clause` and `methods[]`.
 
 AMC records these as language metadata. It does not run a trait solver and does not assume that a missing entry means “not a trait”.

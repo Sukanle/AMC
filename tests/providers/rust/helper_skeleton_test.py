@@ -256,8 +256,14 @@ def main():
             check(trait_decl.get("name") == "Shape", "trait declaration extracted")
             check({method.get("name") for method in trait_decl.get("methods", [])} == {"area", "perimeter"},
                   "trait methods extracted")
-            check(any(item.get("kind") == "impl" and item.get("self_type", "").endswith("::Circle")
-                      for item in traits), "trait impl extracted")
+            circle_impl = next((item for item in traits if item.get("kind") == "impl"
+                                and item.get("self_type", "").endswith("::Circle")), {})
+            check(bool(circle_impl), "trait impl extracted")
+            check(any(associated.get("name") == "Unit"
+                      and associated.get("kind") == "type"
+                      and associated.get("value") == "rust:f64"
+                      for associated in circle_impl.get("associated_types", [])),
+                  "trait impl associated type extracted")
             check(any(item.get("kind") == "impl"
                       and item.get("self_type", "").endswith("::nested::NestedPoint")
                       for item in traits), "inherent impl extracted")
@@ -503,6 +509,13 @@ def main():
                     rust = semantic.get("rust", {})
                     check(bool(rust.get("generics")), "Rust generics reached Semantic IR")
                     check(bool(rust.get("traits")), "Rust traits reached Semantic IR")
+                    circle_impl = next((item for item in rust.get("traits", [])
+                                        if item.get("kind") == "impl"
+                                        and item.get("self_type", "").endswith("::Circle")), {})
+                    check(any(associated.get("name") == "Unit"
+                              and associated.get("value") == "rust:f64"
+                              for associated in circle_impl.get("associated_types", [])),
+                          "trait impl associated type reached Semantic IR")
                     check(bool(rust.get("errors")), "Rust errors reached Semantic IR")
                     check(bool(rust.get("lifetimes")), "Rust lifetimes reached Semantic IR")
                     check(bool(rust.get("trait_objects")), "Rust trait objects reached Semantic IR")

@@ -365,7 +365,8 @@ struct RustTraitMethod {
 
 struct RustAssociatedType {
     std::string name;
-    std::string kind;   // type | const
+    std::string kind;    // type | const
+    std::string value;   // concrete type/value for an impl; empty on a trait
     std::vector<std::string> bounds;
 };
 

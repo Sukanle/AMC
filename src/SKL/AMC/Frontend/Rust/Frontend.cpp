@@ -251,6 +251,7 @@ amc::semantic::RustSemantic helper_rust_semantic(const HelperDocument &document)
                     amc::semantic::RustAssociatedType entry;
                     if (const amc::Json *field = item.find("name")) entry.name = field->as_string();
                     if (const amc::Json *field = item.find("kind")) entry.kind = field->as_string();
+                    if (const amc::Json *field = item.find("value")) entry.value = field->as_string();
                     entry.bounds = helper_strings(item.find("bounds"));
                     trait.associated_types.push_back(std::move(entry));
                 }

@@ -191,7 +191,7 @@ AMC 将这些记录转换为 Semantic IR，并决定实体是否 ABI-safe。help
 
 trait 声明和 impl 共用数组，通过 `kind` 区分：
 
-- `trait`：`parameters`、`where_clause`、`supertraits`、`associated_types[]` 和 `methods[]`；method 包含 `name`、`path`、`has_receiver`、`required`、`abi`、`return_type` 和 `parameters`；
+- `trait`：`parameters`、`where_clause`、`supertraits`、`associated_types[]` 和 `methods[]`；method 包含 `name`、`path`、`has_receiver`、`required`、`abi`、`return_type` 和 `parameters`。impl 条目使用同样的结构，其 `associated_types[]` 除 `name`/`kind` 外还携带具体 `value`（类型身份）。
 - `impl`：`self_type`、`trait`（或 `null`）、`negative`、`parameters`、`where_clause` 和 `methods[]`。
 
 AMC 将这些作为语言元数据保留，不运行 trait solver，也不假设“缺失 = 不是 trait”。

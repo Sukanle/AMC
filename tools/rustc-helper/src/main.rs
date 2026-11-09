@@ -707,12 +707,37 @@ fn emit_impl<'tcx>(tcx: TyCtxt<'tcx>, def_id: DefId) -> Option<Value> {
     let trait_id = tcx.impl_opt_trait_id(def_id).map(|trait_id| item_id(tcx, trait_id));
     let has_trait = trait_id.is_some();
     let negative = has_trait && matches!(tcx.impl_polarity(def_id), rustc_middle::ty::ImplPolarity::Negative);
-    let methods: Vec<Value> = tcx
-        .associated_items(def_id)
-        .in_definition_order()
-        .filter(|item| item.is_fn())
-        .filter_map(|item| method_json(tcx, item.def_id, false))
-        .collect();
+    let mut methods = Vec::new();
+    let mut associated_types = Vec::new();
+    for item in tcx.associated_items(def_id).in_definition_order() {
+        match item.kind {
+            AssocKind::Fn { .. } => {
+                if let Some(method) = method_json(tcx, item.def_id, false) {
+                    methods.push(method);
+                }
+            }
+            AssocKind::Type { data } => {
+                let name = match data {
+                    rustc_middle::ty::AssocTypeData::Normal(name) => name.to_string(),
+                    rustc_middle::ty::AssocTypeData::Rpitit(_) => "<impl Trait>".to_string(),
+                };
+                let value = tcx.type_of(item.def_id).instantiate_identity().skip_normalization();
+                associated_types.push(json!({
+                    "name": name,
+                    "kind": "type",
+                    "value": type_id(tcx, value),
+                }));
+            }
+            AssocKind::Const { name, .. } => {
+                associated_types.push(json!({
+                    "name": name.to_string(),
+                    "kind": "const",
+                    "value": Value::Null,
+                }));
+            }
+            _ => {}
+        }
+    }
     Some(json!({
         "id": item_id(tcx, def_id),
         "name": path_string(tcx, def_id),
@@ -722,6 +747,7 @@ fn emit_impl<'tcx>(tcx: TyCtxt<'tcx>, def_id: DefId) -> Option<Value> {
         "negative": negative,
         "parameters": parameters,
         "where_clause": where_clause,
+        "associated_types": associated_types,
         "methods": methods,
     }))
 }

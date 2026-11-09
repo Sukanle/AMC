@@ -4,7 +4,7 @@
 
 ### 新增
 
-- Rust Semantic IR 扩展：`.semantic` 新增 `rust` 对象，保存 generics、traits/impls、`Result` errors、lifetimes、trait objects 和 async functions；ABIX 可投影的 types/functions 仍在 ABI 视图中。
+- Rust Semantic IR 扩展：`.semantic` 新增 `rust` 对象，保存 generics、traits/impls、`Result` errors、lifetimes、trait objects 和 async functions；impl 条目还会记录具体的 associated type 值（如 `type Unit = f64`）。 ABIX 可投影的 types/functions 仍在 ABI 视图中。
 - Rust 显式泛型选择：`--instantiate Template=arg1,arg2` / `[[instantiate]]` 按请求输出具体本地实例，不再枚举所有 monomorphization。
 - `.abic.toml` 的 `[rust] features` 会转发给 helper；没有 Cargo manifest 时仍记录 CLI features。
 - Rust `[[error]]` 契约会自动复用匹配的 helper error enum 作为 error set（名称和非零 variant code），domain、success 和 value slot 仍由显式契约决定。

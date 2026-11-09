@@ -252,6 +252,7 @@ void append_rust_json(Json &root, const RustSemantic &rust) {
             Json entry = Json::object();
             entry.set("name", item.name);
             entry.set("kind", item.kind);
+            if (!item.value.empty()) entry.set("value", item.value);
             entry.set("bounds", string_array_json(item.bounds));
             associated.push_back(std::move(entry));
         }
@@ -392,6 +393,7 @@ void rust_traits(const Json &section, RustSemantic &rust) {
                     RustAssociatedType entry;
                     entry.name = string_field(item, "name");
                     entry.kind = string_field(item, "kind");
+                    entry.value = string_field(item, "value");
                     entry.bounds = read_string_array(item, "bounds");
                     trait.associated_types.push_back(std::move(entry));
                 }

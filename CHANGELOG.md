@@ -4,7 +4,7 @@
 
 ### Added
 
-- Rust semantic IR extension: `.semantic` now carries a `rust` object with generics, traits/impls, `Result` errors, lifetimes, trait objects and async functions. ABIX-compatible types/functions remain in the ABI view.
+- Rust semantic IR extension: `.semantic` now carries a `rust` object with generics, traits/impls, `Result` errors, lifetimes, trait objects and async functions. Impl entries also record the concrete associated type values (`type Unit = f64`). ABIX-compatible types/functions remain in the ABI view.
 - Explicit Rust generic selection: `--instantiate Template=arg1,arg2` and `[[instantiate]]` emit a concrete local instance on request instead of enumerating monomorphizations.
 - `[rust] features` in `.abic.toml` is forwarded to the helper; without a Cargo manifest the helper still records CLI features.
 - Rust `[[error]]` contracts now reuse a matching helper error enum as an error set (name and non-zero variant codes) while the explicit contract still selects the domain, success value and value slot.
