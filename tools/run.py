@@ -15,6 +15,11 @@ Usage:
     python tools/run.py --interop              # build + interop tests
     python tools/run.py --mcp --host h.abix --plugin p.abix
     python tools/run.py --bench-repetitions 5 --bench-pin off
+    python tools/run.py --test-only --artifact-dir build/tmp
+
+Test artifacts (AMC `.abix` files, native libraries and test executables) are
+kept under `build/tmp` by default so they can be inspected with the ImHex
+patterns in `tools/imhex/`.
 
 All build/test/bench options are forwarded to the stage scripts:
   - run_build.py:  --clean, --build-type, --cmake-var, --no-tests, ...
@@ -25,6 +30,7 @@ All build/test/bench options are forwarded to the stage scripts:
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -32,7 +38,7 @@ from pathlib import Path
 TOOLS_DIR = Path(__file__).resolve().parent
 
 
-def run_script(script_name: str, args: list[str]) -> int:
+def run_script(script_name: str, args: list[str], env: dict[str, str] | None = None) -> int:
     """Run a Python script from the tools directory."""
     script = TOOLS_DIR / script_name
     if not script.exists():
@@ -40,7 +46,7 @@ def run_script(script_name: str, args: list[str]) -> int:
         return 1
     cmd = [sys.executable, str(script), *args]
     print(f"  \033[90m{' '.join(cmd)}\033[0m", flush=True)
-    return subprocess.run(cmd, cwd=TOOLS_DIR.parent).returncode
+    return subprocess.run(cmd, cwd=TOOLS_DIR.parent, env=env).returncode
 
 
 def main() -> int:
@@ -143,6 +149,11 @@ Examples:
     )
     test_group.add_argument(
         "--keep", action="store_true", help="Keep temporary test artifacts"
+    )
+    test_group.add_argument(
+        "--artifact-dir",
+        default="build/tmp",
+        help="Directory for AMC binaries/test artifacts (default: build/tmp)",
     )
     test_group.add_argument(
         "--list",
@@ -277,6 +288,19 @@ Examples:
         print("  TEST STAGE")
         print("=" * 70)
         sys.stdout.flush()
+        artifact_dir = Path(args.artifact_dir)
+        if not artifact_dir.is_absolute():
+            artifact_dir = TOOLS_DIR.parent / artifact_dir
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        test_env = {
+            **os.environ,
+            "AMC_ARTIFACT_DIR": str(artifact_dir),
+            "KEEP_ARTIFACTS": "1",
+            "TMPDIR": str(artifact_dir),
+            "TMP": str(artifact_dir),
+            "TEMP": str(artifact_dir),
+        }
+        print(f"  artifacts: {artifact_dir}")
         test_args = ["--build-dir", build_dir]
         if args.keep:
             test_args.append("--keep")
@@ -307,7 +331,7 @@ Examples:
             if args.amc_mcp:
                 test_args.extend(["--amc-mcp", args.amc_mcp])
 
-        rc = run_script("run_test.py", test_args)
+        rc = run_script("run_test.py", test_args, env=test_env)
         if rc != 0:
             print(f"\033[31mTests failed with exit code {rc}\033[0m", file=sys.stderr)
             exit_code = rc

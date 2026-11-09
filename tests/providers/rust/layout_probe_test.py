@@ -21,6 +21,23 @@ import sys
 import tempfile
 from pathlib import Path
 
+import contextlib
+
+
+@contextlib.contextmanager
+def preserved_directory(prefix: str):
+    """Keep the work directory when KEEP_ARTIFACTS=1 or --keep-artifacts."""
+    work = tempfile.mkdtemp(prefix=prefix)
+    keep = os.environ.get("KEEP_ARTIFACTS", "") == "1" or "--keep-artifacts" in sys.argv[1:]
+    try:
+        yield work
+    finally:
+        if keep:
+            print("  kept artifacts in " + work)
+        else:
+            shutil.rmtree(work, ignore_errors=True)
+
+
 # Types/fields in tests/fixtures/rust_demo.rs that participate in the probe.
 CASES = {
     "RustPoint": ["x", "y"],
@@ -175,7 +192,7 @@ def main() -> int:
         return 1
     pass_(f"configured target matches rustc Host facts ({pointer_width}-bit, {target_endian})")
 
-    with tempfile.TemporaryDirectory(prefix="amc-rust-layout-") as temporary:
+    with preserved_directory("amc-rust-layout-") as temporary:
         work = Path(temporary)
         try:
             artifact = build_artifact(amc, config, work / "build")

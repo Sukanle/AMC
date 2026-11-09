@@ -67,7 +67,7 @@ def env_for(work):
 
 def main():
     argv = [a for a in sys.argv[1:] if a != "--keep-artifacts"]
-    keep = "--keep-artifacts" in sys.argv[1:]
+    keep = "--keep-artifacts" in sys.argv[1:] or os.environ.get("KEEP_ARTIFACTS", "") == "1"
     if len(argv) < 2:
         print("usage: lease_test.py <amc_bin_dir> <source_root>", file=sys.stderr)
         return 2

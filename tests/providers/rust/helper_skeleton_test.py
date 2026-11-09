@@ -25,7 +25,7 @@ def exe(name):
 
 def main():
     argv = [arg for arg in sys.argv[1:] if arg != "--keep-artifacts"]
-    keep = "--keep-artifacts" in sys.argv[1:]
+    keep = "--keep-artifacts" in sys.argv[1:] or os.environ.get("KEEP_ARTIFACTS", "") == "1"
     if not argv:
         print("usage: helper_skeleton_test.py <amc_bin_dir> [source_root]", file=sys.stderr)
         return 2
@@ -50,11 +50,8 @@ def main():
                              encoding="utf-8", errors="replace")
     sysroot = subprocess.run([rustc, "--print", "sysroot"], capture_output=True, text=True,
                              encoding="utf-8", errors="replace")
-    host = next((line.split(":", 1)[1].strip() for line in version.stdout.splitlines()
-                 if line.startswith("host:")), "")
     sysroot_text = sysroot.stdout.strip() if sysroot.returncode == 0 else ""
     driver_lib = os.path.join(sysroot_text, "lib")
-    driver_target_lib = os.path.join(sysroot_text, "lib", "rustlib", host, "lib")
     has_driver = any(name.startswith("librustc_driver") for name in os.listdir(driver_lib)) \
         if sysroot_text and os.path.isdir(driver_lib) else False
     if not has_driver:

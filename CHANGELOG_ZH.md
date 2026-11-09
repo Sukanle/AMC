@@ -10,6 +10,8 @@
 - `amc-rust-helper-test`：用 Cargo 构建 helper，验证 generics/traits/errors/cargo metadata，用 rustc `size_of`/`align_of`/`offset_of!` probe 交叉校验布局，并检查 AMC 导入路径。
 - `tools/rustc-helper` 改为 Cargo 项目（`Cargo.toml`、`Cargo.lock`、`build.rs`）。命令行交给 `clap`，envelope 交给 `serde_json`，workspace 事实交给 `cargo_metadata`，不再手写参数与 JSON 解析。
 - Rust 投影：原始 FFI 声明移入 `raw` 模块；生成的包装保留源码函数名，纯值类型为安全 `pub fn`，指针/owner 契约为 `pub unsafe fn`，所有原始调用统一走生成的 `amc_ffi!` 宏。`Owned*` 和 typed `Result` 包装使用同一宏。
+- `tools/imhex/`：为 ABIX v4 `.abix` artifact 和 ABIX Metadata Region 提供 ImHex Pattern Language 定义，覆盖 section directory、全部 record table、extension 契约、字符串名称和嵌入到 native binary 的 `.abix.metadata`。
+- `tools/run.py` 默认把 AMC 测试产生的二进制保留到 `build/tmp`（可用 `--artifact-dir` 覆盖），并导出 `AMC_ARTIFACT_DIR`、设置 `TMPDIR`/`TMP`/`TEMP`，使 `.abix`、native library 和测试可执行文件在测试结束后仍可用于检查。
 
 ### 破坏性变更
 

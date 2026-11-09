@@ -10,6 +10,8 @@
 - `amc-rust-helper-test`: builds the helper with Cargo, validates generics/traits/errors/cargo metadata, cross-validates layout with a rustc `size_of`/`align_of`/`offset_of!` probe, and checks the AMC import path.
 - `tools/rustc-helper` is now a Cargo project (`Cargo.toml`, `Cargo.lock`, `build.rs`). `clap` handles the command line, `serde_json` emits the envelope, and `cargo_metadata` reads workspace facts instead of hand-written parsers.
 - Rust projection: raw FFI declarations move into a `raw` module; generated wrappers keep the source names, are safe `pub fn` for pure value types and `pub unsafe fn` for pointer/owner contracts, and funnel every raw call through the generated `amc_ffi!` macro. `Owned*` and typed `Result` wrappers use the same macro.
+- `tools/imhex/`: ImHex Pattern Language definitions for ABIX v4 `.abix` artifacts and ABIX Metadata Regions, including the section directory, all record tables, extension contracts, string names and the assembly-level `.abix.metadata` embedding.
+- `tools/run.py` now keeps AMC test artifacts under `build/tmp` by default (`--artifact-dir` overrides it). It exports `AMC_ARTIFACT_DIR` and points `TMPDIR`/`TMP`/`TEMP` there, so `.abix` files, native libraries and test executables survive the test run for inspection.
 
 ### Breaking
 

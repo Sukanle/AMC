@@ -27,7 +27,7 @@ def exe(name):
 
 def main():
     argv = [arg for arg in sys.argv[1:] if arg != "--keep-artifacts"]
-    keep = "--keep-artifacts" in sys.argv[1:]
+    keep = "--keep-artifacts" in sys.argv[1:] or os.environ.get("KEEP_ARTIFACTS", "") == "1"
     if not argv:
         print("usage: c_long_default_test.py <amc_bin_dir> [source_root]", file=sys.stderr)
         return 2
