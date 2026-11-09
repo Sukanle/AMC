@@ -57,18 +57,12 @@ std::string trim(std::string text) {
 
 }   // namespace
 
-bool parse_command_line(const std::vector<std::string> &arguments, std::string &error) {
+bool parse_command_line(int argc, char **argv, std::string &error) {
     llvm::cl::HideUnrelatedOptions(support::cli_category());
     llvm::cl::SetVersionPrinter([](llvm::raw_ostream &out) { out << "amc " AMC_VERSION "\n"; });
 
-    std::vector<const char *> pointers;
-    pointers.reserve(arguments.size());
-    for (const std::string &argument : arguments)
-        pointers.push_back(argument.c_str());
-
     llvm::raw_string_ostream stream(error);
-    const bool ok = llvm::cl::ParseCommandLineOptions(
-        static_cast<int>(pointers.size()), pointers.data(), "AMC interface compiler", &stream);
+    const bool ok = llvm::cl::ParseCommandLineOptions(argc, argv, "AMC interface compiler", &stream);
     stream.flush();
     return ok;
 }
@@ -85,32 +79,16 @@ Command selected_command() {
 }
 
 int run(int argc, char **argv, const fs::path &executable_dir) {
-    // LLVM's subcommand parser requires the subcommand token before options.
-    // Move the global diagnostic option to the end so `amc --error-format json
-    // build ...` still works; LLVM parses its value and invokes the callback.
-    std::vector<std::string> arguments;
-    std::vector<std::string> global_options;
-    arguments.emplace_back(argc > 0 ? argv[0] : "amc");
-    for (int i = 1; i < argc; ++i) {
-        const std::string argument = argv[i];
-        if (argument == "--error-format" || argument == "-error-format") {
-            if (i + 1 >= argc) return usage_error("--error-format requires a value");
-            global_options.push_back(argument);
-            global_options.emplace_back(argv[++i]);
-            continue;
-        }
-        if (argument.rfind("--error-format=", 0) == 0 || argument.rfind("-error-format=", 0) == 0) {
-            global_options.push_back(argument);
-            continue;
-        }
-        arguments.push_back(argument);
-    }
-    arguments.insert(arguments.end(), global_options.begin(), global_options.end());
-
     std::string parse_error;
-    const bool parsed = parse_command_line(arguments, parse_error);
+    const bool parsed = parse_command_line(argc, argv, parse_error);
     if (g_error_format_invalid) return usage_error("--error-format must be text or json");
-    if (!parsed) return usage_error(trim(parse_error));
+    if (!parsed) {
+        const std::string message = trim(parse_error);
+        // Some LLVM value errors are printed directly to stderr and leave the
+        // provided stream empty; do not print an empty second envelope.
+        if (message.empty()) return 2;
+        return usage_error(message);
+    }
     const Command command = selected_command();
 
     if (list_languages) {
