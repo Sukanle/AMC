@@ -14,16 +14,15 @@
  * limitations under the License.
  */
 #include "SKL/AMC/Platform/Symbol.h"
+#include "SKL/AMC/Private/Support/File.h"
 #include "SKL/AMC/Platform/ELF.h"
 
 #include <cctype>
 #include <stdlib.h>
-#include <exception>
 #include <filesystem>
-#include <fstream>
+#include <utility>
 
 #include <fmt/format.h>
-#include <fmt/os.h>
 
 namespace fs = std::filesystem;
 
@@ -281,35 +280,19 @@ bool publish_symbol(const std::string &root, std::string_view key, const std::ve
     const std::string &meta, const char *suffix, std::string &stored_path, std::string &error) {
     error.clear();
     stored_path = symbol_store_path(root, key, suffix);
-    std::error_code ec;
-    fs::create_directories(fs::path(stored_path).parent_path(), ec);
-    if (ec && !fs::exists(fs::path(stored_path).parent_path())) {
-        error = "cannot create symbol store directory: " + ec.message();
+    const fs::path parent = fs::path(stored_path).parent_path();
+    if (auto err = amc::support::make_directories(parent.string())) {
+        error = "cannot create symbol store directory: " + amc::support::error_message(std::move(err));
         return false;
     }
-    // Binary mode: the symbol artifact is a binary image and the Windows CRT
-    // text mode would translate 0x0A into 0x0D 0x0A.
-    try {
-        std::ofstream output(stored_path, std::ios::binary | std::ios::trunc);
-        if (!output) {
-            error = "cannot write symbol artifact: " + stored_path;
-            return false;
-        }
-        output.write(reinterpret_cast<const char *>(artifact.data()), static_cast<std::streamsize>(artifact.size()));
-        if (!output.good()) {
-            error = "cannot write symbol artifact: " + stored_path;
-            return false;
-        }
-    } catch (const std::exception &e) {
-        error = "cannot write symbol artifact: " + stored_path + ": " + e.what();
+    if (auto err = amc::support::write_binary_file(stored_path, artifact)) {
+        error = "cannot write symbol artifact: " + stored_path + ": " + amc::support::error_message(std::move(err));
         return false;
     }
     if (!meta.empty()) {
-        try {
-            auto output = fmt::output_file(stored_path + ".meta");
-            output.print("{}", meta);
-        } catch (const std::exception &e) {
-            error = "cannot write symbol metadata: " + stored_path + ".meta: " + e.what();
+        const std::string meta_path = stored_path + ".meta";
+        if (auto err = amc::support::write_text_file(meta_path, meta)) {
+            error = "cannot write symbol metadata: " + meta_path + ": " + amc::support::error_message(std::move(err));
             return false;
         }
     }
@@ -324,9 +307,9 @@ bool fetch_symbol(const std::string &root, std::string_view key, std::vector<uin
     const char *suffixes[] = {".abix", ".abixmeta"};
     for (const char *suffix : suffixes) {
         const std::string candidate = symbol_store_path(root, key, suffix);
-        std::ifstream input(candidate, std::ios::binary);
-        if (!input) continue;
-        artifact.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+        auto bytes = amc::support::read_binary_file(candidate);
+        if (!bytes) continue;
+        artifact = std::move(*bytes);
         path = candidate;
         return true;
     }

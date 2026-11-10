@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 #include "SKL/AMC/Compilation/Meta.h"
+#include "SKL/AMC/Private/Support/File.h"
 
 #include "SKL/AMC/Artifact/Metadata.h"
 
-#include <exception>
 #include <vector>
 
-#include <fmt/os.h>
 
 namespace skl::amc::compilation {
 
@@ -30,11 +29,9 @@ bool write_abix_meta(const ABIModule &module, const std::filesystem::path &artif
     if (!build_metadata_region(module, options, region, error)) return false;
     MetadataHeader header;
     if (!read_metadata_header(region, header, error)) return false;
-    try {
-        auto meta = fmt::output_file(artifact.string() + ".meta");
-        meta.print("{}", metadata_meta_document(module, header));
-    } catch (const std::exception &e) {
-        error = "cannot write metadata output: " + artifact.string() + ".meta: " + e.what();
+    const std::string path = artifact.string() + ".meta";
+    if (auto err = amc::support::write_text_file(path, metadata_meta_document(module, header))) {
+        error = "cannot write metadata output: " + path + ": " + amc::support::error_message(std::move(err));
         return false;
     }
     return true;

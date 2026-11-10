@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "SKL/AMC/Compilation/Build.h"
+#include "SKL/AMC/Private/Support/File.h"
 #include "SKL/AMC/Support/CommandLine.h"
 #include "SKL/AMC/Support/Owned.h"
 #include "SKL/AMC/Support/OwnerLayout.h"
@@ -31,12 +32,11 @@
 #include "SKL/AMC/Util/Error.h"
 
 #include <llvm/Support/CommandLine.h>
+#include <llvm/Support/FileSystem.h>
 
 #include <algorithm>
 #include <cerrno>
 #include <cstdlib>
-#include <fstream>
-#include <iterator>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -777,29 +777,36 @@ amc::ir::LoweringResult project_lowering(const amc::ir::LoweringResult &lowering
     return result;
 }
 
+bool read_binary_string(const fs::path &path, std::string &out) {
+    auto bytes = amc::support::read_binary_file(path.string());
+    if (!bytes) return false;
+    out.assign(bytes->begin(), bytes->end());
+    return true;
+}
+
+bool read_text_string(const fs::path &path, std::string &out) {
+    auto text = amc::support::read_text_file(path.string());
+    if (!text) return false;
+    out = std::move(*text);
+    return true;
+}
+
 bool copy_file(const fs::path &from, const fs::path &to, std::string &error) {
-    std::ifstream input(from, std::ios::binary);
-    if (!input) {
-        error = "cannot read cached artifact: " + from.string();
+    const std::error_code ec = llvm::sys::fs::copy_file(from.string(), to.string());
+    if (ec) {
+        error = "cannot copy frontend artifact: " + from.string() + " -> " + to.string() + ": " + ec.message();
         return false;
     }
-    std::ofstream output(to, std::ios::binary | std::ios::trunc);
-    if (!output) {
-        error = "cannot write frontend artifact: " + to.string();
-        return false;
-    }
-    output << input.rdbuf();
-    return static_cast<bool>(output);
+    return true;
 }
 
 bool write_bytes(const fs::path &to, const std::string &bytes, std::string &error) {
-    std::ofstream output(to, std::ios::binary | std::ios::trunc);
-    if (!output) {
-        error = "cannot write frontend artifact: " + to.string();
+    const llvm::ArrayRef<uint8_t> data(reinterpret_cast<const uint8_t *>(bytes.data()), bytes.size());
+    if (auto err = amc::support::write_binary_file(to.string(), data)) {
+        error = "cannot write frontend artifact: " + to.string() + ": " + amc::support::error_message(std::move(err));
         return false;
     }
-    output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
-    return static_cast<bool>(output);
+    return true;
 }
 
 }   // namespace
@@ -1333,9 +1340,8 @@ int build_command(const fs::path &provider) {
                 std::vector<amc::CacheDependency> dependencies;
                 const auto add_dependency = [&](const fs::path &path) {
                     const fs::path resolved = path.is_absolute() ? path : source_base / path;
-                    std::ifstream input(resolved, std::ios::binary);
-                    if (!input) return;
-                    std::string content((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+                    std::string content;
+                    if (!read_binary_string(resolved, content)) return;
                     dependencies.push_back({resolved.string(),
                         amc::digest_bytes(content.data(), content.size(), amc::digest_domain_dependency)});
                 };
@@ -1347,26 +1353,20 @@ int build_command(const fs::path &provider) {
                         }
                 for (const auto &dep : dep_files)
                     add_dependency(dep);
-                std::ifstream depfile(temporary.string() + ".d", std::ios::binary);
-                if (depfile) {
-                    std::string text((std::istreambuf_iterator<char>(depfile)), std::istreambuf_iterator<char>());
-                    for (const auto &path : parse_makefile_dependencies(text))
+                std::string dep_text;
+                if (read_text_string(fs::path(temporary.string() + ".d"), dep_text)) {
+                    for (const auto &path : parse_makefile_dependencies(dep_text))
                         add_dependency(path);
                 }
-                std::ifstream cached_output(temporary, std::ios::binary);
-                if (cached_output) {
-                    std::string content(
-                        (std::istreambuf_iterator<char>(cached_output)), std::istreambuf_iterator<char>());
+                std::string content;
+                if (read_binary_string(temporary, content)) {
                     std::string store_error;
                     std::vector<std::pair<std::string, std::string>> artifacts{
-                        {"frontend.abix", content}
+                        {"frontend.abix", std::move(content)}
                     };
-                    std::ifstream cached_semantic(semantic_temporary, std::ios::binary);
-                    if (cached_semantic) {
-                        artifacts.push_back(
-                            {"frontend.abix.semantic", std::string((std::istreambuf_iterator<char>(cached_semantic)),
-                                                           std::istreambuf_iterator<char>())});
-                    }
+                    std::string semantic_content;
+                    if (read_text_string(semantic_temporary, semantic_content))
+                        artifacts.push_back({"frontend.abix.semantic", std::move(semantic_content)});
                     if (cache.store(cache_inputs, artifacts, dependencies, store_error)) cache.record_store();
                 }
             }
