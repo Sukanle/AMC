@@ -9,6 +9,7 @@ include(CMakeFindDependencyMacro)
 find_dependency(ABIX 0.3 CONFIG COMPONENTS runtime)
 find_dependency(EPCD 0.1 CONFIG COMPONENTS Core)
 find_dependency(fmt @AMC_FMT_MIN_VERSION@ CONFIG REQUIRED)
+find_dependency(Threads)
 
 # AMC's query/context headers expose llvm::raw_ostream and AMC::metadata links
 # LLVM Support, so consumers need the LLVM package too. Prefer the LLVM used to
