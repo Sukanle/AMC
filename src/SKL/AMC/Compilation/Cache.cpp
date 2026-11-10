@@ -16,6 +16,7 @@
 #include "SKL/AMC/Compilation/Cache.h"
 
 #include "SKL/AMC/Compilation/Reflect.h"
+#include "SKL/AMC/Private/Support/File.h"
 #include "SKL/AMC/Support/Process.h"
 
 #include <algorithm>
@@ -26,11 +27,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <filesystem>
-#include <fstream>
 
 #include <fmt/format.h>
 
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/raw_ostream.h"
 
 namespace skl::amc {
 namespace {
@@ -124,10 +126,10 @@ bool valid_artifact_name(const std::string &name) {
 }
 
 bool read_file(const fs::path &path, std::string &out) {
-    std::ifstream input(path, std::ios::binary);
-    if (!input) return false;
-    out.assign((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
-    return input.good() || input.eof();
+    auto bytes = amc::support::read_binary_file(path.string());
+    if (!bytes) return false;
+    out.assign(bytes->begin(), bytes->end());
+    return true;
 }
 
 void put_u32(std::string &out, uint32_t value) {
@@ -403,23 +405,13 @@ void write_counters(const fs::path &root, const CacheCounters &counters) {
                            + "stores "
                            + std::to_string(counters.stores)
                            + "\n";
-    std::error_code ec;
-    fs::create_directories(root, ec);
-    if (ec) return;
+    if (auto err = amc::support::make_directories(root.string())) return;
     const fs::path path = root / kStatsName;
     const fs::path temporary = root / ".stats.tmp";
-    {
-        std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
-        if (!output) return;
-        output.write(text.data(), static_cast<std::streamsize>(text.size()));
-        if (!output) {
-            fs::remove(temporary, ec);
-            return;
-        }
-    }
-    fs::remove(path, ec);
-    fs::rename(temporary, path, ec);
-    if (ec) fs::remove(temporary, ec);
+    if (auto err = amc::support::write_text_file(temporary.string(), text)) return;
+    llvm::sys::fs::remove(path.string());
+    const std::error_code rename_ec = llvm::sys::fs::rename(temporary.string(), path.string());
+    if (rename_ec) llvm::sys::fs::remove(temporary.string());
 }
 
 bool same_dependencies(const std::vector<CacheDependency> &a, const std::vector<CacheDependency> &b) {
@@ -445,16 +437,17 @@ enum class EntryRead {
 };
 
 EntryRead read_entry_file(const fs::path &file, EntryFile &out, std::string &error) {
-    std::ifstream input(file, std::ios::binary);
-    if (!input) {
+    auto buffer = llvm::MemoryBuffer::getFile(file.string());
+    if (!buffer) {
         error = "cache entry is missing";
         return EntryRead::MISSING;
     }
-    char header[kEntryHeaderSize];
-    if (!input.read(header, static_cast<std::streamsize>(kEntryHeaderSize))) {
+    const llvm::StringRef data = (*buffer)->getBuffer();
+    if (data.size() < kEntryHeaderSize) {
         error = "cache entry is truncated";
         return EntryRead::MALFORMED;
     }
+    const char *header = data.data();
     if (memcmp(header, kEntryMagic, 8) != 0) {
         error = "cache entry magic is unknown";
         return EntryRead::MALFORMED;
@@ -476,11 +469,11 @@ EntryRead read_entry_file(const fs::path &file, EntryFile &out, std::string &err
         error = "cache entry header is malformed";
         return EntryRead::MALFORMED;
     }
-    std::string body(static_cast<size_t>(body_size), '\0');
-    if (!input.read(body.data(), static_cast<std::streamsize>(body_size))) {
+    if (body_size > data.size() - kEntryHeaderSize) {
         error = "cache entry is truncated";
         return EntryRead::MALFORMED;
     }
+    const char *body = header + kEntryHeaderSize;
 
     std::vector<uint64_t> sizes(artifact_count, 0);
     uint64_t total = 0;
@@ -490,7 +483,7 @@ EntryRead read_entry_file(const fs::path &file, EntryFile &out, std::string &err
     }
     const uint64_t payload_offset = total;
     for (uint32_t i = 0; i < artifact_count; ++i) {
-        sizes[i] = get_u64(body.data() + 8ull * i);
+        sizes[i] = get_u64(body + 8ull * i);
         if (add_overflows(total, sizes[i], total)) {
             error = "cache entry header is malformed";
             return EntryRead::MALFORMED;
@@ -498,14 +491,13 @@ EntryRead read_entry_file(const fs::path &file, EntryFile &out, std::string &err
     }
 
     Manifest manifest;
-    if (!manifest_parse(body.substr(static_cast<size_t>(table_size)), manifest, error)) return EntryRead::MALFORMED;
+    const std::string manifest_text(body + table_size, static_cast<size_t>(body_size - table_size));
+    if (!manifest_parse(manifest_text, manifest, error)) return EntryRead::MALFORMED;
     if (manifest.artifacts.size() != artifact_count) {
         error = "cache entry manifest does not match its size table";
         return EntryRead::MALFORMED;
     }
-    std::error_code ec;
-    const auto file_size = fs::file_size(file, ec);
-    if (ec || static_cast<uint64_t>(file_size) != total) {
+    if (static_cast<uint64_t>(data.size()) != total) {
         error = "cache entry size does not match its header";
         return EntryRead::MALFORMED;
     }
@@ -553,18 +545,19 @@ bool read_entry_payload(
         out.assign(data.data() + offset, static_cast<size_t>(size));
         return true;
     }
-    std::ifstream input(file, std::ios::binary);
-    if (!input) {
+    const uint64_t offset = artifact_offset(entry, index);
+    const uint64_t size = entry.sizes[index];
+    auto buffer = llvm::MemoryBuffer::getFileSlice(file.string(), size, offset);
+    if (!buffer) {
         error = "cache entry is missing";
         return false;
     }
-    input.seekg(static_cast<std::streamoff>(artifact_offset(entry, index)));
-    const size_t size = static_cast<size_t>(entry.sizes[index]);
-    out.assign(size, '\0');
-    if (size != 0 && !input.read(out.data(), static_cast<std::streamsize>(size))) {
+    const llvm::StringRef data = (*buffer)->getBuffer();
+    if (data.size() != size) {
         error = "cache entry is truncated";
         return false;
     }
+    out.assign(data.data(), data.size());
     return true;
 }
 
@@ -746,17 +739,17 @@ bool InstantiationCache::store(const InstantiationBuildInputs &inputs,
                              + std::to_string(next_sequence());
     const fs::path temporary = fs::path(_root) / (".tmp-" + suffix);
     {
-        std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
-        if (!output) {
+        llvm::raw_fd_ostream output(temporary.string(), ec, llvm::sys::fs::OF_None);
+        if (ec) {
             error = "cannot write cache entry: " + temporary.string();
             return false;
         }
-        output.write(blob.data(), static_cast<std::streamsize>(blob.size()));
+        output.write(blob.data(), blob.size());
         for (const auto &artifact : artifacts)
-            output.write(artifact.second.data(), static_cast<std::streamsize>(artifact.second.size()));
+            output.write(artifact.second.data(), artifact.second.size());
         output.close();
-        if (!output) {
-            fs::remove(temporary, ec);
+        if (output.has_error()) {
+            llvm::sys::fs::remove(temporary.string());
             error = "cannot write cache entry: " + temporary.string();
             return false;
         }
@@ -765,9 +758,10 @@ bool InstantiationCache::store(const InstantiationBuildInputs &inputs,
     // the on-disk size is checked before publishing. verify()/lookup() still
     // re-hash whatever they read back.
     const uint64_t expected_size = blob.size() + payload_size;
-    const auto written = fs::file_size(temporary, ec);
-    if (ec || static_cast<uint64_t>(written) != expected_size) {
-        fs::remove(temporary, ec);
+    uint64_t written = 0;
+    const std::error_code size_ec = llvm::sys::fs::file_size(temporary.string(), written);
+    if (size_ec || written != expected_size) {
+        llvm::sys::fs::remove(temporary.string());
         error = "cannot write cache entry: " + temporary.string();
         return false;
     }

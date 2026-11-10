@@ -50,12 +50,13 @@
 #include "SKL/AMC/Artifact/Metadata.h"
 #include "SKL/AMC/Query/Query.h"
 #include "SKL/AMC/Platform/Symbol.h"
+#include "SKL/AMC/Private/Support/File.h"
 #include "SKL/AMC/IR/Verify.h"
 
 #include <stdio.h>
 #include <string.h>
-#include <fstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -70,10 +71,10 @@ std::string hash_hex(skl::amc::Hash128 value) {
 }
 
 bool read_file(const std::string &path, std::vector<uint8_t> &data) {
-    std::ifstream input(path, std::ios::binary);
-    if (!input) return false;
-    data.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
-    return input.good() || input.eof();
+    auto bytes = skl::amc::support::read_binary_file(path);
+    if (!bytes) return false;
+    data = std::move(*bytes);
+    return true;
 }
 
 // The absolute path of the current target executable, or empty.

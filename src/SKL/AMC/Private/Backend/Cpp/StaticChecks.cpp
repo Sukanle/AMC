@@ -15,16 +15,19 @@
  */
 #include "SKL/AMC/Private/Backend/Cpp/Emitters.h"
 
+#include "SKL/AMC/Private/Support/File.h"
+
 #include "SKL/AMC/Private/Backend/Cpp/CppNames.h"
 #include "SKL/AMC/Core/Core.h"
 #include "SKL/AMC/Core/Generated.h"
 
 #include <cstdint>
+#include <llvm/Support/raw_ostream.h>
 #include <string>
 
 namespace skl::amc::lang::backend::cpp {
 
-void Emit::static_checks(const char *output) {
+int Emit::static_checks(const char *output) {
     // ABI check header (AI-P2 clangd integration): compile-time ABI assertions
     // that the editor surfaces as ordinary diagnostics while a source file is
     // edited. clangd exposes no stable out-of-tree plugin API, so instead of a
@@ -36,7 +39,9 @@ void Emit::static_checks(const char *output) {
     const auto slash = check_path.find_last_of("/\\");
     check_path = slash == std::string::npos ? std::string("amc_abi_check.hpp")
                                             : check_path.substr(0, slash + 1) + "amc_abi_check.hpp";
-    auto check = fmt::output_file(check_path);
+    std::string check_text;
+    llvm::raw_string_ostream check_stream(check_text);
+    Output check(check_stream);
     // Field width lookup for the per-field `sizeof` assertion below. AMC
     // already recorded the field's type size, so the check is derived from
     // the artifact rather than recomputed here.
@@ -88,6 +93,12 @@ void Emit::static_checks(const char *output) {
                 type.name, id, field.name, width);
         }
     }
+    check_stream.flush();
+    if (auto err = amc::support::write_text_file(check_path, check_text)) {
+        fmt::print(stderr, "cannot write {}: {}\n", check_path, amc::support::error_message(std::move(err)));
+        return 1;
+    }
+    return 0;
 }
 
 }   // namespace skl::amc::lang::backend::cpp

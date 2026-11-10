@@ -44,7 +44,7 @@
 
 ### 变更
 
-- 文件 I/O：CLI、`.abix` / `.semantic` / `.lowering` artifact、构建缓存拷贝、metadata sidecar 和 symbol store 现在通过新的内部 `amc-io` target 使用 `llvm::MemoryBuffer`、`llvm::raw_fd_ostream` 和 `llvm::sys::fs`。路径保持 UTF-8 `StringRef`/`std::string`，Windows 不再依赖 `std::filesystem::path` 到 `std::string` 的隐式转换。`std::filesystem` 仍用于 path 运算和对性能敏感的 cache header 读取。
+- 文件 I/O：CLI、`.abix` / `.semantic` / `.lowering` artifact、构建缓存拷贝、metadata sidecar 和 symbol store 现在通过新的内部 `amc-io` target 使用 `llvm::MemoryBuffer`、`llvm::raw_fd_ostream` 和 `llvm::sys::fs`。路径保持 UTF-8 `StringRef`/`std::string`，Windows 不再依赖 `std::filesystem::path` 到 `std::string` 的隐式转换。cache entry 使用 `llvm::MemoryBuffer::getFile`/`getFileSlice`；fmt 现在只负责格式化和控制台输出，不再做文件 I/O。`std::filesystem` 仍用于 path 运算。
 
 - `amc` CLI 和 `amc-cpp` / `amc-rust` / `amc-zig` provider 改用 LLVM `CommandLine` 解析参数。每个命令都是注册的 subcommand，使用类型化选项并自动提供 `--help` / `--version`；手写 argv 循环、手工拆分 `--format=` 和手写 usage 文本已移除。命令拼写通过 MICS `SKL_RFS_ENUM` 统一注册，不带命令运行时会输出 LLVM 的 subcommand 总览。`--error-format` 和每个命令的 `--format` 都是真正的 LLVM 选项，通过 callback 选择错误信封。CLI 采用 git 风格的 `amc <command> [options]` 形式：选项写在命令之后，因此不再需要 argv 重排或引导扫描。每个命令在实现旁边注册 handler，分派改为表查找而不是 switch。
 - 语言、provider capability 和 cache action 的分派改用 MICS 注册枚举：`Support/Language.h` 中的 `Language` / `Capability`，以及 `Compilation/Reflect.h` 中的 `CacheAction`。`generate` 的语言链、provider capability 匹配和 `cache stats|prune` 分支改为枚举/表驱动，不再使用字符串比较。

@@ -16,10 +16,11 @@
 #pragma once
 
 #include <string>
+#include <utility>
 
-#include <fmt/os.h>
-#include <optional>
+#include <fmt/format.h>
 #include <llvm/ADT/StringRef.h>
+#include <llvm/Support/raw_ostream.h>
 
 namespace skl::amc {
 struct ABIModule;
@@ -35,6 +36,22 @@ struct LoweredExposedType;
 
 namespace skl::amc::lang::backend::cpp {
 
+// fmt is used for formatting only; the destination is an LLVM stream so file
+// ownership and error reporting stay in llvm::raw_fd_ostream.
+class Output {
+public:
+    explicit Output(llvm::raw_ostream &stream) noexcept
+        : _stream(stream) {}
+
+    template<class... Args>
+    void print(fmt::format_string<Args...> format, Args &&...args) {
+        _stream << fmt::format(format, std::forward<Args>(args)...);
+    }
+
+private:
+    llvm::raw_ostream &_stream;
+};
+
 // Emitters share the same status convention as `backend`: 0 on success, 1 on a
 // reported error (message already stored in `error`), or
 // `amc::lang::kCapabilityCancelled` when the operation was cancelled.
@@ -42,7 +59,7 @@ namespace skl::amc::lang::backend::cpp {
 // Includes, warning banner and the CodeIn prologue.
 class Emit {
 public:
-    Emit(fmt::ostream &o, const amc::ABIModule &m)
+    Emit(llvm::raw_ostream &o, const amc::ABIModule &m)
         : _o(o)
         , _m(m) {}
 
@@ -71,7 +88,7 @@ public:
     void native_type_traits();
 
     // Separate `amc_abi_check.hpp` header next to `output`.
-    void static_checks(const char *output);
+    int static_checks(const char *output);
 
 private:
     void error_set(const amc::ErrorSet &set);
@@ -89,7 +106,7 @@ private:
     int metadata_region(std::string &error);
     void maps();
 
-    fmt::ostream &_o;
+    Output _o;
     const amc::ABIModule &_m;
 };
 }   // namespace skl::amc::lang::backend::cpp

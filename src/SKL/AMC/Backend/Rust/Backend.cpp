@@ -34,7 +34,6 @@
 #include <vector>
 
 #include <fmt/format.h>
-#include <fmt/os.h>
 
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/raw_ostream.h>

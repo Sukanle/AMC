@@ -21,7 +21,8 @@
 #include "SKL/AMC/IR/LoweringJson.h"
 #include "SKL/AMC/Lang/Lang.h"
 
-#include <fmt/os.h>
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Support/raw_ostream.h>
 
 #include <string>
 
@@ -50,7 +51,12 @@ int run_backend(const char *input, const char *output) {
     }
     if (amc::lang::cancellation_requested()) return amc::lang::kCapabilityCancelled;
 
-    auto o = fmt::output_file(output);
+    std::error_code ec;
+    llvm::raw_fd_ostream o(output, ec, llvm::sys::fs::OF_Text);
+    if (ec) {
+        fmt::print(stderr, "cannot write {}: {}\n", output, ec.message());
+        return 1;
+    }
     std::string error;
     const auto report = [&](int status) {
         if (!error.empty()) fmt::print(stderr, "{}\n", error);
@@ -65,7 +71,12 @@ int run_backend(const char *input, const char *output) {
     emit.named_error_sets();
     emit.error_boundaries();
     emit.native_type_traits();
-    emit.static_checks(output);
+    if (const int status = emit.static_checks(output); status != 0) return report(status);
+    o.close();
+    if (o.has_error()) {
+        fmt::print(stderr, "cannot write {}: {}\n", output, o.error().message());
+        return 1;
+    }
     return 0;
 }
 

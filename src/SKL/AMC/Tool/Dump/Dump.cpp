@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 #include "SKL/AMC/Core/Core.h"
+#include "SKL/AMC/Private/Support/File.h"
 #include "SKL/AMC/IR/TypeMapping.h"
 #include "SKL/AMC/Tool/Dump.h"
 
 #include "SKL/AMC/Util/Error.h"
 
 #include <fmt/format.h>
-#include <fmt/os.h>
 
-#include <exception>
 #include <string>
 #include <vector>
 
@@ -92,13 +91,9 @@ int main(int argc, char **argv) {
             return 0;
         }
         skl::amc::dump::write_diff_json(source, target, report, text);
-        try {
-            auto output = fmt::output_file(args[5]);
-            output.print("{}", text);
-        } catch (const std::exception &e) {
-            return skl::amc::util::fail(
-                skl::amc::ErrorCategory::IO, "amc-dump", "cannot write JSON output", args[5], e.what());
-        }
+        if (auto err = skl::amc::support::write_text_file(args[5], text))
+            return skl::amc::util::fail(skl::amc::ErrorCategory::IO, "amc-dump", "cannot write JSON output", args[5],
+                skl::amc::support::error_message(std::move(err)));
         return 0;
     }
 
@@ -113,12 +108,8 @@ int main(int argc, char **argv) {
         return 0;
     }
     skl::amc::dump::write_json(module, text);
-    try {
-        auto output = fmt::output_file(args[3]);
-        output.print("{}", text);
-    } catch (const std::exception &e) {
-        return skl::amc::util::fail(
-            skl::amc::ErrorCategory::IO, "amc-dump", "cannot write JSON output", args[3], e.what());
-    }
+    if (auto err = skl::amc::support::write_text_file(args[3], text))
+        return skl::amc::util::fail(skl::amc::ErrorCategory::IO, "amc-dump", "cannot write JSON output", args[3],
+            skl::amc::support::error_message(std::move(err)));
     return 0;
 }
