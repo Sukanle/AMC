@@ -39,3 +39,4 @@ Raw pointers, `from_raw` / `into_raw` and `LeaseGuard::acquire` stay as explicit
 - [Quick start](quickstart.md)
 - [Advanced: frontend, contracts and safe wrappers](advanced.md)
 - [Real Cargo workspace example](../../../examples/rust/ffi-workspace/README.md)
+- [Migration cost preview](../migration.md)

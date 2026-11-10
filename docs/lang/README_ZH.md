@@ -111,13 +111,14 @@ graph TD
 
 ## 文档结构
 
-每种语言都有独立目录，包含三个入口：`README.md`（预览与状态）、`quickstart.md`（首次构建与消费者）、`advanced.md`（契约、内部实现与限制）。以 `_ZH.md` 结尾的是中文版本。
+每种语言都有独立目录，包含三个入口：`README.md`（预览与状态）、`quickstart.md`（首次构建与消费者）、`advanced.md`（契约、内部实现与限制）。以 `_ZH.md` 结尾的是中文版本。[`migration_ZH.md`](migration_ZH.md) 对比自有源码与已有 DLL 两种迁移成本。
 
 ## 从这里开始
 
 - [C++](cpp/README_ZH.md)
 - [Rust](rust/README_ZH.md)
 - [Zig](zig/README_ZH.md)
+- [用户迁移成本预览](migration_ZH.md)
 - [ABIX Interface](https://github.com/Sukanle/ABIX/blob/main/docs/abix/interface_zh.md)
 - [ABIX-STD](https://github.com/Sukanle/ABIX/blob/main/docs/abix/std_zh.md)
 - [`amc generate`](https://github.com/Sukanle/AMC/docs/amc/amc_zh.md#amc-generate)

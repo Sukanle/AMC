@@ -39,3 +39,4 @@ The same artifact that drives the Rust projection drives the Zig projection. `te
 
 - [Quick start](quickstart.md)
 - [Advanced: layout checks and limits](advanced.md)
+- [Migration cost preview](../migration.md)

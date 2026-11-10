@@ -39,3 +39,4 @@ assert_eq!(box_widget_value(owner), 7);
 - [快速开始](quickstart_ZH.md)
 - [高级特性：前端、契约与安全包装](advanced_ZH.md)
 - [真实 Cargo workspace 示例](../../../examples/rust/ffi-workspace/README.md)
+- [用户迁移成本预览](../migration_ZH.md)

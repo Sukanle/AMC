@@ -44,3 +44,4 @@ symbols = ["DemoVec2", "demo_add", "demo_div"]
 - [快速开始](quickstart_ZH.md)
 - [高级特性：接口、实现与限制](advanced_ZH.md)
 - [`.abic.toml` 参考](../../abic/abic_zh.md)
+- [用户迁移成本预览](../migration_ZH.md)

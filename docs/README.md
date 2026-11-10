@@ -106,12 +106,13 @@ Private implementation headers live under `include/SKL/AMC/Private/` and are onl
 
 ### Languages
 
-| Document                         | 中文                                   | Description                                      |
-| -------------------------------- | -------------------------------------- | ------------------------------------------------ |
-| [lang/README.md](lang/README.md) | [lang/README_ZH.md](lang/README_ZH.md) | the ABIX projection model                        |
-| [C++](lang/cpp/README.md)        | [C++ 中文](lang/cpp/README_ZH.md)      | C++ frontend/backend and compile-time checks     |
-| [Rust](lang/rust/README.md)      | [Rust 中文](lang/rust/README_ZH.md)    | Rust provider, `repr(C)`, ownership and `Result` |
-| [Zig](lang/zig/README.md)        | [Zig 中文](lang/zig/README_ZH.md)      | Zig backend projection and `comptime` checks     |
+| Document                               | 中文                                         | Description                                      |
+| -------------------------------------- | -------------------------------------------- | ------------------------------------------------ |
+| [lang/README.md](lang/README.md)       | [lang/README_ZH.md](lang/README_ZH.md)       | the ABIX projection model                        |
+| [lang/migration.md](lang/migration.md) | [lang/migration_ZH.md](lang/migration_ZH.md) | migration cost: what you write for source or DLL |
+| [C++](lang/cpp/README.md)              | [C++ 中文](lang/cpp/README_ZH.md)            | C++ frontend/backend and compile-time checks     |
+| [Rust](lang/rust/README.md)            | [Rust 中文](lang/rust/README_ZH.md)          | Rust provider, `repr(C)`, ownership and `Result` |
+| [Zig](lang/zig/README.md)              | [Zig 中文](lang/zig/README_ZH.md)            | Zig backend projection and `comptime` checks     |
 
 ### AI and agents
 

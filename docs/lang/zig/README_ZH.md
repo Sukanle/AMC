@@ -39,3 +39,4 @@ amc generate build/package.abix -l zig -o gen/
 
 - [快速开始](quickstart_ZH.md)
 - [高级特性：布局检查与限制](advanced_ZH.md)
+- [用户迁移成本预览](../migration_ZH.md)

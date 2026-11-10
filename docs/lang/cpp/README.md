@@ -44,3 +44,4 @@ See [advanced topics](advanced.md) for the interface/proxy output, check details
 - [Quick start](quickstart.md)
 - [Advanced: interfaces, implementation and limits](advanced.md)
 - [`.abic.toml` reference](../../abic/abic.md)
+- [Migration cost preview](../migration.md)

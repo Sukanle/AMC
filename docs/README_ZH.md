@@ -106,12 +106,13 @@ AMC/
 
 ### 语言
 
-| 文档                                   | English                          | 描述                                        |
-| -------------------------------------- | -------------------------------- | ------------------------------------------- |
-| [lang/README_ZH.md](lang/README_ZH.md) | [lang/README.md](lang/README.md) | ABIX 投影模型                               |
-| [C++ 中文](lang/cpp/README_ZH.md)      | [C++](lang/cpp/README.md)        | C++ 前端/后端与编译期检查                   |
-| [Rust 中文](lang/rust/README_ZH.md)    | [Rust](lang/rust/README.md)      | Rust provider、`repr(C)`、所有权与 `Result` |
-| [Zig 中文](lang/zig/README_ZH.md)      | [Zig](lang/zig/README.md)        | Zig 后端投影与 `comptime` 检查              |
+| 文档                                         | English                                | 描述                                        |
+| -------------------------------------------- | -------------------------------------- | ------------------------------------------- |
+| [lang/README_ZH.md](lang/README_ZH.md)       | [lang/README.md](lang/README.md)       | ABIX 投影模型                               |
+| [lang/migration_ZH.md](lang/migration_ZH.md) | [lang/migration.md](lang/migration.md) | 迁移成本：自有源码或 DLL 需要编写什么       |
+| [C++ 中文](lang/cpp/README_ZH.md)            | [C++](lang/cpp/README.md)              | C++ 前端/后端与编译期检查                   |
+| [Rust 中文](lang/rust/README_ZH.md)          | [Rust](lang/rust/README.md)            | Rust provider、`repr(C)`、所有权与 `Result` |
+| [Zig 中文](lang/zig/README_ZH.md)            | [Zig](lang/zig/README.md)              | Zig 后端投影与 `comptime` 检查              |
 
 ### AI 与 Agent
 

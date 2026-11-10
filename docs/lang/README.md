@@ -111,13 +111,14 @@ graph TD
 
 ## Guide layout
 
-Each language has its own directory with three entry points: `README.md` (preview and status), `quickstart.md` (first build and consumer) and `advanced.md` (contracts, internals and limits). Files ending in `_ZH.md` are the Chinese versions.
+Each language has its own directory with three entry points: `README.md` (preview and status), `quickstart.md` (first build and consumer) and `advanced.md` (contracts, internals and limits). Files ending in `_ZH.md` are the Chinese versions. [`migration.md`](migration.md) compares what you write for your own source and for an existing DLL.
 
 ## Start with
 
 - [C++](cpp/README.md)
 - [Rust](rust/README.md)
 - [Zig](zig/README.md)
+- [Migration cost preview](migration.md)
 - [ABIX Interface](https://github.com/Sukanle/ABIX/blob/main/docs/abix/interface.md)
 - [ABIX-STD](https://github.com/Sukanle/ABIX/blob/main/docs/abix/std.md)
 - [`amc generate`](../amc/amc.md#amc-generate)
