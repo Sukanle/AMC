@@ -1,5 +1,11 @@
 # 变更记录
 
+## Planned — v0.4.x
+
+### 新增
+
+- 共享 ABIX lease 元数据（`ABIX_LEASE_API_JSON`）与生成的 lease 声明。配合 `ABIX_OWNER_HANDLE_JSON`，owner/lease 结构、字段 offset、status 值和 `struct_size` 只有一个事实来源；AMC 从 ABIX 元数据生成 Rust/C++ 声明，不再维护重复拷贝，编译期检查会在布局漂移时失败。这是附加元数据，不改变 lease ABI。见 [ABI 元数据与共享声明](docs/architecture/abi-metadata_zh.md)。
+
 ## Unreleased — v0.4.0
 
 ### 新增

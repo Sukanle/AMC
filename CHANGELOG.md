@@ -1,5 +1,11 @@
 # Changelog
 
+## Planned — v0.4.x
+
+### Added
+
+- Shared ABIX lease metadata (`ABIX_LEASE_API_JSON`) and generated lease declarations. Combined with `ABIX_OWNER_HANDLE_JSON`, owner and lease structs, field offsets, status values and `struct_size` have one source of truth; AMC emits Rust/C++ declarations from ABIX metadata instead of maintaining duplicate copies, and compile-time checks fail the build on drift. This is additive metadata, not a lease ABI change. See [ABI metadata and shared declarations](docs/architecture/abi-metadata.md).
+
 ## Unreleased — v0.4.0
 
 ### Added
