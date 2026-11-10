@@ -297,6 +297,16 @@ assert_eq!(points.as_slice()[0].x, 5);
 
 The root API is unchanged for v0.4.0 consumers. `from_raw` / `into_raw` remain as `pub unsafe` escape hatches on the owner and owned-view wrappers; the safe facade uses `from_handle` / `into_handle` internally. The generated module carries `#![allow(unsafe_code)]`, so the consumer's `deny(unsafe_code)` does not fire on the generated implementation.
 
+Borrowed ABIX-STD views are rebuilt from safe Rust borrows, so string and slice parameters also disappear from the unsafe surface:
+
+```rust
+assert_eq!(container_string_len("hello"), 5);
+assert_eq!(container_vec_sum(&[1, 2, 3]), 6);
+assert_eq!(container_points_sum(&[ContainerPoint { x: 1, y: 2 }]), 3);
+```
+
+`&str` becomes `abix_str_utf8` with UTF-8 encoding, and `&[T]` becomes `abix_span_<T>`; the length comes from the Rust slice and empty slices are passed as a zero-length view. A returned borrowed view and any other raw pointer contract stay `unsafe`, because their lifetime is not proven by the signature.
+
 Lease users get a validated `LeaseHost`, so the guard no longer takes raw pointers:
 
 ```rust

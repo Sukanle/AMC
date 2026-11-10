@@ -1189,11 +1189,64 @@ impl LeaseHost {
     o.print("{}", source);
 }
 
+struct BorrowedView {
+    enum class Kind {
+        None,
+        Utf8,
+        Slice
+    } kind = Kind::None;
+    std::string raw_name;
+    std::string element;
+    std::string data_field;
+    std::string data_type;
+    std::string len_field;
+    std::string len_type;
+    std::string encoding_field;
+    std::string reserved_field;
+};
+
+// ABIX-STD borrowed boundary types can be rebuilt from safe Rust borrows:
+// `&str` -> abix_str_utf8 and `&[T]` -> abix_span_<T>. Anything else keeps the
+// raw unsafe contract.
+BorrowedView borrowed_view(const Projector &p, amc::Hash128 id) {
+    BorrowedView view;
+    const int index = p.index_of(id);
+    if (index < 0) return view;
+    const amc::Type &type = p.m.types[static_cast<size_t>(index)];
+    if (type.kind != amc::TypeKind::RECORD) return view;
+    const bool is_string = type.name == "abix_str_utf8";
+    const bool is_slice = type.name.rfind("abix_span_", 0) == 0;
+    if (!is_string && !is_slice) return view;
+    const amc::Field *data = find_visible_field(p.m, type, "data");
+    const amc::Field *len = find_visible_field(p.m, type, "len");
+    if (data == nullptr || len == nullptr) return view;
+    view.raw_name = type.name;
+    view.data_field = data->name;
+    view.data_type = p.field_type(data->type_id);
+    view.len_field = len->name;
+    view.len_type = p.field_type(len->type_id);
+    const int data_index = p.index_of(data->type_id);
+    if (data_index < 0) return view;
+    view.element = p.pointer_pointee_rust(p.m.types[static_cast<size_t>(data_index)]);
+    if (is_string) {
+        const amc::Field *encoding = find_visible_field(p.m, type, "encoding");
+        const amc::Field *reserved = find_visible_field(p.m, type, "reserved");
+        if (encoding == nullptr || reserved == nullptr) return view;
+        view.kind = BorrowedView::Kind::Utf8;
+        view.encoding_field = encoding->name;
+        view.reserved_field = reserved->name;
+    } else {
+        view.kind = BorrowedView::Kind::Slice;
+    }
+    return view;
+}
+
 void emit_safe_facade(Output &o, const Projector &p) {
     struct SafeParam {
         std::string name;
         std::string type;
         std::string arg;
+        std::string prelude;
     };
     struct SafeFunction {
         const amc::Function *function = nullptr;
@@ -1217,14 +1270,43 @@ void emit_safe_facade(Output &o, const Projector &p) {
                 parameter.name.empty() ? fmt::format("arg{}", i) : rust_field_ident(parameter.name);
             const std::string wrapper = safe_wrapper_name(p, parameter.type_id);
             if (!wrapper.empty()) {
-                entry.params.push_back({parameter_name, wrapper, parameter_name + ".into_handle()"});
+                entry.params.push_back({parameter_name, wrapper, parameter_name + ".into_handle()", {}});
                 has_wrapper = true;
-            } else if (p.is_safe_value(parameter.type_id)) {
-                entry.params.push_back({parameter_name, p.field_type(parameter.type_id), parameter_name});
-            } else {
-                eligible = false;
-                break;
+                continue;
             }
+            if (p.is_safe_value(parameter.type_id)) {
+                entry.params.push_back({parameter_name, p.field_type(parameter.type_id), parameter_name, {}});
+                continue;
+            }
+            const BorrowedView view = borrowed_view(p, parameter.type_id);
+            if (view.kind != BorrowedView::Kind::None) {
+                std::string prelude = "let "
+                                    + parameter_name
+                                    + "_view = "
+                                    + view.raw_name
+                                    + " { "
+                                    + view.data_field
+                                    + ": "
+                                    + parameter_name
+                                    + ".as_ptr() as "
+                                    + view.data_type
+                                    + ", "
+                                    + view.len_field
+                                    + ": "
+                                    + parameter_name
+                                    + ".len() as "
+                                    + view.len_type;
+                if (view.kind == BorrowedView::Kind::Utf8)
+                    prelude += ", " + view.encoding_field + ": 0, " + view.reserved_field + ": 0";
+                prelude += " };";
+                const std::string type =
+                    view.kind == BorrowedView::Kind::Utf8 ? std::string("&str") : "&[" + view.element + "]";
+                entry.params.push_back({parameter_name, type, parameter_name + "_view", prelude});
+                has_wrapper = true;
+                continue;
+            }
+            eligible = false;
+            break;
         }
         if (!eligible) continue;
         const int return_index = p.index_of(function.return_type);
@@ -1272,7 +1354,7 @@ void emit_safe_facade(Output &o, const Projector &p) {
     for (const auto &entry : functions) {
         const amc::Function &function = *entry.function;
         const std::string name = rust_ident(function.name);
-        o.print("    /// Safe wrapper for `{}`: owners are validated, raw handles stay private.\n", function.name);
+        o.print("    /// Safe wrapper for `{}`: raw pointers stay hidden and owners are validated.\n", function.name);
         o.print("    #[inline]\n    pub fn {}(", name);
         for (size_t i = 0; i < entry.params.size(); ++i) {
             if (i != 0) o.print(", ");
@@ -1281,7 +1363,10 @@ void emit_safe_facade(Output &o, const Projector &p) {
         o.print(")");
         if (entry.wrapper_return.empty() && !entry.returns_void) o.print(" -> {}", entry.return_type);
         if (!entry.wrapper_return.empty()) o.print(" -> Result<{}, OwnerError>", entry.wrapper_return);
-        o.print(" {{\n        ");
+        o.print(" {{\n");
+        for (const auto &param : entry.params)
+            if (!param.prelude.empty()) o.print("        {}\n", param.prelude);
+        o.print("        ");
         std::string args;
         for (size_t i = 0; i < entry.params.size(); ++i) {
             if (i != 0) args += ", ";

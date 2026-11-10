@@ -155,6 +155,10 @@ def main():
             check("pub mod safe" in projection and "pub fn container_owned_string" in projection
                   and "pub fn container_take_points" in projection,
                   "safe owned view facade is generated")
+            check("pub fn container_string_len(value: &str)" in projection
+                  and "pub fn container_vec_sum(value: &[core::ffi::c_int])" in projection
+                  and "pub fn container_points_sum(value: &[ContainerPoint])" in projection,
+                  "safe borrowed view facade is generated")
             check("impl Drop for OwnedStringUtf8" in projection and "owner.destroy" in projection,
                   "owned view Drop calls the owner destroy")
 
@@ -300,8 +304,15 @@ mod skl {
     pub use crate::abix;
 }
 use skl::abix::safe::*;
+use skl::abix::ContainerPoint;
 
 fn main() {
+    assert_eq!(container_string_len("hello"), 5);
+    assert_eq!(container_vec_sum(&[1, 2, 3]), 6);
+    assert_eq!(container_str_view_len("world"), 5);
+    assert_eq!(container_slice_sum(&[4, 5, 6]), 15);
+    assert_eq!(container_points_sum(&[ContainerPoint { x: 1, y: 2 }]), 3);
+
     let string = container_owned_string(7).expect("owned string");
     assert_eq!(string.as_bytes(), b"7");
     assert_eq!(string.as_str().expect("utf-8"), "7");

@@ -297,6 +297,16 @@ assert_eq!(points.as_slice()[0].x, 5);
 
 根 API 对 v0.4.0 消费者保持不变。owner 与 owned-view 包装上的 `from_raw` / `into_raw` 仍作为 `pub unsafe` 逃生口保留；安全 facade 内部使用 `from_handle` / `into_handle`。生成模块自身带有 `#![allow(unsafe_code)]`，因此消费者的 `deny(unsafe_code)` 不会被生成的实现触发。
 
+借用的 ABIX-STD 视图会从安全的 Rust 借用重建，因此字符串和切片参数也不再出现在 unsafe 表面上：
+
+```rust
+assert_eq!(container_string_len("hello"), 5);
+assert_eq!(container_vec_sum(&[1, 2, 3]), 6);
+assert_eq!(container_points_sum(&[ContainerPoint { x: 1, y: 2 }]), 3);
+```
+
+`&str` 转为 UTF-8 编码的 `abix_str_utf8`，`&[T]` 转为 `abix_span_<T>`；长度来自 Rust 切片，空切片传入零长度视图。返回借用视图或其它裸指针契约仍然保持 `unsafe`，因为签名无法证明其生命周期。
+
 Lease 用户获得经过校验的 `LeaseHost`，guard 不再直接接收裸指针：
 
 ```rust
