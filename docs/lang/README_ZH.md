@@ -103,17 +103,21 @@ graph TD
 
 ## 语言支持状态
 
-| 语言 | 前端                                   | 后端  | 投影                                                                           | 指南                     |
-| ---- | -------------------------------------- | ----- | ------------------------------------------------------------------------------ | ------------------------ |
-| C++  | Clang AST                              | C++17 | `amc_generated.hpp` + `amc_abi_check.hpp`；`Traits`，条件满足时生成 proxy      | [cpp_zh.md](cpp_zh.md)   |
-| Rust | `#[repr(C)]` / `extern "C"` 源码提取器 | Rust  | `amc_generated.rs`；`repr(C)`、`extern "C"`、`core::ffi::c_*`、`const assert!` | [rust_zh.md](rust_zh.md) |
-| Zig  | 暂未提供                               | Zig   | `amc_generated.zig`；`extern struct`、`extern fn`、`[*c]`、`comptime`          | [zig_zh.md](zig_zh.md)   |
+| 语言 | 前端                                   | 后端  | 投影                                                                           | 指南                      |
+| ---- | -------------------------------------- | ----- | ------------------------------------------------------------------------------ | ------------------------- |
+| C++  | Clang AST                              | C++17 | `amc_generated.hpp` + `amc_abi_check.hpp`；`Traits`，条件满足时生成 proxy      | [C++](cpp/README_ZH.md)   |
+| Rust | `#[repr(C)]` / `extern "C"` 源码提取器 | Rust  | `amc_generated.rs`；`repr(C)`、`extern "C"`、`core::ffi::c_*`、`const assert!` | [Rust](rust/README_ZH.md) |
+| Zig  | 暂未提供                               | Zig   | `amc_generated.zig`；`extern struct`、`extern fn`、`[*c]`、`comptime`          | [Zig](zig/README_ZH.md)   |
+
+## 文档结构
+
+每种语言都有独立目录，包含三个入口：`README.md`（预览与状态）、`quickstart.md`（首次构建与消费者）、`advanced.md`（契约、内部实现与限制）。以 `_ZH.md` 结尾的是中文版本。
 
 ## 从这里开始
 
-- [C++](cpp_zh.md)
-- [Rust](rust_zh.md)
-- [Zig](zig_zh.md)
+- [C++](cpp/README_ZH.md)
+- [Rust](rust/README_ZH.md)
+- [Zig](zig/README_ZH.md)
 - [ABIX Interface](https://github.com/Sukanle/ABIX/blob/main/docs/abix/interface_zh.md)
 - [ABIX-STD](https://github.com/Sukanle/ABIX/blob/main/docs/abix/std_zh.md)
 - [`amc generate`](https://github.com/Sukanle/AMC/docs/amc/amc_zh.md#amc-generate)

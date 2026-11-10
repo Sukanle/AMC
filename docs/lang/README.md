@@ -103,17 +103,21 @@ graph TD
 
 ## Language status
 
-| Language | Frontend                                     | Backend | Projection                                                                     | Guide              |
-| -------- | -------------------------------------------- | ------- | ------------------------------------------------------------------------------ | ------------------ |
-| C++      | Clang AST                                    | C++17   | `amc_generated.hpp` + `amc_abi_check.hpp`; `Traits`, proxy when applicable     | [cpp.md](cpp.md)   |
-| Rust     | `#[repr(C)]` / `extern "C"` source extractor | Rust    | `amc_generated.rs`; `repr(C)`, `extern "C"`, `core::ffi::c_*`, `const assert!` | [rust.md](rust.md) |
-| Zig      | not yet                                      | Zig     | `amc_generated.zig`; `extern struct`, `extern fn`, `[*c]`, `comptime`          | [zig.md](zig.md)   |
+| Language | Frontend                                     | Backend | Projection                                                                     | Guide                  |
+| -------- | -------------------------------------------- | ------- | ------------------------------------------------------------------------------ | ---------------------- |
+| C++      | Clang AST                                    | C++17   | `amc_generated.hpp` + `amc_abi_check.hpp`; `Traits`, proxy when applicable     | [C++](cpp/README.md)   |
+| Rust     | `#[repr(C)]` / `extern "C"` source extractor | Rust    | `amc_generated.rs`; `repr(C)`, `extern "C"`, `core::ffi::c_*`, `const assert!` | [Rust](rust/README.md) |
+| Zig      | not yet                                      | Zig     | `amc_generated.zig`; `extern struct`, `extern fn`, `[*c]`, `comptime`          | [Zig](zig/README.md)   |
+
+## Guide layout
+
+Each language has its own directory with three entry points: `README.md` (preview and status), `quickstart.md` (first build and consumer) and `advanced.md` (contracts, internals and limits). Files ending in `_ZH.md` are the Chinese versions.
 
 ## Start with
 
-- [C++](cpp.md)
-- [Rust](rust.md)
-- [Zig](zig.md)
+- [C++](cpp/README.md)
+- [Rust](rust/README.md)
+- [Zig](zig/README.md)
 - [ABIX Interface](https://github.com/Sukanle/ABIX/blob/main/docs/abix/interface.md)
 - [ABIX-STD](https://github.com/Sukanle/ABIX/blob/main/docs/abix/std.md)
 - [`amc generate`](../amc/amc.md#amc-generate)

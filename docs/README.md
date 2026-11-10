@@ -109,9 +109,9 @@ Private implementation headers live under `include/SKL/AMC/Private/` and are onl
 | Document                         | 中文                                   | Description                                      |
 | -------------------------------- | -------------------------------------- | ------------------------------------------------ |
 | [lang/README.md](lang/README.md) | [lang/README_ZH.md](lang/README_ZH.md) | the ABIX projection model                        |
-| [cpp.md](lang/cpp.md)            | [cpp_zh.md](lang/cpp_zh.md)            | C++ frontend/backend and compile-time checks     |
-| [rust.md](lang/rust.md)          | [rust_zh.md](lang/rust_zh.md)          | Rust provider, `repr(C)`, ownership and `Result` |
-| [zig.md](lang/zig.md)            | [zig_zh.md](lang/zig_zh.md)            | Zig backend projection and `comptime` checks     |
+| [C++](lang/cpp/README.md)        | [C++ 中文](lang/cpp/README_ZH.md)      | C++ frontend/backend and compile-time checks     |
+| [Rust](lang/rust/README.md)      | [Rust 中文](lang/rust/README_ZH.md)    | Rust provider, `repr(C)`, ownership and `Result` |
+| [Zig](lang/zig/README.md)        | [Zig 中文](lang/zig/README_ZH.md)      | Zig backend projection and `comptime` checks     |
 
 ### AI and agents
 

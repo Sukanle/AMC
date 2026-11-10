@@ -109,9 +109,9 @@ AMC/
 | 文档                                   | English                          | 描述                                        |
 | -------------------------------------- | -------------------------------- | ------------------------------------------- |
 | [lang/README_ZH.md](lang/README_ZH.md) | [lang/README.md](lang/README.md) | ABIX 投影模型                               |
-| [cpp_zh.md](lang/cpp_zh.md)            | [cpp.md](lang/cpp.md)            | C++ 前端/后端与编译期检查                   |
-| [rust_zh.md](lang/rust_zh.md)          | [rust.md](lang/rust.md)          | Rust provider、`repr(C)`、所有权与 `Result` |
-| [zig_zh.md](lang/zig_zh.md)            | [zig.md](lang/zig.md)            | Zig 后端投影与 `comptime` 检查              |
+| [C++ 中文](lang/cpp/README_ZH.md)      | [C++](lang/cpp/README.md)        | C++ 前端/后端与编译期检查                   |
+| [Rust 中文](lang/rust/README_ZH.md)    | [Rust](lang/rust/README.md)      | Rust provider、`repr(C)`、所有权与 `Result` |
+| [Zig 中文](lang/zig/README_ZH.md)      | [Zig](lang/zig/README.md)        | Zig 后端投影与 `comptime` 检查              |
 
 ### AI 与 Agent
 

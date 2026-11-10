@@ -279,5 +279,5 @@ v0.3.x 不实现 helper，只做：
 ## 相关文档
 
 - [模块边界](module-boundaries_zh.md)
-- [Rust provider](../lang/rust_zh.md)
+- [Rust provider](../lang/rust/README_ZH.md)
 - [基准测试](../bench/README_ZH.md)

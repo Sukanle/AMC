@@ -323,5 +323,5 @@ A performance change is accepted only when:
 
 - [Module boundaries](../architecture/module-boundaries.md)
 - [AMC CLI](../amc/amc.md)
-- [C++ provider](../lang/cpp.md)
+- [C++ provider](../lang/cpp/README.md)
 - Optimization history is maintained in the repository's internal working notes.

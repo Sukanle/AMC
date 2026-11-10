@@ -1,29 +1,10 @@
-# Rust
+# Rust 高级特性
 
 <p align="center">
-  <a href="rust.md">English</a> · 中文
+  <a href="advanced.md">English</a> · 中文
 </p>
 
-<details>
-<summary>目录</summary>
-
-- [角色](#角色)
-- [前端](#前端)
-- [生成的投影](#生成的投影)
-- [所有权与错误](#所有权与错误)
-- [示例](#示例)
-- [限制与说明](#限制与说明)
-
-</details>
-
-Rust 是 ABIX 的第一个非 C++ provider。`amc-rust` 包含源码级前端与 Rust 后端；它链接 LLVM Support 处理文件系统与文件 I/O，但不使用 Clang AST。
-
-## 角色
-
-- `amc --describe-language rust` 报告 `frontend backend protocol=jsonl-v1`。
-- 前端从 `.rs` 文件中读取 `#[repr(C)]` struct/enum 与 `extern "C"` 函数，并自行计算 C 布局。
-- 后端从已有的 `.abix` artifact 生成 `amc_generated.rs`。
-- `amc-rust` 是独立的 provider 进程；它从不修改 ABIX IR。
+前端契约、生成的包装、安全 facade 与当前限制。
 
 ## 前端
 
@@ -50,7 +31,7 @@ endianness = "little"
 output = "demo.abix"
 ```
 
-缺少 `[target] pointer_bits` 时，Rust 前端会明确失败，而不是默认使用 64 位 Host 布局。 `pointer_bits` 必须为 `64`：32 位和 16 位目标会以显式诊断被拒绝（见[平台支持](../architecture/platform-support_zh.md)）。
+缺少 `[target] pointer_bits` 时，Rust 前端会明确失败，而不是默认使用 64 位 Host 布局。 `pointer_bits` 必须为 `64`：32 位和 16 位目标会以显式诊断被拒绝（见[平台支持](../../architecture/platform-support_zh.md)）。
 
 前端刻意是一个初步提取器：它理解跨越 FFI 边界的那部分 Rust —— `#[repr(C)]` struct/enum 与 `extern "C"` 函数 —— 并计算与 C++ 前端从 Clang 得到的相同布局。泛型、trait、生命周期与位域不在范围内；不支持的构造会被忽略，而不是猜测。
 
@@ -317,7 +298,7 @@ assert!(!guard.owner().object().is_null());
 
 `LeaseHost::new` 校验 ABI 版本、struct size 以及 `acquire` / `release` 入口。`LeaseGuard::acquire` / `adopt` 继续作为裸指针逃生口保留，`LeaseError` 区分无效 API、无效 registry、acquire 失败和 create 失败。
 
-## 示例
+## 完整示例
 
 ```rust
 #[path = "gen/amc_generated.rs"]
@@ -347,24 +328,6 @@ fn main() {
 
 Rust 文件仍需要链接原生库；当启用 `abix_link` 选项时，投影会通过 `ABIX_LIBRARY_NAME` 提供 `#[link]` 支持。
 
-## 真实项目示例
-
-`examples/rust/ffi-workspace/` 是一个端到端使用 AMC 的 Cargo workspace：
-
-```text
-provider/   Rust cdylib；普通 Rust 函数定义 ABI 表面
-consumer/   Rust binary；包含生成绑定并使用 safe::
-```
-
-`amc build` 提取 provider、生成 `extern "C"` thunks 与 owned-handle 契约，随后 `amc generate -l rust` 生成 consumer 绑定。consumer 启用 `#![deny(unsafe_code)]`。运行方式：
-
-```bash
-cd examples/rust/ffi-workspace
-AMC=/path/to/amc ./run.sh
-```
-
-`amc-rust-workspace-example-test` 会在临时副本中运行同一套流程。
-
 ## 限制与说明
 
 - 源码 parser 不是完整的 `rustc` AST：只提取 `#[repr(C)]` / `extern "C"` 表面；泛型、trait、生命周期与位域留在模块内部。可选的 helper 通过 rustc 视图补齐泛型实例、trait、生命周期和标准容器。
@@ -376,4 +339,4 @@ AMC=/path/to/amc ./run.sh
 - panic 与异常不得穿越边界；错误边界契约是受支持的路径。
 - 生成文件是普通 Rust，可以在外层再封装成安全的 crate API。
 - `amc-rust` 链接 LLVM Support 但不使用 Clang AST；它的前端自行计算布局。
-- v0.4.0 起 Rust 语义发现迁移到独立 rustc helper；adapter 契约见 [amc.rust.semantic/1](../architecture/rust-adapter_zh.md)。使用 `-DAMC_BUILD_RUST_HELPER=ON` 可通过 Cargo 构建并安装它。
+- v0.4.0 起 Rust 语义发现迁移到独立 rustc helper；adapter 契约见 [amc.rust.semantic/1](../../architecture/rust-adapter_zh.md)。使用 `-DAMC_BUILD_RUST_HELPER=ON` 可通过 Cargo 构建并安装它。

@@ -1,29 +1,10 @@
-# Rust
+# Rust advanced topics
 
 <p align="center">
-  <a href="rust_zh.md">中文</a> · English
+  <a href="advanced_ZH.md">中文</a> · English
 </p>
 
-<details>
-<summary>Contents</summary>
-
-- [Role](#role)
-- [Frontend](#frontend)
-- [Generated projection](#generated-projection)
-- [Ownership and errors](#ownership-and-errors)
-- [Example](#example)
-- [Limits and notes](#limits-and-notes)
-
-</details>
-
-Rust is ABIX's first non-C++ provider. `amc-rust` has a source-level frontend and a Rust backend. It links LLVM Support for filesystem and file I/O, but does not use Clang AST.
-
-## Role
-
-- `amc --describe-language rust` reports `frontend backend protocol=jsonl-v1`.
-- The frontend reads `#[repr(C)]` structs/enums and `extern "C"` functions from `.rs` files and computes the C layout itself.
-- The backend emits `amc_generated.rs` from an existing `.abix` artifact.
-- `amc-rust` is a standalone provider process; it never changes ABIX IR.
+Frontend contracts, generated wrappers, the safe facade and current limits.
 
 ## Frontend
 
@@ -50,7 +31,7 @@ endianness = "little"
 output = "demo.abix"
 ```
 
-Without `[target] pointer_bits`, the Rust frontend fails explicitly instead of assuming a 64-bit Host layout. `pointer_bits` must be `64`: 32-bit and 16-bit targets are rejected with an explicit diagnostic (see [platform support](../architecture/platform-support.md)).
+Without `[target] pointer_bits`, the Rust frontend fails explicitly instead of assuming a 64-bit Host layout. `pointer_bits` must be `64`: 32-bit and 16-bit targets are rejected with an explicit diagnostic (see [platform support](../../architecture/platform-support.md)).
 
 The frontend is intentionally a preliminary extractor: it understands the subset that crosses an FFI boundary — `#[repr(C)]` structs/enums and `extern "C"` functions — and computes the same layout the C++ frontend gets from Clang. Generics, traits, lifetimes and bit-fields are out of scope; unsupported constructs are ignored rather than guessed.
 
@@ -317,7 +298,7 @@ assert!(!guard.owner().object().is_null());
 
 `LeaseHost::new` validates the ABI version, struct size and `acquire`/`release` entries. `LeaseGuard::acquire` / `adopt` stay as the raw-pointer escape hatch, and `LeaseError` distinguishes an invalid API, an invalid registry, a failed acquire and a failed create.
 
-## Example
+## Full example
 
 ```rust
 #[path = "gen/amc_generated.rs"]
@@ -347,24 +328,6 @@ fn main() {
 
 The Rust file still needs to link the native library; the projection provides `#[link]` support through `ABIX_LIBRARY_NAME` when the `abix_link` option is enabled.
 
-## Real project example
-
-`examples/rust/ffi-workspace/` is a Cargo workspace that uses AMC end to end:
-
-```text
-provider/   Rust cdylib; ordinary Rust functions define the ABI surface
-consumer/   Rust binary; includes the generated binding and uses safe::
-```
-
-`amc build` extracts the provider, writes the `extern "C"` thunks and the owned-handle contract, then `amc generate -l rust` produces the consumer binding. The consumer carries `#![deny(unsafe_code)]`. Run it with:
-
-```bash
-cd examples/rust/ffi-workspace
-AMC=/path/to/amc ./run.sh
-```
-
-`amc-rust-workspace-example-test` runs the same workflow in a temporary copy.
-
 ## Limits and notes
 
 - The source parser is not a full `rustc` AST: only `#[repr(C)]` / `extern "C"` surfaces are extracted; generics, traits, lifetimes and bit-fields stay inside the module. The optional helper supplies the rustc view for generic instances, traits, lifetimes and standard containers.
@@ -376,4 +339,4 @@ AMC=/path/to/amc ./run.sh
 - Panics and exceptions must not cross the boundary; the error boundary contract is the supported path.
 - The generated file is ordinary Rust and can be wrapped in a safe crate API.
 - `amc-rust` links LLVM Support but not Clang AST; its frontend computes the layout itself.
-- v0.4.0 moves Rust semantic discovery to the independent rustc helper; the adapter contract is [amc.rust.semantic/1](../architecture/rust-adapter.md). Configure with `-DAMC_BUILD_RUST_HELPER=ON` to build and install it with Cargo.
+- v0.4.0 moves Rust semantic discovery to the independent rustc helper; the adapter contract is [amc.rust.semantic/1](../../architecture/rust-adapter.md). Configure with `-DAMC_BUILD_RUST_HELPER=ON` to build and install it with Cargo.

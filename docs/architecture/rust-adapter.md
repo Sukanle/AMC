@@ -279,5 +279,5 @@ v0.3.x did not implement the helper. It only:
 ## Related documents
 
 - [Module boundaries](module-boundaries.md)
-- [Rust provider](../lang/rust.md)
+- [Rust provider](../lang/rust/README.md)
 - [Benchmarks](../bench/README.md)

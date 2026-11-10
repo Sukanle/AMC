@@ -323,5 +323,5 @@ Linux 的 `LookupMiss/1000` 在直接打开 entry 后曾从 1.415 ms 变为稳�
 
 - [模块边界](../architecture/module-boundaries_zh.md)
 - [AMC CLI](../amc/amc_zh.md)
-- [C++ provider](../lang/cpp_zh.md)
+- [C++ provider](../lang/cpp/README_ZH.md)
 - 优化历史记录在仓库内部工作笔记中。
