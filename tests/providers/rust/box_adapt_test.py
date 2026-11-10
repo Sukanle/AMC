@@ -45,6 +45,11 @@ def main():
     if not fixtures.is_dir():
         fixtures = source_root / "AMC" / "tests" / "fixtures"
     amc = bin_dir / exe("amc")
+    runtime_archive = None
+    for candidate in (bin_dir.parent / "libabix-format.a", bin_dir.parent / "libabix-format.lib"):
+        if candidate.is_file():
+            runtime_archive = str(candidate)
+            break
     rustc = shutil.which("rustc")
     if not rustc:
         print("  [SKIP] rustc is required for the Box adaptation test")
@@ -283,6 +288,8 @@ print('owner box: OK')
                 header = open(cpp_header, encoding="utf-8").read()
                 check("class OwnerOfBoxWidget" in header,
                       "C++ owner handle RAII wrapper is generated")
+                check("class LeaseGuard" in header and "#include <SKL/ABIX/Interface/LeaseABI.h>" in header,
+                      "C++ lease guard is generated")
                 cxx = os.environ.get("CXX") or shutil.which("clang++") or shutil.which("c++")
                 if cxx:
                     include_flags = [
@@ -332,6 +339,261 @@ int main() {
                             result = run([cpp_consumer_bin], env=env)
                             check(result.returncode == 0,
                                   "C++ owner handle RAII releases through destroy", output(result)[-500:])
+
+                    if runtime_archive:
+                        cpp_lease = os.path.join(owner_dir, "lease_guard_consumer.cpp")
+                        with open(cpp_lease, "w", encoding="utf-8") as handle:
+                            handle.write("""#include "owner_gen.hpp"
+#include "SKL/AMC/Support/LeaseRegistry.h"
+
+extern "C" {
+void amc_module_set_instance(uint64_t instance);
+::skl::amc::generated::abix_owner_BoxWidget box_widget_make(int32_t value);
+int32_t box_widget_value(::skl::amc::generated::abix_owner_BoxWidget widget);
+size_t box_widget_live();
+}
+
+int main() {
+    using Owner = ::skl::amc::generated::OwnerOfBoxWidget;
+    using Guard = ::skl::amc::generated::LeaseGuard<Owner>;
+
+    skl::amc::support::LeaseRegistry host;
+    abix_lease_api api = host.make_api();
+    abix_lease_registry *registry = nullptr;
+    if (host.create_registry(&registry) != ABIX_SUCCESS || registry == nullptr) return 1;
+
+    skl::abix::poly::ModuleControl control;
+    control.name = "rust_box_owner";
+    if (host.register_module(control) != ABIX_SUCCESS) return 2;
+    amc_module_set_instance(control.id);
+
+    {
+        auto guard = Guard::acquire(&api, registry, control.id, [&] { return Owner(box_widget_make(7)); });
+        if (!guard) return 3;
+        if (!guard.owner() || guard.owner().object() == nullptr) return 4;
+        if (guard.owner().module_instance() != control.id) return 5;
+        if (box_widget_live() != 1) return 6;
+        if (host.unregister_module(control.id) != ABIX_ERROR_BUSY) return 7;
+        if (host.find_module(control.id) == nullptr) return 8;
+    }
+    if (box_widget_live() != 0) return 9;
+    if (host.find_module(control.id) == nullptr) return 10;
+    if (host.find_module(control.id)->leases.load() != 0) return 11;
+    if (host.unregister_module(control.id) != ABIX_SUCCESS) return 12;
+
+    skl::abix::poly::ModuleControl control2;
+    control2.name = "rust_box_owner_2";
+    if (host.register_module(control2) != ABIX_SUCCESS) return 13;
+    amc_module_set_instance(control2.id);
+    auto bad = Guard::acquire(&api, registry, control2.id, [] { return Owner{}; });
+    if (bad) return 14;
+    if (host.find_module(control2.id) == nullptr || host.find_module(control2.id)->leases.load() != 0) return 15;
+    if (host.unregister_module(control2.id) != ABIX_SUCCESS) return 16;
+
+    abix_lease_api bad_api = api;
+    bad_api.abi_version = 2;
+    skl::abix::poly::ModuleControl control3;
+    control3.name = "rust_box_owner_3";
+    if (host.register_module(control3) != ABIX_SUCCESS) return 17;
+    auto invalid = Guard::acquire(&bad_api, registry, control3.id, [] { return Owner{}; });
+    if (invalid) return 18;
+    if (host.find_module(control3.id) == nullptr || host.find_module(control3.id)->leases.load() != 0) return 19;
+    if (host.unregister_module(control3.id) != ABIX_SUCCESS) return 20;
+
+    if (host.destroy_registry(registry) != ABIX_SUCCESS) return 21;
+    return 0;
+}
+""")
+                        cpp_lease_bin = os.path.join(owner_dir, exe("lease_guard_cpp"))
+                        link = ["-L" + owner_dir, "-lrust_box_owner", "-Wl,-rpath," + owner_dir,
+                                "-pthread", runtime_archive]
+                        result = run([cxx, "-std=c++17"] + include_flags + [cpp_lease, "-o", cpp_lease_bin] + link)
+                        if check(result.returncode == 0, "C++ lease guard consumer linked", output(result)[-600:]):
+                            env = dict(os.environ)
+                            env["LD_LIBRARY_PATH"] = owner_dir + os.pathsep + env.get("LD_LIBRARY_PATH", "")
+                            env["DYLD_LIBRARY_PATH"] = owner_dir + os.pathsep + env.get("DYLD_LIBRARY_PATH", "")
+                            result = run([cpp_lease_bin], env=env)
+                            check(result.returncode == 0, "C++ lease guard destroys then releases",
+                                  output(result)[-600:])
+
+                    if runtime_archive:
+                        lease_host = os.path.join(owner_dir, "lease_host.cpp")
+                        with open(lease_host, "w", encoding="utf-8") as handle:
+                            handle.write("""#include "SKL/AMC/Support/LeaseRegistry.h"
+#include "SKL/ABIX/Interface/Lease.h"
+
+#include <map>
+#include <memory>
+#include <mutex>
+
+namespace {
+skl::amc::support::LeaseRegistry &host() {
+    static skl::amc::support::LeaseRegistry instance;
+    return instance;
+}
+std::mutex &host_mutex() {
+    static std::mutex instance;
+    return instance;
+}
+std::map<uint64_t, std::unique_ptr<skl::abix::poly::ModuleControl>> &module_map() {
+    static std::map<uint64_t, std::unique_ptr<skl::abix::poly::ModuleControl>> instance;
+    return instance;
+}
+abix_lease_api &host_api() {
+    static abix_lease_api instance = host().make_api();
+    return instance;
+}
+}   // namespace
+
+extern "C" {
+const abix_lease_api *amc_test_lease_api() { return &host_api(); }
+
+abix_lease_registry *amc_test_lease_registry() {
+    static abix_lease_registry *registry = nullptr;
+    std::lock_guard<std::mutex> lock(host_mutex());
+    if (registry == nullptr) host().create_registry(&registry);
+    return registry;
+}
+
+uint64_t amc_test_lease_register(const char *name) {
+    std::lock_guard<std::mutex> lock(host_mutex());
+    auto control = std::make_unique<skl::abix::poly::ModuleControl>();
+    control->name = name != nullptr ? name : "lease-test";
+    if (host().register_module(*control) != ABIX_SUCCESS) return 0;
+    const uint64_t id = control->id;
+    module_map()[id] = std::move(control);
+    return id;
+}
+
+int32_t amc_test_lease_unregister(uint64_t module) {
+    std::lock_guard<std::mutex> lock(host_mutex());
+    auto it = module_map().find(module);
+    if (it == module_map().end()) return ABIX_ERROR_NOT_FOUND;
+    const abix_status status = host().unregister_module(module);
+    if (status == ABIX_SUCCESS) module_map().erase(it);
+    return static_cast<int32_t>(status);
+}
+
+uint32_t amc_test_lease_count(uint64_t module) {
+    std::lock_guard<std::mutex> lock(host_mutex());
+    auto *control = host().find_module(module);
+    return control != nullptr ? control->leases.load(std::memory_order_acquire) : 0;
+}
+}
+""")
+                        lease_host_lib = module_path(owner_dir, "lease_host")
+                        result = run([cxx, "-std=c++17", "-shared", "-fPIC", "-O2", "-pthread",
+                                      lease_host, "-o", lease_host_lib] + include_flags + [runtime_archive])
+                        if check(result.returncode == 0, "Rust lease host linked", output(result)[-500:]):
+                            lease_rs = os.path.join(owner_dir, "lease_guard.rs")
+                            with open(lease_rs, "w", encoding="utf-8") as handle:
+                                handle.write("""#[path = "gen/amc_generated.rs"]
+pub mod abix;
+
+mod skl {
+    pub use crate::abix;
+}
+use skl::abix::*;
+
+use std::ffi::CString;
+
+extern "C" {
+    fn amc_module_set_instance(instance: u64);
+    fn amc_test_lease_api() -> *const abix_lease_api;
+    fn amc_test_lease_registry() -> *mut abix_lease_registry;
+    fn amc_test_lease_register(name: *const core::ffi::c_char) -> u64;
+    fn amc_test_lease_unregister(module: u64) -> i32;
+    fn amc_test_lease_count(module: u64) -> u32;
+    fn box_widget_make(value: i32) -> abix_owner_BoxWidget;
+    fn box_widget_live() -> usize;
+}
+
+unsafe fn register(name: &str) -> u64 {
+    let name = CString::new(name).expect("module name");
+    amc_test_lease_register(name.as_ptr())
+}
+
+fn main() {
+    unsafe {
+        let api = amc_test_lease_api();
+        let registry = amc_test_lease_registry();
+
+        let module = register("rust_box_owner");
+        assert_ne!(module, 0);
+        amc_module_set_instance(module);
+        {
+            let guard = LeaseGuard::<OwnerOfBoxWidget>::acquire(api, registry, module, || {
+                OwnerOfBoxWidget::from_raw(box_widget_make(7))
+            })
+            .expect("lease guard");
+            assert!(guard.is_valid());
+            assert_eq!(guard.owner().module_instance(), module);
+            assert_eq!(box_widget_live(), 1);
+            assert_eq!(amc_test_lease_count(module), 1);
+            assert_eq!(amc_test_lease_unregister(module), ABIX_ERROR_BUSY);
+        }
+        assert_eq!(box_widget_live(), 0);
+        assert_eq!(amc_test_lease_count(module), 0);
+        assert_eq!(amc_test_lease_unregister(module), ABIX_SUCCESS);
+
+        let module2 = register("rust_box_owner_2");
+        assert_ne!(module2, 0);
+        amc_module_set_instance(module2);
+        let bad = LeaseGuard::<OwnerOfBoxWidget>::acquire(api, registry, module2, || {
+            None::<OwnerOfBoxWidget>
+        });
+        assert!(bad.is_none());
+        assert_eq!(amc_test_lease_count(module2), 0);
+        assert_eq!(amc_test_lease_unregister(module2), ABIX_SUCCESS);
+
+        let module3 = register("rust_box_owner_3");
+        assert_ne!(module3, 0);
+        amc_module_set_instance(module3);
+        let acquire = (*api).acquire.expect("acquire");
+        let mut lease = ABIX_LEASE_INVALID;
+        assert_eq!(acquire((*api).host_context, registry, module3, &mut lease), ABIX_SUCCESS);
+        let adopted = LeaseGuard::<OwnerOfBoxWidget>::adopt(
+            api,
+            registry,
+            lease,
+            OwnerOfBoxWidget::from_raw(box_widget_make(9)),
+        )
+        .expect("adopted");
+        assert_eq!(box_widget_live(), 1);
+        drop(adopted);
+        assert_eq!(box_widget_live(), 0);
+        assert_eq!(amc_test_lease_count(module3), 0);
+        assert_eq!(amc_test_lease_unregister(module3), ABIX_SUCCESS);
+
+        let module4 = register("rust_box_owner_4");
+        assert_ne!(module4, 0);
+        amc_module_set_instance(module4);
+        let mut bad_api = *api;
+        bad_api.abi_version = 2;
+        let invalid = LeaseGuard::<OwnerOfBoxWidget>::acquire(&bad_api, registry, module4, || {
+            None::<OwnerOfBoxWidget>
+        });
+        assert!(invalid.is_none());
+        assert_eq!(amc_test_lease_count(module4), 0);
+        assert_eq!(amc_test_lease_unregister(module4), ABIX_SUCCESS);
+    }
+    println!("lease guard rust: OK");
+}
+""")
+                            lease_bin = os.path.join(owner_dir, exe("lease_guard_rust"))
+                            link = ["-L", "native=" + owner_dir, "-l", "dylib=lease_host",
+                                    "-l", "dylib=rust_box_owner"]
+                            if sys.platform != "win32":
+                                link += ["-C", "link-arg=-Wl,-rpath," + owner_dir]
+                            result = run([rustc, "--edition", "2021", lease_rs, "-o", lease_bin] + link)
+                            if check(result.returncode == 0, "Rust lease guard consumer compiled",
+                                     output(result)[-700:]):
+                                env = dict(os.environ)
+                                env["LD_LIBRARY_PATH"] = owner_dir + os.pathsep + env.get("LD_LIBRARY_PATH", "")
+                                env["DYLD_LIBRARY_PATH"] = owner_dir + os.pathsep + env.get("DYLD_LIBRARY_PATH", "")
+                                result = run([lease_bin], env=env)
+                                check(result.returncode == 0 and "lease guard rust: OK" in output(result),
+                                      "Rust lease guard destroys then releases", output(result)[-700:])
 
             owner_rs = os.path.join(owner_dir, "consumer.rs")
             with open(owner_rs, "w", encoding="utf-8") as handle:

@@ -44,7 +44,10 @@ int Emit::preamble(std::string &error) {
         if (kind == amc::LoweringKind::OWNED_STRING) any_owned_string = true;
         if (kind == amc::LoweringKind::OWNED_SPAN) any_owned_span = true;
     }
-    if (any_owner_handle || any_owned_string || any_owned_span) _o.print("#include <SKL/ABIX/Interface/OwnerABI.h>\n");
+    if (any_owner_handle || any_owned_string || any_owned_span) {
+        _o.print("#include <SKL/ABIX/Interface/OwnerABI.h>\n");
+        _o.print("#include <SKL/ABIX/Interface/LeaseABI.h>\n");
+    }
     if (any_owned_string) _o.print("#include <SKL/ABIX/STD/OwnedString.h>\n");
     if (any_owned_span) _o.print("#include <SKL/ABIX/STD/OwnedSpan.h>\n");
 

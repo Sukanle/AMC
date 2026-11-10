@@ -742,6 +742,206 @@ void emit_owner_views(Output &o, const Projector &p) {
     }
 }
 
+void emit_lease_guard(Output &o, const Projector &p) {
+    bool any_owner_view = false;
+    for (const auto &lowering : p.m.lowerings) {
+        const auto kind = static_cast<amc::LoweringKind>(lowering.kind);
+        if (kind != amc::LoweringKind::OWNER
+            && kind != amc::LoweringKind::OWNED_STRING
+            && kind != amc::LoweringKind::OWNED_SPAN)
+            continue;
+        if (p.index_of(lowering.type_id) >= 0) {
+            any_owner_view = true;
+            break;
+        }
+    }
+    if (!any_owner_view) return;
+
+    o.print("{}", R"rust(
+// ABIX lease C ABI v1. This declaration is generated from the stable
+// LeaseABI.h contract; ABIX_LEASE_API_JSON will replace the hand-written
+// layout facts in a later v0.4.x metadata pass.
+#[allow(non_camel_case_types)]
+pub mod amc_lease {
+    #[allow(non_camel_case_types)]
+    pub type abix_lease_registry = core::ffi::c_void;
+    #[allow(non_camel_case_types)]
+    pub type abix_lease = u64;
+    #[allow(non_camel_case_types)]
+    pub type abix_module_instance = u64;
+    #[allow(non_camel_case_types)]
+    pub type abix_status = i32;
+
+    pub const ABIX_SUCCESS: abix_status = 0;
+    pub const ABIX_ERROR_INVALID: abix_status = 1;
+    pub const ABIX_ERROR_NOT_FOUND: abix_status = 2;
+    pub const ABIX_ERROR_STALE_HANDLE: abix_status = 3;
+    pub const ABIX_ERROR_BUSY: abix_status = 4;
+    pub const ABIX_ERROR_UNLOADING: abix_status = 5;
+    pub const ABIX_LEASE_INVALID: abix_lease = 0;
+    pub const ABIX_LEASE_API_VERSION: u32 = 1;
+
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    #[allow(non_camel_case_types)]
+    pub struct abix_lease_api {
+        pub abi_version: u32,
+        pub struct_size: u32,
+        pub host_context: *mut core::ffi::c_void,
+        pub registry_create: Option<
+            unsafe extern "C" fn(*mut core::ffi::c_void, *mut *mut abix_lease_registry) -> abix_status,
+        >,
+        pub registry_destroy: Option<
+            unsafe extern "C" fn(*mut core::ffi::c_void, *mut abix_lease_registry) -> abix_status,
+        >,
+        pub acquire: Option<
+            unsafe extern "C" fn(
+                *mut core::ffi::c_void,
+                *mut abix_lease_registry,
+                abix_module_instance,
+                *mut abix_lease,
+            ) -> abix_status,
+        >,
+        pub release: Option<
+            unsafe extern "C" fn(*mut core::ffi::c_void, *mut abix_lease_registry, abix_lease),
+        >,
+    }
+
+    const _: () = assert!(core::mem::size_of::<abix_lease_api>() == 48);
+    const _: () = assert!(core::mem::align_of::<abix_lease_api>() == 8);
+    const _: () = assert!(core::mem::offset_of!(abix_lease_api, abi_version) == 0);
+    const _: () = assert!(core::mem::offset_of!(abix_lease_api, struct_size) == 4);
+    const _: () = assert!(core::mem::offset_of!(abix_lease_api, host_context) == 8);
+    const _: () = assert!(core::mem::offset_of!(abix_lease_api, registry_create) == 16);
+    const _: () = assert!(core::mem::offset_of!(abix_lease_api, registry_destroy) == 24);
+    const _: () = assert!(core::mem::offset_of!(abix_lease_api, acquire) == 32);
+    const _: () = assert!(core::mem::offset_of!(abix_lease_api, release) == 40);
+}
+
+pub use amc_lease::{
+    abix_lease, abix_lease_api, abix_lease_registry, abix_module_instance, abix_status, ABIX_ERROR_BUSY,
+    ABIX_ERROR_INVALID, ABIX_ERROR_NOT_FOUND, ABIX_ERROR_STALE_HANDLE, ABIX_ERROR_UNLOADING, ABIX_LEASE_API_VERSION,
+    ABIX_LEASE_INVALID, ABIX_SUCCESS,
+};
+
+/// Lease-aware owner guard: acquire -> create -> destroy -> release.
+///
+/// The consumer supplies the Host function table and registry. Dropping the
+/// guard destroys the owner first, then releases the lease. It is move-only and
+/// deliberately not `Clone`.
+pub struct LeaseGuard<O> {
+    owner: Option<O>,
+    api: *const abix_lease_api,
+    registry: *mut abix_lease_registry,
+    lease: abix_lease,
+}
+
+impl<O> LeaseGuard<O> {
+    pub unsafe fn acquire<F>(
+        api: *const abix_lease_api,
+        registry: *mut abix_lease_registry,
+        module: abix_module_instance,
+        create: F,
+    ) -> Option<Self>
+    where
+        F: FnOnce() -> Option<O>,
+    {
+        if !Self::valid_api(api) || registry.is_null() {
+            return None;
+        }
+        let acquire = (*api).acquire?;
+        let mut lease = ABIX_LEASE_INVALID;
+        if acquire((*api).host_context, registry, module, &mut lease) != ABIX_SUCCESS {
+            return None;
+        }
+        match create() {
+            Some(owner) => Some(Self {
+                owner: Some(owner),
+                api,
+                registry,
+                lease,
+            }),
+            None => {
+                Self::release_lease(api, registry, lease);
+                None
+            }
+        }
+    }
+
+    pub unsafe fn adopt(
+        api: *const abix_lease_api,
+        registry: *mut abix_lease_registry,
+        lease: abix_lease,
+        owner: Option<O>,
+    ) -> Option<Self> {
+        if !Self::valid_api(api) || registry.is_null() || lease == ABIX_LEASE_INVALID {
+            Self::release_lease(api, registry, lease);
+            return None;
+        }
+        let owner = match owner {
+            Some(owner) => owner,
+            None => {
+                Self::release_lease(api, registry, lease);
+                return None;
+            }
+        };
+        Some(Self {
+            owner: Some(owner),
+            api,
+            registry,
+            lease,
+        })
+    }
+
+    pub fn owner(&self) -> &O {
+        self.owner.as_ref().expect("LeaseGuard owner")
+    }
+
+    pub fn lease(&self) -> abix_lease {
+        self.lease
+    }
+
+    pub fn is_valid(&self) -> bool {
+        self.owner.is_some() && self.lease != ABIX_LEASE_INVALID
+    }
+
+    fn valid_api(api: *const abix_lease_api) -> bool {
+        if api.is_null() {
+            return false;
+        }
+        let api = unsafe { &*api };
+        api.abi_version == ABIX_LEASE_API_VERSION
+            && api.struct_size as usize >= core::mem::size_of::<abix_lease_api>()
+            && api.acquire.is_some()
+            && api.release.is_some()
+    }
+
+    unsafe fn release_lease(
+        api: *const abix_lease_api,
+        registry: *mut abix_lease_registry,
+        lease: abix_lease,
+    ) {
+        if api.is_null() || registry.is_null() || lease == ABIX_LEASE_INVALID {
+            return;
+        }
+        if let Some(release) = (*api).release {
+            release((*api).host_context, registry, lease);
+        }
+    }
+}
+
+impl<O> Drop for LeaseGuard<O> {
+    fn drop(&mut self) {
+        drop(self.owner.take());
+        unsafe { Self::release_lease(self.api, self.registry, self.lease) };
+        self.api = core::ptr::null();
+        self.registry = core::ptr::null_mut();
+        self.lease = ABIX_LEASE_INVALID;
+    }
+}
+)rust");
+}
+
 void emit_capability_contracts(Output &o, const Projector &p) {
     if (p.m.interfaces.empty()) return;
     o.print("\n// Interface capability contracts: identity, version, slots and signatures.\n");
@@ -1268,6 +1468,7 @@ std::string generate_projection(const amc::ABIModule &module, const amc::ir::Low
     emit_functions(o, projector);
     emit_owned(o, projector);
     emit_owner_views(o, projector);
+    emit_lease_guard(o, projector);
     emit_capability_contracts(o, projector);
     emit_interface_proxies(o, projector);
     emit_error_sets(o, projector);

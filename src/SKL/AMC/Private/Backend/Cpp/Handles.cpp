@@ -172,6 +172,7 @@ std::string suffix_after(const std::string &name, const char *prefix) {
 
 void Emit::owner_views() {
     std::set<std::string> emitted;
+    bool any = false;
     for (const auto &record : _m.lowerings) {
         const auto kind = static_cast<amc::LoweringKind>(record.kind);
         if (kind != amc::LoweringKind::OWNER
@@ -195,6 +196,7 @@ void Emit::owner_views() {
             if (!wrapper_suffix.empty())
                 wrapper_suffix[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(wrapper_suffix[0])));
             const std::string wrapper = "OwnerOf" + wrapper_suffix;
+            any = true;
             _o.print(
                 "\n// ABIX owner handle `{0}`: move-only RAII, released through the\n"
                 "// creator-provided destroy entry.\n"
@@ -268,6 +270,7 @@ void Emit::owner_views() {
                     "        return reinterpret_cast<const T *>(_raw.view.data);\n"
                     "    }\n"
                     "    uint64_t size() const { return _raw.view.len; }\n";
+            any = true;
             _o.print(
                 "\n// ABIX owned view `{0}`: borrowed view + owner handle.\n"
                 "class {1} {{\npublic:\n"
@@ -296,6 +299,109 @@ void Emit::owner_views() {
                 raw_name, wrapper, view_type->name, extra);
         }
     }
+
+    if (!any) return;
+    _o.print("{}", R"cpp(
+// Lease-aware owner guard: acquire -> create -> destroy -> release.
+// The consumer supplies the Host's ABIX lease function table and registry.
+// A dropped guard destroys the owner first, then releases the lease.
+template <class Owner>
+class LeaseGuard {
+public:
+    LeaseGuard() = default;
+    ~LeaseGuard() { reset(); }
+
+    LeaseGuard(const LeaseGuard &) = delete;
+    LeaseGuard &operator=(const LeaseGuard &) = delete;
+
+    LeaseGuard(LeaseGuard &&other) noexcept
+        : _api(other._api)
+        , _registry(other._registry)
+        , _lease(other._lease)
+        , _owner(static_cast<Owner &&>(other._owner)) {
+        other._api = nullptr;
+        other._registry = nullptr;
+        other._lease = ABIX_LEASE_INVALID;
+    }
+
+    LeaseGuard &operator=(LeaseGuard &&other) noexcept {
+        if (this != &other) {
+            reset();
+            _api = other._api;
+            _registry = other._registry;
+            _lease = other._lease;
+            _owner = static_cast<Owner &&>(other._owner);
+            other._api = nullptr;
+            other._registry = nullptr;
+            other._lease = ABIX_LEASE_INVALID;
+        }
+        return *this;
+    }
+
+    static bool valid_api(const abix_lease_api *api) noexcept {
+        return api != nullptr && api->abi_version == ABIX_LEASE_API_VERSION
+            && api->struct_size >= sizeof(abix_lease_api) && api->acquire != nullptr
+            && api->release != nullptr;
+    }
+
+    template <class Create>
+    static LeaseGuard acquire(const abix_lease_api *api, abix_lease_registry *registry,
+        abix_module_instance module, Create &&create) noexcept {
+        LeaseGuard guard;
+        if (!valid_api(api) || registry == nullptr) return guard;
+        abix_lease lease = ABIX_LEASE_INVALID;
+        if (api->acquire(api->host_context, registry, module, &lease) != ABIX_SUCCESS) return guard;
+        Owner owner = create();
+        if (!owner) {
+            api->release(api->host_context, registry, lease);
+            return guard;
+        }
+        guard._api = api;
+        guard._registry = registry;
+        guard._lease = lease;
+        guard._owner = static_cast<Owner &&>(owner);
+        return guard;
+    }
+
+    static LeaseGuard adopt(const abix_lease_api *api, abix_lease_registry *registry,
+        abix_lease lease, Owner owner) noexcept {
+        LeaseGuard guard;
+        if (!valid_api(api) || registry == nullptr || lease == ABIX_LEASE_INVALID || !owner) {
+            if (valid_api(api) && registry != nullptr && lease != ABIX_LEASE_INVALID)
+                api->release(api->host_context, registry, lease);
+            return guard;
+        }
+        guard._api = api;
+        guard._registry = registry;
+        guard._lease = lease;
+        guard._owner = static_cast<Owner &&>(owner);
+        return guard;
+    }
+
+    void reset() noexcept {
+        _owner.reset();
+        if (_lease != ABIX_LEASE_INVALID && _api != nullptr && _api->release != nullptr)
+            _api->release(_api->host_context, _registry, _lease);
+        _api = nullptr;
+        _registry = nullptr;
+        _lease = ABIX_LEASE_INVALID;
+    }
+
+    explicit operator bool() const noexcept {
+        return static_cast<bool>(_owner) && _lease != ABIX_LEASE_INVALID;
+    }
+
+    Owner &owner() noexcept { return _owner; }
+    const Owner &owner() const noexcept { return _owner; }
+    abix_lease lease() const noexcept { return _lease; }
+
+private:
+    const abix_lease_api *_api = nullptr;
+    abix_lease_registry *_registry = nullptr;
+    abix_lease _lease = ABIX_LEASE_INVALID;
+    Owner _owner{};
+};
+)cpp");
 }
 
 }   // namespace skl::amc::lang::backend::cpp

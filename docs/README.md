@@ -93,6 +93,7 @@ Private implementation headers live under `include/SKL/AMC/Private/` and are onl
 | [module-boundaries.md](architecture/module-boundaries.md) | [module-boundaries_zh.md](architecture/module-boundaries_zh.md) | module responsibilities, dependency rules, private layout          |
 | [platform-support.md](architecture/platform-support.md)   | [platform-support_zh.md](architecture/platform-support_zh.md)   | 64-bit platform policy and the 32-bit deferral                     |
 | [abi-metadata.md](architecture/abi-metadata.md)           | [abi-metadata_zh.md](architecture/abi-metadata_zh.md)           | shared ABI metadata and generated declarations                     |
+| [lease-runtime.md](architecture/lease-runtime.md)         | [lease-runtime_zh.md](architecture/lease-runtime_zh.md)         | public lease runtime and generated `LeaseGuard`                    |
 | [Benchmarks](bench/README.md)                             | [基准测试](bench/README_ZH.md)                                  | suites, current results, scaling and regression gates              |
 | [rust-adapter.md](architecture/rust-adapter.md)           | [rust-adapter_zh.md](architecture/rust-adapter_zh.md)           | `amc.rust.semantic/1` adapter contract for the future rustc helper |
 
