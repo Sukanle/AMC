@@ -1165,7 +1165,7 @@ struct HelperCallbacks {
 impl Callbacks for HelperCallbacks {
     fn after_analysis(&mut self, _compiler: &interface::Compiler, tcx: TyCtxt<'_>) -> Compilation {
         let target = &tcx.sess.target;
-        let triple = target.llvm_target.clone();
+        let triple = tcx.sess.opts.target_triple.to_string();
         let arch = triple.split('-').next().unwrap_or("unknown").to_string();
         let os = target.options.os.desc().to_string();
         let abi = target.options.env.desc().to_string();
