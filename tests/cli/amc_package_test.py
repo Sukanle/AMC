@@ -27,6 +27,7 @@ def main() -> int:
     parser.add_argument("build_dir", help="Configured AMC build directory")
     parser.add_argument("source_root", help="AMC source root")
     parser.add_argument("--abix-dir", required=True, help="Installed ABIX CMake package directory")
+    parser.add_argument("--epcd-dir", default=os.environ.get("EPCD_DIR", ""), help="Installed EPCD CMake package directory")
     parser.add_argument("--fmt-dir", default=os.environ.get("fmt_DIR", ""), help="fmt CMake package directory")
     parser.add_argument("--cxx", help="C++ compiler for the package consumer")
     parser.add_argument("--keep-artifacts", action="store_true")
@@ -54,7 +55,7 @@ def main() -> int:
         with open(os.path.join(consumer, "CMakeLists.txt"), "w", encoding="utf-8") as handle:
             handle.write(
                 "cmake_minimum_required(VERSION 3.20)\n"
-                "project(amc_package_consumer LANGUAGES CXX)\n"
+                "project(amc_package_consumer LANGUAGES C CXX)\n"
                 "set(CMAKE_CXX_STANDARD 17)\n"
                 "find_package(AMC 0.4 CONFIG REQUIRED)\n"
                 "add_library(amc_cmake_consumer STATIC consumer.cpp)\n"
@@ -74,6 +75,8 @@ def main() -> int:
             f"-DCMAKE_PREFIX_PATH={prefix}",
             f"-DABIX_DIR={os.path.abspath(args.abix_dir)}",
         ]
+        if args.epcd_dir:
+            configure.append(f"-DEPCD_DIR={os.path.abspath(args.epcd_dir)}")
         if args.fmt_dir:
             configure.append(f"-Dfmt_DIR={args.fmt_dir}")
         if args.cxx:

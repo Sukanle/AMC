@@ -46,14 +46,15 @@ AMC prefers an installed ABIX package. It does not need the ABIX source tree.
 ```bash
 cmake -S . -B build \
   -DABIX_DIR=/opt/abix/lib/cmake/ABIX \
-  -DCMAKE_PREFIX_PATH="/opt/abix;/path/to/llvm;/path/to/fmt;/path/to/tomlplusplus" \
+  -DEPCD_DIR=/opt/epcd/lib/cmake/EPCD \
+  -DCMAKE_PREFIX_PATH="/opt/abix;/opt/epcd;/path/to/llvm;/path/to/fmt;/path/to/tomlplusplus" \
   -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 cmake --install build --prefix /opt/amc
 ```
 
-Only ABIX is fetched automatically. When `find_package(ABIX 0.4.0 CONFIG COMPONENTS runtime)` fails, CMake clones ABIX with its submodules into the repository-local `dependencies/` directory and configures it as a runtime-only subproject:
+ABIX and EPCD are fetched automatically. When `find_package(ABIX 0.4.0 ...)` or `find_package(EPCD 0.1 ...)` fails, CMake clones the missing dependency into the repository-local `dependencies/` directory and configures it as a subproject:
 
 ```bash
 cmake -S . -B build \
@@ -65,11 +66,12 @@ ctest --test-dir build --output-on-failure
 
 All other dependencies — LLVM/Clang, fmt and toml++ — are expected to be installed by the user; AMC uses the versions already available on the system and never downloads replacements. Minimum supported versions are enforced, so newer releases (including newer major versions) are accepted as-is. Set `CMAKE_PREFIX_PATH` (or the corresponding `<package>_DIR` value) when they are not in a default location.
 
-`dependencies/` is a cacheable, untracked ABIX checkout; only [`dependencies/README.md`](dependencies/README.md) is tracked. In this mode AMC still builds and runs its tests, but installs only the tools and headers (not the `AMCConfig.cmake` package export), because the package export requires an installed ABIX package. Reconfigure with `-DABIX_DIR=...` to install the package.
+`dependencies/` is a cacheable, untracked ABIX/EPCD checkout; only [`dependencies/README.md`](dependencies/README.md) is tracked. In this mode AMC still builds and runs its tests, but installs only the tools and headers (not the `AMCConfig.cmake` package export), because the package export requires installed ABIX and EPCD packages. Reconfigure with `-DABIX_DIR=... -DEPCD_DIR=...` to install the package.
 
 Required packages:
 
 - `ABIX 0.4.0` runtime and MICS (fetched automatically when not installed)
+- EPCD 0.1 Core/Interface (fetched automatically when not installed)
 - LLVM and Clang (`clang-cpp`); providers link shared `libLLVM` when available (pass `-DAMC_LLVM_DYNAMIC=OFF` for the static fallback)
 - fmt 11.2 or newer
 - toml++ 3.4 or newer

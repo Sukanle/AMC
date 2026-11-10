@@ -46,14 +46,15 @@ AMC 更推荐使用已安装的 ABIX 包，无需 ABIX 源代码树。
 ```bash
 cmake -S . -B build \
   -DABIX_DIR=/opt/abix/lib/cmake/ABIX \
-  -DCMAKE_PREFIX_PATH="/opt/abix;/path/to/llvm;/path/to/fmt;/path/to/tomlplusplus" \
+  -DEPCD_DIR=/opt/epcd/lib/cmake/EPCD \
+  -DCMAKE_PREFIX_PATH="/opt/abix;/opt/epcd;/path/to/llvm;/path/to/fmt;/path/to/tomlplusplus" \
   -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 cmake --install build --prefix /opt/amc
 ```
 
-仅会自动获取 ABIX。当 `find_package(ABIX 0.4.0 CONFIG COMPONENTS runtime)` 失败时，CMake 会将该版本及其子模块克隆到项目内的 `dependencies/` 目录中，并作为仅运行时依赖的子项目进行配置：
+ABIX 与 EPCD 会自动获取。当 `find_package(ABIX 0.4.0 ...)` 或 `find_package(EPCD 0.1 ...)` 失败时，CMake 会把缺失的依赖克隆到项目内的 `dependencies/` 目录中并作为子项目配置：
 
 ```bash
 cmake -S . -B build \
@@ -65,11 +66,12 @@ ctest --test-dir build --output-on-failure
 
 其他所有依赖项——LLVM/Clang、fmt 以及 toml++——均需由用户自行安装；AMC 会直接使用系统中已有的版本，不会下载替代版本。虽然允许使用更高版本，但会强制执行最低版本要求。若这些依赖未位于默认路径，需设置 `CMAKE_PREFIX_PATH`（或相应的 `<package>_DIR` 参数）。
 
-`dependencies/` 目录中存放的是可缓存的、未被跟踪的 ABIX 源码；仅 [`dependencies/README.md`](dependencies/README.md) 被纳入版本控制。在此模式下，AMC 仍可构建并运行测试，但仅安装工具和头文件（不会导出 `AMCConfig.cmake` 包），因为包导出功能需要已安装的 ABIX 包。如需安装该包，需重新配置并设置 `-DABIX_DIR=...` 参数。
+`dependencies/` 目录中存放的是可缓存的、未被跟踪的 ABIX/EPCD 源码；仅 [`dependencies/README.md`](dependencies/README.md) 被纳入版本控制。在此模式下，AMC 仍可构建并运行测试，但仅安装工具和头文件（不会导出 `AMCConfig.cmake` 包），因为包导出功能需要已安装的 ABIX 与 EPCD 包。如需安装该包，需重新配置并设置 `-DABIX_DIR=... -DEPCD_DIR=...` 参数。
 
 **必需的依赖包：**
 
-- ABIX 0.3 运行时及 MICS（若未安装则自动获取）
+- ABIX 0.4.0 运行时及 MICS（若未安装则自动获取）
+- EPCD 0.1 Core/Interface（若未安装则自动获取）
 - LLVM 与 Clang（`clang-cpp`）；providers 优先链接共享 `libLLVM`，可用 `-DAMC_LLVM_DYNAMIC=OFF` 回退静态组件
 - fmt 11.2 及更高版本
 - toml++ 3.4 及更高版本

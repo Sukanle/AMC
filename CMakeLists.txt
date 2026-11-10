@@ -428,8 +428,10 @@ if(AMC_EPCD_REF STREQUAL "v0.1.0-baseline")
     message(STATUS "AMC_EPCD_REF legacy tag v0.1.0-baseline -> main (EPCD has no such remote tag)")
     set(AMC_EPCD_REF "main" CACHE STRING "EPCD git revision used when FetchContent downloads EPCD" FORCE)
 endif()
+set(AMC_EPCD_FETCHED OFF)
 find_package(EPCD 0.1 CONFIG QUIET COMPONENTS Core)
 if(NOT EPCD_FOUND)
+    set(AMC_EPCD_FETCHED ON)
     find_package(Git QUIET)
     if(NOT GIT_EXECUTABLE)
         message(FATAL_ERROR "git is required to fetch EPCD")
@@ -867,12 +869,12 @@ endif()
 if(AMC_INSTALL)
     set(AMC_CMAKE_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/AMC")
 
-    if(AMC_ABIX_FETCHED)
-        # Fetched-ABIX mode: the build-tree ABIX checkout is not part of AMC's
+    if(AMC_ABIX_FETCHED OR AMC_EPCD_FETCHED)
+        # Fetched-dependency mode: a build-tree checkout is not part of AMC's
         # export set, so install the tools and headers only. The CMake package
-        # (and its exported artifact libraries) requires an installed ABIX
-        # package; reconfigure with -DABIX_DIR to generate it.
-        message(STATUS "Fetched ABIX mode: installing AMC tools/headers without the CMake package export")
+        # (and its exported artifact libraries) requires installed ABIX and
+        # EPCD packages; reconfigure with -DABIX_DIR / -DEPCD_DIR to generate it.
+        message(STATUS "Fetched ABIX/EPCD mode: installing AMC tools/headers without the CMake package export")
         install(TARGETS amc amc-cpp amc-rust amc-zig amc-dump amc-mcp RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
     else()
         install(
@@ -937,7 +939,7 @@ if(AMC_INSTALL)
 endif()
 
 find_program(AMC_PYTHON_EXECUTABLE NAMES python3 python)
-if(AMC_BUILD_TESTS AND AMC_INSTALL AND AMC_PYTHON_EXECUTABLE AND NOT AMC_ABIX_FETCHED)
+if(AMC_BUILD_TESTS AND AMC_INSTALL AND AMC_PYTHON_EXECUTABLE AND NOT AMC_ABIX_FETCHED AND NOT AMC_EPCD_FETCHED)
     add_test(
         NAME amc-package-test
         COMMAND
@@ -946,6 +948,7 @@ if(AMC_BUILD_TESTS AND AMC_INSTALL AND AMC_PYTHON_EXECUTABLE AND NOT AMC_ABIX_FE
             ${CMAKE_BINARY_DIR}
             ${AMC_SOURCE_DIR}
             --abix-dir=${ABIX_DIR}
+            --epcd-dir=${EPCD_DIR}
             --fmt-dir=${fmt_DIR}
             --cxx=${CMAKE_CXX_COMPILER})
     set_tests_properties(amc-package-test PROPERTIES TIMEOUT 180)
