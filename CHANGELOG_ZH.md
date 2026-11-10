@@ -93,7 +93,7 @@
 ### 已知限制
 
 - cross-target probe 仍为后续工作；Host layout probe 已稳定。
-- `packed` / `transparent` / `union` 的 backend emission 延后到 v0.4.0，与一级表示模型一起落地；v0.3.x 只保留布局验证。
+- `packed` / `transparent` / `union` 的 backend emission 延后到 v0.4.x/v0.5.0，与一级表示模型一起落地；v0.3.x 与 v0.4.0 只保留布局验证。
 
 ### 验证
 

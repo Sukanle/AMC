@@ -32,7 +32,7 @@ ABIX 拥有 C ABI 头文件，并同时发布机器可读的布局元数据。AM
 ABIX OwnerABI.h / LeaseABI.h          （权威 C ABI）
         │
         ├── ABIX_OWNER_HANDLE_JSON    （v0.4.0）
-        └── ABIX_LEASE_API_JSON       （v0.4.x 计划）
+        └── ABIX_LEASE_API_JSON       （v0.4.0）
                     │
                     ▼
              AMC 配置期/代码生成

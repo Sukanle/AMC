@@ -32,7 +32,7 @@ ABIX owns the C ABI headers and publishes the layout as machine-readable metadat
 ABIX OwnerABI.h / LeaseABI.h          (authoritative C ABI)
         │
         ├── ABIX_OWNER_HANDLE_JSON    (v0.4.0)
-        └── ABIX_LEASE_API_JSON       (v0.4.x planned)
+        └── ABIX_LEASE_API_JSON       (v0.4.0)
                     │
                     ▼
              AMC configure/codegen

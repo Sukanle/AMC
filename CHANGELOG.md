@@ -93,7 +93,7 @@
 ### Known limitations
 
 - cross-target probe remains future work; the Host layout probe is stable.
-- `packed` / `transparent` / `union` backend emission is deferred to v0.4.0, together with the first-class representation model. v0.3.x keeps layout validation only.
+- `packed` / `transparent` / `union` backend emission is deferred to v0.4.x/v0.5.0, together with the first-class representation model. v0.3.x and v0.4.0 keep layout validation only.
 
 ### Validation
 
