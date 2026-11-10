@@ -2662,7 +2662,11 @@ int run_frontend(const char *config_path, const char *output_path) {
                     const std::string element =
                         adapt->element.empty() ? type.element : compact_spelling(adapt->element);
                     wrapper_source += fmt::format(
-                        "    let p{} = unsafe {{ Box::from_raw(p{}.object as *mut {}) }};\n", i, i, element);
+                        "    if p{0}.object.is_null() || (p{0}.mode != 1 && p{0}.mode != 2) {{\n"
+                        "        panic!(\"AMC: owner handle parameter must be owned or copied\");\n"
+                        "    }}\n"
+                        "    let p{0} = unsafe {{ Box::from_raw(p{0}.object as *mut {1}) }};\n",
+                        i, element);
                 } else {
                     wrapper_source += fmt::format("    let p{} = {};\n", i,
                         container_adapter_expression(*adapt, type.kind, fmt::format("p{}", i)));

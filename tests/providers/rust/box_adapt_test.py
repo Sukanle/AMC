@@ -364,6 +364,33 @@ fn main() {
                 check(result.returncode == 0 and "owner box raii: OK" in output(result),
                       "owner handle RAII wrapper releases through destroy", output(result)[-500:])
 
+            borrowed_rs = os.path.join(owner_dir, "borrowed_consumer.rs")
+            with open(borrowed_rs, "w", encoding="utf-8") as handle:
+                handle.write("""#[path = "gen/amc_generated.rs"]
+pub mod abix;
+
+mod skl {
+    pub use crate::abix;
+}
+use skl::abix::*;
+
+fn main() {
+    let mut raw = unsafe { box_widget_make(7) };
+    raw.mode = 0;
+    let _ = unsafe { box_widget_value(raw) };
+    println!("borrowed owner was accepted");
+}
+""")
+            borrowed_bin = os.path.join(owner_dir, exe("borrowed_consumer"))
+            result = run([rustc, "--edition", "2021", borrowed_rs, "-o", borrowed_bin] + link)
+            if check(result.returncode == 0, "borrowed owner consumer compiled", output(result)[-500:]):
+                env = dict(os.environ)
+                env["LD_LIBRARY_PATH"] = owner_dir + os.pathsep + env.get("LD_LIBRARY_PATH", "")
+                env["DYLD_LIBRARY_PATH"] = owner_dir + os.pathsep + env.get("DYLD_LIBRARY_PATH", "")
+                result = run([borrowed_bin], env=env)
+                check(result.returncode != 0 and "must be owned or copied" in output(result),
+                      "owner handle parameter rejects borrowed mode", output(result)[-500:])
+
         # Optional auto thunks: create = "auto" / destroy = "auto" synthesize
         # the Box::new and Box::from_raw pair, while [[owned]]/[[contract]]
         # still declare the policy.
