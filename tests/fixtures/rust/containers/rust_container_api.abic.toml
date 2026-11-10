@@ -30,6 +30,11 @@ target = "abix_owned_span_ContainerPoint"
 element = "ContainerPoint"
 
 [[adapt]]
+native = "Vec"
+target = "abix_owned_span_i32"
+element = "i32"
+
+[[adapt]]
 native = "&[T]"
 target = "abix_span_i32"
 element = "i32"
@@ -88,6 +93,10 @@ as = "container_owned_string"
 [[rust.expose]]
 function = "container_owned_points"
 as = "container_owned_points"
+
+[[rust.expose]]
+function = "container_owned_numbers"
+as = "container_owned_numbers"
 
 [[rust.expose]]
 function = "container_take_string"

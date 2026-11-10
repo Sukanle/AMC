@@ -135,6 +135,7 @@ def main():
             ("container_option_make", "abix_optional_i32"),
             ("container_owned_string", "abix_owned_str_utf8"),
             ("container_owned_points", "abix_owned_span_ContainerPoint"),
+            ("container_owned_numbers", "abix_owned_span_i32"),
         ):
             result = run([str(amc), "query", artifact, "--function", function, "--format", "json"])
             if check(result.returncode == 0, f"{function} is recorded", output(result)[-300:]):
@@ -169,6 +170,8 @@ def main():
             check("class OwnedSpanContainerPoint" in header
                   and "using abix_owned_span_ContainerPoint = ::abix_std::abix_owned_span<void>;" in header,
                   "C++ arbitrary-element owned span RAII wrapper is generated")
+            check("class OwnedSpanI32" in header,
+                  "C++ ABIX-standard owned span RAII wrapper is generated")
             check("template <class T> const T *data() const" in header,
                   "C++ owned span exposes typed data()")
             cxx = os.environ.get("CXX") or shutil.which("clang++") or shutil.which("c++")
@@ -187,6 +190,7 @@ def main():
 extern "C" {
 ::abix_owned_str_utf8 container_owned_string(int32_t value);
 ::skl::amc::generated::abix_owned_span_ContainerPoint container_owned_points(int32_t value);
+::abix_owned_span_i32 container_owned_numbers(int32_t value);
 }
 
 int main() {
@@ -198,6 +202,11 @@ int main() {
         auto span = ::skl::amc::generated::OwnedSpanContainerPoint(container_owned_points(5));
         if (span.view().len != 1) return 2;
         if (span.data<int32_t>()[0] != 5 || span.data<int32_t>()[1] != 6) return 3;
+    }
+    {
+        auto numbers = ::skl::amc::generated::OwnedSpanI32(container_owned_numbers(3));
+        if (numbers.view().len != 2) return 4;
+        if (numbers.view().data[0] != 3 || numbers.view().data[1] != 4) return 5;
     }
     return 0;
 }
@@ -237,6 +246,11 @@ fn main() {
         assert_eq!(span.view().len, 1);
         assert_eq!((*span.view().data).x, 5);
         drop(span);
+
+        let numbers = OwnedSpanI32::from_raw(container_owned_numbers(3)).expect("owned i32 span");
+        assert_eq!(numbers.view().len, 2);
+        assert_eq!(*numbers.view().data, 3);
+        drop(numbers);
     }
     println!("owned views: OK");
 }
@@ -296,6 +310,9 @@ fn main() {
 
         class AbixOwnedSpanPoint(ctypes.Structure):
             _fields_ = [("view", AbixSpanPoint), ("owner", AbixOwnerHandle)]
+
+        class AbixOwnedSpanI32(ctypes.Structure):
+            _fields_ = [("view", AbixSpanI32), ("owner", AbixOwnerHandle)]
 
         lib = ctypes.CDLL(library)
 
@@ -369,6 +386,16 @@ fn main() {
         check(owned_span.owner.object == ctypes.cast(owned_span.view.data, ctypes.c_void_p).value,
               "owned Vec owner.object equals view.data")
         ctypes.CFUNCTYPE(None, ctypes.c_void_p)(owned_span.owner.destroy)(owned_span.owner.object)
+
+        lib.container_owned_numbers.argtypes = [ctypes.c_int32]
+        lib.container_owned_numbers.restype = AbixOwnedSpanI32
+        owned_numbers = lib.container_owned_numbers(3)
+        check(owned_numbers.view.len == 2 and owned_numbers.view.data[0] == 3
+              and owned_numbers.view.data[1] == 4 and owned_numbers.owner.mode == 1,
+              "owned i32 Vec return uses the ABIX-standard span")
+        check(owned_numbers.owner.object == ctypes.cast(owned_numbers.view.data, ctypes.c_void_p).value,
+              "owned i32 Vec owner.object equals view.data")
+        ctypes.CFUNCTYPE(None, ctypes.c_void_p)(owned_numbers.owner.destroy)(owned_numbers.owner.object)
 
         lib.container_take_string.argtypes = [AbixOwnedStr]
         lib.container_take_string.restype = ctypes.c_size_t

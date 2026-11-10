@@ -64,6 +64,10 @@ pub fn container_owned_points(value: i32) -> Vec<ContainerPoint> {
     vec![ContainerPoint { x: value, y: value + 1 }]
 }
 
+pub fn container_owned_numbers(value: i32) -> Vec<i32> {
+    vec![value, value + 1]
+}
+
 pub fn container_take_string(value: String) -> usize {
     value.len()
 }
