@@ -49,6 +49,13 @@ v0.4.0 开发边界上，核心架构已经就位：
 | 性能护栏                                   | pass/artifact/cache/query/multifile 套件                                                                        |
 | 多文件并行                                 | 由外部多个 `amc` 进程完成，产品内无进程池                                                                       |
 
+### v0.4.0 范围
+
+- 可选的 Rust helper 在 v0.4.0 中覆盖 Linux：源码、构建和 `-DAMC_BUILD_RUST_HELPER=ON` 安装。Windows/macOS 的 helper 验证与预编译分发属于 v0.4.x；前端保留 parser/probe fallback。
+- `repr(C, packed)` / union 的 backend emission 属于 v0.4.x/v0.5.0。v0.4.0 只验证布局，不生成 packed/union 绑定。
+- v0.4.0 的真实项目边界是 Cargo workspace fixture。完整的真实项目、Cargo profile 与 extern dependency 事实属于 v0.4.x。
+- Zig 高级语义属于 v0.4.x/v0.5.0。32 位平台不支持，无限期延后。
+
 当前 P-core 基线与扩展性分析见[基准测试](bench/README_ZH.md)。发布说明见[变更记录](../CHANGELOG_ZH.md)。
 
 ## 仓库结构

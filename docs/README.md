@@ -49,6 +49,13 @@ At the v0.4.0 development boundary the core architecture is in place:
 | Performance guardrails                            | pass/artifact/cache/query/multifile suites                                                                                       |
 | Multi-file parallelism                            | external `amc` processes, no in-product process pool                                                                             |
 
+### v0.4.0 scope
+
+- The optional Rust helper is covered on Linux: source, build and `-DAMC_BUILD_RUST_HELPER=ON` install. Windows/macOS helper validation and prebuilt distribution are v0.4.x work; the frontend keeps the parser/probe fallback.
+- `repr(C, packed)` / union backend emission is v0.4.x/v0.5.0 work. v0.4.0 validates the layout but does not emit packed/union bindings.
+- The Cargo workspace fixture is the v0.4.0 real-project boundary. A full real-project fixture plus Cargo profile and extern-dependency facts are v0.4.x work.
+- Zig advanced semantics are v0.4.x/v0.5.0 work. 32-bit platforms are unsupported and deferred indefinitely.
+
 See [Benchmarks](bench/README.md) for the current P-core baseline and scaling analysis. Release notes are in [CHANGELOG.md](../CHANGELOG.md).
 
 ## Repository layout
