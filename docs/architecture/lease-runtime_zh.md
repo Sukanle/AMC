@@ -98,7 +98,7 @@ let guard = LeaseGuard::<OwnerOfWidget>::acquire(api, registry, module, || {
 
 ## 声明与元数据
 
-C++ guard 直接使用 ABIX 的 `LeaseABI.h`。Rust 投影目前会生成一份 `#[repr(C)] abix_lease_api` 声明，并带 size/offset 编译期断言；[ABI 元数据与共享声明](abi-metadata_zh.md) 描述了计划中的 `ABIX_LEASE_API_JSON` 路径，用来消除这份重复声明。
+C++ guard 直接使用 ABIX 的 `LeaseABI.h`。Rust 投影会生成一份 `#[repr(C)] abix_lease_api` 声明，但其 size、对齐、字段 offset 和状态值在 ABIX 包或 checkout 提供 `ABIX_LEASE_API_JSON` 时来自该元数据；缺失时回退到 v1 值。[ABI 元数据与共享声明](abi-metadata_zh.md) 描述了这套单一事实来源模型。
 
 ## 测试
 

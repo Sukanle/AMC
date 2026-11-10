@@ -98,7 +98,7 @@ The generated guard:
 
 ## Declarations and metadata
 
-The C++ guard uses ABIX's `LeaseABI.h` directly. The Rust projection currently emits a `#[repr(C)] abix_lease_api` declaration with compile-time size/offset assertions; [ABI metadata and shared declarations](abi-metadata.md) describes the planned `ABIX_LEASE_API_JSON` path that removes this duplicate declaration.
+The C++ guard uses ABIX's `LeaseABI.h` directly. The Rust projection emits a `#[repr(C)] abix_lease_api` declaration, but its size, alignment, field offsets and status values come from `ABIX_LEASE_API_JSON` when the ABIX package or checkout provides it; the v1 values remain the fallback. [ABI metadata and shared declarations](abi-metadata.md) describes the single-source model.
 
 ## Tests
 

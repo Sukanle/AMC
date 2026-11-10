@@ -39,6 +39,58 @@
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/raw_ostream.h>
 
+// Lease API layout facts come from ABIX_LEASE_API_JSON (see
+// docs/architecture/abi-metadata.md). The defaults preserve the v1 layout for
+// build systems that do not define the CMake facts.
+#ifndef AMC_ABIX_LEASE_API_VERSION
+#  define AMC_ABIX_LEASE_API_VERSION 1
+#endif
+#ifndef AMC_ABIX_LEASE_API_SIZE
+#  define AMC_ABIX_LEASE_API_SIZE 48
+#endif
+#ifndef AMC_ABIX_LEASE_API_ALIGN
+#  define AMC_ABIX_LEASE_API_ALIGN 8
+#endif
+#ifndef AMC_ABIX_LEASE_ABI_VERSION_OFFSET
+#  define AMC_ABIX_LEASE_ABI_VERSION_OFFSET 0
+#endif
+#ifndef AMC_ABIX_LEASE_STRUCT_SIZE_OFFSET
+#  define AMC_ABIX_LEASE_STRUCT_SIZE_OFFSET 4
+#endif
+#ifndef AMC_ABIX_LEASE_HOST_CONTEXT_OFFSET
+#  define AMC_ABIX_LEASE_HOST_CONTEXT_OFFSET 8
+#endif
+#ifndef AMC_ABIX_LEASE_REGISTRY_CREATE_OFFSET
+#  define AMC_ABIX_LEASE_REGISTRY_CREATE_OFFSET 16
+#endif
+#ifndef AMC_ABIX_LEASE_REGISTRY_DESTROY_OFFSET
+#  define AMC_ABIX_LEASE_REGISTRY_DESTROY_OFFSET 24
+#endif
+#ifndef AMC_ABIX_LEASE_ACQUIRE_OFFSET
+#  define AMC_ABIX_LEASE_ACQUIRE_OFFSET 32
+#endif
+#ifndef AMC_ABIX_LEASE_RELEASE_OFFSET
+#  define AMC_ABIX_LEASE_RELEASE_OFFSET 40
+#endif
+#ifndef AMC_ABIX_LEASE_SUCCESS
+#  define AMC_ABIX_LEASE_SUCCESS 0
+#endif
+#ifndef AMC_ABIX_LEASE_ERROR_INVALID
+#  define AMC_ABIX_LEASE_ERROR_INVALID 1
+#endif
+#ifndef AMC_ABIX_LEASE_ERROR_NOT_FOUND
+#  define AMC_ABIX_LEASE_ERROR_NOT_FOUND 2
+#endif
+#ifndef AMC_ABIX_LEASE_ERROR_STALE_HANDLE
+#  define AMC_ABIX_LEASE_ERROR_STALE_HANDLE 3
+#endif
+#ifndef AMC_ABIX_LEASE_ERROR_BUSY
+#  define AMC_ABIX_LEASE_ERROR_BUSY 4
+#endif
+#ifndef AMC_ABIX_LEASE_ERROR_UNLOADING
+#  define AMC_ABIX_LEASE_ERROR_UNLOADING 5
+#endif
+
 namespace skl::amc::lang::rust {
 namespace {
 
@@ -757,10 +809,10 @@ void emit_lease_guard(Output &o, const Projector &p) {
     }
     if (!any_owner_view) return;
 
-    o.print("{}", R"rust(
-// ABIX lease C ABI v1. This declaration is generated from the stable
-// LeaseABI.h contract; ABIX_LEASE_API_JSON will replace the hand-written
-// layout facts in a later v0.4.x metadata pass.
+    std::string source = R"rust(
+// ABIX lease C ABI v1. The layout and status facts are generated from
+// ABIX_LEASE_API_JSON / LeaseABI.h; the declaration itself is projected once
+// into the language binding.
 #[allow(non_camel_case_types)]
 pub mod amc_lease {
     #[allow(non_camel_case_types)]
@@ -772,14 +824,14 @@ pub mod amc_lease {
     #[allow(non_camel_case_types)]
     pub type abix_status = i32;
 
-    pub const ABIX_SUCCESS: abix_status = 0;
-    pub const ABIX_ERROR_INVALID: abix_status = 1;
-    pub const ABIX_ERROR_NOT_FOUND: abix_status = 2;
-    pub const ABIX_ERROR_STALE_HANDLE: abix_status = 3;
-    pub const ABIX_ERROR_BUSY: abix_status = 4;
-    pub const ABIX_ERROR_UNLOADING: abix_status = 5;
+    pub const ABIX_SUCCESS: abix_status = @LEASE_SUCCESS@;
+    pub const ABIX_ERROR_INVALID: abix_status = @LEASE_ERROR_INVALID@;
+    pub const ABIX_ERROR_NOT_FOUND: abix_status = @LEASE_ERROR_NOT_FOUND@;
+    pub const ABIX_ERROR_STALE_HANDLE: abix_status = @LEASE_ERROR_STALE_HANDLE@;
+    pub const ABIX_ERROR_BUSY: abix_status = @LEASE_ERROR_BUSY@;
+    pub const ABIX_ERROR_UNLOADING: abix_status = @LEASE_ERROR_UNLOADING@;
     pub const ABIX_LEASE_INVALID: abix_lease = 0;
-    pub const ABIX_LEASE_API_VERSION: u32 = 1;
+    pub const ABIX_LEASE_API_VERSION: u32 = @LEASE_API_VERSION@;
 
     #[repr(C)]
     #[derive(Clone, Copy)]
@@ -807,15 +859,15 @@ pub mod amc_lease {
         >,
     }
 
-    const _: () = assert!(core::mem::size_of::<abix_lease_api>() == 48);
-    const _: () = assert!(core::mem::align_of::<abix_lease_api>() == 8);
-    const _: () = assert!(core::mem::offset_of!(abix_lease_api, abi_version) == 0);
-    const _: () = assert!(core::mem::offset_of!(abix_lease_api, struct_size) == 4);
-    const _: () = assert!(core::mem::offset_of!(abix_lease_api, host_context) == 8);
-    const _: () = assert!(core::mem::offset_of!(abix_lease_api, registry_create) == 16);
-    const _: () = assert!(core::mem::offset_of!(abix_lease_api, registry_destroy) == 24);
-    const _: () = assert!(core::mem::offset_of!(abix_lease_api, acquire) == 32);
-    const _: () = assert!(core::mem::offset_of!(abix_lease_api, release) == 40);
+    const _: () = assert!(core::mem::size_of::<abix_lease_api>() == @LEASE_SIZE@);
+    const _: () = assert!(core::mem::align_of::<abix_lease_api>() == @LEASE_ALIGN@);
+    const _: () = assert!(core::mem::offset_of!(abix_lease_api, abi_version) == @LEASE_ABI_VERSION_OFFSET@);
+    const _: () = assert!(core::mem::offset_of!(abix_lease_api, struct_size) == @LEASE_STRUCT_SIZE_OFFSET@);
+    const _: () = assert!(core::mem::offset_of!(abix_lease_api, host_context) == @LEASE_HOST_CONTEXT_OFFSET@);
+    const _: () = assert!(core::mem::offset_of!(abix_lease_api, registry_create) == @LEASE_REGISTRY_CREATE_OFFSET@);
+    const _: () = assert!(core::mem::offset_of!(abix_lease_api, registry_destroy) == @LEASE_REGISTRY_DESTROY_OFFSET@);
+    const _: () = assert!(core::mem::offset_of!(abix_lease_api, acquire) == @LEASE_ACQUIRE_OFFSET@);
+    const _: () = assert!(core::mem::offset_of!(abix_lease_api, release) == @LEASE_RELEASE_OFFSET@);
 }
 
 pub use amc_lease::{
@@ -941,7 +993,33 @@ impl<O> Drop for LeaseGuard<O> {
         self.lease = ABIX_LEASE_INVALID;
     }
 }
-)rust");
+)rust";
+
+    const auto substitute = [&](const char *token, auto value) {
+        const std::string text = std::to_string(value);
+        size_t position = 0;
+        while ((position = source.find(token, position)) != std::string::npos) {
+            source.replace(position, std::string(token).size(), text);
+            position += text.size();
+        }
+    };
+    substitute("@LEASE_SUCCESS@", AMC_ABIX_LEASE_SUCCESS);
+    substitute("@LEASE_ERROR_INVALID@", AMC_ABIX_LEASE_ERROR_INVALID);
+    substitute("@LEASE_ERROR_NOT_FOUND@", AMC_ABIX_LEASE_ERROR_NOT_FOUND);
+    substitute("@LEASE_ERROR_STALE_HANDLE@", AMC_ABIX_LEASE_ERROR_STALE_HANDLE);
+    substitute("@LEASE_ERROR_BUSY@", AMC_ABIX_LEASE_ERROR_BUSY);
+    substitute("@LEASE_ERROR_UNLOADING@", AMC_ABIX_LEASE_ERROR_UNLOADING);
+    substitute("@LEASE_API_VERSION@", AMC_ABIX_LEASE_API_VERSION);
+    substitute("@LEASE_SIZE@", AMC_ABIX_LEASE_API_SIZE);
+    substitute("@LEASE_ALIGN@", AMC_ABIX_LEASE_API_ALIGN);
+    substitute("@LEASE_ABI_VERSION_OFFSET@", AMC_ABIX_LEASE_ABI_VERSION_OFFSET);
+    substitute("@LEASE_STRUCT_SIZE_OFFSET@", AMC_ABIX_LEASE_STRUCT_SIZE_OFFSET);
+    substitute("@LEASE_HOST_CONTEXT_OFFSET@", AMC_ABIX_LEASE_HOST_CONTEXT_OFFSET);
+    substitute("@LEASE_REGISTRY_CREATE_OFFSET@", AMC_ABIX_LEASE_REGISTRY_CREATE_OFFSET);
+    substitute("@LEASE_REGISTRY_DESTROY_OFFSET@", AMC_ABIX_LEASE_REGISTRY_DESTROY_OFFSET);
+    substitute("@LEASE_ACQUIRE_OFFSET@", AMC_ABIX_LEASE_ACQUIRE_OFFSET);
+    substitute("@LEASE_RELEASE_OFFSET@", AMC_ABIX_LEASE_RELEASE_OFFSET);
+    o.print("{}", source);
 }
 
 void emit_capability_contracts(Output &o, const Projector &p) {

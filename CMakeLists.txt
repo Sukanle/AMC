@@ -273,6 +273,150 @@ set(AMC_ABIX_OWNER_LAYOUT_DEFS
     AMC_ABIX_OWNER_DESTROY=${AMC_ABIX_OWNER_DESTROY}
     AMC_ABIX_OWNER_MODULE_INSTANCE=${AMC_ABIX_OWNER_MODULE_INSTANCE})
 
+# The ABIX lease function table is a stable C ABI. Read its layout and status
+# values from ABIX_LEASE_API_JSON when the package (or fetched checkout)
+# provides them; fall back to the v1 values so an older ABIX still builds.
+set(AMC_ABIX_LEASE_API_VERSION 1)
+set(AMC_ABIX_LEASE_API_SIZE 48)
+set(AMC_ABIX_LEASE_API_ALIGN 8)
+set(AMC_ABIX_LEASE_ABI_VERSION_OFFSET 0)
+set(AMC_ABIX_LEASE_STRUCT_SIZE_OFFSET 4)
+set(AMC_ABIX_LEASE_HOST_CONTEXT_OFFSET 8)
+set(AMC_ABIX_LEASE_REGISTRY_CREATE_OFFSET 16)
+set(AMC_ABIX_LEASE_REGISTRY_DESTROY_OFFSET 24)
+set(AMC_ABIX_LEASE_ACQUIRE_OFFSET 32)
+set(AMC_ABIX_LEASE_RELEASE_OFFSET 40)
+set(AMC_ABIX_LEASE_SUCCESS 0)
+set(AMC_ABIX_LEASE_ERROR_INVALID 1)
+set(AMC_ABIX_LEASE_ERROR_NOT_FOUND 2)
+set(AMC_ABIX_LEASE_ERROR_STALE_HANDLE 3)
+set(AMC_ABIX_LEASE_ERROR_BUSY 4)
+set(AMC_ABIX_LEASE_ERROR_UNLOADING 5)
+set(_amc_lease_json "")
+if(DEFINED ABIX_LEASE_API_JSON AND EXISTS "${ABIX_LEASE_API_JSON}")
+    set(_amc_lease_json "${ABIX_LEASE_API_JSON}")
+elseif(DEFINED abix_SOURCE_DIR AND EXISTS "${abix_SOURCE_DIR}/cmake/lease_api.json")
+    set(_amc_lease_json "${abix_SOURCE_DIR}/cmake/lease_api.json")
+endif()
+if(NOT "${_amc_lease_json}" STREQUAL "")
+    file(READ "${_amc_lease_json}" _amc_lease_json_text)
+    string(JSON _amc_lease_version GET "${_amc_lease_json_text}" abi_version)
+    string(JSON _amc_lease_size GET "${_amc_lease_json_text}" struct_size)
+    string(JSON _amc_lease_align GET "${_amc_lease_json_text}" align)
+    string(JSON _amc_lease_fields GET "${_amc_lease_json_text}" fields)
+    string(JSON _amc_lease_field_count LENGTH "${_amc_lease_fields}")
+    set(_amc_lease_abi_version_offset "")
+    set(_amc_lease_struct_size_offset "")
+    set(_amc_lease_host_context_offset "")
+    set(_amc_lease_registry_create_offset "")
+    set(_amc_lease_registry_destroy_offset "")
+    set(_amc_lease_acquire_offset "")
+    set(_amc_lease_release_offset "")
+    if(_amc_lease_field_count GREATER 0)
+        math(EXPR _amc_lease_last_field "${_amc_lease_field_count} - 1")
+        foreach(_amc_lease_field_index RANGE 0 ${_amc_lease_last_field})
+            string(JSON _amc_lease_field_name GET "${_amc_lease_fields}" ${_amc_lease_field_index} name)
+            string(JSON _amc_lease_field_offset GET "${_amc_lease_fields}" ${_amc_lease_field_index} offset)
+            if(_amc_lease_field_name STREQUAL "abi_version")
+                set(_amc_lease_abi_version_offset "${_amc_lease_field_offset}")
+            elseif(_amc_lease_field_name STREQUAL "struct_size")
+                set(_amc_lease_struct_size_offset "${_amc_lease_field_offset}")
+            elseif(_amc_lease_field_name STREQUAL "host_context")
+                set(_amc_lease_host_context_offset "${_amc_lease_field_offset}")
+            elseif(_amc_lease_field_name STREQUAL "registry_create")
+                set(_amc_lease_registry_create_offset "${_amc_lease_field_offset}")
+            elseif(_amc_lease_field_name STREQUAL "registry_destroy")
+                set(_amc_lease_registry_destroy_offset "${_amc_lease_field_offset}")
+            elseif(_amc_lease_field_name STREQUAL "acquire")
+                set(_amc_lease_acquire_offset "${_amc_lease_field_offset}")
+            elseif(_amc_lease_field_name STREQUAL "release")
+                set(_amc_lease_release_offset "${_amc_lease_field_offset}")
+            endif()
+        endforeach()
+    endif()
+    string(JSON _amc_lease_status GET "${_amc_lease_json_text}" status)
+    string(JSON _amc_lease_success GET "${_amc_lease_status}" ABIX_SUCCESS)
+    string(JSON _amc_lease_error_invalid GET "${_amc_lease_status}" ABIX_ERROR_INVALID)
+    string(JSON _amc_lease_error_not_found GET "${_amc_lease_status}" ABIX_ERROR_NOT_FOUND)
+    string(JSON _amc_lease_error_stale_handle GET "${_amc_lease_status}" ABIX_ERROR_STALE_HANDLE)
+    string(JSON _amc_lease_error_busy GET "${_amc_lease_status}" ABIX_ERROR_BUSY)
+    string(JSON _amc_lease_error_unloading GET "${_amc_lease_status}" ABIX_ERROR_UNLOADING)
+    if(
+        NOT
+        "${_amc_lease_abi_version_offset}"
+        STREQUAL
+        ""
+        AND
+        NOT
+        "${_amc_lease_struct_size_offset}"
+        STREQUAL
+        ""
+        AND
+        NOT
+        "${_amc_lease_host_context_offset}"
+        STREQUAL
+        ""
+        AND
+        NOT
+        "${_amc_lease_registry_create_offset}"
+        STREQUAL
+        ""
+        AND
+        NOT
+        "${_amc_lease_registry_destroy_offset}"
+        STREQUAL
+        ""
+        AND
+        NOT
+        "${_amc_lease_acquire_offset}"
+        STREQUAL
+        ""
+        AND
+        NOT
+        "${_amc_lease_release_offset}"
+        STREQUAL
+        "")
+        set(AMC_ABIX_LEASE_API_VERSION "${_amc_lease_version}")
+        set(AMC_ABIX_LEASE_API_SIZE "${_amc_lease_size}")
+        set(AMC_ABIX_LEASE_API_ALIGN "${_amc_lease_align}")
+        set(AMC_ABIX_LEASE_ABI_VERSION_OFFSET "${_amc_lease_abi_version_offset}")
+        set(AMC_ABIX_LEASE_STRUCT_SIZE_OFFSET "${_amc_lease_struct_size_offset}")
+        set(AMC_ABIX_LEASE_HOST_CONTEXT_OFFSET "${_amc_lease_host_context_offset}")
+        set(AMC_ABIX_LEASE_REGISTRY_CREATE_OFFSET "${_amc_lease_registry_create_offset}")
+        set(AMC_ABIX_LEASE_REGISTRY_DESTROY_OFFSET "${_amc_lease_registry_destroy_offset}")
+        set(AMC_ABIX_LEASE_ACQUIRE_OFFSET "${_amc_lease_acquire_offset}")
+        set(AMC_ABIX_LEASE_RELEASE_OFFSET "${_amc_lease_release_offset}")
+        set(AMC_ABIX_LEASE_SUCCESS "${_amc_lease_success}")
+        set(AMC_ABIX_LEASE_ERROR_INVALID "${_amc_lease_error_invalid}")
+        set(AMC_ABIX_LEASE_ERROR_NOT_FOUND "${_amc_lease_error_not_found}")
+        set(AMC_ABIX_LEASE_ERROR_STALE_HANDLE "${_amc_lease_error_stale_handle}")
+        set(AMC_ABIX_LEASE_ERROR_BUSY "${_amc_lease_error_busy}")
+        set(AMC_ABIX_LEASE_ERROR_UNLOADING "${_amc_lease_error_unloading}")
+        message(STATUS "AMC: lease API layout from ${_amc_lease_json} (size ${AMC_ABIX_LEASE_API_SIZE})")
+    else()
+        message(WARNING "AMC: incomplete ABIX lease API metadata at ${_amc_lease_json}; using built-in layout")
+    endif()
+else()
+    message(STATUS "AMC: ABIX lease API metadata not found; using built-in layout")
+endif()
+set(AMC_ABIX_LEASE_LAYOUT_DEFS
+    AMC_ABIX_LEASE_API_VERSION=${AMC_ABIX_LEASE_API_VERSION}
+    AMC_ABIX_LEASE_API_SIZE=${AMC_ABIX_LEASE_API_SIZE}
+    AMC_ABIX_LEASE_API_ALIGN=${AMC_ABIX_LEASE_API_ALIGN}
+    AMC_ABIX_LEASE_ABI_VERSION_OFFSET=${AMC_ABIX_LEASE_ABI_VERSION_OFFSET}
+    AMC_ABIX_LEASE_STRUCT_SIZE_OFFSET=${AMC_ABIX_LEASE_STRUCT_SIZE_OFFSET}
+    AMC_ABIX_LEASE_HOST_CONTEXT_OFFSET=${AMC_ABIX_LEASE_HOST_CONTEXT_OFFSET}
+    AMC_ABIX_LEASE_REGISTRY_CREATE_OFFSET=${AMC_ABIX_LEASE_REGISTRY_CREATE_OFFSET}
+    AMC_ABIX_LEASE_REGISTRY_DESTROY_OFFSET=${AMC_ABIX_LEASE_REGISTRY_DESTROY_OFFSET}
+    AMC_ABIX_LEASE_ACQUIRE_OFFSET=${AMC_ABIX_LEASE_ACQUIRE_OFFSET}
+    AMC_ABIX_LEASE_RELEASE_OFFSET=${AMC_ABIX_LEASE_RELEASE_OFFSET}
+    AMC_ABIX_LEASE_SUCCESS=${AMC_ABIX_LEASE_SUCCESS}
+    AMC_ABIX_LEASE_ERROR_INVALID=${AMC_ABIX_LEASE_ERROR_INVALID}
+    AMC_ABIX_LEASE_ERROR_NOT_FOUND=${AMC_ABIX_LEASE_ERROR_NOT_FOUND}
+    AMC_ABIX_LEASE_ERROR_STALE_HANDLE=${AMC_ABIX_LEASE_ERROR_STALE_HANDLE}
+    AMC_ABIX_LEASE_ERROR_BUSY=${AMC_ABIX_LEASE_ERROR_BUSY}
+    AMC_ABIX_LEASE_ERROR_UNLOADING=${AMC_ABIX_LEASE_ERROR_UNLOADING})
+
 # EPCD owns the stable application-layer error identity. AMC requires Core
 # (ErrorCode / static domains / conditions); Interface is used for registration
 # when the installed or fetched EPCD provides it.
@@ -578,7 +722,7 @@ add_executable(
     amc-rust ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Rust/Rust.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Frontend/Rust/Frontend.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Rust/Backend.cpp)
 target_include_directories(amc-rust PRIVATE ${AMC_INCLUDE_DIR} ${AMC_GENERATED_INCLUDE_DIR})
-target_compile_definitions(amc-rust PRIVATE ${AMC_ABIX_OWNER_LAYOUT_DEFS})
+target_compile_definitions(amc-rust PRIVATE ${AMC_ABIX_OWNER_LAYOUT_DEFS} ${AMC_ABIX_LEASE_LAYOUT_DEFS})
 target_link_libraries(amc-rust PRIVATE amc-core amc-lang amc-llvm fmt::fmt)
 
 add_executable(amc-zig ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Zig/Zig.cpp

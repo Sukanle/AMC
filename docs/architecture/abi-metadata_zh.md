@@ -58,19 +58,24 @@ const _: () = assert!(core::mem::offset_of!(abix_lease_api, acquire) == ...);
 ## 消除了哪些重复声明
 
 - AMC 中手工维护的 owner-handle offset；`OwnerLayout.h` 现在在配置期读取 `ABIX_OWNER_HANDLE_JSON`。
-- Rust 投影里第二份 `abix_lease_api` / `abix_status` 声明。
+- Rust 投影里手工维护的 `abix_lease_api` size/offset/status 值。
 - 各语言各自维护的 `struct_size`、字段 offset 和 status 值。
 - C 头文件与生成绑定之间的静默漂移。
 
-## v0.4.x 交付项
+## 已实现内容
 
-1. ABIX 增加 `cmake/lease_api.json`，安装为 `ABIX_LEASE_API_JSON`。
-2. 字段：`abi_version`、`struct_size`、`host_context`、`registry_create`、`registry_destroy`、`acquire`、`release`，以及稳定的 `abix_status` 值。
-3. AMC CMake 读取 JSON，为生成 lease 绑定的目标定义布局/版本事实。
-4. Rust 投影从这些事实生成 lease 声明；C++ 使用 `LeaseABI.h` 并生成 static_assert。
+1. ABIX 发布 `cmake/lease_api.json`，安装为 `ABIX_LEASE_API_JSON`。
+2. 文件记录 `abi_version`、`struct_size`、`align`、字段 offset 和稳定的 `abix_status` 值。
+3. AMC CMake 读取 JSON，为 `amc-rust` 定义 lease 布局/版本事实。
+4. Rust 投影用这些事实生成常量和编译期 size/offset 断言；C++ 直接使用 `LeaseABI.h`。
 5. 生成的 `LeaseGuard` 使用共享声明。
 
 该 JSON 是附加元数据，不改变 lease ABI、`abi_version` 或 `struct_size` 规则。旧消费者仍可继续使用 `LeaseABI.h`。
+
+## 仍待完成的 v0.4.x 工作
+
+- 发布 ABIX 元数据提交，并把 `AMC_ABIX_REF` 从 `30fc9be` 移到该 ref。在此之前，AMC 从本地 checkout 读取元数据；缺失时回退到 v1 布局。
+- 可选：由 ABIX 提供完整的 Rust/Zig 绑定。Rust 结构拼写目前仍由 AMC 生成，但布局和状态事实已经来自元数据。
 
 ## 为什么这对 `LeaseGuard` 重要
 
