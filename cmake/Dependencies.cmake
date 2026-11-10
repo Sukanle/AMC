@@ -15,6 +15,7 @@ set(AMC_TOMLPLUSPLUS_MIN_VERSION "3.4.0" CACHE STRING "Minimum supported toml++ 
 
 find_package(fmt ${AMC_FMT_MIN_VERSION} CONFIG REQUIRED)
 find_package(tomlplusplus ${AMC_TOMLPLUSPLUS_MIN_VERSION} CONFIG REQUIRED)
+find_package(Threads REQUIRED)
 
 # Google Benchmark is optional: AMC always builds correctness tests, while the
 # performance targets are only created when the package is available.

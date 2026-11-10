@@ -31,7 +31,11 @@ def roots(source_root):
 
 
 def include_flags(source_root):
-    return ["-I" + p for p in roots(source_root)]
+    flags = []
+    amc_include = os.path.join(source_root, "include")
+    if os.path.isdir(amc_include):
+        flags.append("-I" + amc_include)
+    return flags + ["-I" + p for p in roots(source_root)]
 
 
 def module_path(work, base):
@@ -104,10 +108,22 @@ def main():
 
     try:
         fixture = os.path.dirname(os.path.abspath(__file__))
-        for name in ("host_lease.hpp", "host_lease.cpp", "host_lease_test.cpp",
+        for name in ("host_lease.hpp", "host_lease_test.cpp",
                      "lease_bridge.hpp", "lease_bridge.cpp", "provider.cpp",
                      "rust_consumer.rs", "rust_takeover.rs", "zig_consumer.zig"):
             shutil.copyfile(os.path.join(fixture, name), os.path.join(work, name))
+
+        # The public Host registry lives in libabix-format now; the interop
+        # fixture links that archive instead of carrying a private copy.
+        build_dir = Path(argv[0]).resolve().parent
+        runtime_archive = None
+        for candidate in (build_dir / "libabix-format.a", build_dir / "libabix-format.lib"):
+            if candidate.is_file():
+                runtime_archive = str(candidate)
+                break
+        if runtime_archive is None:
+            print("  [FAIL] libabix-format archive not found next to the bin dir", file=sys.stderr)
+            return 1
 
         includes = include_flags(str(source_root))
         provider = module_path(work, "lease_provider")
@@ -127,10 +143,10 @@ def main():
         check(r.returncode == 0, "second provider module built", failure_detail(r))
 
         bridge_link = [] if sys.platform != "linux" else ["-ldl"]
-        r = run([cxx, "-std=c++17", "-shared", "-fPIC", "-O2",
-                 os.path.join(work, "host_lease.cpp"), os.path.join(work, "lease_bridge.cpp"),
+        r = run([cxx, "-std=c++17", "-shared", "-fPIC", "-O2", "-pthread",
+                 os.path.join(work, "lease_bridge.cpp"),
                  "-I", work, *includes, "-o", bridge, *bridge_link,
-                 *module_flags(work, "lease_bridge")])
+                 *module_flags(work, "lease_bridge"), runtime_archive])
         check(r.returncode == 0, "Host lease bridge built", failure_detail(r))
 
         takeover = module_path(work, "rust_takeover")
@@ -141,8 +157,8 @@ def main():
 
         host_test = os.path.join(work, exe("host_lease_test"))
         r = run([cxx, "-std=c++17", "-O2", "-Wall", "-Wextra", "-pthread",
-                 os.path.join(work, "host_lease.cpp"), os.path.join(work, "host_lease_test.cpp"),
-                 "-I", work, *includes, "-o", host_test])
+                 os.path.join(work, "host_lease_test.cpp"),
+                 "-I", work, *includes, "-o", host_test, runtime_archive])
         if check(r.returncode == 0, "Host lease contract test compiled", failure_detail(r)):
             r = run([host_test])
             check(r.returncode == 0 and "lease host: OK" in output(r),

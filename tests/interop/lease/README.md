@@ -8,7 +8,7 @@ ABIX owns the contract; the Host owns the registry, the module table and the fun
 
 | File                                    | Role                                                                                                                          |
 | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `host_lease.hpp` / `host_lease.cpp`     | Host-owned `abix_lease_registry`, module table and `abix_lease_api` implementation                                            |
+| `host_lease.hpp`                        | Forwards to the public `SKL/AMC/Support/LeaseRegistry.h` runtime                                                              |
 | `host_lease_test.cpp`                   | C++ contract test: lifecycle, duplicate release, draining, registry CLOSING/BUSY, concurrent release, acquire/unregister race |
 | `lease_bridge.hpp` / `lease_bridge.cpp` | C ABI bridge that loads a provider and exposes the Host function table to Rust/Zig                                            |
 | `provider.cpp`                          | Minimal provider module with `lease_object_create` / `destroy`                                                                |
@@ -31,6 +31,8 @@ ABIX owns the contract; the Host owns the registry, the module table and the fun
 ## Not covered yet
 
 - registry creation/destruction from Rust/Zig (by contract, only the Host does this; consumers receive the function table).
+
+Generated C++ and Rust `LeaseGuard<OwnerOf*>` consumers are covered by `tests/providers/rust/box_adapt_test.py`, which links the public `libabix-format` runtime and a real Rust provider.
 
 ## Run
 

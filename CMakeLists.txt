@@ -413,6 +413,7 @@ add_library(
         ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/Artifact.cpp
         ${AMC_SOURCE_DIR}/src/SKL/AMC/IR/TypeMapping.cpp
         ${AMC_SOURCE_DIR}/src/SKL/AMC/Support/Json.cpp
+        ${AMC_SOURCE_DIR}/src/SKL/AMC/Support/LeaseRegistry.cpp
         ${AMC_SOURCE_DIR}/src/ljson/json.c
         ${AMC_SOURCE_DIR}/src/ljson/jnum.c
         ${AMC_SOURCE_DIR}/src/ljson/grisu2.c
@@ -420,7 +421,7 @@ add_library(
 target_include_directories(
     libabix-format PUBLIC $<BUILD_INTERFACE:${AMC_INCLUDE_DIR}> $<BUILD_INTERFACE:${AMC_SOURCE_DIR}/include/ljson>
                           $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-target_link_libraries(libabix-format PUBLIC ABIX::runtime fmt::fmt MICS::MICS ${AMC_EPCD_TARGETS})
+target_link_libraries(libabix-format PUBLIC ABIX::runtime fmt::fmt MICS::MICS ${AMC_EPCD_TARGETS} Threads::Threads)
 target_compile_features(libabix-format PUBLIC cxx_std_17)
 set_target_properties(
     libabix-format
