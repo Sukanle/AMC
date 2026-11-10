@@ -33,7 +33,7 @@ The stable wire formats are `.abix`, `.semantic` and `.lowering`. They contain p
 
 ## Current status
 
-At the v0.4.0 development boundary the core architecture is in place:
+v0.4.0 ships the core architecture:
 
 | Area                                              | Status                                                                                                                           |
 | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
