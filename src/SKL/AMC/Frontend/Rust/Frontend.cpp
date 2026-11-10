@@ -1048,7 +1048,7 @@ std::string owner_destroyer_name(const std::string &payload) {
 
 std::string owner_destroyer_definition(const std::string &payload) {
     return fmt::format(
-        "unsafe extern \"C\" fn {}(object: *mut core::ffi::c_void) {{\n"
+        "#[allow(non_snake_case)]\nunsafe extern \"C\" fn {}(object: *mut core::ffi::c_void) {{\n"
         "    if !object.is_null() {{\n        unsafe {{ drop(Box::from_raw(object as *mut {})); }}\n    }}\n}}\n\n",
         owner_destroyer_name(payload), payload);
 }

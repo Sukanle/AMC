@@ -11,6 +11,7 @@
 - Generated `LeaseHost`: validates the ABI version, struct size and `acquire`/`release` entries, then acquires through `guard(module, create)` without raw pointers. `LeaseError` distinguishes `InvalidApi`, `InvalidRegistry`, `AcquireFailed` and `CreateFailed`. The raw `LeaseGuard::acquire` / `adopt` escape hatches remain.
 - Rust helper failures now preserve the first lines of the helper's stderr, so rustc diagnostics (`error[E…]`, location and message) appear in AMC's warning or fatal error instead of a bare exit status.
 - Generated `Owned*::create` uses an internal `from_ptr` helper, and the generated module allows `unused_unsafe`, so including the projection no longer produces nested-unsafe warnings for generated code.
+- `examples/rust/ffi-workspace/`: a real Cargo workspace (provider cdylib + consumer bin) that runs `amc build`, Cargo, `amc generate` and a `#![deny(unsafe_code)]` consumer end to end. `amc-rust-workspace-example-test` runs the workflow in a temporary copy.
 - Provider tests run dedicated `#![deny(unsafe_code)]` consumers for Box and container projections.
 
 ## v0.4.0 — 2026-11-10

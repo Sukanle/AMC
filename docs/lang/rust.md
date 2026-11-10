@@ -347,6 +347,24 @@ fn main() {
 
 The Rust file still needs to link the native library; the projection provides `#[link]` support through `ABIX_LIBRARY_NAME` when the `abix_link` option is enabled.
 
+## Real project example
+
+`examples/rust/ffi-workspace/` is a Cargo workspace that uses AMC end to end:
+
+```text
+provider/   Rust cdylib; ordinary Rust functions define the ABI surface
+consumer/   Rust binary; includes the generated binding and uses safe::
+```
+
+`amc build` extracts the provider, writes the `extern "C"` thunks and the owned-handle contract, then `amc generate -l rust` produces the consumer binding. The consumer carries `#![deny(unsafe_code)]`. Run it with:
+
+```bash
+cd examples/rust/ffi-workspace
+AMC=/path/to/amc ./run.sh
+```
+
+`amc-rust-workspace-example-test` runs the same workflow in a temporary copy.
+
 ## Limits and notes
 
 - The source parser is not a full `rustc` AST: only `#[repr(C)]` / `extern "C"` surfaces are extracted; generics, traits, lifetimes and bit-fields stay inside the module. The optional helper supplies the rustc view for generic instances, traits, lifetimes and standard containers.

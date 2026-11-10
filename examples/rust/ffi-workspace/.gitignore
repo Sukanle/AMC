@@ -1,0 +1,3 @@
+target/
+provider/src/generated/
+consumer/src/generated/

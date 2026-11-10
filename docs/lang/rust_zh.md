@@ -347,6 +347,24 @@ fn main() {
 
 Rust 文件仍需要链接原生库；当启用 `abix_link` 选项时，投影会通过 `ABIX_LIBRARY_NAME` 提供 `#[link]` 支持。
 
+## 真实项目示例
+
+`examples/rust/ffi-workspace/` 是一个端到端使用 AMC 的 Cargo workspace：
+
+```text
+provider/   Rust cdylib；普通 Rust 函数定义 ABI 表面
+consumer/   Rust binary；包含生成绑定并使用 safe::
+```
+
+`amc build` 提取 provider、生成 `extern "C"` thunks 与 owned-handle 契约，随后 `amc generate -l rust` 生成 consumer 绑定。consumer 启用 `#![deny(unsafe_code)]`。运行方式：
+
+```bash
+cd examples/rust/ffi-workspace
+AMC=/path/to/amc ./run.sh
+```
+
+`amc-rust-workspace-example-test` 会在临时副本中运行同一套流程。
+
 ## 限制与说明
 
 - 源码 parser 不是完整的 `rustc` AST：只提取 `#[repr(C)]` / `extern "C"` 表面；泛型、trait、生命周期与位域留在模块内部。可选的 helper 通过 rustc 视图补齐泛型实例、trait、生命周期和标准容器。
