@@ -33,7 +33,7 @@ The stable wire formats are `.abix`, `.semantic` and `.lowering`. They contain p
 
 ## Current status
 
-v0.4.0 ships the core architecture:
+v0.4.0 ships the core architecture (v0.4.1 adds the Rust safe facade and an end-to-end Cargo workspace example):
 
 | Area                                              | Status                                                                                                                           |
 | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |

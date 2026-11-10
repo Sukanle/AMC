@@ -1,5 +1,18 @@
 # 变更记录
 
+## 未发布 — v0.4.1
+
+### 新增
+
+- Rust 投影安全 facade：生成代码新增 `pub mod safe`，校验 owner handle，并用 `OwnerOf*` / `OwnedString*` / `OwnedSpan*` 包装代替裸 handle；产生 owner 的调用返回 `Result<_, OwnerError>`。消费者 crate 可以启用 `#![deny(unsafe_code)]`；生成模块自身局部允许 `unsafe_code`，避免消费者 lint 命中实现。
+- `OwnerOf*` / `OwnedString*` / `OwnedSpan*` 新增安全的 `from_handle` / `into_handle`；`from_raw` / `into_raw` 仍保留为 `pub unsafe` 逃生口。
+- `OwnedString*` 新增 `as_bytes` / `as_str`；`OwnedSpan*` 新增 `as_slice` / `len` / `is_empty`，消费者不再需要 `core::slice::from_raw_parts` 或裸指针解引用。
+- 安全 facade 覆盖 ABIX-STD 借用视图：`&str` 参数重建为 `abix_str_utf8`（UTF-8、reserved 为 0），`&[T]` 参数重建为 `abix_span_<T>`，长度来自 Rust 借用。字符串/切片入口不再需要 `unsafe`；返回借用视图或其它裸指针契约仍保持 unsafe。
+- 生成 `LeaseHost`：校验 ABI 版本、struct size 与 `acquire`/`release` 入口，然后通过 `guard(module, create)` 获取 lease，不再直接接收裸指针。`LeaseError` 区分 `InvalidApi`、`InvalidRegistry`、`AcquireFailed` 和 `CreateFailed`。裸指针版 `LeaseGuard::acquire` / `adopt` 继续保留。
+- Rust helper 失败时会保留 helper stderr 的前几行，rustc 诊断（`error[E…]`、位置和消息）会出现在 AMC 的 warning 或致命错误中，而不是只报告退出码。
+- 生成 `Owned*::create` 改用内部 `from_ptr` helper，生成模块允许 `unused_unsafe`，投影不再产生嵌套 unsafe 警告。
+- `examples/rust/ffi-workspace/`：一个真实 Cargo workspace（provider cdylib + consumer bin），端到端运行 `amc build`、Cargo、`amc generate` 和 `#![deny(unsafe_code)]` consumer。`amc-rust-workspace-example-test` 会在临时副本中运行同一流程。
+
 ## v0.4.0 — 2026-11-10
 
 ### 新增
