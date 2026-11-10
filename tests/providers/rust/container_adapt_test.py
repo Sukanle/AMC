@@ -111,6 +111,8 @@ def main():
         check("pub struct abix_owned_span_ContainerPoint" in thunks
               and "__amc_owned_span_ContainerPoint_destroy" in thunks,
               "owned Vec return uses the ABIX-owned span view")
+        check("amc_module_set_instance" in thunks and "__AMC_MODULE_INSTANCE" in thunks,
+              "module instance setter is generated")
 
         for function, expected in (
             ("container_string_len", "abix_str_utf8"),
@@ -315,6 +317,8 @@ fn main() {
             _fields_ = [("view", AbixSpanI32), ("owner", AbixOwnerHandle)]
 
         lib = ctypes.CDLL(library)
+        lib.amc_module_set_instance.argtypes = [ctypes.c_uint64]
+        lib.amc_module_set_instance(0x1234)
 
         text = b"hello"
         buffer = ctypes.create_string_buffer(text)
@@ -375,6 +379,8 @@ fn main() {
               "owned String return carries a view and an owner")
         check(owned_str.owner.object == ctypes.cast(owned_str.view.data, ctypes.c_void_p).value,
               "owned String owner.object equals view.data")
+        check(owned_str.owner.module_instance == 0x1234,
+              "owned String carries the provider module instance")
         ctypes.CFUNCTYPE(None, ctypes.c_void_p)(owned_str.owner.destroy)(owned_str.owner.object)
 
         lib.container_owned_points.argtypes = [ctypes.c_int32]
@@ -385,6 +391,8 @@ fn main() {
               "owned Vec return carries a span view and an owner")
         check(owned_span.owner.object == ctypes.cast(owned_span.view.data, ctypes.c_void_p).value,
               "owned Vec owner.object equals view.data")
+        check(owned_span.owner.module_instance == 0x1234,
+              "owned Vec carries the provider module instance")
         ctypes.CFUNCTYPE(None, ctypes.c_void_p)(owned_span.owner.destroy)(owned_span.owner.object)
 
         lib.container_owned_numbers.argtypes = [ctypes.c_int32]
@@ -395,6 +403,8 @@ fn main() {
               "owned i32 Vec return uses the ABIX-standard span")
         check(owned_numbers.owner.object == ctypes.cast(owned_numbers.view.data, ctypes.c_void_p).value,
               "owned i32 Vec owner.object equals view.data")
+        check(owned_numbers.owner.module_instance == 0x1234,
+              "owned i32 Vec carries the provider module instance")
         ctypes.CFUNCTYPE(None, ctypes.c_void_p)(owned_numbers.owner.destroy)(owned_numbers.owner.object)
 
         lib.container_take_string.argtypes = [AbixOwnedStr]

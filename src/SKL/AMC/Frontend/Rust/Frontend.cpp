@@ -2684,7 +2684,8 @@ int run_frontend(const char *config_path, const char *output_path) {
                 wrapper_source += "let __amc_value = " + call + ";\n    ";
                 wrapper_source += fmt::format(
                     "{} {{ object: Box::into_raw(__amc_value) as *mut core::ffi::c_void, mode: 1, flags: 0, "
-                    "destroy: Some({}), module_instance: 0 }}",
+                    "destroy: Some({}), module_instance: "
+                    "__AMC_MODULE_INSTANCE.load(core::sync::atomic::Ordering::Acquire) }}",
                     return_adapt->target, owner_destroyer_name(return_payload));
             } else if (return_owned_string) {
                 wrapper_source += "unsafe {\n    ";
@@ -2706,7 +2707,8 @@ int run_frontend(const char *config_path, const char *output_path) {
                 wrapper_source += fmt::format(
                     "{} {{ view: {} {{ data: __amc_data, len: __amc_len as u64, encoding: 0, reserved: 0 }}, "
                     "owner: abix_owner_handle {{ object: __amc_object, mode: 1, flags: 0, "
-                    "destroy: Some(__amc_owned_str_destroy), module_instance: 0 }} }}\n    }}",
+                    "destroy: Some(__amc_owned_str_destroy), module_instance: "
+                    "__AMC_MODULE_INSTANCE.load(core::sync::atomic::Ordering::Acquire) }} }}\n    }}",
                     return_adapt->target, return_view);
             } else if (return_owned_span) {
                 const std::string element = return_payload;
@@ -2734,7 +2736,8 @@ int run_frontend(const char *config_path, const char *output_path) {
                 wrapper_source += fmt::format(
                     "{} {{ view: {} {{ data: __amc_data, len: __amc_len as u64 }}, "
                     "owner: abix_owner_handle {{ object: __amc_object, mode: 1, flags: 0, "
-                    "destroy: Some({}), module_instance: 0 }} }}\n    }}",
+                    "destroy: Some({}), module_instance: "
+                    "__AMC_MODULE_INSTANCE.load(core::sync::atomic::Ordering::Acquire) }} }}\n    }}",
                     return_adapt->target, return_view, owned_span_destroyer_name(element));
             } else if (return_adapt != nullptr && return_kind == ContainerKind::OPTION) {
                 const std::string target = return_adapt->target;
@@ -2766,6 +2769,17 @@ int run_frontend(const char *config_path, const char *output_path) {
     }
 
     if (!wrapper_source.empty()) {
+        // Owner handles carry the creator's module instance so a Host can
+        // associate them with the module it loaded. The Host calls this setter
+        // after loading the provider and before creating any owner.
+        wrapper_source =
+            "static __AMC_MODULE_INSTANCE: core::sync::atomic::AtomicU64 =\n"
+            "    core::sync::atomic::AtomicU64::new(0);\n\n"
+            "#[export_name = \"amc_module_set_instance\"]\n"
+            "pub extern \"C\" fn __amc_set_module_instance(instance: u64) {\n"
+            "    __AMC_MODULE_INSTANCE.store(instance, core::sync::atomic::Ordering::Release);\n"
+            "}\n\n"
+            + wrapper_source;
         if (config.thunks_output.empty()) {
             fmt::print(stderr, "[[rust.expose]] requires a [thunks] output path\n");
             return EXIT_FAILURE;

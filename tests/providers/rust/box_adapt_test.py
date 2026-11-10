@@ -213,6 +213,9 @@ output = "rust_box_owner.abix"
                   "owner handle parameter is unwrapped")
             check("__amc_owner_destroy_BoxWidget" in owner_thunks,
                   "owner handle destroy trampoline is generated")
+            check("amc_module_set_instance" in owner_thunks
+                  and "__AMC_MODULE_INSTANCE.load" in owner_thunks,
+                  "owner handle carries the provider module instance")
             for function, expected in (("box_widget_make", "abix_owner_BoxWidget"),
                                        ("box_widget_value", "abix_owner_BoxWidget")):
                 result = run([str(amc), "query", owner_artifact, "--function", function,
@@ -249,6 +252,8 @@ class Owner(ctypes.Structure):
     _fields_ = [("object", ctypes.c_void_p), ("mode", ctypes.c_uint32), ("flags", ctypes.c_uint32),
                 ("destroy", ctypes.c_void_p), ("module_instance", ctypes.c_uint64)]
 lib = ctypes.CDLL(os.path.join(os.path.dirname(__file__), 'lib' + 'rust_box_owner' + ('.dylib' if sys.platform == 'darwin' else '.so')))
+lib.amc_module_set_instance.argtypes = [ctypes.c_uint64]
+lib.amc_module_set_instance(0x5A5A)
 lib.box_widget_make.argtypes = [ctypes.c_int32]
 lib.box_widget_make.restype = Owner
 lib.box_widget_value.argtypes = [Owner]
@@ -256,6 +261,7 @@ lib.box_widget_value.restype = ctypes.c_int32
 lib.box_widget_live.restype = ctypes.c_size_t
 handle = lib.box_widget_make(7)
 assert handle.object and handle.mode == 1 and handle.destroy
+assert handle.module_instance == 0x5A5A
 assert lib.box_widget_live() == 1
 assert lib.box_widget_value(handle) == 7
 assert lib.box_widget_live() == 0
