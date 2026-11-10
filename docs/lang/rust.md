@@ -297,6 +297,16 @@ assert_eq!(points.as_slice()[0].x, 5);
 
 The root API is unchanged for v0.4.0 consumers. `from_raw` / `into_raw` remain as `pub unsafe` escape hatches on the owner and owned-view wrappers; the safe facade uses `from_handle` / `into_handle` internally. The generated module carries `#![allow(unsafe_code)]`, so the consumer's `deny(unsafe_code)` does not fire on the generated implementation.
 
+Lease users get a validated `LeaseHost`, so the guard no longer takes raw pointers:
+
+```rust
+let host = LeaseHost::new(&LEASE_API, registry)?;
+let guard = host.guard(module, || box_widget_make(7).ok())?;
+assert!(!guard.owner().object().is_null());
+```
+
+`LeaseHost::new` validates the ABI version, struct size and `acquire`/`release` entries. `LeaseGuard::acquire` / `adopt` stay as the raw-pointer escape hatch, and `LeaseError` distinguishes an invalid API, an invalid registry, a failed acquire and a failed create.
+
 ## Example
 
 ```rust

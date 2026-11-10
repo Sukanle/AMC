@@ -297,6 +297,16 @@ assert_eq!(points.as_slice()[0].x, 5);
 
 根 API 对 v0.4.0 消费者保持不变。owner 与 owned-view 包装上的 `from_raw` / `into_raw` 仍作为 `pub unsafe` 逃生口保留；安全 facade 内部使用 `from_handle` / `into_handle`。生成模块自身带有 `#![allow(unsafe_code)]`，因此消费者的 `deny(unsafe_code)` 不会被生成的实现触发。
 
+Lease 用户获得经过校验的 `LeaseHost`，guard 不再直接接收裸指针：
+
+```rust
+let host = LeaseHost::new(&LEASE_API, registry)?;
+let guard = host.guard(module, || box_widget_make(7).ok())?;
+assert!(!guard.owner().object().is_null());
+```
+
+`LeaseHost::new` 校验 ABI 版本、struct size 以及 `acquire` / `release` 入口。`LeaseGuard::acquire` / `adopt` 继续作为裸指针逃生口保留，`LeaseError` 区分无效 API、无效 registry、acquire 失败和 create 失败。
+
 ## 示例
 
 ```rust

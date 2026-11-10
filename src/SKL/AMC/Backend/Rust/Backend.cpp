@@ -867,20 +867,20 @@ void emit_owner_views(Output &o, const Projector &p) {
     }
 }
 
-void emit_lease_guard(Output &o, const Projector &p) {
-    bool any_owner_view = false;
+bool has_owner_views(const Projector &p) {
     for (const auto &lowering : p.m.lowerings) {
         const auto kind = static_cast<amc::LoweringKind>(lowering.kind);
         if (kind != amc::LoweringKind::OWNER
             && kind != amc::LoweringKind::OWNED_STRING
             && kind != amc::LoweringKind::OWNED_SPAN)
             continue;
-        if (p.index_of(lowering.type_id) >= 0) {
-            any_owner_view = true;
-            break;
-        }
+        if (p.index_of(lowering.type_id) >= 0) return true;
     }
-    if (!any_owner_view) return;
+    return false;
+}
+
+void emit_lease_guard(Output &o, const Projector &p) {
+    if (!has_owner_views(p)) return;
 
     std::string source = R"rust(
 // ABIX lease C ABI v1. The layout and status facts are generated from
@@ -1066,6 +1066,100 @@ impl<O> Drop for LeaseGuard<O> {
         self.lease = ABIX_LEASE_INVALID;
     }
 }
+
+/// Error returned by the safe lease API.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LeaseError {
+    InvalidApi,
+    InvalidRegistry,
+    AcquireFailed(abix_status),
+    CreateFailed,
+}
+
+/// Validated lease Host for safe consumers.
+///
+/// The application supplies an already-validated C ABI table and registry;
+/// `LeaseHost` never creates one. Both must stay alive for the rest of the
+/// process because guards release through their addresses on drop.
+pub struct LeaseHost {
+    api: &'static abix_lease_api,
+    registry: core::ptr::NonNull<abix_lease_registry>,
+}
+
+impl LeaseHost {
+    pub fn new(
+        api: &'static abix_lease_api,
+        registry: core::ptr::NonNull<abix_lease_registry>,
+    ) -> Result<Self, LeaseError> {
+        Self::validate(api)?;
+        Ok(Self { api, registry })
+    }
+
+    /// Escape hatch: `api` and `registry` must remain valid for the rest of
+    /// the process; a dangling address makes the safe methods unsound.
+    pub unsafe fn from_raw(
+        api: *const abix_lease_api,
+        registry: *mut abix_lease_registry,
+    ) -> Result<Self, LeaseError> {
+        if api.is_null() {
+            return Err(LeaseError::InvalidApi);
+        }
+        let api = &*api;
+        Self::validate(api)?;
+        let registry = core::ptr::NonNull::new(registry).ok_or(LeaseError::InvalidRegistry)?;
+        Ok(Self { api, registry })
+    }
+
+    pub fn api(&self) -> &'static abix_lease_api {
+        self.api
+    }
+
+    pub fn guard<O, F>(
+        &self,
+        module: abix_module_instance,
+        create: F,
+    ) -> Result<LeaseGuard<O>, LeaseError>
+    where
+        F: FnOnce() -> Option<O>,
+    {
+        let acquire = self.api.acquire.ok_or(LeaseError::InvalidApi)?;
+        let mut lease = ABIX_LEASE_INVALID;
+        let status = unsafe {
+            acquire(
+                self.api.host_context,
+                self.registry.as_ptr(),
+                module,
+                &mut lease,
+            )
+        };
+        if status != ABIX_SUCCESS || lease == ABIX_LEASE_INVALID {
+            return Err(LeaseError::AcquireFailed(status));
+        }
+        match create() {
+            Some(owner) => Ok(LeaseGuard {
+                owner: Some(owner),
+                api: self.api as *const abix_lease_api,
+                registry: self.registry.as_ptr(),
+                lease,
+            }),
+            None => {
+                unsafe { LeaseGuard::<O>::release_lease(self.api, self.registry.as_ptr(), lease) };
+                Err(LeaseError::CreateFailed)
+            }
+        }
+    }
+
+    fn validate(api: &abix_lease_api) -> Result<(), LeaseError> {
+        if api.abi_version != ABIX_LEASE_API_VERSION
+            || (api.struct_size as usize) < core::mem::size_of::<abix_lease_api>()
+            || api.acquire.is_none()
+            || api.release.is_none()
+        {
+            return Err(LeaseError::InvalidApi);
+        }
+        Ok(())
+    }
+}
 )rust";
 
     const auto substitute = [&](const char *token, auto value) {
@@ -1170,6 +1264,7 @@ void emit_safe_facade(Output &o, const Projector &p) {
         }
         o.print("}};\n");
     }
+    if (has_owner_views(p)) o.print("    pub use super::{{LeaseError, LeaseGuard, LeaseHost}};\n");
     if (!functions.empty())
         o.print(
             "    #[derive(Debug, Clone, Copy, PartialEq, Eq)]\n"

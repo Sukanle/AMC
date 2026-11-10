@@ -7,6 +7,7 @@
 - Rust projection safe facade: generated bindings now emit `pub mod safe`, which validates owner handles and accepts `OwnerOf*` / `OwnedString*` / `OwnedSpan*` wrappers instead of raw handles. Owner-producing calls return `Result<_, OwnerError>`. A consumer crate can compile with `#![deny(unsafe_code)]`; the generated module allows `unsafe_code` locally so the lint does not fire inside the implementation.
 - `OwnerOf*` / `OwnedString*` / `OwnedSpan*` gain safe `from_handle` / `into_handle`; `from_raw` / `into_raw` remain `pub unsafe` escape hatches.
 - `OwnedString*` exposes `as_bytes` / `as_str`; `OwnedSpan*` exposes `as_slice` / `len` / `is_empty`, so consumers no longer need `core::slice::from_raw_parts` or raw-pointer dereferences.
+- Generated `LeaseHost`: validates the ABI version, struct size and `acquire`/`release` entries, then acquires through `guard(module, create)` without raw pointers. `LeaseError` distinguishes `InvalidApi`, `InvalidRegistry`, `AcquireFailed` and `CreateFailed`. The raw `LeaseGuard::acquire` / `adopt` escape hatches remain.
 - Provider tests run dedicated `#![deny(unsafe_code)]` consumers for Box and container projections.
 
 ## v0.4.0 — 2026-11-10

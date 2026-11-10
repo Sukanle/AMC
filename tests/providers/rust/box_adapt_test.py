@@ -245,6 +245,9 @@ output = "rust_box_owner.abix"
                       "owner handle RAII wrapper is generated")
                 check("pub mod safe" in owner_projection and "pub fn box_widget_make" in owner_projection,
                       "safe owner facade is generated")
+                check("pub struct LeaseHost" in owner_projection and "pub enum LeaseError" in owner_projection
+                      and "pub use super::{LeaseError, LeaseGuard, LeaseHost}" in owner_projection,
+                      "safe lease host facade is generated")
 
             owner_root = os.path.join(owner_dir, "provider.rs")
             with open(owner_root, "w", encoding="utf-8") as handle:
@@ -306,12 +309,107 @@ mod skl {
     pub use crate::abix;
 }
 use skl::abix::safe::*;
+use skl::abix::OwnerOfBoxWidget;
+
+// Test double for the Host function table. Only this setup module needs
+// `unsafe`; the code that consumes the generated safe API does not.
+#[allow(unsafe_code)]
+mod test_api {
+    use core::ffi::c_void;
+    use core::sync::atomic::{AtomicU32, Ordering};
+    use crate::abix::{abix_lease_api, ABIX_ERROR_UNLOADING, ABIX_LEASE_API_VERSION, ABIX_SUCCESS};
+
+    static ACQUIRED: AtomicU32 = AtomicU32::new(0);
+    static RELEASED: AtomicU32 = AtomicU32::new(0);
+
+    unsafe extern "C" fn acquire(
+        _host: *mut c_void,
+        _registry: *mut c_void,
+        module: u64,
+        lease: *mut u64,
+    ) -> i32 {
+        if module == 999 {
+            return ABIX_ERROR_UNLOADING;
+        }
+        ACQUIRED.fetch_add(1, Ordering::Relaxed);
+        unsafe { *lease = 1; }
+        ABIX_SUCCESS
+    }
+
+    unsafe extern "C" fn release(_host: *mut c_void, _registry: *mut c_void, _lease: u64) {
+        RELEASED.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn api() -> &'static abix_lease_api {
+        Box::leak(Box::new(abix_lease_api {
+            abi_version: ABIX_LEASE_API_VERSION,
+            struct_size: core::mem::size_of::<abix_lease_api>() as u32,
+            host_context: core::ptr::null_mut(),
+            registry_create: None,
+            registry_destroy: None,
+            acquire: Some(acquire),
+            release: Some(release),
+        }))
+    }
+
+    pub fn bad_api() -> &'static abix_lease_api {
+        let mut api = *api();
+        api.abi_version = ABIX_LEASE_API_VERSION + 1;
+        Box::leak(Box::new(api))
+    }
+
+    pub fn registry() -> core::ptr::NonNull<c_void> {
+        let value: core::ptr::NonNull<u64> = core::ptr::NonNull::from(Box::leak(Box::new(0u64)));
+        value.cast()
+    }
+
+    pub fn counts() -> (u32, u32) {
+        (ACQUIRED.load(Ordering::Relaxed), RELEASED.load(Ordering::Relaxed))
+    }
+}
 
 fn main() {
     let owner = box_widget_make(7).expect("owner");
     assert_eq!(box_widget_live(), 1);
     assert_eq!(box_widget_value(owner), 7);
     assert_eq!(box_widget_live(), 0);
+
+    // into_handle transfers the raw handle without a second drop.
+    let owner = box_widget_make(1).expect("owner");
+    let raw = owner.into_handle();
+    let owner = OwnerOfBoxWidget::from_handle(raw).expect("revalidated handle");
+    drop(owner);
+    assert_eq!(box_widget_live(), 0);
+
+    // Invalid handles fail closed instead of adopting foreign memory.
+    let object = core::ptr::NonNull::<core::ffi::c_void>::dangling().as_ptr();
+    let destroy = core::ptr::NonNull::<core::ffi::c_void>::dangling().as_ptr();
+    assert!(OwnerOfBoxWidget::from_handle(skl::abix::abix_owner_BoxWidget {
+        object: core::ptr::null_mut(), mode: 1, flags: 0, destroy, module_instance: 0,
+    }).is_none());
+    assert!(OwnerOfBoxWidget::from_handle(skl::abix::abix_owner_BoxWidget {
+        object, mode: 0, flags: 0, destroy, module_instance: 0,
+    }).is_none());
+    assert!(OwnerOfBoxWidget::from_handle(skl::abix::abix_owner_BoxWidget {
+        object, mode: 1, flags: 0, destroy: core::ptr::null_mut(), module_instance: 0,
+    }).is_none());
+
+    let host = LeaseHost::new(test_api::api(), test_api::registry()).expect("lease host");
+    assert!(matches!(LeaseHost::new(test_api::bad_api(), test_api::registry()),
+                     Err(LeaseError::InvalidApi)));
+    {
+        let guard = host.guard(0x1234, || box_widget_make(9).ok()).expect("lease guard");
+        assert!(!guard.owner().object().is_null());
+        assert_eq!(box_widget_live(), 1);
+    }
+    assert_eq!(box_widget_live(), 0);
+
+    let failed_acquire = host.guard(999, || None::<OwnerOfBoxWidget>);
+    assert!(matches!(failed_acquire, Err(LeaseError::AcquireFailed(_))));
+    let failed_create = host.guard(1, || None::<OwnerOfBoxWidget>);
+    assert!(matches!(failed_create, Err(LeaseError::CreateFailed)));
+    assert_eq!(test_api::counts(), (2, 2));
+
     println!("safe owner: OK");
 }
 """)
