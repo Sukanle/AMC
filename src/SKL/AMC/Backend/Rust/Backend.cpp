@@ -696,6 +696,7 @@ void emit_owner_views(Output &o, const Projector &p) {
                 "        if raw.object.is_null() || (raw.mode != 1 && raw.mode != 2) || raw.destroy.is_null() {{\n");
             o.print("            None\n        }} else {{\n            Some(Self {{ raw }})\n        }}\n    }}\n");
             o.print("    pub fn object(&self) -> {} {{ self.raw.object }}\n", p.field_type(object->type_id));
+            o.print("    pub fn module_instance(&self) -> u64 {{ self.raw.module_instance as u64 }}\n");
             o.print("    pub fn into_raw(self) -> {} {{\n", raw_name);
             o.print("        let raw = unsafe {{ core::ptr::read(&self.raw) }};\n");
             o.print("        core::mem::forget(self);\n        raw\n    }}\n}}\n");
@@ -724,6 +725,7 @@ void emit_owner_views(Output &o, const Projector &p) {
             o.print("            || raw.owner.destroy.is_null()\n        {{\n");
             o.print("            None\n        }} else {{\n            Some(Self {{ raw }})\n        }}\n    }}\n");
             o.print("    pub fn view(&self) -> &{} {{ &self.raw.view }}\n", view_type);
+            o.print("    pub fn module_instance(&self) -> u64 {{ self.raw.owner.module_instance as u64 }}\n");
             o.print("    pub fn into_raw(self) -> {} {{\n", raw_name);
             o.print("        let raw = unsafe {{ core::ptr::read(&self.raw) }};\n");
             o.print("        core::mem::forget(self);\n        raw\n    }}\n}}\n");

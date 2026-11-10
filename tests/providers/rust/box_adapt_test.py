@@ -297,14 +297,17 @@ print('owner box: OK')
                         handle.write("""#include "owner_gen.hpp"
 
 extern "C" {
+void amc_module_set_instance(uint64_t instance);
 ::skl::amc::generated::abix_owner_BoxWidget box_widget_make(int32_t value);
 int32_t box_widget_value(::skl::amc::generated::abix_owner_BoxWidget widget);
 size_t box_widget_live();
 }
 
 int main() {
+    amc_module_set_instance(0x4321);
     auto owner = ::skl::amc::generated::OwnerOfBoxWidget(box_widget_make(7));
     if (!owner || owner.object() == nullptr) return 1;
+    if (owner.module_instance() != 0x4321) return 6;
     if (box_widget_live() != 1) return 2;
     if (box_widget_value(owner.release()) != 7) return 3;
     if (box_widget_live() != 0) return 4;
@@ -340,9 +343,15 @@ mod skl {
 }
 use skl::abix::*;
 
+extern "C" {
+    fn amc_module_set_instance(instance: u64);
+}
+
 fn main() {
     unsafe {
+        amc_module_set_instance(0x4321);
         let owner = OwnerOfBoxWidget::from_raw(box_widget_make(7)).expect("owner");
+        assert_eq!(owner.module_instance(), 0x4321);
         assert_eq!(box_widget_live(), 1);
         assert_eq!(box_widget_value(owner.into_raw()), 7);
         assert_eq!(box_widget_live(), 0);

@@ -190,25 +190,30 @@ def main():
                     handle.write("""#include "owner_gen.hpp"
 
 extern "C" {
+void amc_module_set_instance(uint64_t instance);
 ::abix_owned_str_utf8 container_owned_string(int32_t value);
 ::skl::amc::generated::abix_owned_span_ContainerPoint container_owned_points(int32_t value);
 ::abix_owned_span_i32 container_owned_numbers(int32_t value);
 }
 
 int main() {
+    amc_module_set_instance(0x4321);
     {
         auto string = ::skl::amc::generated::OwnedStringUtf8(container_owned_string(7));
         if (string.view().len != 1 || string.view().data[0] != '7') return 1;
+        if (string.module_instance() != 0x4321) return 6;
     }
     {
         auto span = ::skl::amc::generated::OwnedSpanContainerPoint(container_owned_points(5));
         if (span.view().len != 1) return 2;
         if (span.data<int32_t>()[0] != 5 || span.data<int32_t>()[1] != 6) return 3;
+        if (span.module_instance() != 0x4321) return 7;
     }
     {
         auto numbers = ::skl::amc::generated::OwnedSpanI32(container_owned_numbers(3));
         if (numbers.view().len != 2) return 4;
         if (numbers.view().data[0] != 3 || numbers.view().data[1] != 4) return 5;
+        if (numbers.module_instance() != 0x4321) return 8;
     }
     return 0;
 }
@@ -237,21 +242,29 @@ mod skl {
 }
 use skl::abix::*;
 
+extern "C" {
+    fn amc_module_set_instance(instance: u64);
+}
+
 fn main() {
     unsafe {
+        amc_module_set_instance(0x4321);
         let string = OwnedStringUtf8::from_raw(container_owned_string(7)).expect("owned string");
         assert_eq!(string.view().len, 1);
         assert_eq!(*string.view().data, b'7');
+        assert_eq!(string.module_instance(), 0x4321);
         drop(string);
 
         let span = OwnedSpanContainerPoint::from_raw(container_owned_points(5)).expect("owned span");
         assert_eq!(span.view().len, 1);
         assert_eq!((*span.view().data).x, 5);
+        assert_eq!(span.module_instance(), 0x4321);
         drop(span);
 
         let numbers = OwnedSpanI32::from_raw(container_owned_numbers(3)).expect("owned i32 span");
         assert_eq!(numbers.view().len, 2);
         assert_eq!(*numbers.view().data, 3);
+        assert_eq!(numbers.module_instance(), 0x4321);
         drop(numbers);
     }
     println!("owned views: OK");
