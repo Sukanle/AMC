@@ -20,19 +20,17 @@
 #include "SKL/AMC/Platform/ELF.h"
 #include "SKL/AMC/Diagnostics/Error.h"
 #include "SKL/AMC/Artifact/Metadata.h"
+#include "SKL/AMC/Private/Support/File.h"
 #include "SKL/AMC/Util/Error.h"
 
-#include <exception>
-#include <fstream>
-#include <iterator>
 #include <filesystem>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <llvm/Support/CommandLine.h>
 
 #include <fmt/format.h>
-#include <fmt/os.h>
 
 namespace fs = std::filesystem;
 using skl::amc::util::fail;
@@ -64,19 +62,9 @@ llvm::cl::opt<bool> metadata_no_hash_index("no-hash-index", llvm::cl::desc("Omit
     llvm::cl::cat(support::cli_category()), llvm::cl::sub(metadata_subcommand));
 
 void write_bytes(const fs::path &path, const std::vector<uint8_t> &bytes, const char *stage, int &rc) {
-    // Binary mode: the region is a binary image and the Windows CRT text mode
-    // would translate 0x0A into 0x0D 0x0A and corrupt it.
-    try {
-        std::ofstream out(path, std::ios::binary | std::ios::trunc);
-        if (!out) {
-            rc = fail(amc::ErrorCategory::IO, stage, "cannot write output", path.string());
-            return;
-        }
-        out.write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-        if (!out.good()) rc = fail(amc::ErrorCategory::IO, stage, "cannot write output", path.string());
-    } catch (const std::exception &e) {
-        rc = fail(amc::ErrorCategory::IO, stage, "cannot write output", path.string(), e.what());
-    }
+    if (auto err = amc::support::write_binary_file(path.string(), bytes))
+        rc = fail(amc::ErrorCategory::IO, stage, "cannot write output", path.string(),
+            amc::support::error_message(std::move(err)));
 }
 }   // namespace
 
@@ -96,9 +84,11 @@ int cmd_metadata() {
         if (verify) {
             if (format != "text" && format != "json" && format != "bin")
                 return usage_error("metadata --verify --format must be text or json");
-            std::ifstream file(input, std::ios::binary);
-            if (!file) return fail(amc::ErrorCategory::IO, "metadata", "cannot open input", input.string());
-            std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+            auto bytes_or = amc::support::read_binary_file(input.string());
+            if (!bytes_or)
+                return fail(amc::ErrorCategory::IO, "metadata", "cannot open input", input.string(),
+                    bytes_or.getError().message());
+            std::vector<uint8_t> bytes = std::move(*bytes_or);
             std::vector<uint8_t> region;
             std::string error;
             // A raw region starts with the manifest; an ELF/Mach-O binary
@@ -125,9 +115,11 @@ int cmd_metadata() {
         if (from_elf_flag) {
             if (format != "bin" && format != "json")
                 return usage_error("metadata --from-elf supports --format bin or json");
-            std::ifstream file(input, std::ios::binary);
-            if (!file) return fail(amc::ErrorCategory::IO, "metadata", "cannot open input", input.string());
-            std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+            auto bytes_or = amc::support::read_binary_file(input.string());
+            if (!bytes_or)
+                return fail(amc::ErrorCategory::IO, "metadata", "cannot open input", input.string(),
+                    bytes_or.getError().message());
+            std::vector<uint8_t> bytes = std::move(*bytes_or);
             std::vector<uint8_t> region;
             std::string error;
             if (!amc::find_binary_section(bytes.data(), bytes.size(), ".abix.metadata", region, error))
@@ -185,12 +177,9 @@ int cmd_metadata() {
             fmt::print("{}", rendered);
             return 0;
         }
-        try {
-            auto file = fmt::output_file(output.string());
-            file.print("{}", rendered);
-        } catch (const std::exception &e) {
-            return fail(amc::ErrorCategory::IO, "metadata", "cannot write output", output.string(), e.what());
-        }
+        if (auto err = amc::support::write_text_file(output.string(), rendered))
+            return fail(amc::ErrorCategory::IO, "metadata", "cannot write output", output.string(),
+                amc::support::error_message(std::move(err)));
         return 0;
     }
 }

@@ -670,10 +670,12 @@ add_library(AMC::platform ALIAS amc-platform)
 # AMC helpers (hex/name rendering, JSON text helpers and the structured error
 # envelope).
 add_library(
-    amc-util STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Util/Names.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Util/Json.cpp
-                    ${AMC_SOURCE_DIR}/src/SKL/AMC/Util/Error.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Support/Process.cpp)
+    amc-util
+    STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Util/Names.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Util/Json.cpp
+           ${AMC_SOURCE_DIR}/src/SKL/AMC/Util/Error.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Support/Process.cpp
+           ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Support/File.cpp)
 target_include_directories(amc-util PUBLIC ${AMC_INCLUDE_DIR})
-target_link_libraries(amc-util PUBLIC libabix-format fmt::fmt)
+target_link_libraries(amc-util PUBLIC libabix-format fmt::fmt amc-llvm)
 
 add_library(
     amc-lang STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Lang.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/CodeIn.cpp

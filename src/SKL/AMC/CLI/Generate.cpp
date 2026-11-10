@@ -22,10 +22,10 @@
 #include "SKL/AMC/Core/Core.h"
 #include "SKL/AMC/Diagnostics/Error.h"
 #include "SKL/AMC/Support/CommandLine.h"
+#include "SKL/AMC/Private/Support/File.h"
 #include "SKL/AMC/Support/Language.h"
 #include "SKL/AMC/Util/Error.h"
 
-#include <exception>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -33,7 +33,6 @@
 #include <llvm/Support/CommandLine.h>
 
 #include <fmt/format.h>
-#include <fmt/os.h>
 
 namespace fs = std::filesystem;
 using skl::amc::support::Language;
@@ -76,19 +75,14 @@ int generate_lua(const fs::path &, const fs::path &input, const fs::path &output
     if (!error.empty()) return fail(amc::ErrorCategory::INTERNAL, "generate_lua", error, input.string());
     fs::path destination = output;
     if (destination.extension() != ".hpp" && destination.extension() != ".lua") destination /= "amc_lua_contract.hpp";
-    std::error_code ec;
     if (!destination.parent_path().empty()) {
-        fs::create_directories(destination.parent_path(), ec);
-        if (ec)
+        if (auto err = amc::support::make_directories(destination.parent_path().string()))
             return fail(amc::ErrorCategory::IO, "generate", "cannot create output directory", destination.string(),
-                ec.message());
+                amc::support::error_message(std::move(err)));
     }
-    try {
-        auto file = fmt::output_file(destination.string());
-        file.print("{}", contract);
-    } catch (const std::exception &e) {
-        return fail(amc::ErrorCategory::IO, "generate", "cannot write output", destination.string(), e.what());
-    }
+    if (auto err = amc::support::write_text_file(destination.string(), contract))
+        return fail(amc::ErrorCategory::IO, "generate", "cannot write output", destination.string(),
+            amc::support::error_message(std::move(err)));
     return 0;
 }
 

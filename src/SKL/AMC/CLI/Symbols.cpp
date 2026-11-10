@@ -21,21 +21,19 @@
 #include "SKL/AMC/Diagnostics/Error.h"
 #include "SKL/AMC/Artifact/Metadata.h"
 #include "SKL/AMC/Platform/Symbol.h"
+#include "SKL/AMC/Private/Support/File.h"
 #include "SKL/AMC/Util/Error.h"
 
-#include <exception>
-#include <fstream>
-#include <iterator>
 #include <filesystem>
 
 #include <toml++/toml.h>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <llvm/Support/CommandLine.h>
 
 #include <fmt/format.h>
-#include <fmt/os.h>
 
 namespace fs = std::filesystem;
 using skl::amc::util::fail;
@@ -70,9 +68,11 @@ int cmd_symbols(bool publish) {
 
         if (publish) {
             if (input.empty()) return usage_error("publish requires an input .abix or binary");
-            std::ifstream file(input, std::ios::binary);
-            if (!file) return fail(amc::ErrorCategory::IO, "publish", "cannot open input", input.string());
-            std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+            auto bytes_or = amc::support::read_binary_file(input.string());
+            if (!bytes_or)
+                return fail(amc::ErrorCategory::IO, "publish", "cannot open input", input.string(),
+                    bytes_or.getError().message());
+            std::vector<uint8_t> bytes = std::move(*bytes_or);
             std::string error, key, meta, suffix;
             std::vector<uint8_t> artifact;
             if (amc::is_binary(bytes.data(), bytes.size())) {
@@ -132,9 +132,11 @@ int cmd_symbols(bool publish) {
                 return usage_error("--build-id expects hexadecimal digits");
         } else {
             if (input.empty()) return usage_error("fetch requires a binary or --build-id");
-            std::ifstream file(input, std::ios::binary);
-            if (!file) return fail(amc::ErrorCategory::IO, "fetch", "cannot open input", input.string());
-            std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+            auto bytes_or = amc::support::read_binary_file(input.string());
+            if (!bytes_or)
+                return fail(amc::ErrorCategory::IO, "fetch", "cannot open input", input.string(),
+                    bytes_or.getError().message());
+            std::vector<uint8_t> bytes = std::move(*bytes_or);
             if (!amc::is_binary(bytes.data(), bytes.size()))
                 return fail(amc::ErrorCategory::FORMAT, "fetch", "input is not an ELF or Mach-O binary", input.string(),
                     "pass --build-id to look up by id directly");
@@ -152,12 +154,9 @@ int cmd_symbols(bool publish) {
             fmt::print("{}\n", path);
             return 0;
         }
-        try {
-            auto out = fmt::output_file(output.string());
-            out.print("{}", fmt::string_view(reinterpret_cast<const char *>(artifact.data()), artifact.size()));
-        } catch (const std::exception &e) {
-            return fail(amc::ErrorCategory::IO, "fetch", "cannot write output", output.string(), e.what());
-        }
+        if (auto err = amc::support::write_binary_file(output.string(), artifact))
+            return fail(amc::ErrorCategory::IO, "fetch", "cannot write output", output.string(),
+                amc::support::error_message(std::move(err)));
         fmt::print("fetched {} -> {}\n", path, output.string());
         return 0;
     }

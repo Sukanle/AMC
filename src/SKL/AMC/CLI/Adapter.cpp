@@ -20,9 +20,9 @@
 #include "SKL/AMC/Core/Core.h"
 #include "SKL/AMC/Diagnostics/Error.h"
 #include "SKL/AMC/Artifact/Metadata.h"
+#include "SKL/AMC/Private/Support/File.h"
 #include "SKL/AMC/Util/Error.h"
 
-#include <exception>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -30,7 +30,6 @@
 #include <llvm/Support/CommandLine.h>
 
 #include <fmt/format.h>
-#include <fmt/os.h>
 
 namespace fs = std::filesystem;
 using skl::amc::util::fail;
@@ -87,19 +86,14 @@ int cmd_adapter() {
             fmt::print("{}", text);
             return 0;
         }
-        std::error_code ec;
         if (!output.parent_path().empty()) {
-            fs::create_directories(output.parent_path(), ec);
-            if (ec)
-                return fail(
-                    amc::ErrorCategory::IO, "adapter", "cannot create output directory", output.string(), ec.message());
+            if (auto err = amc::support::make_directories(output.parent_path().string()))
+                return fail(amc::ErrorCategory::IO, "adapter", "cannot create output directory", output.string(),
+                    amc::support::error_message(std::move(err)));
         }
-        try {
-            auto file = fmt::output_file(output.string());
-            file.print("{}", text);
-        } catch (const std::exception &e) {
-            return fail(amc::ErrorCategory::IO, "adapter", "cannot write output", output.string(), e.what());
-        }
+        if (auto err = amc::support::write_text_file(output.string(), text))
+            return fail(amc::ErrorCategory::IO, "adapter", "cannot write output", output.string(),
+                amc::support::error_message(std::move(err)));
         return 0;
     }
 }
