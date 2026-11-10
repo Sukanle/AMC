@@ -6,10 +6,35 @@
 
 namespace skl::amc::support {
 
-// Canonical ABIX owner handle layout. Authored by
-// SKL/ABIX/Interface/OwnerABI.h and exposed as ABIX_OWNER_HANDLE_JSON; AMC
-// mirrors the 64-bit values and derives the 32-bit offsets from the target
-// pointer width instead of hard-coding them at every call site.
+// Canonical ABIX owner handle layout. The C ABI is authored by
+// SKL/ABIX/Interface/OwnerABI.h and its 64-bit layout is published as
+// ABIX_OWNER_HANDLE_JSON. CMake reads that metadata and defines the
+// AMC_ABIX_OWNER_* macros for targets that compile this header; the defaults
+// below keep standalone consumers and 32-bit targets working. 32-bit offsets
+// are derived from the target pointer width because the metadata describes one
+// pointer width only.
+#ifndef AMC_ABIX_OWNER_SIZE
+#  define AMC_ABIX_OWNER_SIZE 32
+#endif
+#ifndef AMC_ABIX_OWNER_ALIGN
+#  define AMC_ABIX_OWNER_ALIGN 8
+#endif
+#ifndef AMC_ABIX_OWNER_OBJECT
+#  define AMC_ABIX_OWNER_OBJECT 0
+#endif
+#ifndef AMC_ABIX_OWNER_MODE
+#  define AMC_ABIX_OWNER_MODE 8
+#endif
+#ifndef AMC_ABIX_OWNER_FLAGS
+#  define AMC_ABIX_OWNER_FLAGS 12
+#endif
+#ifndef AMC_ABIX_OWNER_DESTROY
+#  define AMC_ABIX_OWNER_DESTROY 16
+#endif
+#ifndef AMC_ABIX_OWNER_MODULE_INSTANCE
+#  define AMC_ABIX_OWNER_MODULE_INSTANCE 24
+#endif
+
 struct OwnerHandleLayout {
     uint32_t pointer_size = 8;
     uint32_t size = 32;
@@ -25,13 +50,13 @@ inline OwnerHandleLayout owner_handle_layout(uint32_t pointer_size) {
     OwnerHandleLayout layout;
     layout.pointer_size = pointer_size == 4 ? 4 : 8;
     if (layout.pointer_size == 8) {
-        layout.size = 32;
-        layout.align = 8;
-        layout.object = 0;
-        layout.mode = 8;
-        layout.flags = 12;
-        layout.destroy = 16;
-        layout.module_instance = 24;
+        layout.size = AMC_ABIX_OWNER_SIZE;
+        layout.align = AMC_ABIX_OWNER_ALIGN;
+        layout.object = AMC_ABIX_OWNER_OBJECT;
+        layout.mode = AMC_ABIX_OWNER_MODE;
+        layout.flags = AMC_ABIX_OWNER_FLAGS;
+        layout.destroy = AMC_ABIX_OWNER_DESTROY;
+        layout.module_instance = AMC_ABIX_OWNER_MODULE_INSTANCE;
     } else {
         layout.size = 24;
         layout.align = 8;

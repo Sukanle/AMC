@@ -178,6 +178,101 @@ else()
     string(JOIN ":" AMC_ABIX_INCLUDE_DIRS_ENV ${ABIX_INCLUDE_DIRS})
 endif()
 
+# The canonical owner handle is a C ABI owned by ABIX. The installed package
+# exposes its 64-bit layout as ABIX_OWNER_HANDLE_JSON; read that metadata
+# instead of mirroring the offsets in AMC. A fetched checkout exposes the same
+# file under cmake/owner_handle.json. 32-bit targets still derive offsets from
+# the pointer width because the metadata describes one pointer width only.
+set(AMC_ABIX_OWNER_SIZE 32)
+set(AMC_ABIX_OWNER_ALIGN 8)
+set(AMC_ABIX_OWNER_OBJECT 0)
+set(AMC_ABIX_OWNER_MODE 8)
+set(AMC_ABIX_OWNER_FLAGS 12)
+set(AMC_ABIX_OWNER_DESTROY 16)
+set(AMC_ABIX_OWNER_MODULE_INSTANCE 24)
+set(_amc_owner_json "")
+if(DEFINED ABIX_OWNER_HANDLE_JSON AND EXISTS "${ABIX_OWNER_HANDLE_JSON}")
+    set(_amc_owner_json "${ABIX_OWNER_HANDLE_JSON}")
+elseif(DEFINED abix_SOURCE_DIR AND EXISTS "${abix_SOURCE_DIR}/cmake/owner_handle.json")
+    set(_amc_owner_json "${abix_SOURCE_DIR}/cmake/owner_handle.json")
+endif()
+if(NOT "${_amc_owner_json}" STREQUAL "")
+    file(READ "${_amc_owner_json}" _amc_owner_json_text)
+    string(JSON _amc_owner_size GET "${_amc_owner_json_text}" size)
+    string(JSON _amc_owner_align GET "${_amc_owner_json_text}" align)
+    string(JSON _amc_owner_fields GET "${_amc_owner_json_text}" fields)
+    string(JSON _amc_owner_field_count LENGTH "${_amc_owner_fields}")
+    set(_amc_owner_object "")
+    set(_amc_owner_mode "")
+    set(_amc_owner_flags "")
+    set(_amc_owner_destroy "")
+    set(_amc_owner_module_instance "")
+    if(_amc_owner_field_count GREATER 0)
+        math(EXPR _amc_owner_last_field "${_amc_owner_field_count} - 1")
+        foreach(_amc_owner_field_index RANGE 0 ${_amc_owner_last_field})
+            string(JSON _amc_owner_field_name GET "${_amc_owner_fields}" ${_amc_owner_field_index} name)
+            string(JSON _amc_owner_field_offset GET "${_amc_owner_fields}" ${_amc_owner_field_index} offset)
+            if(_amc_owner_field_name STREQUAL "object")
+                set(_amc_owner_object "${_amc_owner_field_offset}")
+            elseif(_amc_owner_field_name STREQUAL "mode")
+                set(_amc_owner_mode "${_amc_owner_field_offset}")
+            elseif(_amc_owner_field_name STREQUAL "flags")
+                set(_amc_owner_flags "${_amc_owner_field_offset}")
+            elseif(_amc_owner_field_name STREQUAL "destroy")
+                set(_amc_owner_destroy "${_amc_owner_field_offset}")
+            elseif(_amc_owner_field_name STREQUAL "module_instance")
+                set(_amc_owner_module_instance "${_amc_owner_field_offset}")
+            endif()
+        endforeach()
+    endif()
+    if(
+        NOT
+        "${_amc_owner_object}"
+        STREQUAL
+        ""
+        AND
+        NOT
+        "${_amc_owner_mode}"
+        STREQUAL
+        ""
+        AND
+        NOT
+        "${_amc_owner_flags}"
+        STREQUAL
+        ""
+        AND
+        NOT
+        "${_amc_owner_destroy}"
+        STREQUAL
+        ""
+        AND
+        NOT
+        "${_amc_owner_module_instance}"
+        STREQUAL
+        "")
+        set(AMC_ABIX_OWNER_SIZE "${_amc_owner_size}")
+        set(AMC_ABIX_OWNER_ALIGN "${_amc_owner_align}")
+        set(AMC_ABIX_OWNER_OBJECT "${_amc_owner_object}")
+        set(AMC_ABIX_OWNER_MODE "${_amc_owner_mode}")
+        set(AMC_ABIX_OWNER_FLAGS "${_amc_owner_flags}")
+        set(AMC_ABIX_OWNER_DESTROY "${_amc_owner_destroy}")
+        set(AMC_ABIX_OWNER_MODULE_INSTANCE "${_amc_owner_module_instance}")
+        message(STATUS "AMC: owner handle layout from ${_amc_owner_json} (size ${AMC_ABIX_OWNER_SIZE})")
+    else()
+        message(WARNING "AMC: incomplete ABIX owner handle metadata at ${_amc_owner_json}; using built-in layout")
+    endif()
+else()
+    message(STATUS "AMC: ABIX owner handle metadata not found; using built-in layout")
+endif()
+set(AMC_ABIX_OWNER_LAYOUT_DEFS
+    AMC_ABIX_OWNER_SIZE=${AMC_ABIX_OWNER_SIZE}
+    AMC_ABIX_OWNER_ALIGN=${AMC_ABIX_OWNER_ALIGN}
+    AMC_ABIX_OWNER_OBJECT=${AMC_ABIX_OWNER_OBJECT}
+    AMC_ABIX_OWNER_MODE=${AMC_ABIX_OWNER_MODE}
+    AMC_ABIX_OWNER_FLAGS=${AMC_ABIX_OWNER_FLAGS}
+    AMC_ABIX_OWNER_DESTROY=${AMC_ABIX_OWNER_DESTROY}
+    AMC_ABIX_OWNER_MODULE_INSTANCE=${AMC_ABIX_OWNER_MODULE_INSTANCE})
+
 # EPCD owns the stable application-layer error identity. AMC requires Core
 # (ErrorCode / static domains / conditions); Interface is used for registration
 # when the installed or fetched EPCD provides it.
@@ -343,6 +438,7 @@ set_target_properties(
 if(AMC_HAS_EPCD_INTERFACE)
     target_compile_definitions(libabix-format PRIVATE AMC_HAS_EPCD_INTERFACE=1)
 endif()
+target_compile_definitions(libabix-format PRIVATE ${AMC_ABIX_OWNER_LAYOUT_DEFS})
 target_compile_definitions(
     libabix-format
     PRIVATE
@@ -415,6 +511,7 @@ target_include_directories(amc-compilation PUBLIC ${AMC_INCLUDE_DIR})
 target_link_libraries(
     amc-compilation PUBLIC libabix-format libabix-metadata amc-util amc-pass tomlplusplus::tomlplusplus AMC::llvm)
 target_compile_definitions(amc-compilation PRIVATE AMC_DEFAULT_PROVIDERS_FILE="${AMC_SOURCE_DIR}/providers.toml")
+target_compile_definitions(amc-compilation PRIVATE ${AMC_ABIX_OWNER_LAYOUT_DEFS})
 
 add_library(AMC::format ALIAS libabix-format)
 add_library(AMC::abi ALIAS libabix-abi)
@@ -480,6 +577,7 @@ add_executable(
     amc-rust ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Rust/Rust.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Frontend/Rust/Frontend.cpp
     ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/Rust/Backend.cpp)
 target_include_directories(amc-rust PRIVATE ${AMC_INCLUDE_DIR} ${AMC_GENERATED_INCLUDE_DIR})
+target_compile_definitions(amc-rust PRIVATE ${AMC_ABIX_OWNER_LAYOUT_DEFS})
 target_link_libraries(amc-rust PRIVATE amc-core amc-lang amc-llvm fmt::fmt)
 
 add_executable(amc-zig ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Zig/Zig.cpp
