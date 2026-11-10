@@ -8,10 +8,12 @@
 - `OwnerOf*` / `OwnedString*` / `OwnedSpan*` gain safe `from_handle` / `into_handle`; `from_raw` / `into_raw` remain `pub unsafe` escape hatches.
 - `OwnedString*` exposes `as_bytes` / `as_str`; `OwnedSpan*` exposes `as_slice` / `len` / `is_empty`, so consumers no longer need `core::slice::from_raw_parts` or raw-pointer dereferences.
 - Safe facade covers borrowed ABIX-STD views: `&str` parameters become `abix_str_utf8` (UTF-8, zero reserved) and `&[T]` parameters become `abix_span_<T>`, using the Rust borrow's length. String/slice entry points no longer require `unsafe`; returned borrowed views and other raw pointer contracts stay unsafe.
+- Source `&T` / `&mut T` record parameters enter the safe facade as Rust borrows, while raw pointers keep the unsafe contract. `OwnerOf*` gains `as_ref` / `as_mut` so an owned handle can be borrowed without exposing its raw object pointer.
 - Generated `LeaseHost`: validates the ABI version, struct size and `acquire`/`release` entries, then acquires through `guard(module, create)` without raw pointers. `LeaseError` distinguishes `InvalidApi`, `InvalidRegistry`, `AcquireFailed` and `CreateFailed`. The raw `LeaseGuard::acquire` / `adopt` escape hatches remain.
 - Rust helper failures now preserve the first lines of the helper's stderr, so rustc diagnostics (`error[E…]`, location and message) appear in AMC's warning or fatal error instead of a bare exit status.
 - Generated `Owned*::create` uses an internal `from_ptr` helper, and the generated module allows `unused_unsafe`, so including the projection no longer produces nested-unsafe warnings for generated code.
 - `examples/rust/ffi-workspace/`: a real Cargo workspace (provider cdylib + consumer bin) that runs `amc build`, Cargo, `amc generate` and a `#![deny(unsafe_code)]` consumer end to end. `amc-rust-workspace-example-test` runs the workflow in a temporary copy.
+- `tests/interop/opencv/`: an optional OpenCV bridge test. A Rust provider calls a C++ `cv::Mat` shim, AMC owns the `Box<OpencvMat>` handle, and a `#![deny(unsafe_code)]` consumer reads values and a `cv::sum` through the safe facade. The CTest is skipped when OpenCV or pkg-config is unavailable.
 - Provider tests run dedicated `#![deny(unsafe_code)]` consumers for Box and container projections.
 
 ## v0.4.0 — 2026-11-10

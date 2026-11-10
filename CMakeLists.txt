@@ -1035,6 +1035,10 @@ if(AMC_BUILD_TESTS AND AMC_PYTHON_EXECUTABLE)
         NAME amc-lease-interop-test COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/interop/lease/lease_test.py
                                             ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
     add_test(
+        NAME amc-opencv-bridge-test
+        COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/interop/opencv/opencv_bridge_test.py
+                ${CMAKE_BINARY_DIR}/bin ${AMC_SOURCE_DIR})
+    add_test(
         NAME amc-cmake-integration-test
         COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tests/cli/cmake_integration_test.py ${CMAKE_BINARY_DIR}/bin
                 ${AMC_SOURCE_DIR})
@@ -1055,6 +1059,7 @@ if(AMC_BUILD_TESTS AND AMC_PYTHON_EXECUTABLE)
         NAME amc-boundary-edges COMMAND ${AMC_PYTHON_EXECUTABLE} ${AMC_SOURCE_DIR}/tools/check_module_boundaries.py
                                         --strict)
     set_tests_properties(amc-boundary-contracts amc-boundary-edges PROPERTIES TIMEOUT 60)
+    set_tests_properties(amc-opencv-bridge-test PROPERTIES TIMEOUT 180)
 
     set_tests_properties(
         amc-feature-test
@@ -1071,6 +1076,7 @@ if(AMC_BUILD_TESTS AND AMC_PYTHON_EXECUTABLE)
         amc-expose-interop-test
         amc-m7-interop-test
         amc-lease-interop-test
+        amc-opencv-bridge-test
         amc-cmake-integration-test
         amc-elf-pe-metadata-test
         amc-bootstrap-test

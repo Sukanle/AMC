@@ -305,7 +305,7 @@ assert_eq!(container_vec_sum(&[1, 2, 3]), 6);
 assert_eq!(container_points_sum(&[ContainerPoint { x: 1, y: 2 }]), 3);
 ```
 
-`&str` becomes `abix_str_utf8` with UTF-8 encoding, and `&[T]` becomes `abix_span_<T>`; the length comes from the Rust slice and empty slices are passed as a zero-length view. A returned borrowed view and any other raw pointer contract stay `unsafe`, because their lifetime is not proven by the signature.
+`&str` becomes `abix_str_utf8` with UTF-8 encoding, and `&[T]` becomes `abix_span_<T>`; the length comes from the Rust slice and empty slices are passed as a zero-length view. A source `&T` / `&mut T` record parameter also stays a Rust borrow, and `OwnerOf*::as_ref` / `as_mut` borrows the owned payload without exposing `object()`. A returned borrowed view and any raw pointer contract stay `unsafe`, because their lifetime is not proven by the signature.
 
 Lease users get a validated `LeaseHost`, so the guard no longer takes raw pointers:
 

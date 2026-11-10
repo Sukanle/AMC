@@ -305,7 +305,7 @@ assert_eq!(container_vec_sum(&[1, 2, 3]), 6);
 assert_eq!(container_points_sum(&[ContainerPoint { x: 1, y: 2 }]), 3);
 ```
 
-`&str` 转为 UTF-8 编码的 `abix_str_utf8`，`&[T]` 转为 `abix_span_<T>`；长度来自 Rust 切片，空切片传入零长度视图。返回借用视图或其它裸指针契约仍然保持 `unsafe`，因为签名无法证明其生命周期。
+`&str` 转为 UTF-8 编码的 `abix_str_utf8`，`&[T]` 转为 `abix_span_<T>`；长度来自 Rust 切片，空切片传入零长度视图。源码中的 `&T` / `&mut T` record 参数同样保持 Rust 借用，`OwnerOf*::as_ref` / `as_mut` 可在不暴露 `object()` 的情况下借用 owner 载荷。返回借用视图或其它裸指针契约仍然保持 `unsafe`，因为签名无法证明其生命周期。
 
 Lease 用户获得经过校验的 `LeaseHost`，guard 不再直接接收裸指针：
 

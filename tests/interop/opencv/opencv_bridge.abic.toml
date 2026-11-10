@@ -1,0 +1,37 @@
+[package]
+name = "opencv_bridge"
+version = "0.1"
+
+[[import]]
+language = "rust"
+files = ["opencv_bridge.rs"]
+symbols = ["OpencvMat"]
+
+[[adapt]]
+native = "Box"
+target = "abix_owner_OpencvMat"
+
+[[rust.expose]]
+function = "opencv_mat_new"
+
+[[rust.expose]]
+function = "opencv_mat_set"
+
+[[rust.expose]]
+function = "opencv_mat_get"
+
+[[rust.expose]]
+function = "opencv_mat_sum"
+
+[target]
+arch = 0
+os = 0
+abi = 1
+pointer_bits = 64
+endianness = "little"
+
+[thunks]
+output = "opencv_thunks.rs"
+
+[[export]]
+output = "opencv_bridge.abix"

@@ -306,6 +306,40 @@ public:
         return (is_const ? "*const " : "*mut ") + base;
     }
 
+    // Rust borrow type for a source `&T` / `&mut T` parameter. Raw pointers
+    // keep the unsafe contract; only references carry the borrow guarantee.
+    std::string borrowed_ref_type(amc::Hash128 id) const {
+        const int index = index_of(id);
+        if (index < 0) return {};
+        const amc::Type &type = m.types[static_cast<size_t>(index)];
+        if (type.kind != amc::TypeKind::POINTER) return {};
+        const std::string &name = type.name;
+        bool mutable_ref = false;
+        std::string pointee;
+        if (name.rfind("&mut", 0) == 0) {
+            mutable_ref = true;
+            pointee = name.substr(4);
+        } else if (!name.empty() && name[0] == '&') {
+            pointee = name.substr(1);
+        } else {
+            return {};
+        }
+        if (pointee.rfind("mut ", 0) == 0) {
+            mutable_ref = true;
+            pointee = pointee.substr(4);
+        } else if (pointee.rfind("const ", 0) == 0) {
+            pointee = pointee.substr(6);
+        }
+        if (pointee.find('*') != std::string::npos || pointee.find('&') != std::string::npos) return {};
+        const auto found = by_spelling.find(normalise_type_spelling(pointee));
+        if (found == by_spelling.end()) return {};
+        const amc::Type &target = m.types[static_cast<size_t>(found->second)];
+        if (target.kind != amc::TypeKind::RECORD) return {};
+        const std::string base = field_type(target.id);
+        if (base.empty() || base == "()" || base == "core::ffi::c_void") return {};
+        return (mutable_ref ? "&mut " : "&") + base;
+    }
+
     // Rust type of the value a pointer points at (for out-parameters).
     std::string pointer_pointee_rust(const amc::Type &type) const {
         const std::string &n = type.name;
@@ -779,6 +813,19 @@ void emit_owner_views(Output &o, const Projector &p) {
             o.print("            None\n        }} else {{\n            Some(Self {{ raw }})\n        }}\n    }}\n");
             o.print("    /// Escape hatch: the caller must guarantee the raw handle is valid.\n");
             o.print("    pub unsafe fn from_raw(raw: {}) -> Option<Self> {{ Self::from_handle(raw) }}\n", raw_name);
+            const std::string payload = pascal_ident(suffix);
+            o.print("    pub fn as_ref(&self) -> Option<&{}> {{\n", payload);
+            o.print(
+                "        if self.raw.object.is_null() {{ None }} else {{ Some(unsafe {{ &*(self.raw.object as *const "
+                "{}) }}) }}\n",
+                payload);
+            o.print("    }}\n");
+            o.print("    pub fn as_mut(&mut self) -> Option<&mut {}> {{\n", payload);
+            o.print(
+                "        if self.raw.object.is_null() {{ None }} else {{ Some(unsafe {{ &mut *(self.raw.object as *mut "
+                "{}) }}) }}\n",
+                payload);
+            o.print("    }}\n");
             o.print("    pub fn object(&self) -> {} {{ self.raw.object }}\n", p.field_type(object->type_id));
             o.print("    pub fn module_instance(&self) -> u64 {{ self.raw.module_instance as u64 }}\n");
             o.print("    pub fn into_handle(self) -> {} {{\n", raw_name);
@@ -1277,6 +1324,12 @@ void emit_safe_facade(Output &o, const Projector &p) {
             }
             if (p.is_safe_value(parameter.type_id)) {
                 entry.params.push_back({parameter_name, p.field_type(parameter.type_id), parameter_name, {}});
+                continue;
+            }
+            const std::string borrow = p.borrowed_ref_type(parameter.type_id);
+            if (!borrow.empty()) {
+                entry.params.push_back({parameter_name, borrow, parameter_name, {}});
+                has_wrapper = true;
                 continue;
             }
             const BorrowedView view = borrowed_view(p, parameter.type_id);
