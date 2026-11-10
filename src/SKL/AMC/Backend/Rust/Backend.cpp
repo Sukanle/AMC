@@ -851,7 +851,9 @@ impl<O> LeaseGuard<O> {
         }
         let acquire = (*api).acquire?;
         let mut lease = ABIX_LEASE_INVALID;
-        if acquire((*api).host_context, registry, module, &mut lease) != ABIX_SUCCESS {
+        if acquire((*api).host_context, registry, module, &mut lease) != ABIX_SUCCESS
+            || lease == ABIX_LEASE_INVALID
+        {
             return None;
         }
         match create() {
@@ -921,7 +923,7 @@ impl<O> LeaseGuard<O> {
         registry: *mut abix_lease_registry,
         lease: abix_lease,
     ) {
-        if api.is_null() || registry.is_null() || lease == ABIX_LEASE_INVALID {
+        if !Self::valid_api(api) || registry.is_null() || lease == ABIX_LEASE_INVALID {
             return;
         }
         if let Some(release) = (*api).release {

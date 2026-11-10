@@ -350,7 +350,9 @@ public:
         LeaseGuard guard;
         if (!valid_api(api) || registry == nullptr) return guard;
         abix_lease lease = ABIX_LEASE_INVALID;
-        if (api->acquire(api->host_context, registry, module, &lease) != ABIX_SUCCESS) return guard;
+        if (api->acquire(api->host_context, registry, module, &lease) != ABIX_SUCCESS
+            || lease == ABIX_LEASE_INVALID)
+            return guard;
         Owner owner = create();
         if (!owner) {
             api->release(api->host_context, registry, lease);
