@@ -164,6 +164,11 @@ def main():
             header = open(cpp_header, encoding="utf-8").read()
             check("class OwnedStringUtf8" in header and "reinterpret_cast<void (*)(void *)>" in header,
                   "C++ owned string RAII wrapper is generated")
+            check("class OwnedSpanContainerPoint" in header
+                  and "using abix_owned_span_ContainerPoint = ::abix_std::abix_owned_span<void>;" in header,
+                  "C++ arbitrary-element owned span RAII wrapper is generated")
+            check("template <class T> const T *data() const" in header,
+                  "C++ owned span exposes typed data()")
             cxx = os.environ.get("CXX") or shutil.which("clang++") or shutil.which("c++")
             if cxx:
                 cpp_consumer = os.path.join(work, "owner_consumer.cpp")

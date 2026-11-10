@@ -220,13 +220,36 @@ void Emit::owner_views() {
                 "private:\n    {0} _raw{{}};\n}};\n",
                 raw_name, wrapper);
         } else {
-            // ABIX v0.4.0 only defines the int32 owned-span instance in its C
-            // header. Arbitrary element instances need a projection-owned
-            // definition, so their C++ RAII wrapper is a follow-up.
-            if (kind == amc::LoweringKind::OWNED_SPAN && raw_name != "abix_owned_span_i32") continue;
             const amc::Field *view = visible_field(_m, *type, "view");
             const amc::Field *owner = visible_field(_m, *type, "owner");
             if (view == nullptr || owner == nullptr) continue;
+            const amc::Type *view_type = nullptr;
+            for (const auto &candidate : _m.types)
+                if (candidate.id == view->type_id) {
+                    view_type = &candidate;
+                    break;
+                }
+            if (view_type == nullptr || view_type->kind != amc::TypeKind::RECORD) continue;
+
+            // ABIX v0.4.0 only defines the int32 owned-span instance in its C
+            // header. Every other element instance is defined here from the ABI
+            // record, erasing the element type to `void` so the projection
+            // header still compiles without the producer's native header.
+            if (kind == amc::LoweringKind::OWNED_SPAN && raw_name != "abix_owned_span_i32") {
+                const std::string view_name = view_type->name;
+                if (view_name.rfind("abix_span_", 0) != 0) continue;
+                _o.print(
+                    "\n// ABIX owned-span instance `{0}`. The concrete element type is\n"
+                    "// erased at the projection boundary; recover it with data<T>().\n"
+                    "using {1} = ::abix_std::abix_span<void>;\n"
+                    "using {0} = ::abix_std::abix_owned_span<void>;\n"
+                    "static_assert(sizeof({1}) == {2}, \"ABIX owned span view layout changed\");\n"
+                    "static_assert(sizeof({0}) == {3}, \"ABIX owned span layout changed\");\n"
+                    "static_assert(alignof({0}) == {4}, \"ABIX owned span alignment changed\");\n"
+                    "static_assert(offsetof({0}, owner) == sizeof({1}), \"ABIX owned span layout changed\");\n",
+                    raw_name, view_name, view_type->size, type->size, type->align);
+            }
+
             const std::string suffix = kind == amc::LoweringKind::OWNED_STRING
                                          ? suffix_after(raw_name, "abix_owned_str_")
                                          : suffix_after(raw_name, "abix_owned_span_");
@@ -235,6 +258,13 @@ void Emit::owner_views() {
                 wrapper_suffix[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(wrapper_suffix[0])));
             const std::string wrapper =
                 (kind == amc::LoweringKind::OWNED_STRING ? "OwnedString" : "OwnedSpan") + wrapper_suffix;
+            std::string extra;
+            if (kind == amc::LoweringKind::OWNED_SPAN)
+                extra =
+                    "    template <class T> const T *data() const {\n"
+                    "        return reinterpret_cast<const T *>(_raw.view.data);\n"
+                    "    }\n"
+                    "    uint64_t size() const { return _raw.view.len; }\n";
             _o.print(
                 "\n// ABIX owned view `{0}`: borrowed view + owner handle.\n"
                 "class {1} {{\npublic:\n"
@@ -252,11 +282,12 @@ void Emit::owner_views() {
                 "            reinterpret_cast<void (*)(void *)>(_raw.owner.destroy)(_raw.owner.object);\n"
                 "        _raw = {{}};\n    }}\n"
                 "    const {2} &view() const {{ return _raw.view; }}\n"
+                "{3}"
                 "    {0} native_handle() const {{ return _raw; }}\n"
                 "    {0} release() {{ auto raw = _raw; _raw = {{}}; return raw; }}\n"
                 "    explicit operator bool() const {{ return _raw.owner.object != nullptr; }}\n"
                 "private:\n    {0} _raw{{}};\n}};\n",
-                raw_name, wrapper, cpp_type_of(_m, view->type_id));
+                raw_name, wrapper, view_type->name, extra);
         }
     }
 }

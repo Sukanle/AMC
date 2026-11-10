@@ -37,13 +37,16 @@ int Emit::preamble(std::string &error) {
     // proxy class is actually generated.
     bool any_owner_handle = false;
     bool any_owned_string = false;
+    bool any_owned_span = false;
     for (const auto &lowering : _m.lowerings) {
         const auto kind = static_cast<amc::LoweringKind>(lowering.kind);
         if (kind == amc::LoweringKind::OWNER) any_owner_handle = true;
         if (kind == amc::LoweringKind::OWNED_STRING) any_owned_string = true;
+        if (kind == amc::LoweringKind::OWNED_SPAN) any_owned_span = true;
     }
-    if (any_owner_handle || any_owned_string) _o.print("#include <SKL/ABIX/Interface/OwnerABI.h>\n");
+    if (any_owner_handle || any_owned_string || any_owned_span) _o.print("#include <SKL/ABIX/Interface/OwnerABI.h>\n");
     if (any_owned_string) _o.print("#include <SKL/ABIX/STD/OwnedString.h>\n");
+    if (any_owned_span) _o.print("#include <SKL/ABIX/STD/OwnedSpan.h>\n");
 
     bool any_interface_proxy = false;
     for (const auto &record : _m.interfaces)
