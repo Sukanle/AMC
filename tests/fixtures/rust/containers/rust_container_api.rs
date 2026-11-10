@@ -63,3 +63,11 @@ pub fn container_owned_string(value: i32) -> String {
 pub fn container_owned_points(value: i32) -> Vec<ContainerPoint> {
     vec![ContainerPoint { x: value, y: value + 1 }]
 }
+
+pub fn container_take_string(value: String) -> usize {
+    value.len()
+}
+
+pub fn container_take_points(value: Vec<ContainerPoint>) -> i32 {
+    value.iter().map(|point| point.x + point.y).sum()
+}

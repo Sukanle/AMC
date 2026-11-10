@@ -89,6 +89,22 @@ as = "container_owned_string"
 function = "container_owned_points"
 as = "container_owned_points"
 
+[[rust.expose]]
+function = "container_take_string"
+as = "container_take_string"
+
+[[rust.expose]]
+function = "container_take_points"
+as = "container_take_points"
+
+[[contract]]
+function = "container_take_string"
+params = ["owned-view"]
+
+[[contract]]
+function = "container_take_points"
+params = ["owned-view"]
+
 [target]
 arch = 0
 os = 0

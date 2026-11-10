@@ -120,6 +120,8 @@ def main():
             ("container_slice_sum", "abix_span_i32"),
             ("container_points_sum", "abix_span_ContainerPoint"),
             ("container_option_point", "abix_optional_ContainerPoint"),
+            ("container_take_string", "abix_owned_str_utf8"),
+            ("container_take_points", "abix_owned_span_ContainerPoint"),
         ):
             result = run([str(amc), "query", artifact, "--function", function,
                           "--format", "json"])
@@ -368,6 +370,16 @@ fn main() {
               "owned Vec owner.object equals view.data")
         ctypes.CFUNCTYPE(None, ctypes.c_void_p)(owned_span.owner.destroy)(owned_span.owner.object)
 
+        lib.container_take_string.argtypes = [AbixOwnedStr]
+        lib.container_take_string.restype = ctypes.c_size_t
+        check(lib.container_take_string(lib.container_owned_string(7)) == 1,
+              "owned-view String parameter copies before releasing the owner")
+
+        lib.container_take_points.argtypes = [AbixOwnedSpanPoint]
+        lib.container_take_points.restype = ctypes.c_int32
+        check(lib.container_take_points(lib.container_owned_points(5)) == 11,
+              "owned-view Vec parameter copies before releasing the owner")
+
         # A container parameter without a declared mapping still fails closed.
         no_adapt = os.path.join(work, "no_adapt.abic.toml")
         with open(no_adapt, "w", encoding="utf-8") as handle:
@@ -418,6 +430,49 @@ output = "rust_container_no_adapt.abix"
         return_output = output(result)
         check(result.returncode != 0 and "needs an explicit owned contract" in return_output,
               "container return without an owned contract fails closed", return_output[-500:])
+
+        # An owned-view parameter must select an owned boundary, never silently
+        # fall back to the borrowed view.
+        owned_view_bad = os.path.join(work, "owned_view_bad.abic.toml")
+        with open(owned_view_bad, "w", encoding="utf-8") as handle:
+            handle.write("""[package]
+name = "rust_container_owned_view_bad"
+version = "0.1"
+
+[[import]]
+language = "rust"
+files = ["rust_container_api.rs"]
+symbols = ["ContainerApi"]
+
+[[adapt]]
+native = "String"
+target = "abix_str_utf8"
+
+[[contract]]
+function = "container_take_string"
+params = ["owned-view"]
+
+[[rust.expose]]
+function = "container_take_string"
+as = "container_take_string"
+
+[target]
+arch = 0
+os = 0
+abi = 1
+pointer_bits = 64
+endianness = "little"
+
+[thunks]
+output = "owned_view_bad_thunks.rs"
+
+[[export]]
+output = "rust_container_owned_view_bad.abix"
+""")
+        result = run([str(amc), "build", "-c", owned_view_bad, "-B", os.path.join(work, "owned_view_bad_out")])
+        bad_output = output(result)
+        check(result.returncode != 0 and "requires an owned view [[adapt]] target" in bad_output,
+              "owned-view parameter without an owned adapt fails closed", bad_output[-500:])
 
         if keep:
             print("  kept artifacts in " + work)

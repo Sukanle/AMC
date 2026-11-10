@@ -114,7 +114,10 @@ bool resolve_ownership(const toml::table &config, amc::ABIModule &module, std::s
 
 amc::OwnershipMode parse_ownership_mode(const std::string &mode) {
     if (mode == "borrowed" || mode == "borrow") return amc::OwnershipMode::BORROWED;
-    if (mode == "owned") return amc::OwnershipMode::OWNED;
+    // `owned-view` is the ABIX owned-view parameter transport: the callee copies
+    // the payload and releases the caller's allocation through the owner. It is
+    // an owned interaction, not a borrowed one.
+    if (mode == "owned" || mode == "owned-view" || mode == "owned_view") return amc::OwnershipMode::OWNED;
     if (mode == "copy") return amc::OwnershipMode::COPY;
     return amc::OwnershipMode::UNSPECIFIED;
 }

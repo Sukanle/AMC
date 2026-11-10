@@ -806,8 +806,8 @@ std::string compact_spelling(const std::string &text) {
     return out;
 }
 
-const amc::lang::AdaptDecl *find_adapt(
-    const ContainerType &type, const std::vector<amc::lang::AdaptDecl> &adapts, bool return_position) {
+const amc::lang::AdaptDecl *find_adapt(const ContainerType &type, const std::vector<amc::lang::AdaptDecl> &adapts,
+    bool return_position, bool owned_view_parameter = false) {
     for (const auto &adapt : adapts) {
         if (adapt_kind(adapt.native) != type.kind) continue;
         if (adapt_borrowed(adapt.native) != type.borrowed) continue;
@@ -817,8 +817,13 @@ const amc::lang::AdaptDecl *find_adapt(
         if (return_position) {
             // Owned returns must use an owned view; borrowed views would dangle.
             if ((type.kind == ContainerKind::STRING || type.kind == ContainerKind::VEC) && !owned_view) continue;
+        } else if (owned_view_parameter) {
+            // A parameter declared `owned-view` consumes the caller's boundary;
+            // a borrowed view would leave the allocation unreleased or dangle.
+            if (!owned_view) continue;
         } else if (owned_view) {
-            // Owned views are return-only in this version.
+            // Owned views are only selected by return position or an explicit
+            // `[[contract]] params[i] = "owned-view"` declaration.
             continue;
         }
         return &adapt;
@@ -1038,9 +1043,23 @@ std::string owned_span_destroyer_definition(const std::string &element) {
         owned_span_destroyer_name(element), element, element);
 }
 
+std::string container_release_expression(const std::string &var, const std::string &owner_expr) {
+    return fmt::format(
+        "if let Some(__amc_destroy) = {1}.destroy {{ "
+        "if ({1}.mode == 1 || {1}.mode == 2) && !{1}.object.is_null() {{ "
+        "unsafe {{ __amc_destroy({1}.object) }} }} }}",
+        var, owner_expr);
+}
+
 std::string container_adapter_expression(
     const amc::lang::AdaptDecl &adapt, ContainerKind kind, const std::string &var) {
     if (kind == ContainerKind::STRING) {
+        if (amc::support::is_owned_string_name(adapt.target)) {
+            return fmt::format(
+                "{{ let __amc_view = unsafe {{ core::slice::from_raw_parts({0}.view.data, {0}.view.len as usize) }}; "
+                "let __amc_value = String::from_utf8_lossy(__amc_view).into_owned(); {1} __amc_value }}",
+                var, container_release_expression(var, var + ".owner"));
+        }
         if (adapt.native == "String" || adapt.native == "rust.string")
             return fmt::format(
                 "String::from_utf8_lossy(unsafe {{ core::slice::from_raw_parts({}.data, {}.len as usize) }}"
@@ -1051,6 +1070,12 @@ std::string container_adapter_expression(
             var);
     }
     if (kind == ContainerKind::VEC) {
+        if (amc::support::is_owned_span_name(adapt.target)) {
+            return fmt::format(
+                "{{ let __amc_view = unsafe {{ core::slice::from_raw_parts({0}.view.data, {0}.view.len as usize) }}; "
+                "let __amc_value = __amc_view.to_vec(); {1} __amc_value }}",
+                var, container_release_expression(var, var + ".owner"));
+        }
         if (adapt.native == "&[T]")
             return fmt::format("unsafe {{ core::slice::from_raw_parts({}.data, {}.len as usize) }}", var, var);
         return fmt::format("unsafe {{ core::slice::from_raw_parts({}.data, {}.len as usize) }}.to_vec()", var, var);
@@ -2353,12 +2378,36 @@ int run_frontend(const char *config_path, const char *output_path) {
         }
 
         std::vector<const amc::lang::AdaptDecl *> parameter_adapts(source->parameters.size(), nullptr);
+        const amc::lang::ContractDecl *param_contract = find_contract(config, decl.function);
         bool any_adapted = false;
         for (size_t i = 0; i < source->parameters.size(); ++i) {
             const ContainerType type = detect_container(source->parameters[i].type);
-            if (type.kind == ContainerKind::NONE) continue;
-            const amc::lang::AdaptDecl *adapt = find_adapt(type, config.adaptations, false);
-            if (adapt == nullptr) continue;
+            const bool owned_view_parameter = param_contract != nullptr
+                                           && i < param_contract->params.size()
+                                           && param_contract->params[i] == "owned-view";
+            if (type.kind == ContainerKind::NONE) {
+                if (owned_view_parameter) {
+                    fmt::print(stderr, "[[rust.expose]] owned-view parameter '{}' must be String or Vec\n",
+                        spell_type(source->parameters[i].type));
+                    return EXIT_FAILURE;
+                }
+                continue;
+            }
+            if (owned_view_parameter && type.kind != ContainerKind::STRING && type.kind != ContainerKind::VEC) {
+                fmt::print(stderr, "[[rust.expose]] owned-view parameter '{}' must be String or Vec\n",
+                    spell_type(source->parameters[i].type));
+                return EXIT_FAILURE;
+            }
+            const amc::lang::AdaptDecl *adapt = find_adapt(type, config.adaptations, false, owned_view_parameter);
+            if (adapt == nullptr) {
+                if (owned_view_parameter) {
+                    fmt::print(stderr,
+                        "[[rust.expose]] owned-view parameter '{}' requires an owned view [[adapt]] target\n",
+                        spell_type(source->parameters[i].type));
+                    return EXIT_FAILURE;
+                }
+                continue;
+            }
             parameter_adapts[i] = adapt;
             any_adapted = true;
             const std::string element = adapt->element.empty() ? type.element : compact_spelling(adapt->element);
@@ -2397,12 +2446,52 @@ int run_frontend(const char *config_path, const char *output_path) {
                 continue;
             }
             std::string boundary_error;
-            if (!ensure_container_boundary(items, seen_items, adapt->target, type.kind, element, boundary_error)) {
-                fmt::print(stderr, "{}\n", boundary_error);
-                return EXIT_FAILURE;
+            if (owned_view_parameter) {
+                if (type.kind == ContainerKind::STRING) {
+                    if (!owned_string_target(adapt->target)) {
+                        fmt::print(
+                            stderr, "[[rust.expose]] owned-view String parameter requires an abix_owned_str target\n");
+                        return EXIT_FAILURE;
+                    }
+                    if (!ensure_owned_string_item(
+                            items, seen_items, adapt->target, target.pointer_size, boundary_error)) {
+                        fmt::print(stderr, "{}\n", boundary_error);
+                        return EXIT_FAILURE;
+                    }
+                    const std::string view = owned_string_view_name(adapt->target);
+                    if (emitted_boundaries.emplace(view, true).second)
+                        boundary_source += container_boundary_definition(view, ContainerKind::STRING, "");
+                    if (emitted_boundaries.emplace("abix_owner_handle", true).second)
+                        boundary_source += owner_handle_definition("abix_owner_handle");
+                    if (emitted_boundaries.emplace(adapt->target, true).second)
+                        boundary_source += owned_view_definition(adapt->target, view);
+                } else {
+                    if (!owned_span_target(adapt->target)) {
+                        fmt::print(
+                            stderr, "[[rust.expose]] owned-view Vec parameter requires an abix_owned_span target\n");
+                        return EXIT_FAILURE;
+                    }
+                    if (!ensure_owned_span_item(
+                            items, seen_items, adapt->target, element, target.pointer_size, boundary_error)) {
+                        fmt::print(stderr, "{}\n", boundary_error);
+                        return EXIT_FAILURE;
+                    }
+                    const std::string view = owned_span_view_name(adapt->target);
+                    if (emitted_boundaries.emplace(view, true).second)
+                        boundary_source += container_boundary_definition(view, ContainerKind::VEC, element);
+                    if (emitted_boundaries.emplace("abix_owner_handle", true).second)
+                        boundary_source += owner_handle_definition("abix_owner_handle");
+                    if (emitted_boundaries.emplace(adapt->target, true).second)
+                        boundary_source += owned_view_definition(adapt->target, view);
+                }
+            } else {
+                if (!ensure_container_boundary(items, seen_items, adapt->target, type.kind, element, boundary_error)) {
+                    fmt::print(stderr, "{}\n", boundary_error);
+                    return EXIT_FAILURE;
+                }
+                if (emitted_boundaries.emplace(adapt->target, true).second)
+                    boundary_source += container_boundary_definition(adapt->target, type.kind, element);
             }
-            if (emitted_boundaries.emplace(adapt->target, true).second)
-                boundary_source += container_boundary_definition(adapt->target, type.kind, element);
         }
         const ContainerType return_container = detect_container(source->return_type);
         const amc::lang::AdaptDecl *return_adapt = nullptr;
