@@ -256,7 +256,14 @@ output = "rust_box_owner.abix"
 class Owner(ctypes.Structure):
     _fields_ = [("object", ctypes.c_void_p), ("mode", ctypes.c_uint32), ("flags", ctypes.c_uint32),
                 ("destroy", ctypes.c_void_p), ("module_instance", ctypes.c_uint64)]
-lib = ctypes.CDLL(os.path.join(os.path.dirname(__file__), 'lib' + 'rust_box_owner' + ('.dylib' if sys.platform == 'darwin' else '.so')))
+base = 'rust_box_owner'
+if sys.platform == 'win32':
+    module = base + '.dll'
+elif sys.platform == 'darwin':
+    module = 'lib' + base + '.dylib'
+else:
+    module = 'lib' + base + '.so'
+lib = ctypes.CDLL(os.path.join(os.path.dirname(os.path.abspath(__file__)), module))
 lib.amc_module_set_instance.argtypes = [ctypes.c_uint64]
 lib.amc_module_set_instance(0x5A5A)
 lib.box_widget_make.argtypes = [ctypes.c_int32]
@@ -276,8 +283,11 @@ assert lib.box_widget_live() == 0
 print('owner box: OK')
 """)
                 env = dict(os.environ)
-                env["LD_LIBRARY_PATH"] = owner_dir + os.pathsep + env.get("LD_LIBRARY_PATH", "")
-                env["DYLD_LIBRARY_PATH"] = owner_dir + os.pathsep + env.get("DYLD_LIBRARY_PATH", "")
+                if sys.platform == "win32":
+                    env["PATH"] = owner_dir + os.pathsep + env.get("PATH", "")
+                else:
+                    env["LD_LIBRARY_PATH"] = owner_dir + os.pathsep + env.get("LD_LIBRARY_PATH", "")
+                    env["DYLD_LIBRARY_PATH"] = owner_dir + os.pathsep + env.get("DYLD_LIBRARY_PATH", "")
                 result = run([sys.executable, owner_consumer], env=env)
                 check(result.returncode == 0 and "owner box: OK" in output(result),
                       "owner handle create/consume/destroy runs", output(result)[-500:])

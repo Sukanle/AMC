@@ -15,7 +15,9 @@
 #  if !defined(_WIN32)
 #    define O_BINARY 0
 #  else
-#    define O_BINARY 0x8000   // MinGW-gcc
+#    ifndef O_BINARY
+#      define O_BINARY 0x8000   // MinGW-gcc
+#    endif
 #  endif
 #else
 #  include <io.h>
