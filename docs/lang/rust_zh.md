@@ -83,7 +83,7 @@ mod demo_thunks;
 
 ### 可选 rustc helper（v0.4.0）
 
-v0.4.0 的 helper 进程在独立进程中链接 `rustc_driver`。它报告 target/crate 事实，遍历嵌套 module 和 impl，提取 `repr(C)` / `repr(transparent)` / packed / union 记录、具体泛型实例、public `extern "C"` 函数、泛型声明、traits/impls 和 `Result` error enum，并输出稳定的 `amc.rust.semantic/1` envelope。存在 Cargo manifest 时还会从 `cargo metadata` 填充 workspace 与 feature 事实。AMC 将 helper 的 types/functions 导入 ABIX/Semantic IR，并与源码 parser 交叉校验布局。构建需要带 `rustc-dev` 的 Rust toolchain。`cmake -DAMC_BUILD_RUST_HELPER=ON` 会用 Cargo 把 `tools/rustc-helper/` 构建到 build 目录并安装到 `amc` 旁边；不开启该选项时，helper 测试会按需自行构建。
+v0.4.0 的 helper 进程在独立进程中链接 `rustc_driver`。它报告 target/crate 事实，遍历嵌套 module 和 impl，提取 `repr(C)` / `repr(transparent)` / packed / union 记录、具体泛型实例、public `extern "C"` 函数、泛型声明、traits/impls 和 `Result` error enum，并输出稳定的 `amc.rust.semantic/1` envelope。存在 Cargo manifest 时还会从 `cargo metadata` 填充 workspace 与 feature 事实。AMC 将 helper 的 types/functions 导入 ABIX/Semantic IR，并与源码 parser 交叉校验布局。构建需要带 `rustc-dev` 的 Rust toolchain。`cmake -DAMC_BUILD_RUST_HELPER=ON` 会用 Cargo 把 `tools/rustc-helper/` 构建到 build 目录并安装到 `amc` 旁边；不开启该选项时，helper 测试会按需自行构建。 v0.4.0 在 Linux 上验证 helper；Windows/macOS 的 helper 验证与预编译分发属于 v0.4.x。
 
 ```toml
 [rust]
