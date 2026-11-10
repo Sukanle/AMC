@@ -275,6 +275,28 @@ macro_rules! amc_ffi {
 
 `Owned*` RAII methods and typed `Result` wrappers also use `amc_ffi!`, so the generated unsafe block is centralised. The ABI itself is still explicit: the `raw` module and `ABIX_*` constants remain available to advanced consumers.
 
+The projection also emits an additive `pub mod safe` facade. It validates owner handles, accepts `OwnerOf*` / `OwnedString*` / `OwnedSpan*` wrappers instead of raw handles, and returns `Result<_, OwnerError>` for owner-producing calls. A consumer crate can therefore compile with `#![deny(unsafe_code)]` and still call the generated API:
+
+```rust
+#![deny(unsafe_code)]
+use skl::abix::safe::*;
+
+let owner = box_widget_make(7)?;
+assert_eq!(box_widget_value(owner), 7);
+```
+
+Owned views expose safe accessors:
+
+```rust
+let text = container_owned_string(7)?;
+assert_eq!(text.as_str()?, "7");
+
+let points = container_owned_points(5)?;
+assert_eq!(points.as_slice()[0].x, 5);
+```
+
+The root API is unchanged for v0.4.0 consumers. `from_raw` / `into_raw` remain as `pub unsafe` escape hatches on the owner and owned-view wrappers; the safe facade uses `from_handle` / `into_handle` internally. The generated module carries `#![allow(unsafe_code)]`, so the consumer's `deny(unsafe_code)` does not fire on the generated implementation.
+
 ## Example
 
 ```rust

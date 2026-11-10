@@ -275,6 +275,28 @@ macro_rules! amc_ffi {
 
 `Owned*` RAII 方法和带类型的 `Result` 包装也使用 `amc_ffi!`，因此生成的 unsafe 块集中在一处。ABI 本身仍然显式：高级消费者仍可直接使用 `raw` 模块和 `ABIX_*` 常量。
 
+投影还会增量生成 `pub mod safe` 安全 facade：它校验 owner handle，用 `OwnerOf*` / `OwnedString*` / `OwnedSpan*` 包装代替裸 handle，并为产生 owner 的调用返回 `Result<_, OwnerError>`。因此消费者 crate 可以启用 `#![deny(unsafe_code)]` 并继续调用生成的 API：
+
+```rust
+#![deny(unsafe_code)]
+use skl::abix::safe::*;
+
+let owner = box_widget_make(7)?;
+assert_eq!(box_widget_value(owner), 7);
+```
+
+Owned view 提供安全访问器：
+
+```rust
+let text = container_owned_string(7)?;
+assert_eq!(text.as_str()?, "7");
+
+let points = container_owned_points(5)?;
+assert_eq!(points.as_slice()[0].x, 5);
+```
+
+根 API 对 v0.4.0 消费者保持不变。owner 与 owned-view 包装上的 `from_raw` / `into_raw` 仍作为 `pub unsafe` 逃生口保留；安全 facade 内部使用 `from_handle` / `into_handle`。生成模块自身带有 `#![allow(unsafe_code)]`，因此消费者的 `deny(unsafe_code)` 不会被生成的实现触发。
+
 ## 示例
 
 ```rust

@@ -710,6 +710,36 @@ const amc::Field *find_visible_field(const amc::ABIModule &module, const amc::Ty
     return nullptr;
 }
 
+std::string safe_wrapper_name(const Projector &p, amc::Hash128 id) {
+    for (const auto &lowering : p.m.lowerings) {
+        if (lowering.type_id.lo != id.lo || lowering.type_id.hi != id.hi) continue;
+        const auto kind = static_cast<amc::LoweringKind>(lowering.kind);
+        if (kind != amc::LoweringKind::OWNER
+            && kind != amc::LoweringKind::OWNED_STRING
+            && kind != amc::LoweringKind::OWNED_SPAN)
+            continue;
+        const int index = p.index_of(id);
+        if (index < 0) continue;
+        const std::string raw_name = p.m.types[static_cast<size_t>(index)].name;
+        std::string suffix = raw_name;
+        std::string prefix;
+        std::string wrapper_prefix;
+        if (kind == amc::LoweringKind::OWNER) {
+            prefix = "abix_owner_";
+            wrapper_prefix = "OwnerOf";
+        } else if (kind == amc::LoweringKind::OWNED_STRING) {
+            prefix = "abix_owned_str_";
+            wrapper_prefix = "OwnedString";
+        } else {
+            prefix = "abix_owned_span_";
+            wrapper_prefix = "OwnedSpan";
+        }
+        if (suffix.rfind(prefix, 0) == 0) suffix = suffix.substr(prefix.size());
+        return wrapper_prefix + pascal_ident(suffix);
+    }
+    return {};
+}
+
 void emit_owner_views(Output &o, const Projector &p) {
     if (p.m.lowerings.empty()) return;
     std::set<std::string> emitted;
@@ -742,15 +772,19 @@ void emit_owner_views(Output &o, const Projector &p) {
             const std::string wrapper = "OwnerOf" + pascal_ident(suffix);
             o.print("pub struct {} {{\n    raw: {},\n}}\n", wrapper, raw_name);
             o.print("impl {} {{\n", wrapper);
-            o.print("    pub unsafe fn from_raw(raw: {}) -> Option<Self> {{\n", raw_name);
+            o.print("    pub fn from_handle(raw: {}) -> Option<Self> {{\n", raw_name);
             o.print(
                 "        if raw.object.is_null() || (raw.mode != 1 && raw.mode != 2) || raw.destroy.is_null() {{\n");
             o.print("            None\n        }} else {{\n            Some(Self {{ raw }})\n        }}\n    }}\n");
+            o.print("    /// Escape hatch: the caller must guarantee the raw handle is valid.\n");
+            o.print("    pub unsafe fn from_raw(raw: {}) -> Option<Self> {{ Self::from_handle(raw) }}\n", raw_name);
             o.print("    pub fn object(&self) -> {} {{ self.raw.object }}\n", p.field_type(object->type_id));
             o.print("    pub fn module_instance(&self) -> u64 {{ self.raw.module_instance as u64 }}\n");
-            o.print("    pub fn into_raw(self) -> {} {{\n", raw_name);
-            o.print("        let raw = unsafe {{ core::ptr::read(&self.raw) }};\n");
-            o.print("        core::mem::forget(self);\n        raw\n    }}\n}}\n");
+            o.print("    pub fn into_handle(self) -> {} {{\n", raw_name);
+            o.print("        let this = core::mem::ManuallyDrop::new(self);\n");
+            o.print("        unsafe {{ core::ptr::read(&this.raw) }}\n    }}\n");
+            o.print("    /// Escape hatch: transfers the raw handle without validation.\n");
+            o.print("    pub unsafe fn into_raw(self) -> {} {{ self.into_handle() }}\n}}\n", raw_name);
             o.print("impl Drop for {} {{\n", wrapper);
             o.print("    fn drop(&mut self) {{\n");
             o.print("        if !self.raw.destroy.is_null() && (self.raw.mode == 1 || self.raw.mode == 2) {{\n");
@@ -770,16 +804,56 @@ void emit_owner_views(Output &o, const Projector &p) {
             const std::string view_type = p.field_type(view->type_id);
             o.print("pub struct {} {{\n    raw: {},\n}}\n", wrapper, raw_name);
             o.print("impl {} {{\n", wrapper);
-            o.print("    pub unsafe fn from_raw(raw: {}) -> Option<Self> {{\n", raw_name);
+            o.print("    pub fn from_handle(raw: {}) -> Option<Self> {{\n", raw_name);
             o.print("        if raw.owner.object.is_null()\n");
             o.print("            || (raw.owner.mode != 1 && raw.owner.mode != 2)\n");
             o.print("            || raw.owner.destroy.is_null()\n        {{\n");
             o.print("            None\n        }} else {{\n            Some(Self {{ raw }})\n        }}\n    }}\n");
+            o.print("    /// Escape hatch: the caller must guarantee the raw handle is valid.\n");
+            o.print("    pub unsafe fn from_raw(raw: {}) -> Option<Self> {{ Self::from_handle(raw) }}\n", raw_name);
             o.print("    pub fn view(&self) -> &{} {{ &self.raw.view }}\n", view_type);
             o.print("    pub fn module_instance(&self) -> u64 {{ self.raw.owner.module_instance as u64 }}\n");
-            o.print("    pub fn into_raw(self) -> {} {{\n", raw_name);
-            o.print("        let raw = unsafe {{ core::ptr::read(&self.raw) }};\n");
-            o.print("        core::mem::forget(self);\n        raw\n    }}\n}}\n");
+            const int view_index = p.index_of(view->type_id);
+            const amc::Field *data = nullptr;
+            const amc::Field *length = nullptr;
+            if (view_index >= 0) {
+                data = find_visible_field(p.m, p.m.types[static_cast<size_t>(view_index)], "data");
+                length = find_visible_field(p.m, p.m.types[static_cast<size_t>(view_index)], "len");
+            }
+            if (data != nullptr && length != nullptr) {
+                const int data_index = p.index_of(data->type_id);
+                const std::string element = data_index >= 0
+                                              ? p.pointer_pointee_rust(p.m.types[static_cast<size_t>(data_index)])
+                                              : std::string("u8");
+                if (kind == amc::LoweringKind::OWNED_STRING) {
+                    o.print("    /// Borrowed bytes of the owned string; the length comes from the ABI view.\n");
+                    o.print("    pub fn as_bytes(&self) -> &[{}] {{\n", element);
+                    o.print("        let data = self.raw.view.{}.cast::<{}>();\n", data->name, element);
+                    o.print("        let len = self.raw.view.{} as usize;\n", length->name);
+                    o.print(
+                        "        if data.is_null() || len == 0 {{ &[] }} else {{ unsafe {{ "
+                        "core::slice::from_raw_parts(data, len) }} }}\n    }}\n");
+                    o.print("    /// Validated UTF-8 view of the owned string.\n");
+                    o.print(
+                        "    pub fn as_str(&self) -> Result<&str, core::str::Utf8Error> {{ "
+                        "core::str::from_utf8(self.as_bytes()) }}\n");
+                } else {
+                    o.print("    /// Borrowed elements of the owned span; the length comes from the ABI view.\n");
+                    o.print("    pub fn as_slice(&self) -> &[{}] {{\n", element);
+                    o.print("        let data = self.raw.view.{}.cast::<{}>();\n", data->name, element);
+                    o.print("        let len = self.raw.view.{} as usize;\n", length->name);
+                    o.print(
+                        "        if data.is_null() || len == 0 {{ &[] }} else {{ unsafe {{ "
+                        "core::slice::from_raw_parts(data, len) }} }}\n    }}\n");
+                    o.print("    pub fn len(&self) -> usize {{ self.raw.view.{} as usize }}\n", length->name);
+                    o.print("    pub fn is_empty(&self) -> bool {{ self.len() == 0 }}\n");
+                }
+            }
+            o.print("    pub fn into_handle(self) -> {} {{\n", raw_name);
+            o.print("        let this = core::mem::ManuallyDrop::new(self);\n");
+            o.print("        unsafe {{ core::ptr::read(&this.raw) }}\n    }}\n");
+            o.print("    /// Escape hatch: transfers the raw handle without validation.\n");
+            o.print("    pub unsafe fn into_raw(self) -> {} {{ self.into_handle() }}\n}}\n", raw_name);
             o.print("impl Drop for {} {{\n", wrapper);
             o.print("    fn drop(&mut self) {{\n");
             o.print("        if !self.raw.owner.destroy.is_null()\n");
@@ -1019,6 +1093,116 @@ impl<O> Drop for LeaseGuard<O> {
     substitute("@LEASE_ACQUIRE_OFFSET@", AMC_ABIX_LEASE_ACQUIRE_OFFSET);
     substitute("@LEASE_RELEASE_OFFSET@", AMC_ABIX_LEASE_RELEASE_OFFSET);
     o.print("{}", source);
+}
+
+void emit_safe_facade(Output &o, const Projector &p) {
+    struct SafeParam {
+        std::string name;
+        std::string type;
+        std::string arg;
+    };
+    struct SafeFunction {
+        const amc::Function *function = nullptr;
+        std::vector<SafeParam> params;
+        std::string return_type;
+        std::string wrapper_return;
+        bool returns_void = false;
+    };
+    std::vector<SafeFunction> functions;
+    std::vector<std::string> reexports;
+    for (const auto &function : p.m.functions) {
+        if (function.owner_type.lo != 0 || function.owner_type.hi != 0) continue;
+        SafeFunction entry;
+        entry.function = &function;
+        entry.returns_void = false;
+        bool has_wrapper = false;
+        bool eligible = true;
+        for (size_t i = 0; i < function.params.size(); ++i) {
+            const auto &parameter = function.params[i];
+            const std::string parameter_name =
+                parameter.name.empty() ? fmt::format("arg{}", i) : rust_field_ident(parameter.name);
+            const std::string wrapper = safe_wrapper_name(p, parameter.type_id);
+            if (!wrapper.empty()) {
+                entry.params.push_back({parameter_name, wrapper, parameter_name + ".into_handle()"});
+                has_wrapper = true;
+            } else if (p.is_safe_value(parameter.type_id)) {
+                entry.params.push_back({parameter_name, p.field_type(parameter.type_id), parameter_name});
+            } else {
+                eligible = false;
+                break;
+            }
+        }
+        if (!eligible) continue;
+        const int return_index = p.index_of(function.return_type);
+        if (return_index >= 0) {
+            const amc::Type &result = p.m.types[static_cast<size_t>(return_index)];
+            entry.returns_void =
+                result.kind == amc::TypeKind::PRIMITIVE
+                && (result.primitive_abi & 0xffu) == static_cast<uint32_t>(amc::PrimitiveABIKind::AMC_VOID);
+        }
+        if (!entry.returns_void) {
+            const std::string wrapper = safe_wrapper_name(p, function.return_type);
+            if (!wrapper.empty()) {
+                entry.wrapper_return = wrapper;
+                entry.return_type = wrapper;
+                has_wrapper = true;
+            } else if (p.is_safe_value(function.return_type)) {
+                entry.return_type = p.field_type(function.return_type);
+            } else {
+                continue;
+            }
+        }
+        if (!has_wrapper) {
+            if (p.is_safe_function(function)) reexports.push_back(rust_ident(function.name));
+            continue;
+        }
+        functions.push_back(std::move(entry));
+    }
+    if (functions.empty() && reexports.empty()) return;
+
+    o.print("\n// Safe facade: the public surface avoids raw handles and unsafe blocks.\n");
+    o.print("pub mod safe {{\n    use super::*;\n");
+    if (!reexports.empty()) {
+        o.print("    pub use super::{{");
+        for (size_t i = 0; i < reexports.size(); ++i) {
+            if (i != 0) o.print(", ");
+            o.print("{}", reexports[i]);
+        }
+        o.print("}};\n");
+    }
+    if (!functions.empty())
+        o.print(
+            "    #[derive(Debug, Clone, Copy, PartialEq, Eq)]\n"
+            "    pub enum OwnerError {{ InvalidHandle }}\n");
+    for (const auto &entry : functions) {
+        const amc::Function &function = *entry.function;
+        const std::string name = rust_ident(function.name);
+        o.print("    /// Safe wrapper for `{}`: owners are validated, raw handles stay private.\n", function.name);
+        o.print("    #[inline]\n    pub fn {}(", name);
+        for (size_t i = 0; i < entry.params.size(); ++i) {
+            if (i != 0) o.print(", ");
+            o.print("{}: {}", entry.params[i].name, entry.params[i].type);
+        }
+        o.print(")");
+        if (entry.wrapper_return.empty() && !entry.returns_void) o.print(" -> {}", entry.return_type);
+        if (!entry.wrapper_return.empty()) o.print(" -> Result<{}, OwnerError>", entry.wrapper_return);
+        o.print(" {{\n        ");
+        std::string args;
+        for (size_t i = 0; i < entry.params.size(); ++i) {
+            if (i != 0) args += ", ";
+            args += entry.params[i].arg;
+        }
+        if (!entry.wrapper_return.empty()) {
+            o.print("{}::from_handle(unsafe {{ super::{}({}) }}).ok_or(OwnerError::InvalidHandle)\n",
+                entry.wrapper_return, name, args);
+        } else if (entry.returns_void) {
+            o.print("unsafe {{ super::{}({}) }};\n", name, args);
+        } else {
+            o.print("unsafe {{ super::{}({}) }}\n", name, args);
+        }
+        o.print("    }}\n");
+    }
+    o.print("}}\n");
 }
 
 void emit_capability_contracts(Output &o, const Projector &p) {
@@ -1525,7 +1709,9 @@ std::string generate_projection(const amc::ABIModule &module, const amc::ir::Low
     o.print(AMC_GENERATED_FILE_WARNING("//"));
     o.print("// ABI: {} {} (arch={}, os={}, abi={})\n", module.package_name, module.package_version, module.arch,
         module.os, module.target_abi);
-    o.print("#![allow(non_camel_case_types, non_snake_case, non_upper_case_globals, dead_code, unused_imports)]\n");
+    o.print(
+        "#![allow(non_camel_case_types, non_snake_case, non_upper_case_globals, dead_code, unused_imports, "
+        "unsafe_code)]\n");
     o.print("#![allow(unexpected_cfgs, unknown_lints)]\n");
     o.print("use core::ffi;\n\n");
     o.print("pub const ABIX_PACKAGE_NAME: &str = {};\n", rust_string(module.package_name));
@@ -1548,6 +1734,7 @@ std::string generate_projection(const amc::ABIModule &module, const amc::ir::Low
     emit_owned(o, projector);
     emit_owner_views(o, projector);
     emit_lease_guard(o, projector);
+    emit_safe_facade(o, projector);
     emit_capability_contracts(o, projector);
     emit_interface_proxies(o, projector);
     emit_error_sets(o, projector);

@@ -149,8 +149,12 @@ def main():
         result = run([str(amc), "generate", artifact, "-l", "rust", "-o", gen])
         if check(result.returncode == 0, "owned view Rust projection generated", output(result)[-400:]):
             projection = open(os.path.join(gen, "amc_generated.rs"), encoding="utf-8").read()
-            check("pub struct OwnedStringUtf8" in projection and "pub struct OwnedSpanContainerPoint" in projection,
+            check("pub struct OwnedStringUtf8" in projection and "pub struct OwnedSpanContainerPoint" in projection
+                  and "pub fn from_handle" in projection and "pub fn into_handle" in projection,
                   "owned view RAII wrappers are generated")
+            check("pub mod safe" in projection and "pub fn container_owned_string" in projection
+                  and "pub fn container_take_points" in projection,
+                  "safe owned view facade is generated")
             check("impl Drop for OwnedStringUtf8" in projection and "owner.destroy" in projection,
                   "owned view Drop calls the owner destroy")
 
@@ -285,6 +289,55 @@ fn main() {
             result = run([owner_consumer_bin], env=env)
             check(result.returncode == 0 and "owned views: OK" in output(result),
                   "owned view RAII wrappers release through the owner", output(result)[-500:])
+
+        safe_consumer = os.path.join(work, "safe_owner_consumer.rs")
+        with open(safe_consumer, "w", encoding="utf-8") as handle:
+            handle.write("""#![deny(unsafe_code)]
+#[path = "gen_owner/amc_generated.rs"]
+pub mod abix;
+
+mod skl {
+    pub use crate::abix;
+}
+use skl::abix::safe::*;
+
+fn main() {
+    let string = container_owned_string(7).expect("owned string");
+    assert_eq!(string.as_bytes(), b"7");
+    assert_eq!(string.as_str().expect("utf-8"), "7");
+    drop(string);
+
+    let span = container_owned_points(5).expect("owned span");
+    assert_eq!(span.len(), 1);
+    assert_eq!(span.as_slice()[0].x, 5);
+    assert_eq!(span.as_slice()[0].y, 6);
+    drop(span);
+
+    let numbers = container_owned_numbers(3).expect("owned i32 span");
+    assert_eq!(numbers.len(), 2);
+    assert_eq!(numbers.as_slice(), &[3, 4]);
+    drop(numbers);
+
+    let taken = container_owned_string(12345).expect("owned string");
+    assert_eq!(container_take_string(taken), 5);
+
+    let points = container_owned_points(5).expect("owned span");
+    assert_eq!(container_take_points(points), 11);
+    println!("safe owned views: OK");
+}
+""")
+        safe_consumer_bin = os.path.join(work, exe("safe_owner_consumer"))
+        result = run([rustc, "--edition", "2021", safe_consumer, "-o", safe_consumer_bin] + link)
+        if check(result.returncode == 0, "safe owned view consumer compiled", output(result)[-500:]):
+            env = dict(os.environ)
+            if sys.platform == "win32":
+                env["PATH"] = work + os.pathsep + env.get("PATH", "")
+            else:
+                env["LD_LIBRARY_PATH"] = work + os.pathsep + env.get("LD_LIBRARY_PATH", "")
+                env["DYLD_LIBRARY_PATH"] = work + os.pathsep + env.get("DYLD_LIBRARY_PATH", "")
+            result = run([safe_consumer_bin], env=env)
+            check(result.returncode == 0 and "safe owned views: OK" in output(result),
+                  "safe owned view facade runs without unsafe", output(result)[-500:])
 
         class AbixStr(ctypes.Structure):
             _fields_ = [("data", ctypes.POINTER(ctypes.c_uint8)),

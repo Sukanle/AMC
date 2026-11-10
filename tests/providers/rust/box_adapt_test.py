@@ -239,8 +239,12 @@ output = "rust_box_owner.abix"
             if check(result.returncode == 0, "owner Box Rust projection generated", output(result)[-400:]):
                 owner_projection = open(os.path.join(owner_gen, "amc_generated.rs"), encoding="utf-8").read()
                 check("pub struct OwnerOfBoxWidget" in owner_projection
-                      and "impl Drop for OwnerOfBoxWidget" in owner_projection,
+                      and "impl Drop for OwnerOfBoxWidget" in owner_projection
+                      and "pub fn from_handle" in owner_projection
+                      and "pub fn into_handle" in owner_projection,
                       "owner handle RAII wrapper is generated")
+                check("pub mod safe" in owner_projection and "pub fn box_widget_make" in owner_projection,
+                      "safe owner facade is generated")
 
             owner_root = os.path.join(owner_dir, "provider.rs")
             with open(owner_root, "w", encoding="utf-8") as handle:
@@ -291,6 +295,41 @@ print('owner box: OK')
                 result = run([sys.executable, owner_consumer], env=env)
                 check(result.returncode == 0 and "owner box: OK" in output(result),
                       "owner handle create/consume/destroy runs", output(result)[-500:])
+
+            safe_consumer = os.path.join(owner_dir, "safe_consumer.rs")
+            with open(safe_consumer, "w", encoding="utf-8") as handle:
+                handle.write("""#![deny(unsafe_code)]
+#[path = "gen/amc_generated.rs"]
+pub mod abix;
+
+mod skl {
+    pub use crate::abix;
+}
+use skl::abix::safe::*;
+
+fn main() {
+    let owner = box_widget_make(7).expect("owner");
+    assert_eq!(box_widget_live(), 1);
+    assert_eq!(box_widget_value(owner), 7);
+    assert_eq!(box_widget_live(), 0);
+    println!("safe owner: OK");
+}
+""")
+            safe_bin = os.path.join(owner_dir, exe("safe_consumer"))
+            link = ["-L", "native=" + owner_dir, "-l", "dylib=rust_box_owner"]
+            if sys.platform != "win32":
+                link += ["-C", "link-arg=-Wl,-rpath," + owner_dir]
+            result = run([rustc, "--edition", "2021", safe_consumer, "-o", safe_bin] + link)
+            if check(result.returncode == 0, "safe owner consumer compiled", output(result)[-600:]):
+                env = dict(os.environ)
+                if sys.platform == "win32":
+                    env["PATH"] = owner_dir + os.pathsep + env.get("PATH", "")
+                else:
+                    env["LD_LIBRARY_PATH"] = owner_dir + os.pathsep + env.get("LD_LIBRARY_PATH", "")
+                    env["DYLD_LIBRARY_PATH"] = owner_dir + os.pathsep + env.get("DYLD_LIBRARY_PATH", "")
+                result = run([safe_bin], env=env)
+                check(result.returncode == 0 and "safe owner: OK" in output(result),
+                      "safe owner facade runs without unsafe", output(result)[-600:])
 
             cpp_header = os.path.join(owner_dir, "owner_gen.hpp")
             result = run([str(amc), "generate", owner_artifact, "-l", "cpp", "-o", cpp_header])
