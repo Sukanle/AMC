@@ -56,7 +56,7 @@ def main() -> int:
                 "cmake_minimum_required(VERSION 3.20)\n"
                 "project(amc_package_consumer LANGUAGES CXX)\n"
                 "set(CMAKE_CXX_STANDARD 17)\n"
-                "find_package(AMC 0.1 CONFIG REQUIRED)\n"
+                "find_package(AMC 0.4 CONFIG REQUIRED)\n"
                 "add_library(amc_cmake_consumer STATIC consumer.cpp)\n"
                 "amc_add_abi(\n"
                 "  TARGET amc_cmake_consumer\n"

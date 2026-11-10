@@ -9,7 +9,7 @@ project(AMC VERSION 0.4.0 LANGUAGES C CXX)
 #     -DABIX_DIR=<prefix>/lib/cmake/ABIX \
 #     -DCMAKE_PREFIX_PATH=<prefix>;/path/to/llvm;/path/to/fmt;/path/to/tomlplusplus
 #
-# Only ABIX is fetched automatically: when no ABIX 0.3 package is found, the
+# Only ABIX is fetched automatically: when no ABIX 0.4.0 package is found, the
 # build clones ABIX with its submodules into ./dependencies and configures it
 # as a runtime-only subproject. LLVM/Clang, fmt and toml++ are expected to be
 # installed by the user; AMC uses the versions already present on the system.
@@ -113,12 +113,12 @@ if(NOT ABIX_FOUND)
     if(EXISTS "${AMC_DEPENDENCIES_DIR}/ABIX/CMakeLists.txt")
         message(
             STATUS
-                "ABIX 0.3 package not found; using existing checkout at ${AMC_DEPENDENCIES_DIR}/ABIX (delete it to refetch)"
+                "ABIX 0.4.0 package not found; using existing checkout at ${AMC_DEPENDENCIES_DIR}/ABIX (delete it to refetch)"
         )
         set(abix_SOURCE_DIR "${AMC_DEPENDENCIES_DIR}/ABIX")
         set(abix_BINARY_DIR "${CMAKE_BINARY_DIR}/abix")
     else()
-        message(STATUS "ABIX 0.3 package not found; fetching ABIX into ${AMC_DEPENDENCIES_DIR}")
+        message(STATUS "ABIX 0.4.0 package not found; fetching ABIX into ${AMC_DEPENDENCIES_DIR}")
 
         # Populate ABIX without its submodules and without adding it yet: its
         # .gitmodules uses SSH URLs, which fail on machines without GitHub SSH
@@ -606,7 +606,8 @@ set_target_properties(libabix-abi PROPERTIES EXPORT_NAME abi POSITION_INDEPENDEN
 add_library(
     amc-platform
     STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Platform/ELF.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Platform/Symbol.cpp)
-target_include_directories(amc-platform PUBLIC ${AMC_INCLUDE_DIR})
+target_include_directories(
+    amc-platform PUBLIC $<BUILD_INTERFACE:${AMC_INCLUDE_DIR}> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 target_link_libraries(amc-platform PUBLIC ABIX::runtime fmt::fmt)
 target_compile_features(amc-platform PUBLIC cxx_std_17)
 set_target_properties(

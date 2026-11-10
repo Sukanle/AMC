@@ -53,12 +53,12 @@ ctest --test-dir build --output-on-failure
 cmake --install build --prefix /opt/amc
 ```
 
-Only ABIX is fetched automatically. When `find_package(ABIX 0.3 CONFIG COMPONENTS runtime)` fails, CMake clones ABIX with its submodules into the repository-local `dependencies/` directory and configures it as a runtime-only subproject:
+Only ABIX is fetched automatically. When `find_package(ABIX 0.4.0 CONFIG COMPONENTS runtime)` fails, CMake clones ABIX with its submodules into the repository-local `dependencies/` directory and configures it as a runtime-only subproject:
 
 ```bash
 cmake -S . -B build \
   -DCMAKE_PREFIX_PATH="/path/to/llvm;/path/to/fmt;/path/to/tomlplusplus" \
-  -DAMC_ABIX_REF=v0.3.0
+  -DAMC_ABIX_REF=v0.4.0
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```
@@ -69,7 +69,7 @@ All other dependencies — LLVM/Clang, fmt and toml++ — are expected to be ins
 
 Required packages:
 
-- `ABIX 0.3` runtime and MICS (fetched automatically when not installed)
+- `ABIX 0.4.0` runtime and MICS (fetched automatically when not installed)
 - LLVM and Clang (`clang-cpp`); providers link shared `libLLVM` when available (pass `-DAMC_LLVM_DYNAMIC=OFF` for the static fallback)
 - fmt 11.2 or newer
 - toml++ 3.4 or newer
@@ -83,7 +83,7 @@ The standalone CTest suite covers the C++ core/e2e tests, the installed package 
 ## Installed package
 
 ```cmake
-find_package(AMC 0.1 CONFIG REQUIRED)
+find_package(AMC 0.4 CONFIG REQUIRED)
 
 add_library(my_contract STATIC contract.cpp)
 amc_add_abi(

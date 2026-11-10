@@ -6,7 +6,7 @@ include(CMakeFindDependencyMacro)
 # AMC consumes the ABIX runtime headers/MICS and builds its own artifact
 # libraries. fmt is required by AMC::format; the version is a lower bound, so
 # any newer fmt release is accepted too.
-find_dependency(ABIX 0.3 CONFIG COMPONENTS runtime)
+find_dependency(ABIX 0.4.0 CONFIG COMPONENTS runtime)
 find_dependency(EPCD 0.1 CONFIG COMPONENTS Core)
 find_dependency(fmt @AMC_FMT_MIN_VERSION@ CONFIG REQUIRED)
 find_dependency(Threads)

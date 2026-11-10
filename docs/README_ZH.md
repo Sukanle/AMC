@@ -35,19 +35,19 @@ AMC 把原生 ABI 作为契约，而不是让 C 头文件成为唯一事实来�
 
 v0.4.0 开发边界上，核心架构已经就位：
 
-| 领域                                       | 状态                                                                                                         |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| Semantic model 与身份系统                  | 完成                                                                                                         |
-| 模板声明 / 实例化 / `.semantic`            | 完成                                                                                                         |
-| ABI lowering 与 `.lowering`                | 完成                                                                                                         |
-| C++ / Rust / Zig 投影                      | 完成                                                                                                         |
-| Rust FFI surface                           | target-aware；probe 验证 `repr(C)` / array / alias / enum / packed / transparent / union 布局                |
-| Rust adapter                               | `amc.rust.semantic/1` 已冻结；显式 `[[rust.expose]]` 与 ownership/error 交接可用；rustc helper 延后到 v0.4.0 |
-| typed `Result`、命名错误集、exposed handle | 完成                                                                                                         |
-| 接口契约与 proxy 层                        | C++ 完成；Rust/Zig typed proxy                                                                               |
-| 模块边界与物理拆分                         | A0–A5 完成；A6 核心完成                                                                                      |
-| 性能护栏                                   | pass/artifact/cache/query/multifile 套件                                                                     |
-| 多文件并行                                 | 由外部多个 `amc` 进程完成，产品内无进程池                                                                    |
+| 领域                                       | 状态                                                                                                            |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| Semantic model 与身份系统                  | 完成                                                                                                            |
+| 模板声明 / 实例化 / `.semantic`            | 完成                                                                                                            |
+| ABI lowering 与 `.lowering`                | 完成                                                                                                            |
+| C++ / Rust / Zig 投影                      | 完成                                                                                                            |
+| Rust FFI surface                           | target-aware；probe 验证 `repr(C)` / array / alias / enum / packed / transparent / union 布局                   |
+| Rust adapter                               | `amc.rust.semantic/1` 已冻结；显式 `[[rust.expose]]` 与 ownership/error 交接可用；rustc helper 已在 v0.4.0 提供 |
+| typed `Result`、命名错误集、exposed handle | 完成                                                                                                            |
+| 接口契约与 proxy 层                        | C++ 完成；Rust/Zig typed proxy                                                                                  |
+| 模块边界与物理拆分                         | A0–A5 完成；A6 核心完成                                                                                         |
+| 性能护栏                                   | pass/artifact/cache/query/multifile 套件                                                                        |
+| 多文件并行                                 | 由外部多个 `amc` 进程完成，产品内无进程池                                                                       |
 
 当前 P-core 基线与扩展性分析见[基准测试](bench/README_ZH.md)。发布说明见[变更记录](../CHANGELOG_ZH.md)。
 

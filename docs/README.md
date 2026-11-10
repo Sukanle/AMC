@@ -35,19 +35,19 @@ The stable wire formats are `.abix`, `.semantic` and `.lowering`. They contain p
 
 At the v0.4.0 development boundary the core architecture is in place:
 
-| Area                                              | Status                                                                                                                          |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Semantic model and identities                     | complete                                                                                                                        |
-| Template declarations / instances / `.semantic`   | complete                                                                                                                        |
-| ABI lowering and `.lowering`                      | complete                                                                                                                        |
-| C++ / Rust / Zig projections                      | complete                                                                                                                        |
-| Rust FFI surface                                  | target-aware; probe-validated `repr(C)` / array / alias / enum / packed / transparent / union layout                            |
-| Rust adapter                                      | `amc.rust.semantic/1` frozen; explicit `[[rust.expose]]` and ownership/error handoff available; rustc helper deferred to v0.4.0 |
-| Typed `Result`, named error sets, exposed handles | complete                                                                                                                        |
-| Interface contracts and proxy layer               | C++ complete; Rust/Zig typed proxies                                                                                            |
-| Module boundaries and physical split              | A0–A5 complete; A6 core complete                                                                                                |
-| Performance guardrails                            | pass/artifact/cache/query/multifile suites                                                                                      |
-| Multi-file parallelism                            | external `amc` processes, no in-product process pool                                                                            |
+| Area                                              | Status                                                                                                                           |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Semantic model and identities                     | complete                                                                                                                         |
+| Template declarations / instances / `.semantic`   | complete                                                                                                                         |
+| ABI lowering and `.lowering`                      | complete                                                                                                                         |
+| C++ / Rust / Zig projections                      | complete                                                                                                                         |
+| Rust FFI surface                                  | target-aware; probe-validated `repr(C)` / array / alias / enum / packed / transparent / union layout                             |
+| Rust adapter                                      | `amc.rust.semantic/1` frozen; explicit `[[rust.expose]]` and ownership/error handoff available; rustc helper available in v0.4.0 |
+| Typed `Result`, named error sets, exposed handles | complete                                                                                                                         |
+| Interface contracts and proxy layer               | C++ complete; Rust/Zig typed proxies                                                                                             |
+| Module boundaries and physical split              | A0–A5 complete; A6 core complete                                                                                                 |
+| Performance guardrails                            | pass/artifact/cache/query/multifile suites                                                                                       |
+| Multi-file parallelism                            | external `amc` processes, no in-product process pool                                                                             |
 
 See [Benchmarks](bench/README.md) for the current P-core baseline and scaling analysis. Release notes are in [CHANGELOG.md](../CHANGELOG.md).
 

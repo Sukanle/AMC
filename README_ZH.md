@@ -53,12 +53,12 @@ ctest --test-dir build --output-on-failure
 cmake --install build --prefix /opt/amc
 ```
 
-仅会自动获取 ABIX。当 `find_package(ABIX 0.3 CONFIG COMPONENTS runtime)` 失败时，CMake 会将该版本及其子模块克隆到项目内的 `dependencies/` 目录中，并作为仅运行时依赖的子项目进行配置：
+仅会自动获取 ABIX。当 `find_package(ABIX 0.4.0 CONFIG COMPONENTS runtime)` 失败时，CMake 会将该版本及其子模块克隆到项目内的 `dependencies/` 目录中，并作为仅运行时依赖的子项目进行配置：
 
 ```bash
 cmake -S . -B build \
   -DCMAKE_PREFIX_PATH="/path/to/llvm;/path/to/fmt;/path/to/tomlplusplus" \
-  -DAMC_ABIX_REF=v0.3.0
+  -DAMC_ABIX_REF=v0.4.0
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```
@@ -83,7 +83,7 @@ AMC 自行实现并维护工具层库（`format`、`abi`、`metadata`、`tools`�
 ## 已安装包模式
 
 ```cmake
-find_package(AMC 0.1 CONFIG REQUIRED)
+find_package(AMC 0.4 CONFIG REQUIRED)
 
 add_library(my_contract STATIC contract.cpp)
 amc_add_abi(
