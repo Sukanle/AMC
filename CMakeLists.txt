@@ -539,6 +539,17 @@ if(NOT AMC_CLANG_RESOURCE_DIR)
     message(WARNING "Could not detect the Clang resource directory; amc-cpp may not find built-in headers")
 endif()
 
+# Portable file I/O used by the artifact/compiler layers. Keeping it separate
+# from AMC::util avoids a dependency cycle: libabix-format -> amc-io, while
+# amc-util also consumes amc-io.
+add_library(amc-io STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Support/File.cpp)
+target_include_directories(
+    amc-io PUBLIC $<BUILD_INTERFACE:${AMC_INCLUDE_DIR}> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+target_link_libraries(amc-io PUBLIC amc-llvm)
+target_compile_features(amc-io PUBLIC cxx_std_17)
+set_target_properties(amc-io PROPERTIES EXPORT_NAME io POSITION_INDEPENDENT_CODE ON OUTPUT_NAME amc-io)
+add_library(AMC::io ALIAS amc-io)
+
 # AMC owns the artifact-layer libraries (`format`, `abi`, `metadata`, `tools`).
 # They are compiled in this project; ABIX supplies only the runtime headers and
 # MICS. This keeps the AMC release independent without splitting the AMC core
@@ -567,7 +578,8 @@ add_library(
 target_include_directories(
     libabix-format PUBLIC $<BUILD_INTERFACE:${AMC_INCLUDE_DIR}> $<BUILD_INTERFACE:${AMC_SOURCE_DIR}/include/ljson>
                           $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-target_link_libraries(libabix-format PUBLIC ABIX::runtime fmt::fmt MICS::MICS ${AMC_EPCD_TARGETS} Threads::Threads)
+target_link_libraries(
+    libabix-format PUBLIC ABIX::runtime fmt::fmt MICS::MICS ${AMC_EPCD_TARGETS} Threads::Threads amc-io)
 target_compile_features(libabix-format PUBLIC cxx_std_17)
 set_target_properties(
     libabix-format
@@ -610,7 +622,7 @@ add_library(
     STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Platform/ELF.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Platform/Symbol.cpp)
 target_include_directories(
     amc-platform PUBLIC $<BUILD_INTERFACE:${AMC_INCLUDE_DIR}> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-target_link_libraries(amc-platform PUBLIC ABIX::runtime fmt::fmt)
+target_link_libraries(amc-platform PUBLIC ABIX::runtime fmt::fmt amc-io)
 target_compile_features(amc-platform PUBLIC cxx_std_17)
 set_target_properties(
     amc-platform PROPERTIES EXPORT_NAME platform POSITION_INDEPENDENT_CODE ON OUTPUT_NAME amc-platform)
@@ -675,7 +687,7 @@ add_library(
            ${AMC_SOURCE_DIR}/src/SKL/AMC/Util/Error.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Support/Process.cpp
            ${AMC_SOURCE_DIR}/src/SKL/AMC/Private/Support/File.cpp)
 target_include_directories(amc-util PUBLIC ${AMC_INCLUDE_DIR})
-target_link_libraries(amc-util PUBLIC libabix-format fmt::fmt amc-llvm)
+target_link_libraries(amc-util PUBLIC libabix-format fmt::fmt amc-io)
 
 add_library(
     amc-lang STATIC ${AMC_SOURCE_DIR}/src/SKL/AMC/Lang/Lang.cpp ${AMC_SOURCE_DIR}/src/SKL/AMC/Backend/CodeIn.cpp
@@ -897,6 +909,7 @@ if(AMC_INSTALL)
             libabix-tools
             amc-platform
             amc-llvm
+            amc-io
             EXPORT AMCTargets
             ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
             LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

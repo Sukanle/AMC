@@ -15,15 +15,14 @@
  */
 #include "SKL/AMC/Semantic/Serialize.h"
 
+#include "SKL/AMC/Private/Support/File.h"
 #include "SKL/AMC/Support/Json.h"
 #include "SKL/AMC/Semantic/Identity.h"
 
 #include <cerrno>
 #include <cstdlib>
-#include <exception>
-#include <fstream>
-#include <iterator>
 #include <string_view>
+#include <utility>
 
 #include <fmt/format.h>
 
@@ -717,31 +716,21 @@ bool write_semantic_json(const SemanticModule &module, const std::string &path, 
     root.set("instances", std::move(instances));
     append_rust_json(root, module.rust);
 
-    try {
-        std::ofstream output(path, std::ios::binary | std::ios::trunc);
-        if (!output) {
-            error = "cannot write semantic sidecar: " + path;
-            return false;
-        }
-        output << root.dump_pretty(2) << '\n';
-        if (!output.good()) {
-            error = "cannot write semantic sidecar: " + path;
-            return false;
-        }
-    } catch (const std::exception &e) {
-        error = "cannot write semantic sidecar: " + path + ": " + e.what();
+    const std::string text = root.dump_pretty(2) + '\n';
+    if (auto err = amc::support::write_text_file(path, text)) {
+        error = "cannot write semantic sidecar: " + path + ": " + amc::support::error_message(std::move(err));
         return false;
     }
     return true;
 }
 
 bool read_semantic_json(const std::string &path, SemanticModule &module, std::string &error) {
-    std::ifstream input(path, std::ios::binary);
-    if (!input) {
-        error = "cannot read semantic sidecar: " + path;
+    auto text_or = amc::support::read_text_file(path);
+    if (!text_or) {
+        error = "cannot read semantic sidecar: " + path + ": " + text_or.getError().message();
         return false;
     }
-    const std::string text((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+    const std::string text = std::move(*text_or);
 
     Json root;
     if (!parse_json(text, root, error)) {

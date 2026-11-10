@@ -15,18 +15,16 @@
  */
 #include "SKL/AMC/IR/Artifact.h"
 
+#include "SKL/AMC/Private/Support/File.h"
+
 #include "SKL/AMC/IR/LoweringJson.h"
 #include "SKL/AMC/Semantic/Serialize.h"
 
-#include <fstream>
 
 namespace skl::amc::ir {
 namespace {
 
-bool exists(const std::string &path) {
-    std::ifstream input(path, std::ios::binary);
-    return static_cast<bool>(input);
-}
+bool exists(const std::string &path) { return amc::support::path_exists(path); }
 
 }   // namespace
 

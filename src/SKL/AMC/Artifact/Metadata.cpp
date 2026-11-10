@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 #include "SKL/AMC/Artifact/Metadata.h"
+#include "SKL/AMC/Private/Support/File.h"
 #include "SKL/AMC/Platform/ELF.h"
 #include "SKL/AMC/Diagnostics/Error.h"
 
 #include <algorithm>
 #include <string.h>
-#include <fstream>
-#include <iterator>
 #include <string_view>
 #include <utility>
 
@@ -1534,12 +1533,12 @@ bool verify_abi(const std::vector<uint8_t> &region, const TargetExpectation &exp
 
 bool load_module_source(const std::string &path, ABIModule &module, std::string &error) {
     error.clear();
-    std::ifstream input(path, std::ios::binary);
-    if (!input) {
-        error = "cannot open input: " + path;
+    auto bytes_or = amc::support::read_binary_file(path);
+    if (!bytes_or) {
+        error = "cannot open input: " + path + ": " + bytes_or.getError().message();
         return false;
     }
-    const std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+    const std::vector<uint8_t> bytes = std::move(*bytes_or);
     if (is_binary(bytes.data(), bytes.size())) {
         std::vector<uint8_t> region;
         if (!find_binary_section(bytes.data(), bytes.size(), ".abix.metadata", region, error)) return false;

@@ -18,17 +18,16 @@
 #include "SKL/AMC/IR/Reflect.h"
 #include "SKL/AMC/Semantic/Reflect.h"
 
+#include "SKL/AMC/Private/Support/File.h"
 #include "SKL/AMC/Support/Json.h"
 
 #include <cerrno>
 #include <cstdlib>
-#include <exception>
-#include <fstream>
-#include <iterator>
 #include <set>
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 
 #include <fmt/format.h>
 
@@ -244,31 +243,21 @@ bool write_lowering_json(const LoweringResult &result, const std::string &path, 
     }
     root.set("templates", std::move(templates));
 
-    try {
-        std::ofstream output(path, std::ios::binary | std::ios::trunc);
-        if (!output) {
-            error = "cannot write lowering sidecar: " + path;
-            return false;
-        }
-        output << root.dump_pretty(2) << '\n';
-        if (!output.good()) {
-            error = "cannot write lowering sidecar: " + path;
-            return false;
-        }
-    } catch (const std::exception &e) {
-        error = "cannot write lowering sidecar: " + path + ": " + e.what();
+    const std::string text = root.dump_pretty(2) + '\n';
+    if (auto err = amc::support::write_text_file(path, text)) {
+        error = "cannot write lowering sidecar: " + path + ": " + amc::support::error_message(std::move(err));
         return false;
     }
     return true;
 }
 
 bool read_lowering_json(const std::string &path, LoweringResult &result, std::string &error) {
-    std::ifstream input(path, std::ios::binary);
-    if (!input) {
-        error = "cannot read lowering sidecar: " + path;
+    auto text_or = amc::support::read_text_file(path);
+    if (!text_or) {
+        error = "cannot read lowering sidecar: " + path + ": " + text_or.getError().message();
         return false;
     }
-    const std::string text((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+    const std::string text = std::move(*text_or);
 
     Json root;
     if (!parse_json(text, root, error)) {
@@ -410,12 +399,10 @@ bool read_lowering_json(const std::string &path, LoweringResult &result, std::st
 
 bool load_lowering_sidecar(const std::string &artifact_path, LoweringResult &result, std::string &error) {
     const std::string path = artifact_path + ".lowering";
-    std::ifstream probe(path, std::ios::binary);
-    if (!probe) {
+    if (!amc::support::path_exists(path)) {
         result = {};
         return true;
     }
-    probe.close();
     return read_lowering_json(path, result, error);
 }
 

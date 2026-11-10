@@ -14,19 +14,18 @@
  * limitations under the License.
  */
 #include "SKL/AMC/Core/Core.h"
+#include "SKL/AMC/Private/Support/File.h"
 #include "SKL/AMC/Support/OwnerLayout.h"
 #include "SKL/AMC/Core/Reflect.h"
 
 #include <algorithm>
 #include <string.h>
-#include <exception>
-#include <fstream>
 #include <limits>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 
 #include <fmt/format.h>
-#include <fmt/os.h>
 
 namespace skl::amc {
 namespace {
@@ -2220,21 +2219,10 @@ bool write_abix(const ABIModule &module, const std::string &path, std::string &e
                 bytes[entry_offset + field * 4 + byte] = static_cast<uint8_t>(values[field] >> (byte * 8));
         bytes.insert(bytes.end(), section.bytes.begin(), section.bytes.end());
     }
-    // The artifact is a binary image: open in binary mode so the Windows CRT
-    // does not translate 0x0A into 0x0D 0x0A and corrupt the section directory.
-    try {
-        std::ofstream output(path, std::ios::binary | std::ios::trunc);
-        if (!output) {
-            error = "cannot write output: " + path;
-            return false;
-        }
-        output.write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-        if (!output.good()) {
-            error = "cannot write output: " + path;
-            return false;
-        }
-    } catch (const std::exception &e) {
-        error = "cannot write output: " + path + ": " + e.what();
+    // The artifact is a binary image; write_binary_file keeps it out of the
+    // Windows CRT text mode and reports llvm::sys::fs errors explicitly.
+    if (auto err = support::write_binary_file(path, bytes)) {
+        error = "cannot write output: " + path + ": " + support::error_message(std::move(err));
         return false;
     }
     return true;
@@ -2242,12 +2230,12 @@ bool write_abix(const ABIModule &module, const std::string &path, std::string &e
 
 bool read_abix(const std::string &path, ABIModule &module, std::string &error) {
     error.clear();
-    std::ifstream input(path, std::ios::binary);
-    if (!input) {
-        error = "cannot open input: " + path;
+    auto bytes_or = support::read_binary_file(path);
+    if (!bytes_or) {
+        error = "cannot open input: " + path + ": " + bytes_or.getError().message();
         return false;
     }
-    std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(input)), {});
+    std::vector<uint8_t> bytes = std::move(*bytes_or);
     if (bytes.size() < kHeaderSize || memcmp(bytes.data(), "ABIX", 4) != 0) {
         error = "invalid ABIX header";
         return false;
