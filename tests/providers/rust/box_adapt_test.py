@@ -401,6 +401,48 @@ int main() {
     if (host.unregister_module(control3.id) != ABIX_SUCCESS) return 20;
 
     if (host.destroy_registry(registry) != ABIX_SUCCESS) return 21;
+
+    // Two registries with the same numeric token must not affect each other.
+    skl::amc::support::LeaseRegistry host_a;
+    skl::amc::support::LeaseRegistry host_b;
+    abix_lease_api api_a = host_a.make_api();
+    abix_lease_api api_b = host_b.make_api();
+    abix_lease_registry *registry_a = nullptr;
+    abix_lease_registry *registry_b = nullptr;
+    if (host_a.create_registry(&registry_a) != ABIX_SUCCESS) return 22;
+    if (host_b.create_registry(&registry_b) != ABIX_SUCCESS) return 23;
+
+    skl::abix::poly::ModuleControl control_a;
+    control_a.name = "rust_box_owner_a";
+    skl::abix::poly::ModuleControl control_b;
+    control_b.name = "rust_box_owner_b";
+    if (host_a.register_module(control_a) != ABIX_SUCCESS) return 24;
+    if (host_b.register_module(control_b) != ABIX_SUCCESS) return 25;
+
+    amc_module_set_instance(control_a.id);
+    auto guard_a = Guard::acquire(&api_a, registry_a, control_a.id, [&] { return Owner(box_widget_make(11)); });
+    if (!guard_a) return 26;
+    amc_module_set_instance(control_b.id);
+    auto guard_b = Guard::acquire(&api_b, registry_b, control_b.id, [&] { return Owner(box_widget_make(12)); });
+    if (!guard_b) return 27;
+    if (guard_a.owner().module_instance() != control_a.id) return 28;
+    if (guard_b.owner().module_instance() != control_b.id) return 29;
+    if (box_widget_live() != 2) return 30;
+    if (host_a.find_module(control_a.id) == nullptr || host_a.find_module(control_a.id)->leases.load() != 1)
+        return 31;
+    if (host_b.find_module(control_b.id) == nullptr || host_b.find_module(control_b.id)->leases.load() != 1)
+        return 32;
+    guard_a.reset();
+    if (box_widget_live() != 1) return 33;
+    if (host_a.find_module(control_a.id)->leases.load() != 0) return 34;
+    if (host_b.find_module(control_b.id)->leases.load() != 1) return 35;
+    guard_b.reset();
+    if (box_widget_live() != 0) return 36;
+    if (host_b.find_module(control_b.id)->leases.load() != 0) return 37;
+    if (host_a.unregister_module(control_a.id) != ABIX_SUCCESS) return 38;
+    if (host_b.unregister_module(control_b.id) != ABIX_SUCCESS) return 39;
+    if (host_a.destroy_registry(registry_a) != ABIX_SUCCESS) return 40;
+    if (host_b.destroy_registry(registry_b) != ABIX_SUCCESS) return 41;
     return 0;
 }
 """)
