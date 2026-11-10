@@ -473,6 +473,27 @@ def main():
             check(result.returncode != 0 and "rust helper" in output(result),
                   "missing helper fails closed when target facts are absent", output(result)[-400:])
 
+            # A failing helper must surface the rustc diagnostics instead of
+            # reporting only an exit status.
+            broken_source = Path(work) / "broken_helper.rs"
+            broken_source.write_text(
+                "#[repr(C)]\npub struct BrokenHelper { pub value: i32 }\n\n"
+                "pub fn broken_helper_value() -> i32 {\n"
+                "    let value: i32 = \"not a number\";\n"
+                "    value\n}\n", encoding="utf-8")
+            broken_config = os.path.join(work, "broken_helper.abic.toml")
+            with open(broken_config, "w", encoding="utf-8") as handle:
+                handle.write(
+                    "[package]\nname = \"broken_helper\"\nversion = \"0.1\"\n\n"
+                    "[[import]]\nlanguage = \"rust\"\nfiles = [\"broken_helper.rs\"]\n"
+                    "symbols = [\"BrokenHelper\"]\n\n"
+                    "[rust]\nhelper = \"" + helper_toml + "\"\n\n"
+                    "[[export]]\noutput = \"broken_helper.abix\"\n")
+            result = run([str(amc), "build", "-c", broken_config, "-B", os.path.join(work, "broken_out")])
+            check(result.returncode != 0 and "rust helper failed" in output(result)
+                  and "E0308" in output(result),
+                  "helper failure preserves rustc diagnostics", output(result)[-400:])
+
             mismatch_config = os.path.join(work, "mismatch.abic.toml")
             mismatch_text = fixture_config.read_text(encoding="utf-8").replace(
                 'endianness = "little"', 'endianness = "big"', 1)

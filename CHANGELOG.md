@@ -9,6 +9,8 @@
 - `OwnedString*` exposes `as_bytes` / `as_str`; `OwnedSpan*` exposes `as_slice` / `len` / `is_empty`, so consumers no longer need `core::slice::from_raw_parts` or raw-pointer dereferences.
 - Safe facade covers borrowed ABIX-STD views: `&str` parameters become `abix_str_utf8` (UTF-8, zero reserved) and `&[T]` parameters become `abix_span_<T>`, using the Rust borrow's length. String/slice entry points no longer require `unsafe`; returned borrowed views and other raw pointer contracts stay unsafe.
 - Generated `LeaseHost`: validates the ABI version, struct size and `acquire`/`release` entries, then acquires through `guard(module, create)` without raw pointers. `LeaseError` distinguishes `InvalidApi`, `InvalidRegistry`, `AcquireFailed` and `CreateFailed`. The raw `LeaseGuard::acquire` / `adopt` escape hatches remain.
+- Rust helper failures now preserve the first lines of the helper's stderr, so rustc diagnostics (`error[E…]`, location and message) appear in AMC's warning or fatal error instead of a bare exit status.
+- Generated `Owned*::create` uses an internal `from_ptr` helper, and the generated module allows `unused_unsafe`, so including the projection no longer produces nested-unsafe warnings for generated code.
 - Provider tests run dedicated `#![deny(unsafe_code)]` consumers for Box and container projections.
 
 ## v0.4.0 — 2026-11-10

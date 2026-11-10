@@ -101,7 +101,7 @@ as = "WrapperU64"
 
 `[rust] manifest` 会作为 `--manifest-path` 转发，使 helper 能通过 `cargo metadata` 解析 workspace 成员、默认成员、依赖和 target directory。`[rust] target` 会作为 `--target` 转发，用于选择布局和 target facts 的 rustc target。`[rust] edition` 选择 rustc edition（默认 `2021`；存在 manifest 且未设置该键时使用 Cargo package edition）；不支持的值会在 helper 启动前失败。`[rust] features` 会作为 `--features` 转发给 helper。每个 `[[instantiate]]` 条目会作为 `--instantiate` 转发，强制输出一个本地具体泛型实例；类型参数可以是 primitive 或非泛型本地类型，const generic 参数使用十进制整数字面量；helper 仍不会枚举所有 monomorphization。
 
-配置后，`amc-rust` 会运行 helper 并使用其 target facts。如果 helper 失败且 `[target]` 已提供 `pointer_bits`、endianness 和 `c_long_bits`，AMC 会给出警告并回退到 parser/probe 路径。
+配置后，`amc-rust` 会运行 helper 并使用其 target facts。如果 helper 失败且 `[target]` 已提供 `pointer_bits`、endianness 和 `c_long_bits`，AMC 会给出警告并回退到 parser/probe 路径。警告会包含 helper stderr 的前几行，因此 rustc 的 `error[E…]`、源码位置和消息都会被保留，而不是只报告退出码。缺少 target facts 时，同样的文本会作为致命诊断输出。
 
 `Option<T>`、`Box<T>`、`String`、`Vec<T>` 会作为语义事实记录，而不会被当作隐式 ABI 布局。选择包含这些类型的函数或字段时必须提供显式 `[[contract]]`；否则构建会以点名容器的诊断失败，而不是静默猜测所有权或缓冲区表示。trait object 也会被同样拒绝，因为 `&dyn Trait` 是 fat pointer，没有显式契约时不能当作普通指针降级。
 

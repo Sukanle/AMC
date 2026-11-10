@@ -632,10 +632,11 @@ void emit_owned(Output &o, const Projector &p) {
         const std::string wrapper = "Owned" + type_name;
         o.print("pub struct {} {{\n    ptr: *mut {},\n}}\n", wrapper, type_name);
         o.print("impl {} {{\n", wrapper);
-        o.print("    /// Wrap a raw handle returned by the library; `None` when null.\n");
-        o.print("    pub unsafe fn from_raw(ptr: *mut {}) -> Option<Self> {{\n", type_name);
+        o.print("    fn from_ptr(ptr: *mut {}) -> Option<Self> {{\n", type_name);
         o.print("        if ptr.is_null() {{ None }} else {{ Some({} {{ ptr }}) }}\n", wrapper);
         o.print("    }}\n");
+        o.print("    /// Wrap a raw handle returned by the library; `None` when null.\n");
+        o.print("    pub unsafe fn from_raw(ptr: *mut {}) -> Option<Self> {{ Self::from_ptr(ptr) }}\n", type_name);
         if (create) {
             std::string params, args;
             for (size_t i = 0; i < create->params.size(); ++i) {
@@ -651,7 +652,7 @@ void emit_owned(Output &o, const Projector &p) {
             }
             o.print("    /// Call `{}` and take ownership of the result.\n", create->name);
             o.print("    pub fn create({}) -> Option<Self> {{\n", params);
-            o.print("        unsafe {{ Self::from_raw(amc_ffi!({}({}))) }}\n", rust_ident(create->name), args);
+            o.print("        Self::from_ptr(amc_ffi!({}({})))\n", rust_ident(create->name), args);
             o.print("    }}\n");
         }
         o.print("    pub fn as_ptr(&self) -> *mut {} {{ self.ptr }}\n", type_name);

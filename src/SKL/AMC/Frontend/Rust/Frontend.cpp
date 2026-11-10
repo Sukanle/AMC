@@ -29,10 +29,12 @@
 #include <stdlib.h>
 #include <llvm/ADT/SmallString.h>
 #include <llvm/Support/FileSystem.h>
+#include <llvm/Support/LineIterator.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/Path.h>
 #include <llvm/Support/Program.h>
 #include <llvm/Support/raw_ostream.h>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -378,6 +380,28 @@ bool target_facts_from(const amc::lang::Config &config, TargetFacts &target, std
     return true;
 }
 
+// Keep the first few diagnostic lines a tool wrote to stderr. rustc errors are
+// already multi-line and actionable, so preserve them instead of collapsing the
+// failure to an exit status.
+std::string summarize_tool_output(llvm::StringRef path) {
+    auto buffer = llvm::MemoryBuffer::getFile(path);
+    if (!buffer) return {};
+    std::string summary;
+    unsigned lines = 0;
+    for (llvm::line_iterator it((*buffer)->getMemBufferRef()), end; it != end && lines < 10; ++it) {
+        const llvm::StringRef line = it->rtrim();
+        if (line.empty()) continue;
+        if (!summary.empty()) summary += '\n';
+        summary += line.str();
+        ++lines;
+        if (summary.size() > 2'000) {
+            summary += "\n...";
+            break;
+        }
+    }
+    return summary;
+}
+
 // Run the optional v0.4.0 rustc helper and use its target facts. The helper is
 // an independent process: AMC never links rustc or reads its internal types.
 bool query_rust_helper(
@@ -465,17 +489,29 @@ bool query_rust_helper(
         helper_args.push_back(spec);
     }
 
+    llvm::SmallString<64> diagnostics;
+    if (const std::error_code ec = llvm::sys::fs::createTemporaryFile("amc-rust-helper", "log", diagnostics)) {
+        llvm::sys::fs::remove(temporary);
+        error = "cannot create rust helper diagnostics: " + ec.message();
+        return false;
+    }
+    std::optional<llvm::StringRef> redirects[3];
+    redirects[2] = diagnostics.str();
     std::string exec_error;
-    const int status = llvm::sys::ExecuteAndWait(helper.str(), helper_args, std::nullopt, {}, 0, 0, &exec_error);
+    const int status = llvm::sys::ExecuteAndWait(helper.str(), helper_args, std::nullopt, redirects, 0, 0, &exec_error);
     if (status != 0) {
+        const std::string details = summarize_tool_output(diagnostics);
+        llvm::sys::fs::remove(diagnostics);
         llvm::sys::fs::remove(temporary);
         error = "rust helper failed";
         if (!exec_error.empty())
             error += ": " + exec_error;
         else
             error += " with status " + std::to_string(status);
+        if (!details.empty()) error += "\n" + details;
         return false;
     }
+    llvm::sys::fs::remove(diagnostics);
 
     auto buffer = llvm::MemoryBuffer::getFile(temporary);
     llvm::sys::fs::remove(temporary);
