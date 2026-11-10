@@ -32,6 +32,7 @@
 
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
 
 namespace skl::amc {
@@ -698,10 +699,8 @@ bool InstantiationCache::store(const InstantiationBuildInputs &inputs,
         return false;
     }
 
-    std::error_code ec;
-    fs::create_directories(_root, ec);
-    if (ec) {
-        error = "cannot create cache root: " + ec.message();
+    if (auto err = amc::support::make_directories(_root)) {
+        error = "cannot create cache root: " + amc::support::error_message(std::move(err));
         return false;
     }
     const fs::path entry = entry_file(manifest.build_key);
@@ -739,6 +738,7 @@ bool InstantiationCache::store(const InstantiationBuildInputs &inputs,
                              + std::to_string(next_sequence());
     const fs::path temporary = fs::path(_root) / (".tmp-" + suffix);
     {
+        std::error_code ec;
         llvm::raw_fd_ostream output(temporary.string(), ec, llvm::sys::fs::OF_None);
         if (ec) {
             error = "cannot write cache entry: " + temporary.string();
@@ -770,22 +770,22 @@ bool InstantiationCache::store(const InstantiationBuildInputs &inputs,
     // or damaged one is replaced below. `equivalent` already opens the entry, so
     // no separate existence check is needed.
     if (equivalent(entry)) {
-        fs::remove(temporary, ec);
+        llvm::consumeError(amc::support::remove_path(temporary.string()));
         return true;
     }
-    fs::remove(entry, ec);
-    fs::rename(temporary, entry, ec);
-    if (ec) {
+    llvm::consumeError(amc::support::remove_path(entry.string()));
+    if (auto err = amc::support::rename_path(temporary.string(), entry.string())) {
+        llvm::consumeError(std::move(err));
         // Another writer may have won between the check and the rename.
         if (equivalent(entry)) {
-            fs::remove(temporary, ec);
+            llvm::consumeError(amc::support::remove_path(temporary.string()));
             return true;
         }
-        fs::remove(entry, ec);
-        fs::rename(temporary, entry, ec);
-        if (ec) {
-            fs::remove(temporary, ec);
-            error = "cannot commit cache entry: " + ec.message();
+        llvm::consumeError(amc::support::remove_path(entry.string()));
+        if (auto retry = amc::support::rename_path(temporary.string(), entry.string())) {
+            const std::string message = amc::support::error_message(std::move(retry));
+            llvm::consumeError(amc::support::remove_path(temporary.string()));
+            error = "cannot commit cache entry: " + message;
             return false;
         }
     }
@@ -797,17 +797,10 @@ CacheLookup InstantiationCache::lookup(const InstantiationBuildInputs &inputs, c
     result.build_key = instantiation_build_key(inputs);
     result.entry = entry_file(result.build_key);
     const fs::path entry = result.entry;
-    std::error_code ec;
-#if !defined(_WIN32)
-    // POSIX: a missing entry is cheaper to detect with stat() than by
-    // constructing an ifstream. Windows keeps the direct-open path because
-    // CreateFile-based metadata operations are much more expensive there.
-    if (!fs::exists(entry, ec)) {
+    if (!amc::support::path_exists(entry.string())) {
         result.status = CacheStatus::MISS;
         result.reason = cache_reason_not_found;
-    } else
-#endif
-    {
+    } else {
         EntryFile file;
         std::string error;
         const EntryRead read = read_entry_file(entry, file, error);
@@ -858,12 +851,14 @@ CacheLookup InstantiationCache::lookup(const InstantiationBuildInputs &inputs, c
     // report why they rebuilt.
     const Hash128 desired_template = instantiation_template_signature(inputs.request);
     const Hash128 desired_request = instantiation_request_id(inputs.request);
-    for (const auto &item : fs::directory_iterator(fs::path(_root), ec)) {
-        if (!item.is_regular_file(ec)) continue;
-        if (item.path().extension() != kEntrySuffix) continue;
+    const auto entries = amc::support::list_directory(_root);
+    if (!entries) return result;
+    for (const auto &item : *entries) {
+        if (item.directory) continue;
+        if (llvm::sys::path::extension(item.path) != kEntrySuffix) continue;
         EntryFile other;
         std::string ignored;
-        if (read_entry_file(item.path(), other, ignored) != EntryRead::OK) continue;
+        if (read_entry_file(fs::path(item.path), other, ignored) != EntryRead::OK) continue;
         if (!(other.manifest.template_signature == desired_template)) continue;
         if (!(other.manifest.request_id == desired_request)) {
             result.reason = cache_reason_target_changed;
@@ -921,47 +916,53 @@ bool InstantiationCache::verify(const Hash128 &build_key, std::string &error) co
 }
 
 size_t InstantiationCache::verify_all(std::vector<std::string> &failures) const {
-    std::error_code ec;
+    const auto entries = amc::support::list_directory(_root);
+    if (!entries) return 0;
     size_t checked = 0;
-    for (const auto &item : fs::directory_iterator(fs::path(_root), ec)) {
-        if (!item.is_regular_file(ec)) continue;
-        if (item.path().extension() != kEntrySuffix) continue;
+    for (const auto &item : *entries) {
+        if (item.directory) continue;
+        if (llvm::sys::path::extension(item.path) != kEntrySuffix) continue;
         ++checked;
         EntryFile file;
         std::string error;
-        if (read_entry_file(item.path(), file, error) != EntryRead::OK
-            || !verify_entry_payload(item.path(), file, error))
-            failures.push_back(item.path().filename().string() + ": " + error);
+        const fs::path path(item.path);
+        if (read_entry_file(path, file, error) != EntryRead::OK || !verify_entry_payload(path, file, error))
+            failures.push_back(llvm::sys::path::filename(item.path).str() + ": " + error);
     }
     return checked;
 }
 
 size_t InstantiationCache::entries() const {
-    std::error_code ec;
+    const auto entries = amc::support::list_directory(_root);
+    if (!entries) return 0;
     size_t count = 0;
-    for (const auto &item : fs::directory_iterator(fs::path(_root), ec)) {
-        if (!item.is_regular_file(ec)) continue;
-        if (item.path().extension() == kEntrySuffix) ++count;
-    }
+    for (const auto &item : *entries)
+        if (!item.directory && llvm::sys::path::extension(item.path) == kEntrySuffix) ++count;
     return count;
 }
 
 size_t InstantiationCache::clear() const {
-    std::error_code ec;
-    std::vector<fs::path> remove;
+    const auto entries = amc::support::list_directory(_root);
+    if (!entries) return 0;
+    struct RemoveItem {
+        std::string path;
+        bool directory = false;
+    };
+    std::vector<RemoveItem> remove;
     // Only the top level is walked: shard directories are removed whole, so a
     // recursive iterator would be invalidated while it is being deleted.
-    for (const auto &item : fs::directory_iterator(fs::path(_root), ec)) {
-        if (item.is_directory(ec)) {
+    for (const auto &item : *entries) {
+        if (item.directory) {
             // Entries used to be directories; remove leftovers too.
-            remove.push_back(item.path());
+            remove.push_back({item.path, true});
             continue;
         }
-        const std::string name = item.path().filename().string();
-        if (item.path().extension() == kEntrySuffix || name.rfind(".tmp-", 0) == 0) remove.push_back(item.path());
+        const std::string name = llvm::sys::path::filename(item.path).str();
+        if (llvm::sys::path::extension(item.path) == kEntrySuffix || name.rfind(".tmp-", 0) == 0)
+            remove.push_back({item.path, false});
     }
-    for (const auto &path : remove)
-        fs::remove_all(path, ec);
+    for (const auto &item : remove)
+        llvm::consumeError(amc::support::remove_path(item.path, item.directory));
     return remove.size();
 }
 
@@ -982,18 +983,18 @@ void InstantiationCache::record_store() const {
 
 CacheStats InstantiationCache::stats() const {
     CacheStats result;
-    std::error_code ec;
-    const auto now = fs::file_time_type::clock::now();
+    const auto entries = amc::support::list_directory(_root);
+    if (!entries) return result;
+    const auto now = std::chrono::system_clock::now().time_since_epoch();
     bool first = true;
-    for (const auto &item : fs::directory_iterator(fs::path(_root), ec)) {
-        if (!item.is_regular_file(ec)) continue;
-        if (item.path().extension() != kEntrySuffix) continue;
+    for (const auto &item : *entries) {
+        if (item.directory) continue;
+        if (llvm::sys::path::extension(item.path) != kEntrySuffix) continue;
         ++result.entries;
-        const auto bytes = fs::file_size(item.path(), ec);
-        if (!ec) result.bytes += bytes;
-        const auto mtime = fs::last_write_time(item.path(), ec);
-        if (ec) continue;
-        const auto age = std::chrono::duration_cast<std::chrono::seconds>(now - mtime).count();
+        result.bytes += item.size;
+        const auto age =
+            std::chrono::duration_cast<std::chrono::seconds>(now - std::chrono::nanoseconds(item.modification_time))
+                .count();
         const uint64_t seconds = age < 0 ? 0 : static_cast<uint64_t>(age);
         if (first) {
             result.oldest_age_seconds = seconds;
@@ -1013,36 +1014,34 @@ CacheStats InstantiationCache::stats() const {
 
 PruneResult InstantiationCache::prune(const PruneOptions &options, bool dry_run) const {
     struct Item {
-        fs::path path;
+        std::string path;
         uint64_t bytes = 0;
-        fs::file_time_type mtime{};
+        int64_t mtime = 0;
     };
     PruneResult result;
-    std::error_code ec;
+    const auto entries = amc::support::list_directory(_root);
+    if (!entries) return result;
     std::vector<Item> items;
     uint64_t total = 0;
-    for (const auto &entry : fs::directory_iterator(fs::path(_root), ec)) {
-        if (!entry.is_regular_file(ec)) continue;
-        if (entry.path().extension() != kEntrySuffix) continue;
-        const auto bytes = fs::file_size(entry.path(), ec);
-        if (ec) continue;
-        const auto mtime = fs::last_write_time(entry.path(), ec);
-        if (ec) continue;
-        items.push_back({entry.path(), static_cast<uint64_t>(bytes), mtime});
-        total += static_cast<uint64_t>(bytes);
+    for (const auto &entry : *entries) {
+        if (entry.directory) continue;
+        if (llvm::sys::path::extension(entry.path) != kEntrySuffix) continue;
+        items.push_back({entry.path, entry.size, entry.modification_time});
+        total += entry.size;
     }
     std::sort(items.begin(), items.end(), [](const Item &a, const Item &b) { return a.mtime < b.mtime; });
 
-    const auto now = fs::file_time_type::clock::now();
+    const auto now = std::chrono::system_clock::now().time_since_epoch();
     for (const auto &item : items) {
         bool remove = false;
         if (options.max_age_seconds != 0) {
-            const auto age = std::chrono::duration_cast<std::chrono::seconds>(now - item.mtime).count();
+            const auto age =
+                std::chrono::duration_cast<std::chrono::seconds>(now - std::chrono::nanoseconds(item.mtime)).count();
             if (age >= 0 && static_cast<uint64_t>(age) > options.max_age_seconds) remove = true;
         }
         if (!remove && options.max_bytes != 0 && total > options.max_bytes) remove = true;
         if (!remove) continue;
-        if (!dry_run) fs::remove(item.path, ec);
+        if (!dry_run) llvm::consumeError(amc::support::remove_path(item.path));
         total -= item.bytes;
         ++result.removed;
         result.freed_bytes += item.bytes;

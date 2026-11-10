@@ -19,6 +19,7 @@
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/raw_ostream.h>
 
+#include <chrono>
 #include <utility>
 
 namespace skl::amc::support {
@@ -64,6 +65,49 @@ llvm::Error make_directories(llvm::StringRef path) {
 }
 
 bool path_exists(llvm::StringRef path) { return llvm::sys::fs::exists(path); }
+
+bool is_regular_file(llvm::StringRef path) { return llvm::sys::fs::is_regular_file(path); }
+
+bool is_directory(llvm::StringRef path) { return llvm::sys::fs::is_directory(path); }
+
+llvm::Error remove_path(llvm::StringRef path, bool recursive) {
+    const std::error_code ec = recursive ? llvm::sys::fs::remove_directories(path) : llvm::sys::fs::remove(path);
+    if (ec) return llvm::errorCodeToError(ec);
+    return llvm::Error::success();
+}
+
+llvm::Error rename_path(llvm::StringRef from, llvm::StringRef to) {
+    const std::error_code ec = llvm::sys::fs::rename(from, to);
+    if (ec) return llvm::errorCodeToError(ec);
+    return llvm::Error::success();
+}
+
+llvm::ErrorOr<uint64_t> file_size(llvm::StringRef path) {
+    uint64_t size = 0;
+    const std::error_code ec = llvm::sys::fs::file_size(path, size);
+    if (ec) return ec;
+    return size;
+}
+
+llvm::ErrorOr<std::vector<DirectoryEntryInfo>> list_directory(llvm::StringRef path) {
+    std::error_code ec;
+    std::vector<DirectoryEntryInfo> entries;
+    for (llvm::sys::fs::directory_iterator it(path, ec), end; it != end; it.increment(ec)) {
+        if (ec) return ec;
+        const auto status = it->status();
+        if (!status) return status.getError();
+        DirectoryEntryInfo entry;
+        entry.path = it->path();
+        entry.size = status->getSize();
+        entry.modification_time =
+            std::chrono::duration_cast<std::chrono::nanoseconds>(status->getLastModificationTime().time_since_epoch())
+                .count();
+        entry.directory = status->type() == llvm::sys::fs::file_type::directory_file;
+        entries.push_back(std::move(entry));
+    }
+    if (ec) return ec;
+    return entries;
+}
 
 std::string error_message(llvm::Error error) { return llvm::toString(std::move(error)); }
 

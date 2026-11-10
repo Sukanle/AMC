@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "SKL/AMC/Private/Support/File.h"
 #include "SKL/AMC/Support/CommandLine.h"
 #include "SKL/AMC/CLI/Support.h"
 #include "SKL/AMC/Support/Process.h"
@@ -122,11 +123,9 @@ int cmd_verify(const fs::path &provider) {
             const fs::path base = build_dir.empty() ? fs::absolute(config_path).parent_path() : build_dir;
             const std::string process_suffix = amc::support::unique_process_suffix();
             const fs::path temporary = base / ".amc" / ("verify-frontend-" + process_suffix + ".abix");
-            std::error_code ec;
-            fs::create_directories(temporary.parent_path(), ec);
-            if (ec)
-                return fail(
-                    amc::ErrorCategory::IO, "verify", "cannot create build directory", base.string(), ec.message());
+            if (auto err = amc::support::make_directories(temporary.parent_path().string()))
+                return fail(amc::ErrorCategory::IO, "verify", "cannot create build directory", base.string(),
+                    amc::support::error_message(std::move(err)));
             if (!amc::compilation::dispatch_provider(
                     frontend, amc::support::Capability::FRONTEND, config_path, temporary, error))
                 return fail(amc::ErrorCategory::PROVIDER, "frontend", error, config_path.string());
@@ -145,8 +144,8 @@ int cmd_verify(const fs::path &provider) {
             for (size_t index = 0; index < exports.size(); ++index) {
                 const auto &spec = exports[index];
                 const fs::path reference = spec.output.is_absolute() ? spec.output : base / spec.output;
-                if (!fs::exists(reference)) {
-                    fs::remove(temporary, ec);
+                if (!amc::support::path_exists(reference.string())) {
+                    llvm::consumeError(amc::support::remove_path(temporary.string()));
                     return fail(amc::ErrorCategory::IO, "verify", "reference contract artifact not found",
                         reference.string(), "build the contract before verifying");
                 }
@@ -176,9 +175,9 @@ int cmd_verify(const fs::path &provider) {
                         std::make_move_iterator(converted.end()));
                 }
                 results.push_back(std::move(result));
-                fs::remove(fresh, ec);
+                llvm::consumeError(amc::support::remove_path(fresh.string()));
             }
-            fs::remove(temporary, ec);
+            llvm::consumeError(amc::support::remove_path(temporary.string()));
 
             if (diagnostics)
                 fmt::print("{}", diagnostics_buffer);

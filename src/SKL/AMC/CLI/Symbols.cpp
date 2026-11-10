@@ -101,7 +101,7 @@ int cmd_symbols(bool publish) {
                 if (!explicit_build_id.empty()) {
                     if (!amc::normalize_build_id(explicit_build_id, key))
                         return usage_error("--build-id expects hexadecimal digits");
-                } else if (fs::exists(input.string() + ".meta")) {
+                } else if (amc::support::path_exists(input.string() + ".meta")) {
                     try {
                         const auto table = toml::parse_file(input.string() + ".meta");
                         const auto side = table["metadata"]["build_id"].value<std::string>();

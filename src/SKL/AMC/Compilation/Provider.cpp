@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "SKL/AMC/Compilation/Provider.h"
+#include "SKL/AMC/Private/Support/File.h"
 #include "SKL/AMC/Support/Language.h"
 
 #include "SKL/AMC/Support/Json.h"
@@ -58,11 +59,10 @@ fs::path manifest_path(const fs::path &executable_dir) {
         override_path != nullptr && *override_path != '\0')
         return fs::path(override_path);
     const fs::path beside_executable = executable_dir / "amc-providers.toml";
-    std::error_code ec;
-    if (fs::is_regular_file(beside_executable, ec)) return beside_executable;
+    if (amc::support::is_regular_file(beside_executable.string())) return beside_executable;
 #ifdef AMC_DEFAULT_PROVIDERS_FILE
     const fs::path source_tree = AMC_DEFAULT_PROVIDERS_FILE;
-    if (fs::is_regular_file(source_tree, ec)) return source_tree;
+    if (amc::support::is_regular_file(source_tree.string())) return source_tree;
 #endif
     return beside_executable;
 }
@@ -87,8 +87,7 @@ bool read_string_array(const toml::table &table, const char *key, std::vector<st
 bool load_provider_manifest(const fs::path &executable_dir, ProviderManifest &manifest, std::string &error) {
     manifest = {};
     const fs::path path = manifest_path(executable_dir);
-    std::error_code ec;
-    if (!fs::is_regular_file(path, ec)) {
+    if (!amc::support::is_regular_file(path.string())) {
         error = "provider manifest not found: " + path.string();
         return false;
     }
@@ -593,12 +592,10 @@ int generate(
     const fs::path &provider, const fs::path &input, const fs::path &destination, const std::string &extension) {
     fs::path output = destination;
     if (destination.extension() != extension) output /= ("amc_generated" + extension);
-    std::error_code ec;
     if (!output.parent_path().empty()) {
-        fs::create_directories(output.parent_path(), ec);
-        if (ec)
-            return fail(
-                amc::ErrorCategory::IO, "generate", "cannot create output directory", output.string(), ec.message());
+        if (auto err = amc::support::make_directories(output.parent_path().string()))
+            return fail(amc::ErrorCategory::IO, "generate", "cannot create output directory", output.string(),
+                amc::support::error_message(std::move(err)));
     }
     std::string error;
     if (!dispatch_provider(provider, amc::support::Capability::BACKEND, input, output, error))

@@ -35,8 +35,21 @@ llvm::ErrorOr<std::vector<uint8_t>> read_binary_file(llvm::StringRef path);
 llvm::Error write_text_file(llvm::StringRef path, llvm::StringRef text);
 llvm::Error write_binary_file(llvm::StringRef path, llvm::ArrayRef<uint8_t> bytes);
 
+struct DirectoryEntryInfo {
+    std::string path;
+    uint64_t size = 0;
+    int64_t modification_time = 0;   // nanoseconds since the Unix epoch
+    bool directory = false;
+};
+
 llvm::Error make_directories(llvm::StringRef path);
 bool path_exists(llvm::StringRef path);
+bool is_regular_file(llvm::StringRef path);
+bool is_directory(llvm::StringRef path);
+llvm::Error remove_path(llvm::StringRef path, bool recursive = false);
+llvm::Error rename_path(llvm::StringRef from, llvm::StringRef to);
+llvm::ErrorOr<uint64_t> file_size(llvm::StringRef path);
+llvm::ErrorOr<std::vector<DirectoryEntryInfo>> list_directory(llvm::StringRef path);
 
 // Render an llvm::Error for the CLI's fail()/detail path and consume it.
 std::string error_message(llvm::Error error);

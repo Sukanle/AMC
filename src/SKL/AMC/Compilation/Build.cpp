@@ -869,11 +869,9 @@ int build_command(const fs::path &provider) {
             // process so they never clobber each other's frontend output.
             const fs::path temporary = base / ".amc" / ("frontend-" + amc::support::unique_process_suffix() + ".abix");
             const fs::path semantic_temporary = fs::path(temporary.string() + ".semantic");
-            std::error_code ec;
-            fs::create_directories(temporary.parent_path(), ec);
-            if (ec)
-                return fail(
-                    amc::ErrorCategory::IO, "build", "cannot create build directory", base.string(), ec.message());
+            if (auto err = amc::support::make_directories(temporary.parent_path().string()))
+                return fail(amc::ErrorCategory::IO, "build", "cannot create build directory", base.string(),
+                    amc::support::error_message(std::move(err)));
 
             // M3.4: reuse a cached frontend artifact when every input that can
             // change it is identical. The source digest covers the declared
@@ -1024,7 +1022,7 @@ int build_command(const fs::path &provider) {
             // frontend today) still gets one: the synthesized links are the
             // input of the lowering pass and must be reproducible next to the
             // artifact.
-            if (!fs::exists(semantic_temporary)
+            if (!amc::support::path_exists(semantic_temporary.string())
                 && (!semantic.types.empty() || !semantic.functions.empty() || !semantic.records.empty())) {
                 if (!amc::semantic::write_semantic_json(semantic, semantic_temporary.string(), error))
                     return fail(amc::ErrorCategory::IO, "semantic", error, semantic_temporary.string());
@@ -1308,10 +1306,9 @@ int build_command(const fs::path &provider) {
             }
             for (const auto &spec : exports) {
                 const fs::path output = spec.output.is_absolute() ? spec.output : base / spec.output;
-                fs::create_directories(output.parent_path(), ec);
-                if (ec)
+                if (auto err = amc::support::make_directories(output.parent_path().string()))
                     return fail(amc::ErrorCategory::IO, "build", "cannot create export directory", output.string(),
-                        ec.message());
+                        amc::support::error_message(std::move(err)));
                 amc::ABIModule projected;
                 if (!amc::project_symbols(full, spec.symbols, projected, error))
                     return fail(amc::ErrorCategory::VALIDATION, "project_symbols", error, config_path.string());
@@ -1323,7 +1320,7 @@ int build_command(const fs::path &provider) {
                 // The semantic sidecar describes template declarations and
                 // instances. It is not part of the ABI artifact, so it is
                 // copied verbatim next to each exported artifact.
-                if (fs::exists(semantic_temporary)
+                if (amc::support::path_exists(semantic_temporary.string())
                     && !copy_file(semantic_temporary, fs::path(output.string() + ".semantic"), error))
                     return fail(amc::ErrorCategory::IO, "semantic", error, output.string() + ".semantic");
                 // The lowered contract is sidecar data: backends consume it when
@@ -1370,9 +1367,9 @@ int build_command(const fs::path &provider) {
                     if (cache.store(cache_inputs, artifacts, dependencies, store_error)) cache.record_store();
                 }
             }
-            fs::remove(temporary, ec);
-            fs::remove(temporary.string() + ".d", ec);
-            fs::remove(semantic_temporary, ec);
+            llvm::consumeError(amc::support::remove_path(temporary.string()));
+            llvm::consumeError(amc::support::remove_path(temporary.string() + ".d"));
+            llvm::consumeError(amc::support::remove_path(semantic_temporary.string()));
             return 0;
         } catch (const toml::parse_error &error) {
             return fail(amc::ErrorCategory::CONFIG, "build", std::string(error.description()), config_path.string());

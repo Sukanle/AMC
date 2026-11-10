@@ -37,25 +37,39 @@ This does **not** remove the module dependency direction above. IR/Pass/Backend 
 
 ### Preferred replacements
 
-| Standard library                              | LLVM facility                            | Use when                                                                                                     |
-| --------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `std::vector`                                 | `llvm::SmallVector<T, N>`                | Small, frequently created containers; choose `N` from measured usage, not by habit                           |
-| `const char*` / `std::string_view` parameters | `llvm::StringRef`                        | Non-owning read-only strings; never store beyond the source lifetime                                         |
-| `std::unordered_map`                          | `llvm::DenseMap`                         | Pointer/integer keys and cache-friendly iteration                                                            |
-| string-keyed map                              | `llvm::StringMap`                        | String keys owned by the map; iteration order is not stable                                                  |
-| `std::set` / `std::unordered_set`             | `llvm::SmallSet` / `llvm::DenseSet`      | Small or hash-friendly sets                                                                                  |
-| `std::function` for immediate calls           | `llvm::function_ref`                     | Non-owning, synchronous callbacks only                                                                       |
-| move-only stored callback                     | `llvm::unique_function`                  | The callback must outlive the call site                                                                      |
-| `std::ifstream` whole-file read               | `llvm::MemoryBuffer`                     | File reads; check the returned `ErrorOr`                                                                     |
-| `std::ofstream` file writes                   | `llvm::raw_fd_ostream`                   | File writes; check `has_error()`/`error()`                                                                   |
-| `std::regex`                                  | `llvm::Regex`                            | Parsing; prefer a small hand-written parser on hot paths                                                     |
-| filesystem queries                            | `llvm::sys::fs` / `llvm::sys::path`      | Filesystem access; `std::filesystem` remains acceptable where it is clearer or the target does not link LLVM |
-| line-by-line reading                          | `llvm::line_iterator`                    | Line-oriented parsing                                                                                        |
-| `std::optional`                               | `std::optional`                          | Prefer the standard type; `llvm::Optional` is obsolete and must not be added                                 |
-| error-or-value                                | `llvm::ErrorOr<T>` / `llvm::Expected<T>` | LLVM APIs that already use them, or rich error propagation in LLVM-linked code                               |
-| `std::thread`                                 | `llvm::thread`                           | Only when stack-size or LLVM's single-thread mode is required                                                |
+| Standard library                              | LLVM facility                            | Use when                                                                                                                                                                                    |
+| --------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `std::vector`                                 | `llvm::SmallVector<T, N>`                | Small, frequently created containers; choose `N` from measured usage, not by habit                                                                                                          |
+| `const char*` / `std::string_view` parameters | `llvm::StringRef`                        | Non-owning read-only strings; never store beyond the source lifetime                                                                                                                        |
+| `std::unordered_map`                          | `llvm::DenseMap`                         | Pointer/integer keys and cache-friendly iteration                                                                                                                                           |
+| string-keyed map                              | `llvm::StringMap`                        | String keys owned by the map; iteration order is not stable                                                                                                                                 |
+| `std::set` / `std::unordered_set`             | `llvm::SmallSet` / `llvm::DenseSet`      | Small or hash-friendly sets                                                                                                                                                                 |
+| `std::function` for immediate calls           | `llvm::function_ref`                     | Non-owning, synchronous callbacks only                                                                                                                                                      |
+| move-only stored callback                     | `llvm::unique_function`                  | The callback must outlive the call site                                                                                                                                                     |
+| `std::ifstream` whole-file read               | `llvm::MemoryBuffer`                     | File reads; use `getFile` or `getFileSlice` and check the returned `ErrorOr`                                                                                                                |
+| `std::ofstream` / `fmt::output_file` writes   | `llvm::raw_fd_ostream`                   | File writes; check the open error and `has_error()`/`error()`. fmt is formatting-only                                                                                                       |
+| `std::regex`                                  | `llvm::Regex`                            | Parsing; prefer a small hand-written parser on hot paths                                                                                                                                    |
+| `std::filesystem` file/directory operations   | `llvm::sys::fs` / `llvm::sys::path`      | Prefer LLVM for content I/O, status, iteration, create/remove/rename and path handling. Keep `std::filesystem` only for pure path algebra where clearer or when the target cannot link LLVM |
+| line-by-line reading                          | `llvm::line_iterator`                    | Line-oriented parsing                                                                                                                                                                       |
+| `std::optional`                               | `std::optional`                          | Prefer the standard type; `llvm::Optional` is obsolete and must not be added                                                                                                                |
+| error-or-value                                | `llvm::ErrorOr<T>` / `llvm::Expected<T>` | LLVM APIs that already use them, or rich error propagation in LLVM-linked code                                                                                                              |
+| `std::thread`                                 | `llvm::thread`                           | Only when stack-size or LLVM's single-thread mode is required                                                                                                                               |
 
 `llvm::ArrayRef<T>` / `llvm::MutableArrayRef<T>` are preferred for read-only or mutable borrowed spans in LLVM-facing APIs. They are non-owning views; do not store them past the underlying storage lifetime.
+
+### File I/O policy
+
+`fmt` is a formatting library, not a file API: use `fmt::format` / `fmt::format_to` for text, but open, read, write, iterate and query files through LLVM Support.
+
+The STL file APIs are not sufficient as the default for AMC:
+
+- they only provide basic operations, so status, directory iteration, atomic replace, slicing and memory-mapped reads need ad-hoc code;
+- their path representation is platform-native: `std::filesystem::path::string_type` is `std::wstring` on Windows, which makes `fs::path` → `std::string` code compile on Linux and fail on Windows;
+- error reporting is split between streams, exceptions and `std::error_code`.
+
+LLVM provides a portable UTF-8/StringRef path model on every platform, `MemoryBuffer::getFile` / `getFileSlice` for mapped or sliced reads, `raw_fd_ostream` for checked writes, `sys::fs` for status, directory iteration, create/remove/rename and `ErrorOr`/`Error` error propagation.
+
+Use `std::filesystem` only for pure path algebra where it is clearer, or in a target that cannot link LLVM. Do not pass a `std::filesystem::path` to a `std::string` API.
 
 LLVM ADT is not mandatory. Keep the standard type when it is clearer, when the container is large, or when the element count is unknown; measure before replacing.
 
@@ -68,6 +82,8 @@ LLVM ADT is not mandatory. Keep the standard type when it is clearer, when the c
 5. **Measure before replacing.** `SmallVector` and `DenseMap` are not automatic wins for every container. Keep the standard type when the code is clearer, the container is large, or the element count is unknown.
 6. **Do not use `llvm::Optional`.** It is removed from modern LLVM. Use `std::optional`, `llvm::ErrorOr<T>` or `llvm::Expected<T>`.
 7. **Prefer LLVM APIs when already in LLVM code.** If a function already returns `llvm::Expected` or takes `StringRef`, keep the LLVM type at that boundary instead of converting back and forth.
+8. **File I/O uses LLVM Support.** New file content, status, directory, create/remove/rename and path-boundary code uses `llvm::MemoryBuffer`, `llvm::raw_fd_ostream` and `llvm::sys::fs` (or `llvm::sys::path`). `std::ifstream`, `std::ofstream`, `fmt::output_file` and `std::filesystem` file operations are not acceptable in new code except for a documented target that cannot link LLVM.
+9. **fmt is formatting-only.** `fmt::print` to the console is fine, but fmt must not own, open, read or write a file. File writes go through `llvm::raw_fd_ostream`, never `fmt::output_file` or `fmt::ostream`.
 
 ### Review checklist
 
@@ -78,6 +94,8 @@ LLVM ADT is not mandatory. Keep the standard type when it is clearer, when the c
 - [ ] Is every `Expected` error checked?
 - [ ] Was the replacement measured or justified, not applied mechanically?
 - [ ] Is LLVM/Clang version compatibility considered for public APIs?
+- [ ] Do file reads/writes/status/iteration use `MemoryBuffer`, `raw_fd_ostream` and `sys::fs` rather than STL streams or fmt file APIs?
+- [ ] Is `std::filesystem` limited to pure path algebra, and never passed to a `std::string` API?
 
 ---
 
