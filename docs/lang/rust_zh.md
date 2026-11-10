@@ -309,7 +309,7 @@ Rust 文件仍需要链接原生库；当启用 `abix_link` 选项时，投影�
 
 - 源码 parser 不是完整的 `rustc` AST：只提取 `#[repr(C)]` / `extern "C"` 表面；泛型、trait、生命周期与位域留在模块内部。可选的 helper 通过 rustc 视图补齐泛型实例、trait、生命周期和标准容器。
 - `repr(C)` 布局通过 provider conformance 测试中的 rustc probe 验证（`amc-rust-layout-probe-test`）；probe 目前只覆盖 Host target。
-- `repr(C, packed)` / `repr(C, packed(N))` 和 `repr(C)` union 只完成布局验证；backend emission 暂缓到 v0.4.0，与一级 union/packed/transparent 表示模型一起落地。v0.3.x 不引入中间态 `TypeRepr` section。
+- `repr(C, packed)` / `repr(C, packed(N))` 和 `repr(C)` union 只完成布局验证；backend emission 延后到 v0.4.x/v0.5.0，与一级 union/packed/transparent 表示模型一起落地。v0.4.0 不生成 packed/union 绑定。
 - `repr(transparent)` 目前要求恰好一个字段；额外的零大小字段在 v0.3.x 尚未建模。
 - 记录的 ABI 是 target 相关的；Rust 消费方必须按与 provider 相同的 target 与 C ABI 编译。
 - `isize` / `usize` 在投影中保留 Rust 拼写；`c_long` / `c_ulong` 映射为 `core::ffi::c_long` / `c_ulong`。其他 primitive 继续使用 ABI 宽度映射。

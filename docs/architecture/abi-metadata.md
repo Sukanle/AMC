@@ -6,12 +6,12 @@
 
 ## Status
 
-| Item                                           | Status                            |
-| ---------------------------------------------- | --------------------------------- |
-| Owner handle layout (`ABIX_OWNER_HANDLE_JSON`) | available in v0.4.0               |
-| Lease C ABI (`LeaseABI.h`)                     | available in v0.4.0               |
-| Lease API metadata (`ABIX_LEASE_API_JSON`)     | available in the v0.4.x ABIX tree |
-| Generated lease declarations (Rust/C++)        | available in AMC v0.4.0           |
+| Item                                           | Status                   |
+| ---------------------------------------------- | ------------------------ |
+| Owner handle layout (`ABIX_OWNER_HANDLE_JSON`) | available in v0.4.0      |
+| Lease C ABI (`LeaseABI.h`)                     | available in v0.4.0      |
+| Lease API metadata (`ABIX_LEASE_API_JSON`)     | available in ABIX v0.4.0 |
+| Generated lease declarations (Rust/C++)        | available in AMC v0.4.0  |
 
 ## The duplicate-declaration problem
 
@@ -64,7 +64,7 @@ const _: () = assert!(core::mem::offset_of!(abix_lease_api, acquire) == ...);
 
 ## What is implemented
 
-1. ABIX publishes `cmake/lease_api.json`, installed as `ABIX_LEASE_API_JSON`.
+1. ABIX v0.4.0 publishes `cmake/lease_api.json`, installed as `ABIX_LEASE_API_JSON`.
 2. The file records `abi_version`, `struct_size`, `align`, field offsets and the stable `abix_status` values.
 3. AMC CMake reads the JSON and defines the lease layout/version facts for `amc-rust`.
 4. The Rust projection uses those facts for its constants and compile-time size/offset assertions; C++ uses `LeaseABI.h` directly.
@@ -72,9 +72,8 @@ const _: () = assert!(core::mem::offset_of!(abix_lease_api, acquire) == ...);
 
 The JSON is additive metadata. It does not change the lease ABI, `abi_version`, or the `struct_size` rules. Older consumers can keep using `LeaseABI.h`.
 
-## Remaining v0.4.x work
+## Remaining optional work
 
-- Publish the ABIX metadata commit and move `AMC_ABIX_REF` from `30fc9be` to that ref. Until then AMC reads the metadata from the local checkout and falls back to the v1 layout when it is absent.
 - Optionally ship full ABIX-owned Rust/Zig bindings; the Rust struct spelling is still emitted by AMC, but its layout and status facts already come from the metadata.
 
 ## Why this matters for `LeaseGuard`

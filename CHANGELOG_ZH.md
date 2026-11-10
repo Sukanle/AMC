@@ -16,7 +16,7 @@
 - 显式泛型实例现在支持 primitive、非泛型本地类型和 const generic 十进制整数。未知名称、多余参数和非法 const 值会 fail closed，不再生成猜测的实例。
 - Rust 容器契约：`[[adapt]]` 将 `[[rust.expose]]` 暴露的 `String`/`&str`、`Vec<T>`/`&[T]`、`Option<T>` 参数映射到 ABIX-STD StringView、SequenceView、Optional 边界类型。AMC 合成边界 record，生成 `#[repr(C)]` 结构和 marshal 代码，并记录 lowering。ABIX v0.4.0 owner handle 与 owned view 已接入。Rust 投影生成 `OwnerOf*`、`OwnedString*`、`OwnedSpan*` RAII 包装，Drop 通过 owner handle 释放；C++ 投影生成 move-only 的 `OwnerOf*`、`OwnedString*`、`OwnedSpan*`（任意 owned span 元素在投影边界擦除为 `void`，通过 `data<T>()` 取回；Zig backend 暂缓到后续）；owned String/Vec 使用带 header 的分配，使 `owner.object == view.data`：`Box<T>` 可映射到 `abix_owner_<T>`，owned `String`/`Vec` 返回值映射到 `abix_owned_str_utf8` / `abix_owned_span_<T>`（view + owner，通过 `owner.destroy` 释放）。`Option<T>` 返回值映射到 Optional 边界。`[[contract]] params = ["owned-view"]` 让 `String`/`Vec` 参数消费 ABIX owned view：适配器复制 payload，并通过 owner handle 释放调用方的分配。owner handle 参数在运行期拒绝 `borrowed` 模式，不再接管调用方仍持有的对象。 64 位 owner handle 的规范布局在配置期从 ABIX 的 `ABIX_OWNER_HANDLE_JSON` 读取，不再由 AMC 镜像。生成的 RAII 包装在接管 handle 前会拒绝空对象、borrowed 模式和缺失的 destroy。owner handle 现在携带 Host 设置的 provider module instance（`amc_module_set_instance`），不再硬编码为 `0`，为接入 ABIX lease C ABI 做准备。生成的 Rust/C++ RAII 包装提供 `module_instance()`，用于诊断和 lease 关联。`Box<dyn Trait>` 会作为 fat pointer 明确拒绝，不再降级为 thin owned handle。`Vec<T>` / `Option<T>` 适配现在除 primitive 外还支持本地 `#[repr(C)]` record 元素；owned `Vec` marshal 要求 `Clone`。嵌套字段解析不再把父 record 的字段区间与元素类型新增的字段混在一起。
 - 公共 lease 运行时与生成的 guard：`SKL/AMC/Support/LeaseRegistry.h` 实现 ABIX lease C ABI 的 Host（registry、module table、acquire/release、draining/CLOSING）。C++ 与 Rust 投影生成 move-only 的 `LeaseGuard<OwnerOf*>`，在 create 前 acquire、在 release 前 destroy、create 失败时释放 lease，并拒绝不兼容的 API。生成的 owner handle 携带 Host 设置的 module instance。见[lease 运行时](docs/architecture/lease-runtime_zh.md)。
-- Lease API 元数据：当 ABIX 包或 checkout 提供 `ABIX_LEASE_API_JSON` 时，`amc-rust` 会读取其中的 `struct_size`、对齐、字段 offset 和状态值，用于生成 Rust lease 声明。v1 布局仍作为回退，旧 ABIX 包仍可构建。本地 ABIX checkout 已发布 `lease_api.json`；在元数据进入已发布 ref 之前，`AMC_ABIX_REF` 仍保持 `30fc9be`。
+- Lease API 元数据：ABIX v0.4.0 包含 `ABIX_LEASE_API_JSON`（`share/ABIX/lease_api.json`），`amc-rust` 会读取其中的 `struct_size`、对齐、字段 offset 和状态值，用于生成 Rust lease 声明。v1 布局仍作为旧 ABIX 包的回退。`AMC_ABIX_REF` 现在为 `v0.4.0`。
 - `Box<T>` 走显式 owned-handle 路径：`[[adapt]] native = "Box" target = "*mut T"` 加上 `[[owned]]` create/destroy 和 `[[contract]]` 所有权模式。机械配对可用 `create = "auto"` / `destroy = "auto"` 自动生成（`Box::new` / `Box::from_raw`），`release = "auto"` 复用匹配的 owned destroy。容器返回值在 owned 契约落地前仍明确拒绝。
 - 标准容器事实：`Option<T>`、`Box<T>`、`String`、`Vec<T>` 的出现位置记录在 `.semantic` 的 `rust.containers`。选中进入 ABI 时会要求显式 `[[contract]]`，不会假设 niche 布局或所有权。
 - `AMC_BUILD_RUST_HELPER=ON` 会用 Cargo 把 `tools/rustc-helper` 构建到 build 目录（仅在 helper 进程内设置 `RUSTC_BOOTSTRAP=1`），并安装到 AMC 工具旁边；未开启时测试仍按需构建 helper。
@@ -34,6 +34,13 @@
 ### 平台
 
 - AMC 与 ABIX 只支持 64 位平台。32 位和 16 位目标不受支持，无限期延后，不在 v0.4.x/v0.5.0 路线图中。支持 32 位需要重新设计 64 位/128 位身份 hash 以及对指针敏感的 ABIX metadata/query 表；owner/lease ABI（`module_instance`、`abix_lease`）也是 64 位。Rust 前端现在会拒绝 `pointer_bits != 64`，不再输出尽力而为的布局。见[平台支持](docs/architecture/platform-support_zh.md)。
+
+### 范围
+
+- 可选的 `amc-rustc-helper` 在 v0.4.0 中覆盖 Linux：源码、构建和 `-DAMC_BUILD_RUST_HELPER=ON` 安装已验证。Windows/macOS 的 helper 验证与预编译分发延后到 v0.4.x；Rust 前端保留 parser/probe fallback。
+- `repr(C, packed)` / union 的 backend emission 仍延后到 v0.4.x/v0.5.0。v0.4.0 只保留布局验证，不生成 packed/union 绑定。
+- v0.4.0 提供 Cargo workspace fixture 及其 workspace/member/path dependency/target 事实；完整的真实项目 fixture、Cargo profile 与 extern dependency 事实延后到 v0.4.x。
+- Zig 高级语义仍属于 v0.4.x/v0.5.0，不是 v0.4.0 验收项。
 
 ### 变更
 
