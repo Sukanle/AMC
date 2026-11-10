@@ -692,7 +692,9 @@ void emit_owner_views(Output &o, const Projector &p) {
             o.print("pub struct {} {{\n    raw: {},\n}}\n", wrapper, raw_name);
             o.print("impl {} {{\n", wrapper);
             o.print("    pub unsafe fn from_raw(raw: {}) -> Option<Self> {{\n", raw_name);
-            o.print("        if raw.object.is_null() {{ None }} else {{ Some(Self {{ raw }}) }}\n    }}\n");
+            o.print(
+                "        if raw.object.is_null() || (raw.mode != 1 && raw.mode != 2) || raw.destroy.is_null() {{\n");
+            o.print("            None\n        }} else {{\n            Some(Self {{ raw }})\n        }}\n    }}\n");
             o.print("    pub fn object(&self) -> {} {{ self.raw.object }}\n", p.field_type(object->type_id));
             o.print("    pub fn into_raw(self) -> {} {{\n", raw_name);
             o.print("        let raw = unsafe {{ core::ptr::read(&self.raw) }};\n");
@@ -717,7 +719,10 @@ void emit_owner_views(Output &o, const Projector &p) {
             o.print("pub struct {} {{\n    raw: {},\n}}\n", wrapper, raw_name);
             o.print("impl {} {{\n", wrapper);
             o.print("    pub unsafe fn from_raw(raw: {}) -> Option<Self> {{\n", raw_name);
-            o.print("        if raw.owner.object.is_null() {{ None }} else {{ Some(Self {{ raw }}) }}\n    }}\n");
+            o.print("        if raw.owner.object.is_null()\n");
+            o.print("            || (raw.owner.mode != 1 && raw.owner.mode != 2)\n");
+            o.print("            || raw.owner.destroy.is_null()\n        {{\n");
+            o.print("            None\n        }} else {{\n            Some(Self {{ raw }})\n        }}\n    }}\n");
             o.print("    pub fn view(&self) -> &{} {{ &self.raw.view }}\n", view_type);
             o.print("    pub fn into_raw(self) -> {} {{\n", raw_name);
             o.print("        let raw = unsafe {{ core::ptr::read(&self.raw) }};\n");

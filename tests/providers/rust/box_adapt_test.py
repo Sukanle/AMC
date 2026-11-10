@@ -375,7 +375,12 @@ mod skl {
 use skl::abix::*;
 
 fn main() {
-    let mut raw = unsafe { box_widget_make(7) };
+    let raw = unsafe { box_widget_make(7) };
+    let mut borrowed = unsafe { core::ptr::read(&raw) };
+    borrowed.mode = 0;
+    assert!(unsafe { OwnerOfBoxWidget::from_raw(borrowed) }.is_none());
+
+    let mut raw = raw;
     raw.mode = 0;
     let _ = unsafe { box_widget_value(raw) };
     println!("borrowed owner was accepted");

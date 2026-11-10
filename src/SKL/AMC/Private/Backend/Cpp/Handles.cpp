@@ -216,7 +216,9 @@ void Emit::owner_views() {
                 "    void *object() const {{ return _raw.object; }}\n"
                 "    {0} native_handle() const {{ return _raw; }}\n"
                 "    {0} release() {{ auto raw = _raw; _raw = {{}}; return raw; }}\n"
-                "    explicit operator bool() const {{ return _raw.object != nullptr; }}\n"
+                "    explicit operator bool() const {{\n"
+                "        return _raw.object != nullptr && (_raw.mode == 1 || _raw.mode == 2)\n"
+                "            && _raw.destroy != nullptr;\n    }}\n"
                 "private:\n    {0} _raw{{}};\n}};\n",
                 raw_name, wrapper);
         } else {
@@ -285,7 +287,9 @@ void Emit::owner_views() {
                 "{3}"
                 "    {0} native_handle() const {{ return _raw; }}\n"
                 "    {0} release() {{ auto raw = _raw; _raw = {{}}; return raw; }}\n"
-                "    explicit operator bool() const {{ return _raw.owner.object != nullptr; }}\n"
+                "    explicit operator bool() const {{\n"
+                "        return _raw.owner.object != nullptr && (_raw.owner.mode == 1 || _raw.owner.mode == 2)\n"
+                "            && _raw.owner.destroy != nullptr;\n    }}\n"
                 "private:\n    {0} _raw{{}};\n}};\n",
                 raw_name, wrapper, view_type->name, extra);
         }
