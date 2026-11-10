@@ -68,12 +68,12 @@ int generate_lua(const fs::path &, const fs::path &input, const fs::path &output
     if (backend) return usage_error("backend is a C++ provider capability; use generate for lua");
     amc::ABIModule module;
     std::string error;
-    if (!amc::load_module_source(input, module, error))
-        return fail(read_error_category(error), "read_abix", error, input);
+    if (!amc::load_module_source(input.string(), module, error))
+        return fail(read_error_category(error), "read_abix", error, input.string());
     const bool conformance = output.extension() == ".lua";
     const std::string contract =
         conformance ? amc::generate_lua_conformance(module, error) : amc::generate_lua_contract(module, error);
-    if (!error.empty()) return fail(amc::ErrorCategory::INTERNAL, "generate_lua", error, input);
+    if (!error.empty()) return fail(amc::ErrorCategory::INTERNAL, "generate_lua", error, input.string());
     fs::path destination = output;
     if (destination.extension() != ".hpp" && destination.extension() != ".lua") destination /= "amc_lua_contract.hpp";
     std::error_code ec;
@@ -99,7 +99,7 @@ int generate_provider(
     if (backend) {
         std::string error;
         if (!amc::compilation::dispatch_provider(provider, amc::support::Capability::BACKEND, input, output, error))
-            return fail(amc::ErrorCategory::PROVIDER, "backend", error, input);
+            return fail(amc::ErrorCategory::PROVIDER, "backend", error, input.string());
         return 0;
     }
     const char *extension = language == Language::CPP ? ".hpp" : (language == Language::RUST ? ".rs" : ".zig");

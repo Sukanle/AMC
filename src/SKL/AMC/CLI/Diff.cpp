@@ -52,9 +52,12 @@ llvm::cl::opt<std::string> diff_output("o", llvm::cl::desc("Write the compatibil
 }   // namespace
 
 int cmd_diff(bool compatibility) {
-    const fs::path source_path = diff_source.getValue();
-    const fs::path target_path = diff_target.getValue();
-    const fs::path output = diff_output.getValue();
+    // Keep the artifact paths as std::string: the load/write helpers take a
+    // portable string path, while std::filesystem::path::string_type is
+    // std::wstring on Windows and does not implicitly convert.
+    const std::string source_path = diff_source.getValue();
+    const std::string target_path = diff_target.getValue();
+    const std::string output = diff_output.getValue();
     {
         if (compatibility && !output.empty()) return usage_error("compatibility does not accept -o; use diff");
         amc::ABIModule source, target, report;
