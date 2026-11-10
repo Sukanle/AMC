@@ -475,7 +475,7 @@ def main():
 
             mismatch_config = os.path.join(work, "mismatch.abic.toml")
             mismatch_text = fixture_config.read_text(encoding="utf-8").replace(
-                "pointer_bits = 64", "pointer_bits = 16", 1)
+                'endianness = "little"', 'endianness = "big"', 1)
             mismatch_text = mismatch_text.replace(
                 "[target]", '[rust]\nhelper = "' + helper_toml + '"\n\n[target]', 1)
             with open(mismatch_config, "w", encoding="utf-8") as handle:

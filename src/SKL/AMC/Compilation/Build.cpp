@@ -893,6 +893,10 @@ int build_command(const fs::path &provider) {
                 const std::string endianness = (*target)["endianness"].value_or(std::string{});
                 if (!endianness.empty()) key_endianness = endianness == "little" ? 1u : (endianness == "big" ? 2u : 0u);
             }
+            if (key_pointer_bits != 0 && key_pointer_bits != 64)
+                return fail(amc::ErrorCategory::CONFIG, "build",
+                    "AMC supports 64-bit targets only; 32-bit and 16-bit platforms are not supported",
+                    config_path.string());
 
             amc::InstantiationBuildInputs cache_inputs;
             const bool use_cache = !cache_dir.empty();

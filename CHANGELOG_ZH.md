@@ -29,6 +29,10 @@
 - 采用 ABIX v0.4.0 的显式 ABIX-STD 布局：`abix_optional`、`abix_result`、`abix_str`。`AMC_ABIX_REF` 改为 v0.4.0，并要求 `find_package(ABIX 0.4.0)`。
 - 旧 v0.3.x `.abix` artifact 与生成代码不兼容；必须用本树重新生成。
 
+### 平台
+
+- AMC 与 ABIX 只支持 64 位平台。32 位和 16 位目标不受支持，无限期延后，不在 v0.4.x/v0.5.0 路线图中。支持 32 位需要重新设计 64 位/128 位身份 hash 以及对指针敏感的 ABIX metadata/query 表；owner/lease ABI（`module_instance`、`abix_lease`）也是 64 位。Rust 前端现在会拒绝 `pointer_bits != 64`，不再输出尽力而为的布局。见[平台支持](docs/architecture/platform-support_zh.md)。
+
 ### 变更
 
 - `amc` CLI 和 `amc-cpp` / `amc-rust` / `amc-zig` provider 改用 LLVM `CommandLine` 解析参数。每个命令都是注册的 subcommand，使用类型化选项并自动提供 `--help` / `--version`；手写 argv 循环、手工拆分 `--format=` 和手写 usage 文本已移除。命令拼写通过 MICS `SKL_RFS_ENUM` 统一注册，不带命令运行时会输出 LLVM 的 subcommand 总览。`--error-format` 和每个命令的 `--format` 都是真正的 LLVM 选项，通过 callback 选择错误信封。CLI 采用 git 风格的 `amc <command> [options]` 形式：选项写在命令之后，因此不再需要 argv 重排或引导扫描。每个命令在实现旁边注册 handler，分派改为表查找而不是 switch。

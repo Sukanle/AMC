@@ -309,6 +309,8 @@ The binding maps `(interface_id, slot)` to an adapter function signature; the ad
 
 `[target]` describes the **target platform**; unknown facts are reported as `unverifiable` by runtime verification rather than assumed compatible. See [`ABI-SPEC.md`](https://github.com/Sukanle/ABIX/blob/main/.agents/ABI-SPEC.md) §10.
 
+> **Platform support:** `pointer_bits` must be `64`. AMC and ABIX support 64-bit platforms only; 32-bit and 16-bit targets are rejected. See [platform support](../architecture/platform-support.md).
+
 ## Runtime Modes
 
 ### `static`

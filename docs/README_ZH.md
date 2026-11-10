@@ -91,6 +91,7 @@ AMC/
 | 文档                                                            | English                                                   | 描述                                                    |
 | --------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------- |
 | [module-boundaries_zh.md](architecture/module-boundaries_zh.md) | [module-boundaries.md](architecture/module-boundaries.md) | 模块职责、依赖规则与私有实现布局                        |
+| [platform-support_zh.md](architecture/platform-support_zh.md)   | [platform-support.md](architecture/platform-support.md)   | 64 位平台策略与 32 位无限期延后                         |
 | [基准测试](bench/README_ZH.md)                                  | [Benchmarks](bench/README.md)                             | 套件、当前结果、扩展性与回归门槛                        |
 | [rust-adapter_zh.md](architecture/rust-adapter_zh.md)           | [rust-adapter.md](architecture/rust-adapter.md)           | 未来 rustc helper 的 `amc.rust.semantic/1` adapter 契约 |
 

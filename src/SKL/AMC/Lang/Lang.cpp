@@ -103,6 +103,13 @@ bool config_load(const std::string &path, const std::string &expected_language, 
             if (auto value = (*target)["c_long_bits"].value<int64_t>()) c.c_long_bits = static_cast<uint32_t>(*value);
             const std::string endianness = (*target)["endianness"].value_or(std::string{});
             if (!endianness.empty()) c.endianness = endianness == "little" ? 1u : (endianness == "big" ? 2u : 0u);
+            // AMC/ABIX only support 64-bit platforms; see
+            // docs/architecture/platform-support.md. Reject a 32-bit/16-bit
+            // target before any provider projects an ABI for it.
+            if (c.pointer_bits != 0 && c.pointer_bits != 64) {
+                e = "AMC supports 64-bit targets only; 32-bit and 16-bit platforms are not supported";
+                return false;
+            }
         }
         if (auto *owned = t["owned"].as_array()) {
             for (auto &&entry : *owned) {

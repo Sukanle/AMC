@@ -239,40 +239,27 @@ def main() -> int:
             return 1
         print("  [PASS] AMC layout matches rustc probe")
 
-        # Target-aware fallback: a 32-bit target must change pointer/usize/isize
-        # and the default c_long width without relying on the Host.
-        try:
-            config_text = config.read_text(encoding="utf-8")
-            config_text = config_text.replace("pointer_bits = 64", "pointer_bits = 32")
-            config32 = work / "rust_demo32.abic.toml"
-            config32.write_text(config_text, encoding="utf-8")
-            shutil.copyfile(source, work / "rust_demo.rs")
-            artifact32 = build_artifact(amc, config32, work / "build32")
-            buffer32 = query_layout(amc, artifact32, "RustBuffer")
-            fields32 = {field["name"]: field["offset"] for field in buffer32.get("fields", [])}
-            intptrs32 = query_layout(amc, artifact32, "RustIntPtrs")
-            int_fields32 = {field["name"]: field["offset"] for field in intptrs32.get("fields", [])}
-            checks = [
-                ("32-bit RustBuffer size", buffer32.get("size"), 8),
-                ("32-bit RustBuffer.len offset", fields32.get("len"), 4),
-                ("32-bit RustIntPtrs size", intptrs32.get("size"), 8),
-                ("32-bit RustIntPtrs.signed offset", int_fields32.get("signed"), 0),
-                ("32-bit RustIntPtrs.unsigned offset", int_fields32.get("unsigned"), 4),
-            ]
-            for description, actual, expected in checks:
-                if actual != expected:
-                    fail(f"{description}: amc={actual} expected={expected}")
-                    failures += 1
-                else:
-                    pass_(f"{description} = {expected}")
-        except RuntimeError as error:
-            print(f"  [FAIL] 32-bit target check: {error}", file=sys.stderr)
-            return 1
+        # 64-bit only: a 32-bit target is rejected, not projected best-effort.
+        config_text = config.read_text(encoding="utf-8")
+        config_text = config_text.replace("pointer_bits = 64", "pointer_bits = 32")
+        config32 = work / "rust_demo32.abic.toml"
+        config32.write_text(config_text, encoding="utf-8")
+        shutil.copyfile(source, work / "rust_demo.rs")
+        result32 = run([str(amc), "build", "-c", str(config32), "-B", str(work / "build32")])
+        rejection = (result32.stderr or "") + (result32.stdout or "")
+        if result32.returncode == 0:
+            fail("32-bit target was accepted")
+            failures += 1
+        elif "64-bit targets only" not in rejection:
+            fail(f"32-bit target rejected without the 64-bit policy diagnostic: {rejection.strip()[-300:]}")
+            failures += 1
+        else:
+            pass_("32-bit target is rejected (64-bit platforms only)")
 
         if failures:
-            print(f"  [FAIL] {failures} target-aware layout mismatch(es)")
+            print(f"  [FAIL] {failures} target policy mismatch(es)")
             return 1
-        print("  [PASS] target-aware pointer widths match the configured target")
+        print("  [PASS] target policy is 64-bit only")
 
         # Packed structs are layout-only for now: the backends do not yet emit
         # repr(C, packed), so this fixture is not sent through amc generate.

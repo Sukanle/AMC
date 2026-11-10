@@ -356,8 +356,8 @@ bool target_facts_from(const amc::lang::Config &config, TargetFacts &target, std
         error = "Rust frontend requires [target] pointer_bits";
         return false;
     }
-    if (config.pointer_bits != 16 && config.pointer_bits != 32 && config.pointer_bits != 64) {
-        error = "Rust frontend only supports 16/32/64-bit pointers";
+    if (config.pointer_bits != 64) {
+        error = "AMC supports 64-bit targets only; 32-bit and 16-bit platforms are not supported";
         return false;
     }
     target.arch = config.arch;
@@ -527,18 +527,24 @@ bool query_rust_helper(
         return false;
     }
 
+    // A conflicting target is not a fallback situation: continuing would mix
+    // the helper's facts with a different [target] and produce a layout that
+    // matches neither. Treat every target mismatch as fatal.
     if (config.pointer_bits != 0 && config.pointer_bits != static_cast<uint32_t>(pointer_bits)) {
         error = fmt::format(
             "rust helper pointer_bits={} does not match [target] pointer_bits={}", pointer_bits, config.pointer_bits);
+        fatal = true;
         return false;
     }
     if (config.endianness != 0 && config.endianness != endianness_value) {
         error = "rust helper endianness does not match [target] endianness";
+        fatal = true;
         return false;
     }
     if (config.c_long_bits != 0 && config.c_long_bits != static_cast<uint32_t>(c_long_bits)) {
         error = fmt::format(
             "rust helper c_long_bits={} does not match [target] c_long_bits={}", c_long_bits, config.c_long_bits);
+        fatal = true;
         return false;
     }
 

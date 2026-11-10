@@ -17,6 +17,10 @@ AMC is an interface compiler and code-generation toolchain. This is the standalo
 - [Benchmarks and performance analysis](docs/bench/README.md)
 - [Changelog](CHANGELOG.md)
 
+## Platform support
+
+AMC and ABIX target 64-bit platforms only. 32-bit and 16-bit targets are unsupported and deferred indefinitely; they are not on the v0.4.x/v0.5.0 roadmap. See [platform support](docs/architecture/platform-support.md) for the identity-hash, metadata/query-table and ABI reasons.
+
 ## Tests and analysis
 
 The unified entry point is `python tools/run.py` (build + CTest). Use `tools/run_build.py` or `tools/run_test.py` when only one stage is needed:

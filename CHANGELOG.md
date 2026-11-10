@@ -29,6 +29,10 @@
 - Adopt the ABIX v0.4.0 explicit ABIX-STD layouts for `abix_optional`, `abix_result` and `abix_str`. `AMC_ABIX_REF` is now v0.4.0 and `find_package(ABIX 0.4.0)` is required.
 - Old v0.3.x `.abix` artifacts and generated bindings are not compatible; regenerate them with this tree.
 
+### Platform
+
+- AMC and ABIX target 64-bit platforms only. 32-bit and 16-bit targets are unsupported and deferred indefinitely; they are not on the v0.4.x/v0.5.0 roadmap. Supporting 32-bit would require redesigning the 64-bit/128-bit identity hashes and the pointer-rich ABIX metadata/query tables, and the owner/lease ABI (`module_instance`, `abix_lease`) is 64-bit. The Rust frontend now rejects `pointer_bits != 64` instead of projecting a best-effort layout. See [platform support](docs/architecture/platform-support.md).
+
 ### Changed
 
 - The `amc` CLI and the `amc-cpp` / `amc-rust` / `amc-zig` providers now parse arguments with LLVM `CommandLine`. Each command is a registered subcommand with typed options and automatic `--help` / `--version`; the hand-written argv loops, the manual `--format=` splitting and the manual usage text are gone. Command spellings are registered once through MICS `SKL_RFS_ENUM`, and an invocation without a command prints LLVM's subcommand overview. `--error-format` and every per-command `--format` are real LLVM options whose callbacks select the error envelope. The CLI follows a git-style `amc <command> [options]` shape: options are written after the command, so no argv rewriting or bootstrap scan remains. Each command registers its handler next to its implementation and dispatch is a table lookup instead of a switch.

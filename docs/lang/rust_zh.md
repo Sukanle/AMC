@@ -35,8 +35,9 @@ language = "rust"
 files = ["src/lib.rs"]
 symbols = ["DemoVec2", "demo_add"]
 
-# 必需：Rust 布局与 target 绑定。`c_long_bits` 可选：
-# os=1（Windows）默认 32 位，其他支持的 target 跟随 pointer 宽度；
+# 必需：Rust 布局与 target 绑定。`pointer_bits` 必须为 64；
+# 32 位和 16 位目标不受支持。`c_long_bits` 可选：
+# os=1（Windows）默认 32 位，其他 64 位 target 跟随 pointer 宽度；
 # 显式值始终优先。
 [target]
 arch = 0
@@ -49,7 +50,7 @@ endianness = "little"
 output = "demo.abix"
 ```
 
-缺少 `[target] pointer_bits` 时，Rust 前端会明确失败，而不是默认使用 64 位 Host 布局。
+缺少 `[target] pointer_bits` 时，Rust 前端会明确失败，而不是默认使用 64 位 Host 布局。 `pointer_bits` 必须为 `64`：32 位和 16 位目标会以显式诊断被拒绝（见[平台支持](../architecture/platform-support_zh.md)）。
 
 前端刻意是一个初步提取器：它理解跨越 FFI 边界的那部分 Rust —— `#[repr(C)]` struct/enum 与 `extern "C"` 函数 —— 并计算与 C++ 前端从 Clang 得到的相同布局。泛型、trait、生命周期与位域不在范围内；不支持的构造会被忽略，而不是猜测。
 

@@ -17,6 +17,10 @@ AMC 是接口编译器与代码生成工具链。这是一个独立的 AMC 代�
 - [基准测试与性能分析](docs/bench/README_ZH.md)
 - [变更记录](CHANGELOG_ZH.md)
 
+## 平台支持
+
+AMC 与 ABIX 只支持 64 位平台。32 位和 16 位目标不支持，无限期延后，不在 v0.4.x/v0.5.0 路线图中。身份 hash、metadata/query 表与 ABI 方面的原因见[平台支持](docs/architecture/platform-support_zh.md)。
+
 ## 测试与分析
 
 统一入口为 `python tools/run.py`（同时执行构建与 CTest）。若仅需执行某一步骤，可使用 `tools/run_build.py` 或 `tools/run_test.py`：

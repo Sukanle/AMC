@@ -35,8 +35,9 @@ language = "rust"
 files = ["src/lib.rs"]
 symbols = ["DemoVec2", "demo_add"]
 
-# Required: Rust layout is target-specific. `c_long_bits` is optional:
-# os=1 (Windows) defaults to 32 bits, other supported targets follow the
+# Required: Rust layout is target-specific. `pointer_bits` must be 64;
+# 32-bit and 16-bit targets are unsupported. `c_long_bits` is optional:
+# os=1 (Windows) defaults to 32 bits, other 64-bit targets follow the
 # pointer width. An explicit value always wins.
 [target]
 arch = 0
@@ -49,7 +50,7 @@ endianness = "little"
 output = "demo.abix"
 ```
 
-Without `[target] pointer_bits`, the Rust frontend fails explicitly instead of assuming a 64-bit Host layout.
+Without `[target] pointer_bits`, the Rust frontend fails explicitly instead of assuming a 64-bit Host layout. `pointer_bits` must be `64`: 32-bit and 16-bit targets are rejected with an explicit diagnostic (see [platform support](../architecture/platform-support.md)).
 
 The frontend is intentionally a preliminary extractor: it understands the subset that crosses an FFI boundary — `#[repr(C)]` structs/enums and `extern "C"` functions — and computes the same layout the C++ frontend gets from Clang. Generics, traits, lifetimes and bit-fields are out of scope; unsupported constructs are ignored rather than guessed.
 

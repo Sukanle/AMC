@@ -308,6 +308,8 @@ STL 类型不能裸穿边界（见 [`ABI-SPEC.md`](https://github.com/Sukanle/AB
 
 `[target]` 描述**目标平台**；未知事实在运行期验证中报告为 `unverifiable`，而不是假定兼容。见 [`ABI-SPEC.md`](https://github.com/Sukanle/ABIX/blob/main/.agents/ABI-SPEC.md) §10。
 
+> **平台支持：** `pointer_bits` 必须为 `64`。AMC 与 ABIX 只支持 64 位平台；32 位和 16 位目标会被拒绝。见[平台支持](../architecture/platform-support_zh.md)。
+
 ## 运行模式
 
 ### `static`
