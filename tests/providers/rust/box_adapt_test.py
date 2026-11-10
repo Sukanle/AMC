@@ -279,9 +279,6 @@ print('owner box: OK')
                       "C++ owner handle RAII wrapper is generated")
                 cxx = os.environ.get("CXX") or shutil.which("clang++") or shutil.which("c++")
                 if cxx:
-                    cpp_consumer = os.path.join(owner_dir, "owner_consumer.cpp")
-                    with open(cpp_consumer, "w", encoding="utf-8") as handle:
-                        handle.write('#include "owner_gen.hpp"\nint main() { return 0; }\n')
                     include_flags = [
                         "-I" + owner_dir,
                         "-I" + str(source_root / "include"),
@@ -289,8 +286,43 @@ print('owner box: OK')
                         "-I" + str(source_root / "dependencies" / "ABIX" / "MICS" / "include"),
                         "-I" + str(source_root / "dependencies" / "ABIX" / "MICS" / "HLMD"),
                     ]
+                    cpp_consumer = os.path.join(owner_dir, "owner_consumer.cpp")
+                    with open(cpp_consumer, "w", encoding="utf-8") as handle:
+                        handle.write("""#include "owner_gen.hpp"
+
+extern "C" {
+::skl::amc::generated::abix_owner_BoxWidget box_widget_make(int32_t value);
+int32_t box_widget_value(::skl::amc::generated::abix_owner_BoxWidget widget);
+size_t box_widget_live();
+}
+
+int main() {
+    auto owner = ::skl::amc::generated::OwnerOfBoxWidget(box_widget_make(7));
+    if (!owner || owner.object() == nullptr) return 1;
+    if (box_widget_live() != 1) return 2;
+    if (box_widget_value(owner.release()) != 7) return 3;
+    if (box_widget_live() != 0) return 4;
+    {
+        auto second = ::skl::amc::generated::OwnerOfBoxWidget(box_widget_make(9));
+        (void)second;
+    }
+    if (box_widget_live() != 0) return 5;
+    return 0;
+}
+""")
                     result = run([cxx, "-std=c++17", "-fsyntax-only"] + include_flags + [cpp_consumer])
                     check(result.returncode == 0, "C++ owner handle projection compiles", output(result)[-500:])
+                    if sys.platform != "win32":
+                        cpp_consumer_bin = os.path.join(owner_dir, exe("consumer_cpp"))
+                        link = ["-L" + owner_dir, "-lrust_box_owner", "-Wl,-rpath," + owner_dir]
+                        result = run([cxx, "-std=c++17"] + include_flags + [cpp_consumer, "-o", cpp_consumer_bin] + link)
+                        if check(result.returncode == 0, "C++ owner handle consumer linked", output(result)[-500:]):
+                            env = dict(os.environ)
+                            env["LD_LIBRARY_PATH"] = owner_dir + os.pathsep + env.get("LD_LIBRARY_PATH", "")
+                            env["DYLD_LIBRARY_PATH"] = owner_dir + os.pathsep + env.get("DYLD_LIBRARY_PATH", "")
+                            result = run([cpp_consumer_bin], env=env)
+                            check(result.returncode == 0,
+                                  "C++ owner handle RAII releases through destroy", output(result)[-500:])
 
             owner_rs = os.path.join(owner_dir, "consumer.rs")
             with open(owner_rs, "w", encoding="utf-8") as handle:

@@ -171,9 +171,6 @@ def main():
                   "C++ owned span exposes typed data()")
             cxx = os.environ.get("CXX") or shutil.which("clang++") or shutil.which("c++")
             if cxx:
-                cpp_consumer = os.path.join(work, "owner_consumer.cpp")
-                with open(cpp_consumer, "w", encoding="utf-8") as handle:
-                    handle.write('#include "owner_gen.hpp"\nint main() { return 0; }\n')
                 include_flags = [
                     "-I" + work,
                     "-I" + str(source_root / "include"),
@@ -181,8 +178,41 @@ def main():
                     "-I" + str(source_root / "dependencies" / "ABIX" / "MICS" / "include"),
                     "-I" + str(source_root / "dependencies" / "ABIX" / "MICS" / "HLMD"),
                 ]
+                cpp_consumer = os.path.join(work, "owner_consumer.cpp")
+                with open(cpp_consumer, "w", encoding="utf-8") as handle:
+                    handle.write("""#include "owner_gen.hpp"
+
+extern "C" {
+::abix_owned_str_utf8 container_owned_string(int32_t value);
+::skl::amc::generated::abix_owned_span_ContainerPoint container_owned_points(int32_t value);
+}
+
+int main() {
+    {
+        auto string = ::skl::amc::generated::OwnedStringUtf8(container_owned_string(7));
+        if (string.view().len != 1 || string.view().data[0] != '7') return 1;
+    }
+    {
+        auto span = ::skl::amc::generated::OwnedSpanContainerPoint(container_owned_points(5));
+        if (span.view().len != 1) return 2;
+        if (span.data<int32_t>()[0] != 5 || span.data<int32_t>()[1] != 6) return 3;
+    }
+    return 0;
+}
+""")
                 result = run([cxx, "-std=c++17", "-fsyntax-only"] + include_flags + [cpp_consumer])
                 check(result.returncode == 0, "C++ owned view projection compiles", output(result)[-500:])
+                if sys.platform != "win32":
+                    cpp_consumer_bin = os.path.join(work, exe("owner_consumer_cpp"))
+                    link = ["-L" + work, "-lrust_container_api", "-Wl,-rpath," + work]
+                    result = run([cxx, "-std=c++17"] + include_flags + [cpp_consumer, "-o", cpp_consumer_bin] + link)
+                    if check(result.returncode == 0, "C++ owned view consumer linked", output(result)[-500:]):
+                        env = dict(os.environ)
+                        env["LD_LIBRARY_PATH"] = work + os.pathsep + env.get("LD_LIBRARY_PATH", "")
+                        env["DYLD_LIBRARY_PATH"] = work + os.pathsep + env.get("DYLD_LIBRARY_PATH", "")
+                        result = run([cpp_consumer_bin], env=env)
+                        check(result.returncode == 0,
+                              "C++ owned view RAII wrappers release through the owner", output(result)[-500:])
 
         owner_consumer = os.path.join(work, "owner_consumer.rs")
         with open(owner_consumer, "w", encoding="utf-8") as handle:
