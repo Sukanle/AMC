@@ -10,9 +10,10 @@ namespace skl::amc::support {
 // SKL/ABIX/Interface/OwnerABI.h and its 64-bit layout is published as
 // ABIX_OWNER_HANDLE_JSON. CMake reads that metadata and defines the
 // AMC_ABIX_OWNER_* macros for targets that compile this header; the defaults
-// below keep standalone consumers and 32-bit targets working. 32-bit offsets
-// are derived from the target pointer width because the metadata describes one
-// pointer width only.
+// below keep standalone consumers working. AMC and ABIX support 64-bit
+// platforms only, so a 32-bit artifact cannot match this layout and is
+// rejected by the owner-handle validation instead of receiving a derived
+// 32-bit table.
 #ifndef AMC_ABIX_OWNER_SIZE
 #  define AMC_ABIX_OWNER_SIZE 32
 #endif
@@ -48,24 +49,14 @@ struct OwnerHandleLayout {
 
 inline OwnerHandleLayout owner_handle_layout(uint32_t pointer_size) {
     OwnerHandleLayout layout;
-    layout.pointer_size = pointer_size == 4 ? 4 : 8;
-    if (layout.pointer_size == 8) {
-        layout.size = AMC_ABIX_OWNER_SIZE;
-        layout.align = AMC_ABIX_OWNER_ALIGN;
-        layout.object = AMC_ABIX_OWNER_OBJECT;
-        layout.mode = AMC_ABIX_OWNER_MODE;
-        layout.flags = AMC_ABIX_OWNER_FLAGS;
-        layout.destroy = AMC_ABIX_OWNER_DESTROY;
-        layout.module_instance = AMC_ABIX_OWNER_MODULE_INSTANCE;
-    } else {
-        layout.size = 24;
-        layout.align = 8;
-        layout.object = 0;
-        layout.mode = 4;
-        layout.flags = 8;
-        layout.destroy = 12;
-        layout.module_instance = 16;
-    }
+    layout.pointer_size = pointer_size;
+    layout.size = AMC_ABIX_OWNER_SIZE;
+    layout.align = AMC_ABIX_OWNER_ALIGN;
+    layout.object = AMC_ABIX_OWNER_OBJECT;
+    layout.mode = AMC_ABIX_OWNER_MODE;
+    layout.flags = AMC_ABIX_OWNER_FLAGS;
+    layout.destroy = AMC_ABIX_OWNER_DESTROY;
+    layout.module_instance = AMC_ABIX_OWNER_MODULE_INSTANCE;
     return layout;
 }
 
